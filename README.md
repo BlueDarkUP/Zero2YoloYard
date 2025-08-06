@@ -56,7 +56,7 @@ Z2Y-Yard 将数据处理的各个环节无缝集成在一个统一的界面中�
 
 **a. 克隆仓库**
 ```bash
-git clone https://github.com/your-username/zero-to-yolo-yard-ide.git
+git clone https://github.com/BlueDarkUP/Zero2YoloYard.git
 cd zero-to-yolo-yard-ide
 ```
 
