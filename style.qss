@@ -1,0 +1,149 @@
+/* style.qss */
+QMainWindow, QDialog {
+    background-color: #2b2b2b;
+}
+
+QWidget {
+    background-color: #2b2b2b;
+    color: #f0f0f0;
+    font-family: "Segoe UI", Arial, sans-serif;
+}
+
+QGroupBox {
+    background-color: #3c3f41;
+    border: 1px solid #555;
+    border-radius: 6px;
+    margin-top: 10px;
+    font-weight: bold;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    padding: 2px 8px;
+    background-color: #555;
+    border-radius: 4px;
+}
+
+QLabel {
+    background-color: transparent; /* 保持透明，如果某个QLabel有问题，可单独设置其objectName并指定背景 */
+    font-size: 10pt;
+}
+
+QLineEdit {
+    background-color: #3c3f41;
+    border: 1px solid #555;
+    border-radius: 4px;
+    padding: 4px;
+}
+
+QPushButton {
+    background-color: #558de8;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 16px;
+    font-weight: bold;
+}
+
+QPushButton:hover {
+    background-color: #699aeb;
+}
+
+QPushButton:pressed {
+    background-color: #497dcf;
+}
+
+QPushButton:disabled {
+    background-color: #4a4a4a;
+    color: #888;
+}
+
+QCheckBox {
+    font-size: 11pt;
+    font-weight: bold;
+}
+
+QCheckBox::indicator {
+    width: 16px;
+    height: 16px;
+}
+
+QSlider::groove:horizontal {
+    border: 1px solid #555;
+    height: 4px;
+    background: #555;
+    margin: 2px 0;
+    border-radius: 2px;
+}
+
+QSlider::handle:horizontal {
+    background: #558de8;
+    border: 1px solid #558de8;
+    width: 16px;
+    height: 16px;
+    margin: -6px 0;
+    border-radius: 8px;
+}
+
+QProgressBar {
+    border: 1px solid #555;
+    border-radius: 4px;
+    text-align: center;
+    color: white;
+}
+
+QProgressBar::chunk {
+    background-color: #558de8;
+    border-radius: 4px;
+}
+
+QTextEdit {
+    background-color: #252526;
+    border: 1px solid #555;
+    border-radius: 4px;
+    color: #ccc;
+    font-family: "Consolas", "Courier New", monospace;
+}
+
+QScrollArea {
+    border: none;
+}
+
+/* QTabWidget 样式 */
+QTabWidget::pane { /* Tab widget 的框架 */
+    border-top: 1px solid #555; /* 与现有边框颜色保持一致 */
+}
+
+QTabWidget::tab-bar {
+    left: 0px; /* 标签栏位置调整 */
+}
+
+QTabBar::tab {
+    background: #3c3f41; /* 未选中标签的背景色，使用深色，与QGroupBox背景类似 */
+    color: #f0f0f0; /* 未选中标签的文字颜色，与QWidget文字颜色一致 */
+    border: 1px solid #555; /* 边框 */
+    border-bottom-color: #3c3f41; /* 底部边框颜色与标签背景一致，使其与pane融合 */
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+    min-width: 8ex;
+    padding: 5px 10px; /* 标签内部填充 */
+    margin-right: 2px; /* 标签间距 */
+}
+
+QTabBar::tab:selected {
+    background: #2b2b2b; /* 选中标签的背景色，与主窗口/QWidget背景一致 */
+    color: white; /* 选中标签的文字颜色，可以更亮一点 */
+    border-bottom-color: #2b2b2b; /* 底部边框颜色与标签背景一致，使其与pane融合 */
+    border-left: 1px solid #555;
+    border-right: 1px solid #555;
+    border-top: 1px solid #555;
+}
+
+QTabBar::tab:hover {
+    background: #4a4d4f; /* 鼠标悬停在未选中标签上时的背景色，略微变亮 */
+}
+
+QTabBar::tab:!selected {
+    margin-top: 2px; /* 未选中标签稍微下移，增加层次感 */
+}
