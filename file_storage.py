@@ -63,28 +63,43 @@ def get_dataset_zip_path(dataset_uuid):
     return os.path.join(config.STORAGE_DIR, 'datasets', f"{dataset_uuid}.zip")
 
 
-def create_yolo_dataset_zip(dataset_uuid, frames_data, all_labels, eval_percent):
+def create_yolo_dataset_zip(dataset_uuid, frames_data, all_labels, eval_percent, test_percent):
     dataset_dir = get_dataset_dir(dataset_uuid)
     if os.path.exists(dataset_dir):
         shutil.rmtree(dataset_dir)
+
     img_train_dir = os.path.join(dataset_dir, 'images', 'train')
     lbl_train_dir = os.path.join(dataset_dir, 'labels', 'train')
     img_val_dir = os.path.join(dataset_dir, 'images', 'val')
     lbl_val_dir = os.path.join(dataset_dir, 'labels', 'val')
+    img_test_dir = os.path.join(dataset_dir, 'images', 'test')
+    lbl_test_dir = os.path.join(dataset_dir, 'labels', 'test')
+
     os.makedirs(img_train_dir)
     os.makedirs(lbl_train_dir)
     os.makedirs(img_val_dir)
     os.makedirs(lbl_val_dir)
+    os.makedirs(img_test_dir)
+    os.makedirs(lbl_test_dir)
 
     class_map = {name: i for i, name in enumerate(all_labels)}
     random.shuffle(frames_data)
-    split_index = int(len(frames_data) * (1 - (eval_percent / 100.0)))
-    train_data = frames_data[:split_index]
-    val_data = frames_data[split_index:]
-    for dataset_part, target_img_dir, target_lbl_dir in [
+
+    total_count = len(frames_data)
+    val_count = int(total_count * eval_percent / 100.0)
+    test_count = int(total_count * test_percent / 100.0)
+
+    # 从列表开头取 val 和 test 数据，剩下的是 train 数据
+    val_data = frames_data[:val_count]
+    test_data = frames_data[val_count:val_count + test_count]
+    train_data = frames_data[val_count + test_count:]
+
+    dataset_parts = [
         (train_data, img_train_dir, lbl_train_dir),
-        (val_data, img_val_dir, lbl_val_dir)
-    ]:
+        (val_data, img_val_dir, lbl_val_dir),
+        (test_data, img_test_dir, lbl_test_dir)
+    ]
+    for dataset_part, target_img_dir, target_lbl_dir in dataset_parts:
         for video_uuid, frame_num, bboxes, width, height in dataset_part:
             base_filename = f"{video_uuid}_{frame_num:05d}"
             src_img_path = get_frame_path(video_uuid, frame_num)
@@ -98,6 +113,7 @@ def create_yolo_dataset_zip(dataset_uuid, frames_data, all_labels, eval_percent)
         'path': f"../datasets/{dataset_uuid}",
         'train': 'images/train',
         'val': 'images/val',
+        'test': 'images/test',
         'nc': len(all_labels),
         'names': all_labels
     }

@@ -88,9 +88,8 @@
         box-shadow: 0 2px 10px rgba(0,0,0,0.2);
     }
 
-    /* 核心修改点: 跟踪控制面板样式 */
     #track-controls {
-        display: none; /* 默认隐藏 */
+        display: none;
         border: 2px dashed #007bff;
         padding: 10px;
         margin-top: 15px;
@@ -145,18 +144,14 @@
             <h4>Bounding Boxes</h4>
             <p><small>Select a class, then draw. Click a box to select it.</small></p>
             <button id="save-bboxes" class="btn btn-primary btn-block mb-2">Save BBoxes (S)</button>
-            <!-- 功能1: SAM 单点辅助标注按钮 -->
             <button id="sam-toggle-btn" class="btn btn-info btn-block mb-2">Enable SAM (Click Point)</button>
-            <!-- 功能2: SAM2 跟踪辅助标注按钮 -->
             <button id="sam2-track-btn" class="btn btn-success btn-block mb-3">Track Objects with SAM2</button>
 
-            <!-- 核心修改点: 全新的跟踪控制面板 -->
             <div id="track-controls">
                 <h5 id="track-status-header">Tracking...</h5>
                 <div class="progress mb-2">
                     <div id="track-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%;">0%</div>
                 </div>
-                <!-- 停止按钮 -->
                 <button id="stop-sam2-track-btn" class="btn btn-danger btn-block">Stop Tracking</button>
                 <hr>
                 <h5>Review Mode</h5>
@@ -186,7 +181,6 @@
 {% block scripts %}
 <script>
 $(document).ready(function() {
-    // --- Configuration & Global Variables --- (No changes)
     const videoUuid = "{{ video_entity.video_uuid }}";
     const task = {{ task_entity | tojson }};
     const frameCount = task.end_frame + 1;
@@ -214,7 +208,6 @@ $(document).ready(function() {
     const frameImage = document.getElementById('frame-image');
     const frameSlider = $('#frame-slider');
 
-    // --- Core Functions --- (No changes to most functions)
     function saveStateToHistory() {
         history = history.slice(0, historyIndex + 1);
         history.push(JSON.parse(JSON.stringify(bboxes)));
@@ -242,9 +235,7 @@ $(document).ready(function() {
     }
 
     function redrawCanvas() {
-        if (!frameImage.complete || frameImage.naturalWidth === 0) {
-            return;
-        }
+        if (!frameImage.complete || frameImage.naturalWidth === 0) return;
         const dpr = window.devicePixelRatio || 1;
         drawingCtx.clearRect(0, 0, drawingCanvas.width / dpr, drawingCanvas.height / dpr);
         const scaleX = frameImage.clientWidth / frameImage.naturalWidth;
@@ -277,25 +268,35 @@ $(document).ready(function() {
         });
     }
 
+    // =========================================================================
+    //  核心修复点 1: 逻辑重构
+    //  将“处理数据”和“更新UI”绑定。此函数现在是更新bboxes状态和重绘UI的唯一入口。
+    // =========================================================================
+    const processFrameDataAndUpdateUI = (frameData) => {
+        bboxes = parseBboxesFromString(frameData ? frameData.bboxes_text : '');
+        history = [JSON.parse(JSON.stringify(bboxes))];
+        historyIndex = 0;
+        selectedBboxIndex = -1;
+
+        // 数据更新后，立即重绘界面
+        redrawCanvas();
+        renderBboxList();
+    };
 
     function loadBboxesForFrame(frameNumber) {
+        // 在 Review 模式下，数据来自缓存
         if (isReviewMode) {
             const bboxesText = trackedBboxCache[frameNumber];
-            bboxes = parseBboxesFromString(bboxesText || '');
-            history = [JSON.parse(JSON.stringify(bboxes))];
-            historyIndex = 0;
-            selectedBboxIndex = -1;
+            processFrameDataAndUpdateUI({ bboxes_text: bboxesText || '' });
             return;
         }
 
-        const processFrameData = (frameData) => {
-            bboxes = parseBboxesFromString(frameData ? frameData.bboxes_text : '');
-            history = [JSON.parse(JSON.stringify(bboxes))];
-            historyIndex = 0;
-            selectedBboxIndex = -1;
-        };
-
-        if (!window.cachedFrames) {
+        // 检查全局缓存
+        if (window.cachedFrames) {
+            const frameData = window.cachedFrames.find(f => f.frame_number == frameNumber);
+            processFrameDataAndUpdateUI(frameData);
+        } else {
+            // 如果无缓存，则通过Ajax获取，并在成功回调中更新UI
             $.ajax({
                 url: '/retrieveVideoFrames',
                 type: 'POST',
@@ -305,15 +306,46 @@ $(document).ready(function() {
                     if (response.success) {
                         window.cachedFrames = response.frames;
                         const frameData = window.cachedFrames.find(f => f.frame_number == frameNumber);
-                        processFrameData(frameData);
+                        processFrameDataAndUpdateUI(frameData);
                     }
                 }
             });
-        } else {
-            const frameData = window.cachedFrames.find(f => f.frame_number == frameNumber);
-            processFrameData(frameData);
         }
     }
+
+    // =========================================================================
+    //  核心修复点 2: 修改图片加载逻辑
+    //  `onload`现在只负责调整画布大小和触发数据加载。
+    //  真正的数据绘制由`loadBboxesForFrame`内部逻辑确保在数据加载后执行。
+    // =========================================================================
+    frameImage.onload = function() {
+        // 清空旧数据，防止在数据加载完成前，resizeCanvas中的redrawCanvas绘制上一帧的残留数据
+        bboxes = [];
+        selectedBboxIndex = -1;
+
+        // 调整画布大小，这会用空白状态重绘一次画布，避免了旧数据闪烁
+        resizeCanvas();
+
+        // 加载新数据，此函数内部会负责在数据到达后进行正确的绘制
+        loadBboxesForFrame(frameSlider.val());
+    };
+
+    frameImage.addEventListener('dragstart', (e) => { e.preventDefault(); });
+    window.onresize = resizeCanvas;
+
+    frameSlider.on("input", function() {
+        const frameNumber = $(this).val();
+        $("#frame-number-display").text(frameNumber);
+        const imageUrl = `/media/frames/${videoUuid}/frame_${String(frameNumber).padStart(5, "0")}.jpg`;
+
+        // 只有当图片URL真的改变时才重新加载
+        if (frameImage.src !== window.location.origin + imageUrl) {
+            frameImage.src = imageUrl;
+        } else if (frameImage.complete) {
+            // 如果URL未变但需要强制刷新（例如，退出review模式），手动触发
+            loadBboxesForFrame(frameNumber);
+        }
+    });
 
     function setTrackingUiState(isTracking) {
         isReviewMode = isTracking;
@@ -339,32 +371,22 @@ $(document).ready(function() {
         frameSlider.trigger('input');
     }
 
-    // =========================================================================
-    //  核心修复点: 修改 handleSseEvent 函数
-    // =========================================================================
     function handleSseEvent(data) {
         switch(data.event) {
             case 'update':
-                // 将接收到的数据存入缓存
                 trackedBboxCache[data.frame_number] = data.bboxes_text;
-
-                // 更新进度条
                 const percent = data.total > 0 ? Math.round((data.progress / data.total) * 100) : 0;
                 $('#track-progress-bar').css('width', percent + '%').text(percent + '%');
 
-                // 关键修复：我们现在更新UI到我们刚刚接收到数据的 *当前帧*，而不是下一帧。
                 const currentFrame = data.frame_number;
-
                 if (currentFrame <= parseInt(frameSlider.attr('max'))) {
-                    // 更新滑块和数字显示，但不触发 'input' 事件，以避免循环
                     frameSlider.val(currentFrame);
                     $("#frame-number-display").text(currentFrame);
-
-                    // 改变图片源到当前帧。这将触发 onload 事件。
-                    // onload 事件会调用 loadBboxesForFrame，它将从缓存中获取我们刚刚存入的
-                    // `trackedBboxCache[currentFrame]` 数据，并正确地绘制出来。
-                    // 这样就保证了数据和画面的完全同步。
-                    frameImage.src = `/media/frames/${videoUuid}/frame_${String(currentFrame).padStart(5, "0")}.jpg`;
+                    const imageUrl = `/media/frames/${videoUuid}/frame_${String(currentFrame).padStart(5, "0")}.jpg`;
+                    // 设置新图片源会触发 onload 事件, 从而以正确的顺序加载和绘制数据
+                    if (frameImage.src !== window.location.origin + imageUrl) {
+                        frameImage.src = imageUrl;
+                    }
                 }
                 break;
             case 'completed':
@@ -405,7 +427,6 @@ $(document).ready(function() {
         $('#save-all-tracked-btn').prop('disabled', Object.keys(trackedBboxCache).length === 0);
         showToast(headerText + (message ? ` (${message})` : ''), 4000);
 
-        // 跟踪结束后，跳转到第一个被跟踪的帧，以便用户从头开始审查。
         const firstTrackedFrame = Math.min(...Object.keys(trackedBboxCache).map(Number));
         if (isFinite(firstTrackedFrame)) {
             frameSlider.val(firstTrackedFrame).trigger('input');
@@ -426,27 +447,6 @@ $(document).ready(function() {
     function parseBboxesFromString(t){if(!t)return[];const e=t.split("\n").filter(t=>""!==t.trim()).map(t=>{const e=t.split(",");if(e.length<5)return null;return{x1:parseInt(e[0]),y1:parseInt(e[1]),x2:parseInt(e[2]),y2:parseInt(e[3]),label:e.slice(4).join(",")}}).filter(t=>null!==t);return e}
 
     // --- Event Handlers ---
-    frameImage.onload = function() {
-        resizeCanvas();
-        loadBboxesForFrame(frameSlider.val());
-        redrawCanvas();
-        renderBboxList();
-    };
-
-    frameImage.addEventListener('dragstart', (e) => { e.preventDefault(); });
-    window.onresize = resizeCanvas;
-
-    frameSlider.on("input",function(){
-        const frameNumber = $(this).val();
-        $("#frame-number-display").text(frameNumber);
-        const imageUrl = `/media/frames/${videoUuid}/frame_${String(frameNumber).padStart(5, "0")}.jpg`;
-        if (frameImage.src === imageUrl && frameImage.complete) {
-            frameImage.onload();
-        } else {
-            frameImage.src = imageUrl;
-        }
-    });
-
     $('#sam2-track-btn').on('click', function() {
         if (bboxes.length === 0) {
             alert('Please label at least one object on the current frame to start tracking.');
@@ -471,12 +471,10 @@ $(document).ready(function() {
                 if (res.success) {
                     sam2TrackerUuid = res.tracker_uuid;
                     sam2EventSource = new EventSource(`/streamSam2Tracking/${sam2TrackerUuid}`);
-
                     sam2EventSource.onmessage = function(event) {
                         const data = JSON.parse(event.data);
                         handleSseEvent(data);
                     };
-
                     sam2EventSource.onerror = function(err) {
                         showToast('Connection to tracking stream lost.', 3000);
                         console.error("EventSource failed:", err);
@@ -672,7 +670,7 @@ $(document).ready(function() {
         delete window.cachedFrames;
     }
 
-    if (frameImage.complete) {
+    if (frameImage.complete && frameImage.naturalWidth > 0) {
         performInitialLoad();
     } else {
         $(frameImage).one('load', performInitialLoad);

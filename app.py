@@ -470,6 +470,7 @@ def create_dataset():
     desc = data.get('description')
     video_uuids = data.get('video_uuids')
     eval_percent = float(data.get('eval_percent', 20.0))
+    test_percent = float(data.get('test_percent', 10.0))
 
     is_valid, message = validate_description(desc, [d['description'] for d in database.get_dataset_list()])
     if not is_valid:
@@ -481,7 +482,7 @@ def create_dataset():
     dataset_uuid = database.create_dataset_entry(desc, video_uuids, create_time)
 
     threading.Thread(target=background_tasks.create_dataset_task, args=(
-        dataset_uuid, video_uuids, eval_percent
+        dataset_uuid, video_uuids, eval_percent, test_percent
     ), name=f"Dataset-{dataset_uuid[:6]}").start()
 
     return jsonify({'success': True, 'dataset_uuid': dataset_uuid})

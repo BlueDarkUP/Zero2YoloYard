@@ -231,9 +231,13 @@ def start_tracking_task(video_uuid, tracker_uuid, tracker_name, scale, init_fram
             f"Tracking task for {video_uuid} finished with status: {tracking_sessions.get(tracker_uuid, {}).get('status')}")
 
 
-def create_dataset_task(dataset_uuid, video_uuids, eval_percent):
+def create_dataset_task(dataset_uuid, video_uuids, eval_percent, test_percent):
     logging.info(f"Starting dataset creation task for UUID: {dataset_uuid}")
     try:
+        if eval_percent + test_percent >= 100.0:
+            raise ValueError(
+                f"The sum of validation ({eval_percent}%) and test ({test_percent}%) percentages must be less than 100.")
+
         database.update_dataset_status(dataset_uuid, status="PROCESSING")
 
         frames_to_include = []
@@ -272,7 +276,7 @@ def create_dataset_task(dataset_uuid, video_uuids, eval_percent):
 
         logging.info(f"Creating YOLO ZIP archive for dataset {dataset_uuid}...")
         zip_path = file_storage.create_yolo_dataset_zip(
-            dataset_uuid, frames_to_include, sorted_labels, eval_percent
+            dataset_uuid, frames_to_include, sorted_labels, eval_percent, test_percent
         )
         logging.info(f"ZIP archive created at: {zip_path}")
 

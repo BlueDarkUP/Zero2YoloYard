@@ -140,6 +140,10 @@
             <label for="eval-percent">Validation Set Percentage (%)</label>
             <input type="number" class="form-control" id="eval-percent" value="20" min="5" max="50" step="1">
         </div>
+        <div class="form-group">
+            <label for="test-percent">Test Set Percentage (%)</label>
+            <input type="number" class="form-control" id="test-percent" value="10" min="0" max="50" step="1">
+        </div>
         <button type="submit" class="btn btn-primary">Create</button>
     </form>
 {% endcall %}
@@ -339,7 +343,8 @@ $(document).ready(function() {
         const datasetData = {
             description: $('#dataset-description').val(),
             video_uuids: $('#dataset-videos').val(),
-            eval_percent: $('#eval-percent').val()
+            eval_percent: $('#eval-percent').val(),
+            test_percent: $('#test-percent').val()
         };
         $.ajax({
             url: '/createDataset', type: 'POST', contentType: 'application/json', data: JSON.stringify(datasetData),
