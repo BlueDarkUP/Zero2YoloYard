@@ -1,3 +1,7 @@
+### 阅读之前：已经有数据集？
+  - #### 使用[Yolo2TFRecord](https://github.com/BlueDarkUP/Yolo2TFRecord)轻松的将YOLOv8格式数据集转换为TFRecord
+  - #### 使用[FTC-Easy-TFLITE](https://github.com/BlueDarkUP/FTC-Easy-TFLITE)轻松构建从搭建环境到导出模型的简单流水线
+
 # Zero-to-YOLO-Yard: 本地化机器学习标注工具
 
 **Zero-to-YOLO-Yard** 是一个深度定制的 [FMLTC (FIRST Machine Learning Toolchain)](https://github.com/FIRST-Tech-Challenge/fmltc) 版本，专为在本地计算机上高效运行而设计，无需依赖任何云服务。它专注于提供一个从视频到数据集的完整解决方案，是机器人、无人机或其他计算机视觉项目理想的本地化数据处理工具。
