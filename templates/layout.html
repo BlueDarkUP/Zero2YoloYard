@@ -1,0 +1,35 @@
+<!-- templates/layout.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>FTC-ML Local</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <a class="navbar-brand" href="/">Zero 2 YOLO Yard</a>
+        <div class="collapse navbar-collapse">
+            <ul class="navbar-nav mr-auto">
+            </ul>
+            <span class="navbar-text">
+                Produced By BlueDarkUP -- Be Based On FIRST Machine Learning Toolchain --
+            </span>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-3">
+        {% block content %}{% endblock %}
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.4/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <!-- 使用 url_for 确保路径正确 -->
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

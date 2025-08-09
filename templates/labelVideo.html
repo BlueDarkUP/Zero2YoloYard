@@ -1,0 +1,682 @@
+{% extends "layout.html" %}
+
+{% block head %}
+<style>
+    #canvas-container {
+        position: relative;
+        cursor: crosshair;
+        max-width: 100%;
+        display: inline-block;
+    }
+
+    #canvas-container.sam-active {
+        cursor: copy;
+    }
+
+    #canvas-container.sam-loading {
+        cursor: wait;
+    }
+
+    #canvas-container canvas {
+        position: absolute;
+        top: 0;
+        left: 0;
+        pointer-events: none;
+    }
+
+    #drawing-canvas {
+        pointer-events: auto;
+        z-index: 10;
+    }
+
+    #crosshair-canvas {
+        z-index: 5;
+    }
+
+    #frame-image {
+        user-select: none;
+        -webkit-user-select: none;
+        -moz-user-select: none;
+    }
+
+    #class-list .list-group-item, #bbox-list .list-group-item {
+        cursor: pointer;
+    }
+
+    #bbox-list .list-group-item.selected {
+        border-color: #007bff;
+        border-width: 2px;
+    }
+
+    #class-list .list-group-item.active {
+        color: white;
+        border-width: 2px;
+    }
+
+    #sam-toggle-btn.active {
+        background-color: #28a745;
+        border-color: #28a745;
+        color: white;
+    }
+
+    .color-swatch {
+        display: inline-block;
+        width: 15px;
+        height: 15px;
+        margin-right: 10px;
+        border: 1px solid #ccc;
+        vertical-align: middle;
+    }
+
+    .side-panel {
+        max-height: 85vh;
+        overflow-y: auto;
+    }
+
+    #toast-notification {
+        position: fixed;
+        bottom: 30px;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 10px 20px;
+        border-radius: 5px;
+        background-color: #28a745;
+        color: white;
+        font-weight: bold;
+        z-index: 9999;
+        display: none;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    }
+
+    /* 核心修改点: 跟踪控制面板样式 */
+    #track-controls {
+        display: none; /* 默认隐藏 */
+        border: 2px dashed #007bff;
+        padding: 10px;
+        margin-top: 15px;
+        background-color: #f8f9fa;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <h3>
+            Task for {{ task_entity.assigned_to }}: {{ video_entity.description }}
+            <small class="text-muted">(Frames {{ task_entity.start_frame }} to {{ task_entity.end_frame }})</small>
+        </h3>
+        <a href="/" class="btn btn-secondary">Back to Home</a>
+    </div>
+
+    <div class="row">
+        <div class="col-md-9">
+            <div id="canvas-container">
+                <img id="frame-image" src="{{ first_frame_url }}" class="img-fluid" alt="Video Frame" draggable="false"/>
+                <canvas id="crosshair-canvas"></canvas>
+                <canvas id="drawing-canvas"></canvas>
+            </div>
+            <div class="mt-2">
+                <label for="frame-slider">
+                    Frame: <span id="frame-number-display">{{ task_entity.start_frame }}</span> / {{ task_entity.end_frame }}
+                </label>
+                <input type="range" class="form-control-range" id="frame-slider"
+                       min="{{ task_entity.start_frame }}"
+                       max="{{ task_entity.end_frame }}"
+                       value="{{ task_entity.start_frame }}">
+                 <small class="form-text text-muted">
+                     <b>Shortcuts:</b>
+                     (S) Save/Update | (A) Prev Frame | (D) Next Frame | (Ctrl+Z) Undo | (Ctrl+Y) Redo | (Del/Bksp) Delete Selected
+                 </small>
+            </div>
+        </div>
+        <div class="col-md-3 side-panel">
+            <h4>Classes</h4>
+            <div class="input-group mb-3">
+                <input type="text" id="new-class-name" class="form-control" placeholder="New class name">
+                <div class="input-group-append">
+                    <button id="add-class-btn" class="btn btn-outline-secondary" type="button">Add</button>
+                </div>
+            </div>
+            <ul id="class-list" class="list-group mb-3"></ul>
+
+            <hr>
+
+            <h4>Bounding Boxes</h4>
+            <p><small>Select a class, then draw. Click a box to select it.</small></p>
+            <button id="save-bboxes" class="btn btn-primary btn-block mb-2">Save BBoxes (S)</button>
+            <!-- 功能1: SAM 单点辅助标注按钮 -->
+            <button id="sam-toggle-btn" class="btn btn-info btn-block mb-2">Enable SAM (Click Point)</button>
+            <!-- 功能2: SAM2 跟踪辅助标注按钮 -->
+            <button id="sam2-track-btn" class="btn btn-success btn-block mb-3">Track Objects with SAM2</button>
+
+            <!-- 核心修改点: 全新的跟踪控制面板 -->
+            <div id="track-controls">
+                <h5 id="track-status-header">Tracking...</h5>
+                <div class="progress mb-2">
+                    <div id="track-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%;">0%</div>
+                </div>
+                <!-- 停止按钮 -->
+                <button id="stop-sam2-track-btn" class="btn btn-danger btn-block">Stop Tracking</button>
+                <hr>
+                <h5>Review Mode</h5>
+                <p><small>Use A/D to review. Correct boxes. Press (S) to update a frame in cache.</small></p>
+                <button id="save-all-tracked-btn" class="btn btn-warning btn-block" disabled>Save All Reviewed Frames</button>
+                <button id="exit-track-mode-btn" class="btn btn-secondary btn-block mt-2">Exit & Discard</button>
+            </div>
+
+            <ul id="bbox-list" class="list-group"></ul>
+        </div>
+    </div>
+</div>
+
+<div id="toast-notification"></div>
+
+<template id="bbox-item-template">
+    <li class="list-group-item d-flex justify-content-between align-items-center">
+        <div>
+            <span class="color-swatch"></span>
+            <span class="bbox-label font-weight-bold"></span>
+        </div>
+        <button class="btn btn-danger btn-sm delete-bbox-btn">&times;</button>
+    </li>
+</template>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    // --- Configuration & Global Variables --- (No changes)
+    const videoUuid = "{{ video_entity.video_uuid }}";
+    const task = {{ task_entity | tojson }};
+    const frameCount = task.end_frame + 1;
+
+    let availableClasses = [];
+    let activeClass = null;
+    let bboxes = [];
+    let selectedBboxIndex = -1;
+    let history = [];
+    let historyIndex = -1;
+    let isDrawing = false;
+    let startX, startY;
+
+    let isSamModeActive = false;
+    let sam2TrackerUuid = null;
+    let sam2EventSource = null;
+    let isReviewMode = false;
+    let trackedBboxCache = {};
+
+    const canvasContainer = $('#canvas-container');
+    const drawingCanvas = document.getElementById('drawing-canvas');
+    const drawingCtx = drawingCanvas.getContext('2d');
+    const crosshairCanvas = document.getElementById('crosshair-canvas');
+    const crosshairCtx = crosshairCanvas.getContext('2d');
+    const frameImage = document.getElementById('frame-image');
+    const frameSlider = $('#frame-slider');
+
+    // --- Core Functions --- (No changes to most functions)
+    function saveStateToHistory() {
+        history = history.slice(0, historyIndex + 1);
+        history.push(JSON.parse(JSON.stringify(bboxes)));
+        historyIndex = history.length - 1;
+    }
+
+    function undo() {
+        if (historyIndex > 0) {
+            historyIndex--;
+            bboxes = JSON.parse(JSON.stringify(history[historyIndex]));
+            selectedBboxIndex = -1;
+            redrawCanvas();
+            renderBboxList();
+        }
+    }
+
+    function redo() {
+        if (historyIndex < history.length - 1) {
+            historyIndex++;
+            bboxes = JSON.parse(JSON.stringify(history[historyIndex]));
+            selectedBboxIndex = -1;
+            redrawCanvas();
+            renderBboxList();
+        }
+    }
+
+    function redrawCanvas() {
+        if (!frameImage.complete || frameImage.naturalWidth === 0) {
+            return;
+        }
+        const dpr = window.devicePixelRatio || 1;
+        drawingCtx.clearRect(0, 0, drawingCanvas.width / dpr, drawingCanvas.height / dpr);
+        const scaleX = frameImage.clientWidth / frameImage.naturalWidth;
+        const scaleY = frameImage.clientHeight / frameImage.naturalHeight;
+        bboxes.forEach((box, index) => {
+            const color = stringToColor(box.label);
+            drawingCtx.strokeStyle = color;
+            if (index === selectedBboxIndex) {
+                 drawingCtx.lineWidth = 4 / dpr;
+                 drawingCtx.shadowColor = 'black';
+                 drawingCtx.shadowBlur = 6 / dpr;
+            } else {
+                 drawingCtx.lineWidth = 2 / dpr;
+                 drawingCtx.shadowBlur = 0;
+            }
+            const x = box.x1 * scaleX;
+            const y = box.y1 * scaleY;
+            const width = (box.x2 - box.x1) * scaleX;
+            const height = (box.y2 - box.y1) * scaleY;
+            drawingCtx.strokeRect(x, y, width, height);
+            drawingCtx.shadowBlur = 0;
+            drawingCtx.fillStyle = color;
+            drawingCtx.font = `${12 / dpr}px Arial`;
+            const textMetrics = drawingCtx.measureText(box.label);
+            const textWidth = textMetrics.width;
+            const textHeight = 14 / dpr;
+            drawingCtx.fillRect(x, y - textHeight, textWidth + (4 / dpr), textHeight);
+            drawingCtx.fillStyle = 'white';
+            drawingCtx.fillText(box.label, x + (2 / dpr), y - (2 / dpr));
+        });
+    }
+
+
+    function loadBboxesForFrame(frameNumber) {
+        if (isReviewMode) {
+            const bboxesText = trackedBboxCache[frameNumber];
+            bboxes = parseBboxesFromString(bboxesText || '');
+            history = [JSON.parse(JSON.stringify(bboxes))];
+            historyIndex = 0;
+            selectedBboxIndex = -1;
+            return;
+        }
+
+        const processFrameData = (frameData) => {
+            bboxes = parseBboxesFromString(frameData ? frameData.bboxes_text : '');
+            history = [JSON.parse(JSON.stringify(bboxes))];
+            historyIndex = 0;
+            selectedBboxIndex = -1;
+        };
+
+        if (!window.cachedFrames) {
+            $.ajax({
+                url: '/retrieveVideoFrames',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ video_uuid: videoUuid }),
+                success: function(response) {
+                    if (response.success) {
+                        window.cachedFrames = response.frames;
+                        const frameData = window.cachedFrames.find(f => f.frame_number == frameNumber);
+                        processFrameData(frameData);
+                    }
+                }
+            });
+        } else {
+            const frameData = window.cachedFrames.find(f => f.frame_number == frameNumber);
+            processFrameData(frameData);
+        }
+    }
+
+    function setTrackingUiState(isTracking) {
+        isReviewMode = isTracking;
+        $('#track-controls').toggle(isTracking);
+        $('#save-bboxes, #sam-toggle-btn, #sam2-track-btn').toggle(!isTracking);
+        if (!isTracking) {
+            $('#track-progress-bar').css('width', '0%').text('0%').removeClass('bg-success bg-danger').addClass('progress-bar-animated');
+            $('#track-status-header').text('Tracking...');
+            $('#stop-sam2-track-btn').prop('disabled', false).text('Stop Tracking');
+            $('#save-all-tracked-btn').prop('disabled', true);
+            sam2TrackerUuid = null;
+            if (sam2EventSource) {
+                sam2EventSource.close();
+                sam2EventSource = null;
+            }
+        }
+    }
+
+    function exitReviewMode() {
+        setTrackingUiState(false);
+        trackedBboxCache = {};
+        showToast('Exited tracking/review mode.', 2000);
+        frameSlider.trigger('input');
+    }
+
+    // =========================================================================
+    //  核心修复点: 修改 handleSseEvent 函数
+    // =========================================================================
+    function handleSseEvent(data) {
+        switch(data.event) {
+            case 'update':
+                // 将接收到的数据存入缓存
+                trackedBboxCache[data.frame_number] = data.bboxes_text;
+
+                // 更新进度条
+                const percent = data.total > 0 ? Math.round((data.progress / data.total) * 100) : 0;
+                $('#track-progress-bar').css('width', percent + '%').text(percent + '%');
+
+                // 关键修复：我们现在更新UI到我们刚刚接收到数据的 *当前帧*，而不是下一帧。
+                const currentFrame = data.frame_number;
+
+                if (currentFrame <= parseInt(frameSlider.attr('max'))) {
+                    // 更新滑块和数字显示，但不触发 'input' 事件，以避免循环
+                    frameSlider.val(currentFrame);
+                    $("#frame-number-display").text(currentFrame);
+
+                    // 改变图片源到当前帧。这将触发 onload 事件。
+                    // onload 事件会调用 loadBboxesForFrame，它将从缓存中获取我们刚刚存入的
+                    // `trackedBboxCache[currentFrame]` 数据，并正确地绘制出来。
+                    // 这样就保证了数据和画面的完全同步。
+                    frameImage.src = `/media/frames/${videoUuid}/frame_${String(currentFrame).padStart(5, "0")}.jpg`;
+                }
+                break;
+            case 'completed':
+            case 'stopped':
+            case 'failed':
+                handleTrackingEnd(data.event.toUpperCase(), data.message);
+                break;
+            case 'error':
+                 alert('Tracking Stream Error: ' + data.message);
+                 handleTrackingEnd('FAILED', data.message);
+                 break;
+        }
+    }
+
+    function handleTrackingEnd(status, message) {
+        if (sam2EventSource) {
+            sam2EventSource.close();
+            sam2EventSource = null;
+        }
+        $('#sam2-track-btn').prop('disabled', false);
+        $('#stop-sam2-track-btn').prop('disabled', true);
+
+        const progressBar = $('#track-progress-bar');
+        progressBar.removeClass('progress-bar-animated');
+
+        let headerText = 'Review Results';
+        if (status === 'COMPLETED') {
+             headerText = 'Tracking Completed. Review Results.';
+             progressBar.css('width', '100%').text('100%').addClass('bg-success');
+        } else if (status === 'STOPPED') {
+            headerText = 'Tracking Stopped. Review Results.';
+        } else if (status === 'FAILED') {
+            headerText = 'Tracking Failed. Review Partial Results.';
+            progressBar.addClass('bg-danger');
+        }
+
+        $('#track-status-header').text(headerText);
+        $('#save-all-tracked-btn').prop('disabled', Object.keys(trackedBboxCache).length === 0);
+        showToast(headerText + (message ? ` (${message})` : ''), 4000);
+
+        // 跟踪结束后，跳转到第一个被跟踪的帧，以便用户从头开始审查。
+        const firstTrackedFrame = Math.min(...Object.keys(trackedBboxCache).map(Number));
+        if (isFinite(firstTrackedFrame)) {
+            frameSlider.val(firstTrackedFrame).trigger('input');
+        }
+    }
+
+    // --- Helper & UI Functions --- (No other changes below this line)
+    function stringToColor(t){let e=0;for(let s=0;s<t.length;s++)e=t.charCodeAt(s)+((e<<5)-e);return`hsl(${(e%360+360)%360}, 80%, 50%)`}
+    function resizeCanvas(){const t=window.devicePixelRatio||1;const e=frameImage.getBoundingClientRect();[drawingCanvas,crosshairCanvas].forEach(s=>{s.style.width=e.width+"px",s.style.height=e.height+"px",s.width=Math.round(e.width*t),s.height=Math.round(e.height*t)}),drawingCtx.scale(t,t),crosshairCtx.scale(t,t);const s=document.getElementById("canvas-container"),a=document.querySelector(".side-panel");s&&a&&(a.style.maxHeight=s.clientHeight+"px"),redrawCanvas()}
+    function drawCrosshairs(t,e){if(isSamModeActive||isDrawing||isReviewMode)return;const s=window.devicePixelRatio||1;crosshairCtx.clearRect(0,0,crosshairCanvas.width/s,crosshairCanvas.height/s),crosshairCtx.strokeStyle="rgba(0, 0, 255, 0.7)",crosshairCtx.lineWidth=1/s,crosshairCtx.setLineDash([4/s,4/s]),crosshairCtx.beginPath(),crosshairCtx.moveTo(0,e),crosshairCtx.lineTo(crosshairCanvas.width/s,e),crosshairCtx.stroke(),crosshairCtx.beginPath(),crosshairCtx.moveTo(t,0),crosshairCtx.lineTo(t,crosshairCanvas.height/s),crosshairCtx.stroke()}
+    function clearCrosshairs(){const t=window.devicePixelRatio||1;crosshairCtx.clearRect(0,0,crosshairCanvas.width/t,crosshairCanvas.height/t)}
+    function getMousePos(t,e){const s=t.getBoundingClientRect();return{x:e.clientX-s.left,y:e.clientY-s.top}}
+    let toastTimeout;function showToast(t,e=2e3){const s=$("#toast-notification");s.text(t).fadeIn(),toastTimeout&&clearTimeout(toastTimeout),toastTimeout=setTimeout(()=>{s.fadeOut()},e)}
+    function renderBboxList(){const t=$("#bbox-list");t.empty(),bboxes.forEach((e,s)=>{const a=document.getElementById("bbox-item-template").content.cloneNode(!0),i=stringToColor(e.label),n=$(a).find("li");n.attr("data-index",s),s===selectedBboxIndex&&n.addClass("selected"),$(a).find(".color-swatch").css("background-color",i),$(a).find(".bbox-label").text(e.label),$(a).find(".delete-bbox-btn").attr("data-index",s),t.append(a)})}
+    function renderClassList(){const t=$("#class-list");t.empty(),availableClasses.forEach(e=>{const s=stringToColor(e),a=`<span class="color-swatch" style="background-color: ${s};"></span>`,i=$(`<li class="list-group-item">${a}${e}</li>`);i.attr("data-class-name",e),e===activeClass&&(i.addClass("active"),i.css({"background-color":s,"border-color":s})),t.append(i)})}
+    function addClass(t){if(!t||availableClasses.includes(t))return;$.ajax({url:"/addClass",type:"POST",contentType:"application/json",data:JSON.stringify({label_name:t}),success:function(){availableClasses.push(t),renderClassList()},error:function(){showToast("Error: Failed to add new class.",3e3)}})}
+    function formatBboxesToString(){const validBboxes=bboxes.filter(t=>null!=t.x1&&null!=t.y1&&null!=t.x2&&null!=t.y2&&!isNaN(t.x1)&&!isNaN(t.y1)&&!isNaN(t.x2)&&!isNaN(t.y2));return validBboxes.map(t=>`${t.x1},${t.y1},${t.x2},${t.y2},${t.label}`).join("\n")}
+    function parseBboxesFromString(t){if(!t)return[];const e=t.split("\n").filter(t=>""!==t.trim()).map(t=>{const e=t.split(",");if(e.length<5)return null;return{x1:parseInt(e[0]),y1:parseInt(e[1]),x2:parseInt(e[2]),y2:parseInt(e[3]),label:e.slice(4).join(",")}}).filter(t=>null!==t);return e}
+
+    // --- Event Handlers ---
+    frameImage.onload = function() {
+        resizeCanvas();
+        loadBboxesForFrame(frameSlider.val());
+        redrawCanvas();
+        renderBboxList();
+    };
+
+    frameImage.addEventListener('dragstart', (e) => { e.preventDefault(); });
+    window.onresize = resizeCanvas;
+
+    frameSlider.on("input",function(){
+        const frameNumber = $(this).val();
+        $("#frame-number-display").text(frameNumber);
+        const imageUrl = `/media/frames/${videoUuid}/frame_${String(frameNumber).padStart(5, "0")}.jpg`;
+        if (frameImage.src === imageUrl && frameImage.complete) {
+            frameImage.onload();
+        } else {
+            frameImage.src = imageUrl;
+        }
+    });
+
+    $('#sam2-track-btn').on('click', function() {
+        if (bboxes.length === 0) {
+            alert('Please label at least one object on the current frame to start tracking.');
+            return;
+        }
+        const startFrame = parseInt(frameSlider.val());
+        const endFrame = parseInt(frameSlider.attr('max'));
+        if (!confirm(`This will start tracking ${bboxes.length} object(s) from frame ${startFrame} to ${endFrame}. Continue?`)) return;
+
+        $(this).prop('disabled', true);
+        setTrackingUiState(true);
+        trackedBboxCache = {};
+        trackedBboxCache[startFrame] = formatBboxesToString();
+
+        $.ajax({
+            url: '/startSam2Tracking', type: 'POST', contentType: 'application/json',
+            data: JSON.stringify({
+                video_uuid: videoUuid, start_frame: startFrame, end_frame: endFrame,
+                init_bboxes_text: formatBboxesToString()
+            }),
+            success: (res) => {
+                if (res.success) {
+                    sam2TrackerUuid = res.tracker_uuid;
+                    sam2EventSource = new EventSource(`/streamSam2Tracking/${sam2TrackerUuid}`);
+
+                    sam2EventSource.onmessage = function(event) {
+                        const data = JSON.parse(event.data);
+                        handleSseEvent(data);
+                    };
+
+                    sam2EventSource.onerror = function(err) {
+                        showToast('Connection to tracking stream lost.', 3000);
+                        console.error("EventSource failed:", err);
+                        handleTrackingEnd('FAILED', 'Connection lost');
+                        if(sam2EventSource) sam2EventSource.close();
+                    };
+                } else {
+                    alert('Error starting tracking: ' + res.message);
+                    exitReviewMode();
+                }
+            },
+            error: () => {
+                alert('Server error starting tracking.');
+                exitReviewMode();
+            }
+        });
+    });
+
+    $('#stop-sam2-track-btn').on('click', function() {
+        if (!sam2TrackerUuid) return;
+        $(this).prop('disabled', true).text('Stopping...');
+        $.ajax({
+            url: '/stopSam2Tracking', type: 'POST', contentType: 'application/json',
+            data: JSON.stringify({ tracker_uuid: sam2TrackerUuid })
+        });
+    });
+
+    $('#exit-track-mode-btn').on('click', exitReviewMode);
+
+    $('#save-all-tracked-btn').on('click', function() {
+        if (!confirm(`This will save all ${Object.keys(trackedBboxCache).length} reviewed annotations to the database. Are you sure?`)) return;
+
+        const requests = Object.entries(trackedBboxCache).map(([frame_number, bboxes_text]) =>
+            $.ajax({
+                url: "/storeVideoFrameBboxesText", type: "POST", contentType: "application/json",
+                data: JSON.stringify({ video_uuid: videoUuid, frame_number: parseInt(frame_number), bboxes_text: bboxes_text })
+            })
+        );
+
+        showToast(`Saving ${requests.length} frames...`, 5000);
+        Promise.all(requests)
+            .then(() => {
+                showToast('All tracked frames saved successfully!', 3000);
+                window.cachedFrames = null;
+                exitReviewMode();
+            })
+            .catch(err => {
+                alert('An error occurred while saving some frames.'); console.error(err);
+            });
+    });
+
+    canvasContainer.on('mousedown', function(e) {
+        if (isReviewMode) return;
+
+        if (isSamModeActive) {
+            const pos = getMousePos(drawingCanvas, e);
+            if (!activeClass) {
+                alert("Please select a class before using SAM.");
+                return;
+            }
+            const imageX = Math.round(pos.x * (frameImage.naturalWidth / frameImage.clientWidth));
+            const imageY = Math.round(pos.y * (frameImage.naturalHeight / frameImage.clientHeight));
+            canvasContainer.addClass('sam-loading');
+            $.ajax({
+                url: '/samPredict', type: 'POST', contentType: 'application/json',
+                data: JSON.stringify({ video_uuid: videoUuid, frame_number: frameSlider.val(), point: { x: imageX, y: imageY } }),
+                success: function(response) {
+                    if (response.success) {
+                        const newBox = { ...response.bbox, label: activeClass };
+                        bboxes.push(newBox);
+                        saveStateToHistory();
+                        selectedBboxIndex = bboxes.length - 1;
+                        redrawCanvas();
+                        renderBboxList();
+                    } else { showToast('SAM Error: ' + response.message, 3000); }
+                },
+                error: function() { showToast('Server error during SAM prediction.', 3000); },
+                complete: function() { canvasContainer.removeClass('sam-loading'); }
+            });
+            return;
+        }
+
+        const pos = getMousePos(drawingCanvas, e);
+        const scaleX = frameImage.clientWidth / frameImage.naturalWidth;
+        const scaleY = frameImage.clientHeight / frameImage.naturalHeight;
+        let clickedOnBox = false;
+        for (let i = bboxes.length - 1; i >= 0; i--) {
+            const box = bboxes[i];
+            const x = box.x1 * scaleX; const y = box.y1 * scaleY;
+            const w = (box.x2 - box.x1) * scaleX; const h = (box.y2 - box.y1) * scaleY;
+            if (pos.x > x && pos.x < x + w && pos.y > y && pos.y < y + h) {
+                selectedBboxIndex = i; clickedOnBox = true; break;
+            }
+        }
+        if (!clickedOnBox) { selectedBboxIndex = -1; }
+        if (!clickedOnBox && activeClass && !isSamModeActive) {
+            isDrawing = true; startX = pos.x; startY = pos.y; clearCrosshairs();
+        }
+        redrawCanvas(); renderBboxList();
+    });
+
+    $(document).on('mousemove', function(e) {
+        if (!$(e.target).closest('#canvas-container').length) return;
+        const pos = getMousePos(drawingCanvas, e);
+        if (isDrawing) {
+            const dpr = window.devicePixelRatio || 1;
+            const canvasWidth = frameImage.clientWidth;
+            const canvasHeight = frameImage.clientHeight;
+            let currentX = Math.max(0, Math.min(pos.x, canvasWidth));
+            let currentY = Math.max(0, Math.min(pos.y, canvasHeight));
+            redrawCanvas();
+            drawingCtx.strokeStyle = 'blue';
+            drawingCtx.lineWidth = 2 / dpr;
+            drawingCtx.strokeRect(startX, startY, currentX - startX, currentY - startY);
+        } else { drawCrosshairs(pos.x, pos.y); }
+    }).on('mouseup', function(e) {
+        if (!isDrawing) return;
+        isDrawing = false;
+        const pos = getMousePos(drawingCanvas, e);
+        const canvasWidth = frameImage.clientWidth;
+        const canvasHeight = frameImage.clientHeight;
+        let endX = Math.max(0, Math.min(pos.x, canvasWidth));
+        let endY = Math.max(0, Math.min(pos.y, canvasHeight));
+        if (Math.abs(startX - endX) < 5 || Math.abs(startY - endY) < 5) { redrawCanvas(); return; }
+        const scaleX = frameImage.naturalWidth / frameImage.clientWidth;
+        const scaleY = frameImage.naturalHeight / frameImage.clientHeight;
+        const newBox = { x1: Math.round(Math.min(startX, endX) * scaleX), y1: Math.round(Math.min(startY, endY) * scaleY), x2: Math.round(Math.max(startX, endX) * scaleX), y2: Math.round(Math.max(startY, endY) * scaleY), label: activeClass };
+        bboxes.push(newBox);
+        saveStateToHistory();
+        selectedBboxIndex = bboxes.length - 1;
+        redrawCanvas();
+        renderBboxList();
+        drawCrosshairs(pos.x, pos.y);
+    });
+
+    $('#canvas-container').on('mouseleave',function(t){clearCrosshairs()});
+    $('#new-class-name').on("keydown",function(t){"Enter"===t.key&&(t.preventDefault(),$("#add-class-btn").click())});
+    $('#bbox-list').on("click",".list-group-item",function(){selectedBboxIndex=parseInt($(this).data("index")),redrawCanvas(),renderBboxList()});
+    $("#add-class-btn").on("click",function(){const t=$("#new-class-name").val().trim();if(t){addClass(t),$("#new-class-name").val("");}});
+    $("#class-list").on("click", ".list-group-item", function() { const clickedClass = $(this).data("class-name"); activeClass = activeClass === clickedClass ? null : clickedClass; renderClassList(); });
+    $("#bbox-list").on("click",".delete-bbox-btn",function(t){t.stopPropagation();const e=parseInt($(this).data("index"));bboxes.splice(e,1),saveStateToHistory(),selectedBboxIndex=-1,redrawCanvas(),renderBboxList()});
+
+    $("#save-bboxes").on("click",function(){
+        const frameNumber = frameSlider.val();
+        if (isReviewMode) {
+             trackedBboxCache[frameNumber] = formatBboxesToString();
+             showToast(`Frame ${frameNumber} updated in review cache.`, 1500);
+        } else {
+            const bboxesTextToSave = formatBboxesToString();
+            $.ajax({
+                url:"/storeVideoFrameBboxesText",type:"POST",contentType:"application/json",
+                data:JSON.stringify({video_uuid:videoUuid,frame_number:frameNumber,bboxes_text:bboxesTextToSave}),
+                success:function(r){if(r.success){showToast("Frame "+frameNumber+" saved successfully!");window.cachedFrames=null}},
+                error:function(){showToast("Error: Failed to save bounding boxes.",3e3)}
+            });
+        }
+    });
+
+    $('#sam-toggle-btn').on('click', function() {
+        isSamModeActive = !isSamModeActive;
+        $(this).toggleClass('active', isSamModeActive);
+        canvasContainer.toggleClass('sam-active', isSamModeActive);
+        if (isSamModeActive) { $(this).text('SAM Enabled (Click to label)'); clearCrosshairs(); }
+        else { $(this).text('Enable SAM (Click Point)'); }
+    });
+
+    $(document).on("keydown",function(t){
+        if($(t.target).is("input, textarea"))return;
+        if(t.ctrlKey&&"z"===t.key.toLowerCase())t.preventDefault(),undo();
+        else if(t.ctrlKey&&("y"===t.key.toLowerCase()||t.shiftKey&&"z"===t.key.toLowerCase()))t.preventDefault(),redo();
+        else if(("Delete"===t.key||"Backspace"===t.key)&&-1!==selectedBboxIndex)t.preventDefault(),bboxes.splice(selectedBboxIndex,1),saveStateToHistory(),selectedBboxIndex=-1,redrawCanvas(),renderBboxList();
+        else switch(t.key.toLowerCase()){
+            case"s":t.preventDefault();$("#save-bboxes").click();break;
+            case"a":t.preventDefault();let e=parseInt(frameSlider.val())-1;e>=task.start_frame&&frameSlider.val(e).trigger("input");break;
+            case"d":t.preventDefault();let s=parseInt(frameSlider.val())+1;s<frameCount&&frameSlider.val(s).trigger("input");break;
+        }
+    });
+
+    // --- Initial Load ---
+    function performInitialLoad() {
+        $.get('/listClasses', function(response) {
+            if (response.success) {
+                response.labels.forEach(lbl => {
+                    if(!availableClasses.includes(lbl)) availableClasses.push(lbl);
+                });
+                renderClassList();
+                frameSlider.trigger('input');
+            }
+        });
+    }
+
+    if (window.cachedFrames) {
+        delete window.cachedFrames;
+    }
+
+    if (frameImage.complete) {
+        performInitialLoad();
+    } else {
+        $(frameImage).one('load', performInitialLoad);
+    }
+});
+</script>
+{% endblock %}
