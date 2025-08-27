@@ -4,6 +4,8 @@
 
 # Zero-to-YOLO-Yard: 本地化机器学习标注工具
 
+*   [English README (英文 README)](README-EN.md)
+
 **Zero-to-YOLO-Yard** 是一个深度定制的 [FMLTC (FIRST Machine Learning Toolchain)](https://github.com/FIRST-Tech-Challenge/fmltc) 版本，专为在本地计算机上高效运行而设计，无需依赖任何云服务。它专注于提供一个从视频到数据集的完整解决方案，是机器人、无人机或其他计算机视觉项目理想的本地化数据处理工具。
 
 [![Python Version](https://img.shields.io/badge/python-3.10-blue.svg)](https://www.python.org/downloads/release/python-3100/)
