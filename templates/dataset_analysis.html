@@ -1,0 +1,386 @@
+{% extends "layout.html" %}
+
+{% block head %}
+<style>
+    .chart-container {
+        position: relative;
+        height: 40vh;
+        width: 100%;
+        margin-bottom: 40px;
+    }
+    #gallery {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 15px;
+        max-height: 80vh;
+        overflow-y: auto;
+        padding: 5px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+    #gallery .gallery-item {
+        position: relative;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+    #gallery img {
+        width: 100%;
+        height: auto;
+        cursor: pointer;
+        display: block;
+    }
+    #gallery .gallery-item.hidden {
+        display: none;
+    }
+    #gallery .caption {
+        background: rgba(0,0,0,0.7);
+        color: white;
+        font-size: 0.8em;
+        padding: 8px;
+        text-align: center;
+        margin-top: auto;
+    }
+    .caption-text {
+        display: block;
+        margin-bottom: 5px;
+    }
+    .outlier-controls {
+        background-color: #f8f9fa;
+        padding: 15px;
+        border-radius: 5px;
+        border: 1px solid #dee2e6;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3>Analysis for Dataset: <span class="text-primary">{{ dataset.description }}</span></h3>
+        <a href="/" class="btn btn-secondary">Back to Home</a>
+    </div>
+
+    <div id="loading-indicator">
+        <h4><span class="spinner-border" role="status" aria-hidden="true"></span> Loading analysis data...</h4>
+        <p>This may take a moment for large datasets.</p>
+    </div>
+
+    <div id="analysis-content" style="display: none;">
+        <!-- Row 0: Summary and Warnings -->
+        <div id="summary-container" class="mb-4"></div>
+
+        <!-- Row 1: Core Stats -->
+        <div class="row">
+            <div class="col-lg-6 col-xl-4">
+                <h4>Instance Counts by Class</h4>
+                <div class="chart-container">
+                    <canvas id="class-counts-chart"></canvas>
+                </div>
+            </div>
+            <div class="col-lg-6 col-xl-4">
+                <h4>Objects per Image Distribution</h4>
+                 <div class="chart-container">
+                    <canvas id="objects-per-image-chart"></canvas>
+                </div>
+            </div>
+            <div class="col-lg-6 col-xl-4">
+                <h4>Brightness Distribution</h4>
+                 <div class="chart-container">
+                    <canvas id="brightness-chart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Row 2: Shape and Position -->
+        <div class="row">
+             <div class="col-lg-5 col-xl-4">
+                <h4>Aspect Ratio Distribution</h4>
+                 <div class="chart-container">
+                    <canvas id="aspect-ratio-chart"></canvas>
+                </div>
+            </div>
+            <div class="col-lg-7 col-xl-8">
+                <h4>Bounding Box Center Scatter Plot</h4>
+                 <div class="chart-container" style="background: #f0f0f0; border: 1px solid #ccc;">
+                    <canvas id="bbox-center-scatter-plot"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Row 3: Annotator Statistics (Now full width) -->
+        <div class="row mt-4">
+            <div class="col-lg-12">
+                <h4>Annotator Statistics</h4>
+                <div class="chart-container">
+                    <canvas id="annotator-chart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <hr class="my-4">
+
+        <!-- Row 4: Gallery and Outlier Browser -->
+        <div class="row">
+            <div class="col-12">
+                 <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h4>Image Gallery (<span id="gallery-count">0</span> images)</h4>
+                    <div class="outlier-controls">
+                        <label class="mr-2"><strong>Filter & Browser:</strong></label>
+                        <select id="outlier-filter" class="form-control-sm mr-2">
+                            <option value="none">-- Select a Filter Type --</option>
+                            <option value="area_smallest">Smallest Area (Top 10)</option>
+                            <option value="area_largest">Largest Area (Top 10)</option>
+                            <option value="ar_smallest">Most Squarish AR (Top 10)</option>
+                            <option value="ar_largest">Most Extreme AR (Top 10)</option>
+                            <option value="iou_high">High Overlap (IoU > 0.95)</option>
+                        </select>
+                        <button id="reset-filter-btn" class="btn btn-sm btn-secondary">Reset View</button>
+                    </div>
+                </div>
+                <div id="gallery"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+
+<script>
+$(document).ready(function() {
+    const datasetUuid = "{{ dataset.dataset_uuid }}";
+    // --- Global variables for new features ---
+    let fullGalleryData = [];
+    let allBboxesData = [];
+    let suspiciousPairsData = [];
+    let imageClassMap = {};
+    let classChart = null; // To hold the chart instance for interaction
+
+    $.ajax({
+        url: `/api/datasetAnalysis/${datasetUuid}`,
+        type: 'GET',
+        success: function(response) {
+            if (response.success) {
+                $('#loading-indicator').hide();
+                $('#analysis-content').show();
+
+                // --- Store all data from backend ---
+                fullGalleryData = response.gallery_images;
+                allBboxesData = response.all_bboxes;
+                suspiciousPairsData = response.suspicious_pairs;
+                imageClassMap = response.image_class_map;
+
+                // --- Render all components ---
+                renderSummaryAndWarnings(response.summary_text, response.warnings);
+                renderClassCounts(response.class_counts);
+                renderObjectsPerImage(response.objects_per_image);
+                renderBrightness(response.brightness_levels);
+                renderAspectRatio(response.aspect_ratios);
+                renderCenterScatterPlot(response.center_points);
+                renderAnnotatorStats(response.annotator_stats);
+                renderGallery(fullGalleryData);
+            } else {
+                $('#loading-indicator').html(`<div class="alert alert-danger">Error loading analysis: ${response.message}</div>`);
+            }
+        },
+        error: function() {
+            $('#loading-indicator').html('<div class="alert alert-danger">Failed to fetch analysis data from the server.</div>');
+        }
+    });
+
+    function createHistogramData(data, bins = 10, min, max) {
+        if (data.length === 0) return { labels: [], counts: [] };
+        min = min ?? Math.min(...data);
+        max = max ?? Math.max(...data);
+        if (min === max) { min -= 0.5; max += 0.5; }
+        const binSize = (max - min) / bins;
+        const counts = Array(bins).fill(0);
+        const labels = [];
+        for (let i = 0; i < bins; i++) {
+            const binStart = min + i * binSize;
+            const binEnd = binStart + binSize;
+            labels.push(`${binStart.toFixed(2)}-${binEnd.toFixed(2)}`);
+        }
+        for (const value of data) {
+            let binIndex = Math.floor((value - min) / binSize);
+            binIndex = Math.max(0, Math.min(bins - 1, binIndex));
+            if (value === max) binIndex = bins - 1;
+            counts[binIndex]++;
+        }
+        return { labels, counts };
+    }
+
+    // --- NEW: Function to render summary and warnings ---
+    function renderSummaryAndWarnings(summary, warnings) {
+        const container = $('#summary-container');
+        container.empty();
+        if (summary) {
+            container.append(`<div class="alert alert-info">${summary}</div>`);
+        }
+        if (warnings && warnings.length > 0) {
+            const warningsList = $('<ul class="list-group mt-2"></ul>');
+            warnings.forEach(warning => {
+                warningsList.append(`<li class="list-group-item list-group-item-warning">${warning}</li>`);
+            });
+            container.append(warningsList);
+        }
+    }
+
+    function renderCenterScatterPlot(points) {
+        const ctx = document.getElementById('bbox-center-scatter-plot').getContext('2d');
+        new Chart(ctx, {
+            type: 'scatter',
+            data: {
+                datasets: [{
+                    label: 'BBox Center', data: points, backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                    pointRadius: 3, pointHoverRadius: 5
+                }]
+            },
+            options: {
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { type: 'linear', position: 'bottom', min: 0, max: 1, title: { display: true, text: 'Normalized X Position' }},
+                    y: { min: 0, max: 1, reverse: true, title: { display: true, text: 'Normalized Y Position' }}
+                }
+            }
+        });
+    }
+
+    function renderGallery(images) {
+        const gallery = $('#gallery');
+        gallery.empty();
+        $('#gallery-count').text(images.length);
+        images.forEach((image, index) => {
+            const annotatedUrl = `/media/annotated_frame/${image.video_uuid}/${image.frame}.jpg`;
+            const goToLabelUrl = image.task_uuid ? `/labelVideo?task_uuid=${image.task_uuid}&frame=${image.frame}` : '#';
+            const buttonDisabled = image.task_uuid ? '' : 'disabled';
+            const item = $(`
+                <div class="gallery-item" data-index="${index}">
+                    <img src="${annotatedUrl}" alt="Frame ${image.frame}" loading="lazy">
+                    <div class="caption">
+                        <span class="caption-text">${image.video} / F ${image.frame}</span>
+                        <a href="${goToLabelUrl}" class="btn btn-sm btn-primary" ${buttonDisabled}>Go to Label</a>
+                    </div>
+                </div>
+            `);
+            item.find('img').on('click', () => window.open(image.original_url, '_blank'));
+            gallery.append(item);
+        });
+    }
+
+    // --- NEW: Function to filter gallery by class name ---
+    function filterGalleryByClass(className) {
+        const classImageIndices = [];
+        for (const [imageIndex, classList] of Object.entries(imageClassMap)) {
+            if (classList.includes(className)) {
+                classImageIndices.push(parseInt(imageIndex));
+            }
+        }
+        $('#outlier-filter').val('none');
+        $('#gallery .gallery-item').each(function() {
+            const itemIndex = parseInt($(this).data('index'));
+            $(this).toggleClass('hidden', !classImageIndices.includes(itemIndex));
+        });
+    }
+
+    // --- NEW: Function to reset all gallery filters ---
+    function resetGalleryFilter() {
+        $('#outlier-filter').val('none');
+        $('#gallery .gallery-item').removeClass('hidden');
+    }
+
+    $('#outlier-filter').on('change', function() {
+        const filterType = $(this).val();
+        if (filterType === 'none') {
+             $('#gallery .gallery-item').removeClass('hidden');
+             return;
+        }
+        let sortedBboxes, targetImageIndices;
+        switch(filterType) {
+            case 'area_smallest': sortedBboxes = [...allBboxesData].sort((a, b) => a.area - b.area); break;
+            case 'area_largest': sortedBboxes = [...allBboxesData].sort((a, b) => b.area - a.area); break;
+            case 'ar_smallest': sortedBboxes = [...allBboxesData].sort((a, b) => Math.abs(a.aspect_ratio - 1) - Math.abs(b.aspect_ratio - 1)); break;
+            case 'ar_largest': sortedBboxes = [...allBboxesData].sort((a, b) => Math.abs(b.aspect_ratio - 1) - Math.abs(a.aspect_ratio - 1)); break;
+            case 'iou_high':
+                targetImageIndices = [...new Set(suspiciousPairsData.map(p => p.image_index))];
+                break;
+        }
+
+        if (sortedBboxes) {
+            targetImageIndices = [...new Set(sortedBboxes.slice(0, 10).map(b => b.image_index))];
+        }
+
+        $('#gallery .gallery-item').each(function() {
+            const itemIndex = parseInt($(this).data('index'));
+            $(this).toggleClass('hidden', !targetImageIndices.includes(itemIndex));
+        });
+    });
+
+    $('#reset-filter-btn').on('click', resetGalleryFilter);
+
+    // --- UPDATED: Class counts chart is now interactive ---
+    function renderClassCounts(classCounts) {
+        const chartData = { labels: Object.keys(classCounts), datasets: [{ label: '# of Instances', data: Object.values(classCounts), backgroundColor: 'rgba(54, 162, 235, 0.6)' }]};
+        if (classChart) { classChart.destroy(); } // Destroy old chart instance if it exists
+        const ctx = document.getElementById('class-counts-chart');
+        classChart = new Chart(ctx, {
+            type: 'bar',
+            data: chartData,
+            options: {
+                maintainAspectRatio: false,
+                scales: { y: { beginAtZero: true } },
+                onClick: (event, elements) => {
+                    if (elements.length > 0) {
+                        const clickedIndex = elements[0].index;
+                        const className = classChart.data.labels[clickedIndex];
+                        filterGalleryByClass(className);
+                    } else {
+                        // If user clicks on the background, reset the filter
+                        resetGalleryFilter();
+                    }
+                }
+            }
+        });
+    }
+
+    function renderObjectsPerImage(data) {
+        const counts = data.reduce((acc, val) => { acc[val] = (acc[val] || 0) + 1; return acc; }, {});
+        const chartData = { labels: Object.keys(counts), datasets: [{ label: '# of Images', data: Object.values(counts), backgroundColor: 'rgba(75, 192, 192, 0.6)' }] };
+        new Chart($('#objects-per-image-chart'), { type: 'bar', data: chartData, options: { maintainAspectRatio: false, scales: { x: { title: { display: true, text: 'Number of Objects in Image' } }, y: { beginAtZero: true } } } });
+    }
+    function renderBrightness(data) {
+        const histData = createHistogramData(data, 20, 0, 255);
+        const chartData = { labels: histData.labels, datasets: [{ label: 'Image Count', data: histData.counts, backgroundColor: 'rgba(255, 206, 86, 0.6)' }] };
+        new Chart($('#brightness-chart'), { type: 'bar', data: chartData, options: { maintainAspectRatio: false, scales: { y: { beginAtZero: true } } } });
+    }
+    function renderAspectRatio(data) {
+        const logData = data.map(d => d > 0 ? Math.log10(d) : 0);
+        const minLog = logData.length > 0 ? Math.min(...logData) : 0;
+        const maxLog = logData.length > 0 ? Math.max(...logData) : 1;
+        const histData = createHistogramData(logData, 15, minLog, maxLog);
+        histData.labels = histData.labels.map(l => {
+            const range = l.split('-').map(parseFloat);
+            return `${Math.pow(10, range[0]).toFixed(2)}-${Math.pow(10, range[1]).toFixed(2)}`;
+        });
+        const chartData = { labels: histData.labels, datasets: [{ label: 'BBox Count', data: histData.counts, backgroundColor: 'rgba(153, 102, 255, 0.6)' }] };
+        new Chart($('#aspect-ratio-chart'), { type: 'bar', data: chartData, options: { maintainAspectRatio: false, scales: { x: { title: {display: true, text: 'Width / Height'}}, y: { beginAtZero: true } } } });
+    }
+    function renderAnnotatorStats(stats) {
+        const users = Object.keys(stats);
+        if (users.length === 0) {
+            $('#annotator-chart').parent().html('<p class="text-muted">No annotator data found. Ensure tasks are assigned.</p>');
+            return;
+        }
+        const imageCounts = users.map(u => stats[u].image_count);
+        const chartData = { labels: users, datasets: [{ label: '# Labeled Images', data: imageCounts, backgroundColor: 'rgba(255, 159, 64, 0.6)' }] };
+        new Chart($('#annotator-chart'), { type: 'bar', data: chartData, options: { maintainAspectRatio: false, scales: { y: { beginAtZero: true } } } });
+    }
+});
+</script>
+{% endblock %}

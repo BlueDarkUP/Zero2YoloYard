@@ -661,6 +661,14 @@ $(document).ready(function() {
                     if(!availableClasses.includes(lbl)) availableClasses.push(lbl);
                 });
                 renderClassList();
+                const urlParams = new URLSearchParams(window.location.search);
+                const frameFromUrl = urlParams.get('frame');
+                if (frameFromUrl) {
+                    const frameNumber = parseInt(frameFromUrl);
+                    if (frameNumber >= parseInt(frameSlider.attr('min')) && frameNumber <= parseInt(frameSlider.attr('max'))) {
+                        frameSlider.val(frameNumber);
+                    }
+                }
                 frameSlider.trigger('input');
             }
         });

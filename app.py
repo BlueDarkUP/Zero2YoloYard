@@ -6,13 +6,20 @@ import json
 import threading
 import uuid
 import logging
+import cv2
+import numpy as np
+import io
+from collections import Counter
+from skimage import io as skio
+from skimage.color import rgb2gray
+import itertools  # Added for finding combinations of boxes
 
 import settings_manager
 import config
 import database
 import file_storage
 import background_tasks
-from bbox_writer import validate_bboxes_text, count_boxes
+from bbox_writer import validate_bboxes_text, count_boxes, convert_text_to_rects_and_labels, extract_labels
 
 try:
     import ultralytics_sam_tasks as sam_tasks
@@ -33,6 +40,7 @@ except ImportError:
 
 with app.app_context():
     database.init_db()
+    database.migrate_db()
     file_storage.init_storage()
 
 
@@ -46,6 +54,34 @@ def validate_description(desc, existing_descriptions):
 
 def sanitize_dict(d):
     return d
+
+
+def string_to_color_bgr(s):
+    hash_val = 0
+    for char in s:
+        hash_val = ord(char) + ((hash_val << 5) - hash_val)
+    hue = hash_val % 360
+    color_hsv = np.uint8([[[hue, 200, 200]]])
+    color_bgr = cv2.cvtColor(color_hsv, cv2.COLOR_HSV2BGR)[0][0]
+    return tuple(map(int, color_bgr))
+
+
+def calculate_iou(boxA, boxB):
+    """Calculates Intersection over Union for two bounding boxes."""
+    xA = max(boxA[0], boxB[0])
+    yA = max(boxA[1], boxB[1])
+    xB = min(boxA[2], boxB[2])
+    yB = min(boxA[3], boxB[3])
+
+    interArea = max(0, xB - xA) * max(0, yB - yA)
+    if interArea == 0:
+        return 0.0
+
+    boxAArea = (boxA[2] - boxA[0]) * (boxA[3] - boxA[1])
+    boxBArea = (boxB[2] - boxB[0]) * (boxB[3] - boxB[1])
+
+    iou = interArea / float(boxAArea + boxBArea - interArea)
+    return iou
 
 
 @app.route('/')
@@ -85,6 +121,47 @@ def label_video():
 @app.route('/media/<path:path>')
 def send_media(path):
     return send_from_directory(config.STORAGE_DIR, path)
+
+
+@app.route('/media/annotated_frame/<video_uuid>/<int:frame_number>.jpg')
+def serve_annotated_frame(video_uuid, frame_number):
+    try:
+        frame_path = file_storage.get_frame_path(video_uuid, frame_number)
+        if not os.path.exists(frame_path):
+            return "Frame not found", 404
+        image = cv2.imread(frame_path)
+        if image is None:
+            return "Could not read frame image", 500
+
+        conn = database.get_db_connection()
+        frame_data = conn.execute(
+            'SELECT bboxes_text FROM video_frames WHERE video_uuid = ? AND frame_number = ?',
+            (video_uuid, frame_number)
+        ).fetchone()
+        conn.close()
+
+        bboxes_text = frame_data['bboxes_text'] if frame_data else None
+
+        if bboxes_text and bboxes_text.strip():
+            rects, labels = convert_text_to_rects_and_labels(bboxes_text)
+            for i, rect in enumerate(rects):
+                label = labels[i]
+                color = string_to_color_bgr(label)
+                x1, y1, x2, y2 = rect
+                cv2.rectangle(image, (x1, y1), (x2, y2), color, 2)
+                (text_width, text_height), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+                cv2.rectangle(image, (x1, y1 - text_height - 5), (x1 + text_width, y1), color, -1)
+                cv2.putText(image, label, (x1, y1 - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+
+        success, buffer = cv2.imencode('.jpg', image)
+        if not success:
+            return "Failed to encode image", 500
+
+        return Response(buffer.tobytes(), mimetype='image/jpeg')
+
+    except Exception as e:
+        logging.error(f"Error generating annotated frame for {video_uuid}/{frame_number}: {e}")
+        return "Internal server error", 500
 
 
 @app.route('/listVideos', methods=['GET'])
@@ -479,13 +556,36 @@ def create_dataset():
         return jsonify({'success': False, 'message': 'Please select at least one video.'}), 400
 
     create_time = int(time.time() * 1000)
-    dataset_uuid = database.create_dataset_entry(desc, video_uuids, create_time)
+    dataset_uuid = database.create_dataset_entry(desc, video_uuids, create_time, eval_percent, test_percent)
 
     threading.Thread(target=background_tasks.create_dataset_task, args=(
         dataset_uuid, video_uuids, eval_percent, test_percent
     ), name=f"Dataset-{dataset_uuid[:6]}").start()
 
     return jsonify({'success': True, 'dataset_uuid': dataset_uuid})
+
+
+@app.route('/regenerateDataset', methods=['POST'])
+def regenerate_dataset():
+    dataset_uuid = request.json.get('dataset_uuid')
+    if not dataset_uuid:
+        return jsonify({'success': False, 'message': 'Dataset UUID is required.'}), 400
+
+    dataset = database.get_dataset_entity(dataset_uuid)
+    if not dataset:
+        return jsonify({'success': False, 'message': 'Dataset not found.'}), 404
+
+    file_storage.delete_dataset_files(dataset_uuid)
+    database.update_dataset_status(dataset_uuid, 'PENDING')
+    video_uuids = json.loads(dataset['video_uuids'])
+    eval_percent = dataset.get('eval_percent')
+    test_percent = dataset.get('test_percent')
+
+    threading.Thread(target=background_tasks.create_dataset_task, args=(
+        dataset_uuid, video_uuids, eval_percent, test_percent
+    ), name=f"Dataset-Regen-{dataset_uuid[:6]}").start()
+
+    return jsonify({'success': True, 'message': 'Dataset regeneration started.'})
 
 
 @app.route('/downloadDataset/<dataset_uuid>')
@@ -538,7 +638,144 @@ def delete_model():
     return jsonify({'success': True})
 
 
-# --- 启动任务与服务器运行 ---
+@app.route('/datasetAnalysis/<dataset_uuid>')
+def dataset_analysis(dataset_uuid):
+    dataset = database.get_dataset_entity(dataset_uuid)
+    if not dataset:
+        return "Dataset not found", 404
+    return render_template('dataset_analysis.html', dataset=sanitize_dict(dataset))
+
+
+@app.route('/api/datasetAnalysis/<dataset_uuid>', methods=['GET'])
+def get_dataset_analysis_data(dataset_uuid):
+    dataset = database.get_dataset_entity(dataset_uuid)
+    if not dataset:
+        return jsonify({'success': False, 'message': 'Dataset not found.'}), 404
+
+    video_uuids = json.loads(dataset.get('video_uuids', '[]'))
+
+    tasks_by_video = {vu: database.get_tasks_for_video(vu) for vu in video_uuids}
+    video_info_cache = {vu: database.get_video_entity(vu) for vu in video_uuids}
+
+    def get_task_for_frame(video_uuid, frame_number):
+        for task in tasks_by_video.get(video_uuid, []):
+            if task['start_frame'] <= frame_number <= task['end_frame']:
+                return task['task_uuid']
+        return None
+
+    all_frames = [
+        {**dict(frame), 'video_uuid': vu, 'video_description': video_info_cache[vu].get('description')}
+        for vu in video_uuids
+        for frame in database.get_video_frames(vu)
+        if frame.get('bboxes_text', '').strip()
+    ]
+
+    class_counts = Counter()
+    aspect_ratios, objects_per_image, center_points, brightness_levels = [], [], [], []
+    all_bboxes_for_outliers = []
+    suspicious_pairs = []
+    image_class_map = {}
+
+    for i, frame in enumerate(all_frames):
+        video_uuid, frame_number, bboxes_text = frame['video_uuid'], frame['frame_number'], frame['bboxes_text']
+        rects, labels = convert_text_to_rects_and_labels(bboxes_text)
+
+        image_class_map[i] = list(set(labels))
+        objects_per_image.append(len(labels))
+
+        if len(rects) > 1:
+            for (idx1, rect1), (idx2, rect2) in itertools.combinations(enumerate(rects), 2):
+                iou = calculate_iou(rect1, rect2)
+                if iou > 0.95:
+                    suspicious_pairs.append({
+                        'image_index': i, 'iou': iou,
+                        'box1_label': labels[idx1], 'box2_label': labels[idx2]
+                    })
+        try:
+            image_gray = skio.imread(file_storage.get_frame_path(video_uuid, frame_number), as_gray=True)
+            brightness_levels.append(np.mean(image_gray) * 255)
+        except Exception:
+            pass
+
+        for j, rect in enumerate(rects):
+            class_counts[labels[j]] += 1
+            width, height = int(rect[2] - rect[0]), int(rect[3] - rect[1])
+
+            if width > 0 and height > 0:
+                aspect_ratios.append(width / height)
+                video_info = video_info_cache[video_uuid]
+                if video_info and video_info['width'] > 0 and video_info['height'] > 0:
+                    center_x = (float(rect[0]) + float(rect[2])) / 2.0 / float(video_info['width'])
+                    center_y = (float(rect[1]) + float(rect[3])) / 2.0 / float(video_info['height'])
+                    center_points.append({'x': center_x, 'y': center_y})
+                all_bboxes_for_outliers.append(
+                    {'id': f'{video_uuid}_{frame_number}_{j}', 'image_index': i, 'area': width * height,
+                     'aspect_ratio': width / height})
+
+    annotator_stats = {}
+    all_tasks = [task for vid_tasks in tasks_by_video.values() for task in vid_tasks]
+    for task in all_tasks:
+        user = task['assigned_to']
+        if user not in annotator_stats:
+            annotator_stats[user] = {'image_count': 0, 'class_counts': Counter()}
+
+    user_frame_sets = {user: set() for user in annotator_stats.keys()}
+    for frame in all_frames:
+        for task in all_tasks:
+            if task['video_uuid'] == frame['video_uuid'] and task['start_frame'] <= frame['frame_number'] <= task[
+                'end_frame']:
+                user = task['assigned_to']
+                user_frame_sets[user].add(f"{frame['video_uuid']}_{frame['frame_number']}")
+                annotator_stats[user]['class_counts'].update(extract_labels(frame['bboxes_text']))
+    for user, frame_set in user_frame_sets.items():
+        annotator_stats[user]['image_count'] = len(frame_set)
+
+    gallery_images = [{
+        'original_url': f"/media/frames/{f['video_uuid']}/frame_{f['frame_number']:05d}.jpg",
+        'video': f['video_description'], 'frame': f['frame_number'], 'video_uuid': f['video_uuid'],
+        'task_uuid': get_task_for_frame(f['video_uuid'], f['frame_number'])
+    } for f in all_frames]
+
+    # Generate Summary and Warnings
+    warnings = []
+    total_instances = sum(class_counts.values())
+    if class_counts:
+        avg_instances = total_instances / len(class_counts)
+        for class_name, count in class_counts.items():
+            if count < 10 or count < avg_instances * 0.1:
+                warnings.append(
+                    f"<b>Class Imbalance:</b> Class '{class_name}' has very few instances ({count}), which may lead to poor model performance.")
+
+    small_object_threshold = 100
+    small_object_count = sum(1 for bbox in all_bboxes_for_outliers if bbox['area'] < small_object_threshold)
+    if small_object_count > 0:
+        warnings.append(
+            f"<b>Small Objects:</b> Found {small_object_count} objects with an area smaller than {small_object_threshold} pixels. Please verify they are not annotation errors.")
+
+    if suspicious_pairs:
+        warnings.append(
+            f"<b>Potential Duplicates:</b> Found {len(suspicious_pairs)} pairs of bounding boxes with very high overlap (IoU > 0.95), suggesting possible duplicate annotations.")
+
+    summary_text = f"This dataset contains <strong>{len(class_counts)}</strong> classes with a total of <strong>{total_instances}</strong> instances across <strong>{len(all_frames)}</strong> annotated images."
+
+    return jsonify({
+        'success': True,
+        'summary_text': summary_text,
+        'warnings': warnings,
+        'class_counts': dict(class_counts),
+        'aspect_ratios': aspect_ratios,
+        'objects_per_image': objects_per_image,
+        'center_points': center_points,
+        'brightness_levels': brightness_levels,
+        'annotator_stats': {u: {'image_count': d['image_count'], 'class_counts': dict(d['class_counts'])} for u, d in
+                            annotator_stats.items()},
+        'all_bboxes': all_bboxes_for_outliers,
+        'suspicious_pairs': suspicious_pairs,
+        'image_class_map': image_class_map,
+        'gallery_images': gallery_images
+    })
+
+
 def startup_ai_models():
     if sam_tasks:
         logging.info("Starting initial AI model load based on settings...")
@@ -546,7 +783,12 @@ def startup_ai_models():
 
 
 if __name__ == '__main__':
+    from waitress import serve
+
     logging.info("Starting AI model initialization in a background thread...")
     threading.Thread(target=startup_ai_models, name="AI-Initializers").start()
-
-    app.run(host='127.0.0.1', port=5000, debug=True, use_reloader=False)
+    print("=" * 60)
+    print("FTC-ML Server is running.")
+    print("Open your web browser and go to http://127.0.0.1:5000")
+    print("=" * 60)
+    serve(app, host='0.0.0.0', port=5000)

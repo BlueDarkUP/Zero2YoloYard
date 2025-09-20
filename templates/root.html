@@ -274,7 +274,12 @@ $(document).ready(function() {
                 let actions = `<button class="btn btn-sm btn-danger btn-delete-dataset" data-uuid="${dataset.dataset_uuid}">Delete</button>`;
                 if (dataset.status === 'READY') {
                     actions = `<a href="/downloadDataset/${dataset.dataset_uuid}" class="btn btn-sm btn-success">Download</a> ` + actions;
+                    actions = `<button class="btn btn-sm btn-secondary btn-regenerate-dataset" data-uuid="${dataset.dataset_uuid}">Update</button> ` + actions;
+                    actions = `<a href="/datasetAnalysis/${dataset.dataset_uuid}" class="btn btn-sm btn-info">Analyze</a> ` + actions;
+                } else if (dataset.status === 'FAILED') {
+                    actions = `<button class="btn btn-sm btn-secondary btn-regenerate-dataset" data-uuid="${dataset.dataset_uuid}">Retry</button> ` + actions;
                 }
+
                 const videos = JSON.parse(dataset.video_uuids || '[]').length;
                 const classes = JSON.parse(dataset.sorted_label_list || '[]').join(', ');
 
@@ -425,7 +430,7 @@ $(document).ready(function() {
                             <td>${task.start_frame} - ${task.end_frame}</td>
                             <td>${task.description || ''}</td>
                             <td>
-                                <a href="/labelVideo?task_uuid=${task.task_uuid}" class="btn btn-sm btn-primary" target="_blank">Start Labeling</a>
+                                <a href="/labelVideo?task_uuid=${task.task_uuid}" class="btn btn-sm btn-primary">Start Labeling</a>
                                 <button class="btn btn-sm btn-danger btn-delete-task" data-task-uuid="${task.task_uuid}" data-video-uuid="${videoUuid}">Delete</button>
                             </td>
                         </tr>`;
@@ -454,7 +459,7 @@ $(document).ready(function() {
         });
     });
 
-    // --- Deletion Handlers ---
+    // --- Deletion and Update Handlers ---
     $(document).on("click", ".btn-delete-video", function() {
         if (confirm('Are you sure you want to delete this video and all its data?')) { $.ajax({url: '/deleteVideo', type: 'POST', contentType: 'application/json', data: JSON.stringify({ video_uuid: $(this).data('uuid') }), success: refreshVideos }); }
     });
@@ -467,6 +472,29 @@ $(document).ready(function() {
     });
     $(document).on("click", ".btn-delete-model", function() {
         if (confirm('Are you sure you want to delete this model?')) { $.ajax({url: '/deleteModel', type: 'POST', contentType: 'application/json', data: JSON.stringify({ model_uuid: $(this).data('uuid') }), success: refreshModels }); }
+    });
+
+    $(document).on("click", ".btn-regenerate-dataset", function() {
+        const uuid = $(this).data('uuid');
+        if (confirm('Are you sure you want to update this dataset? This will delete the old zip file and regenerate it with the latest annotations.')) {
+            $.ajax({
+                url: '/regenerateDataset',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ dataset_uuid: uuid }),
+                success: function(response) {
+                    if(response.success) {
+                        alert('Dataset update process has started.');
+                        refreshDatasets();
+                    } else {
+                        alert('Error: ' + response.message);
+                    }
+                },
+                error: function() {
+                    alert('An error occurred while starting the dataset update.');
+                }
+            });
+        }
     });
 
     // --- Initial Load & Refresh Interval ---
