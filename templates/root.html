@@ -3,7 +3,7 @@
 {% from "_macros.html" import render_modal %}
 
 {% block content %}
-<div class="container-fluid">
+<div class="content-wrapper slide-in-up">
     <ul class="nav nav-tabs" id="mainTabs" role="tablist">
         <li class="nav-item"><a class="nav-link active" id="videos-tab" data-toggle="tab" href="#videos" role="tab">Videos</a></li>
         <li class="nav-item"><a class="nav-link" id="datasets-tab" data-toggle="tab" href="#datasets" role="tab">Datasets</a></li>
@@ -11,64 +11,85 @@
         <li class="nav-item"><a class="nav-link" id="settings-tab" data-toggle="tab" href="#settings" role="tab">Settings</a></li>
     </ul>
 
-    <div class="tab-content mt-3">
+    <div class="tab-content pt-4">
         <!-- Videos Tab -->
         <div class="tab-pane fade show active" id="videos" role="tabpanel">
-            <h2>Videos</h2>
-            <button class="btn btn-primary mb-3" data-toggle="modal" data-target="#uploadVideoModal">Upload Video</button>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h2 class="mb-0">Videos Management</h2>
+                <button class="btn btn-primary" data-toggle="modal" data-target="#uploadVideoModal">
+                    <i class="bi bi-upload"></i> Upload Video
+                </button>
+            </div>
+            <p class="text-muted">Upload, manage, and assign annotation tasks for your videos.</p>
             <input type="file" id="frame-import-input" webkitdirectory directory multiple style="display: none;" />
-            <table class="table table-hover">
-                <thead><tr><th>Description</th><th>Filename</th><th>Status</th><th>Frames</th><th>Labeled</th><th>Actions</th></tr></thead>
-                <tbody id="video-list"></tbody>
-            </table>
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="thead-light"><tr><th>Description</th><th>Filename</th><th>Status</th><th>Frames</th><th>Labeled</th><th>Actions</th></tr></thead>
+                    <tbody id="video-list"></tbody>
+                </table>
+            </div>
         </div>
 
         <!-- Datasets Tab -->
         <div class="tab-pane fade" id="datasets" role="tabpanel">
-            <h2>Datasets</h2>
-            <button class="btn btn-primary mb-3" data-toggle="modal" data-target="#createDatasetModal">Create Dataset</button>
-            <table class="table table-hover">
-                <thead>
-                    <tr>
-                        <th>Description</th>
-                        <th>Status</th>
-                        <th>Included Videos</th>
-                        <th>Classes</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody id="dataset-list"></tbody>
-            </table>
+             <div class="d-flex justify-content-between align-items-center mb-3">
+                <h2 class="mb-0">Dataset Hub</h2>
+                <button class="btn btn-primary" data-toggle="modal" data-target="#createDatasetModal">
+                    <i class="bi bi-plus-circle"></i> Create Dataset
+                </button>
+            </div>
+            <p class="text-muted">Create, analyze, and download your datasets in YOLO format.</p>
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="thead-light">
+                        <tr>
+                            <th>Description</th>
+                            <th>Status</th>
+                            <th>Included Videos</th>
+                            <th>Classes</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dataset-list"></tbody>
+                </table>
+            </div>
         </div>
 
         <!-- Models Tab -->
         <div class="tab-pane fade" id="models" role="tabpanel">
-             <h2>Models</h2>
-            <button class="btn btn-primary mb-3" data-toggle="modal" data-target="#importModelModal">Import TFLite Model</button>
-            <table class="table table-hover">
-                <thead>
-                    <tr>
-                        <th>Description</th>
-                        <th>Created Date</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody id="model-list"></tbody>
-            </table>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h2 class="mb-0">Model Repository</h2>
+                <button class="btn btn-primary" data-toggle="modal" data-target="#importModelModal">
+                    <i class="bi bi-box-arrow-in-down"></i> Import TFLite Model
+                </button>
+            </div>
+            <p class="text-muted">Import and manage your trained TFLite models.</p>
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="thead-light">
+                        <tr>
+                            <th>Description</th>
+                            <th>Created Date</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="model-list"></tbody>
+                </table>
+            </div>
         </div>
 
         <!-- Settings Tab -->
         <div class="tab-pane fade" id="settings" role="tabpanel">
-            <h2>Application Settings</h2>
-            <p>Changes to the SAM model will take effect on the next annotation or tracking task.</p>
-            <form id="settings-form" class="mt-3 col-md-8 col-lg-6">
-                <div class="card">
+            <h2 class="mb-3">Application Settings</h2>
+            <p class="text-muted">Changes to the SAM model will take effect on the next annotation or tracking task.</p>
+            <form id="settings-form" class="mt-4 col-md-10 col-lg-8">
+                <div class="card mb-4">
                     <div class="card-header">
-                        AI Model Settings
+                        <i class="bi bi-magic"></i> AI Model Settings
                     </div>
                     <div class="card-body">
                         <div class="form-group">
-                            <label for="setting-sam-model">Annotation Assistance Model (SAM)</label>
+                            <label for="setting-sam-model"><strong>Annotation Assistance Model (SAM)</strong></label>
                             <select id="setting-sam-model" class="form-control">
                                 <option value="sam2.1_t.pt" data-name="SAM 2.1 Tiny">SAM 2.1 Tiny</option>
                                 <option value="sam2.1_s.pt" data-name="SAM 2.1 Small">SAM 2.1 Small</option>
@@ -80,18 +101,18 @@
                     </div>
                 </div>
 
-                <div class="card mt-4">
+                <div class="card">
                     <div class="card-header">
-                        General Settings
+                        <i class="bi bi-gear-fill"></i> General Settings
                     </div>
                     <div class="card-body">
                         <div class="form-group">
-                            <label for="setting-jpeg-quality">Frame Extraction JPEG Quality</label>
+                            <label for="setting-jpeg-quality"><strong>Frame Extraction JPEG Quality</strong></label>
                             <input type="number" id="setting-jpeg-quality" class="form-control" min="10" max="100" step="5">
                              <small class="form-text text-muted">Affects disk space usage and image quality for new video uploads (10-100).</small>
                         </div>
                         <div class="form-group">
-                            <label for="setting-opencv-tracker">Default OpenCV Tracker</label>
+                            <label for="setting-opencv-tracker"><strong>Default OpenCV Tracker</strong></label>
                             <select id="setting-opencv-tracker" class="form-control">
                                 {% for tracker in tracker_fns %}
                                 <option value="{{ tracker }}">{{ tracker }}</option>
@@ -102,7 +123,9 @@
                     </div>
                 </div>
 
-                <button type="submit" class="btn btn-primary mt-4">Save Settings</button>
+                <button type="submit" class="btn btn-primary mt-4">
+                    <i class="bi bi-check-circle"></i> Save Settings
+                </button>
             </form>
         </div>
     </div>
@@ -117,10 +140,13 @@
         </div>
         <div class="form-group">
             <label for="video-file">Video File</label>
-            <input type="file" class="form-control-file" id="video-file" name="video_file" accept="video/mp4" required>
+            <div class="custom-file">
+                <input type="file" class="custom-file-input" id="video-file" name="video_file" accept="video/mp4" required>
+                <label class="custom-file-label" for="video-file">Choose file...</label>
+            </div>
             <small class="form-text text-muted">Max size: {{ limit_data.MAX_VIDEO_SIZE_MB }}MB. Only .mp4 is supported.</small>
         </div>
-        <button type="submit" class="btn btn-primary">Upload</button>
+        <button type="submit" class="btn btn-primary w-100"><i class="bi bi-upload"></i> Upload</button>
     </form>
 {% endcall %}
 
@@ -136,15 +162,17 @@
             </select>
             <small class="form-text text-muted">Hold Ctrl/Cmd to select multiple videos.</small>
         </div>
-        <div class="form-group">
-            <label for="eval-percent">Validation Set Percentage (%)</label>
-            <input type="number" class="form-control" id="eval-percent" value="20" min="5" max="50" step="1">
+        <div class="row">
+            <div class="form-group col-md-6">
+                <label for="eval-percent">Validation Set (%)</label>
+                <input type="number" class="form-control" id="eval-percent" value="20" min="5" max="50" step="1">
+            </div>
+            <div class="form-group col-md-6">
+                <label for="test-percent">Test Set (%)</label>
+                <input type="number" class="form-control" id="test-percent" value="10" min="0" max="50" step="1">
+            </div>
         </div>
-        <div class="form-group">
-            <label for="test-percent">Test Set Percentage (%)</label>
-            <input type="number" class="form-control" id="test-percent" value="10" min="0" max="50" step="1">
-        </div>
-        <button type="submit" class="btn btn-primary">Create</button>
+        <button type="submit" class="btn btn-primary w-100"><i class="bi bi-plus-circle"></i> Create</button>
     </form>
 {% endcall %}
 
@@ -156,10 +184,13 @@
         </div>
         <div class="form-group">
             <label for="model-file">TFLite File</label>
-            <input type="file" class="form-control-file" id="model-file" name="model_file" accept=".tflite" required>
+             <div class="custom-file">
+                <input type="file" class="custom-file-input" id="model-file" name="model_file" accept=".tflite" required>
+                <label class="custom-file-label" for="model-file">Choose file...</label>
+            </div>
             <small class="form-text text-muted">Only .tflite models are supported.</small>
         </div>
-        <button type="submit" class="btn btn-primary">Import</button>
+        <button type="submit" class="btn btn-primary w-100"><i class="bi bi-box-arrow-in-down"></i> Import</button>
     </form>
 {% endcall %}
 
@@ -173,13 +204,15 @@
                 </button>
             </div>
             <div class="modal-body">
-                <h6>Existing Tasks</h6>
-                <table class="table table-sm">
-                    <thead><tr><th>Assigned To</th><th>Frame Range</th><th>Description</th><th>Actions</th></tr></thead>
-                    <tbody id="task-list-in-modal"></tbody>
-                </table>
-                <hr>
-                <h6>Create New Task</h6>
+                <h6><i class="bi bi-list-task"></i> Existing Tasks</h6>
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead class="thead-light"><tr><th>Assigned To</th><th>Frame Range</th><th>Description</th><th>Actions</th></tr></thead>
+                        <tbody id="task-list-in-modal"></tbody>
+                    </table>
+                </div>
+                <hr class="my-4">
+                <h6><i class="bi bi-plus-circle-dotted"></i> Create New Task</h6>
                 <form id="create-task-form">
                     <input type="hidden" id="task-video-uuid">
                     <div class="form-row">
@@ -195,12 +228,14 @@
                             <label for="task-end-frame">End Frame</label>
                             <input type="number" class="form-control" id="task-end-frame" min="0" required>
                         </div>
+                         <div class="form-group col-md-2 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary w-100">Create</button>
+                        </div>
                     </div>
                      <div class="form-group">
                         <label for="task-description">Task Description (Optional)</label>
                         <input type="text" class="form-control" id="task-description" placeholder="e.g., Label all cars in daytime scenes">
                     </div>
-                    <button type="submit" class="btn btn-primary">Create Task</button>
                 </form>
             </div>
         </div>
@@ -212,6 +247,12 @@
 {% block scripts %}
 <script>
 $(document).ready(function() {
+    // --- Custom File Input Label ---
+    $('.custom-file-input').on('change', function() {
+       let fileName = $(this).val().split('\\').pop();
+       $(this).next('.custom-file-label').addClass("selected").html(fileName);
+    });
+
     // --- Helper Functions ---
     function getStatusBadge(status) {
         let badgeClass = 'secondary';
@@ -237,9 +278,9 @@ $(document).ready(function() {
             data.all_videos.forEach(video => {
                 const actionBtnDisabled = video.status !== 'READY' ? 'disabled' : '';
                 const row = `
-                    <tr>
-                        <td>${video.description}</td>
-                        <td>${video.video_filename || ''}</td>
+                    <tr class="slide-in-up">
+                        <td><strong>${video.description}</strong></td>
+                        <td class="text-muted">${video.video_filename || ''}</td>
                         <td>${getStatusBadge(video.status)} <small class="text-muted">${video.status_message || ''}</small></td>
                         <td>${video.extracted_frame_count} / ${video.frame_count || '?'}</td>
                         <td>${video.labeled_frame_count}</td>
@@ -249,10 +290,10 @@ $(document).ready(function() {
                                     data-description="${video.description}"
                                     data-frameCount="${video.frame_count}"
                                     ${actionBtnDisabled}>
-                                Manage Tasks
+                                <i class="bi bi-card-checklist"></i> Manage Tasks
                             </button>
-                            <button class="btn btn-sm btn-info btn-import-frames ${actionBtnDisabled}" data-uuid="${video.video_uuid}">Import Frames</button>
-                            <button class="btn btn-sm btn-danger btn-delete-video" data-uuid="${video.video_uuid}">Delete</button>
+                            <button class="btn btn-sm btn-info btn-import-frames ${actionBtnDisabled}" data-uuid="${video.video_uuid}"><i class="bi bi-images"></i> Import</button>
+                            <button class="btn btn-sm btn-danger btn-delete-video" data-uuid="${video.video_uuid}"><i class="bi bi-trash"></i> Delete</button>
                         </td>
                     </tr>`;
                 videoList.append(row);
@@ -271,24 +312,25 @@ $(document).ready(function() {
             const datasetList = $('#dataset-list');
             datasetList.empty();
             data.datasets.forEach(dataset => {
-                let actions = `<button class="btn btn-sm btn-danger btn-delete-dataset" data-uuid="${dataset.dataset_uuid}">Delete</button>`;
+                let actions = `<button class="btn btn-sm btn-danger btn-delete-dataset" data-uuid="${dataset.dataset_uuid}"><i class="bi bi-trash"></i> Delete</button>`;
                 if (dataset.status === 'READY') {
-                    actions = `<a href="/downloadDataset/${dataset.dataset_uuid}" class="btn btn-sm btn-success">Download</a> ` + actions;
-                    actions = `<button class="btn btn-sm btn-secondary btn-regenerate-dataset" data-uuid="${dataset.dataset_uuid}">Update</button> ` + actions;
-                    actions = `<a href="/datasetAnalysis/${dataset.dataset_uuid}" class="btn btn-sm btn-info">Analyze</a> ` + actions;
+                    actions = `<a href="/downloadDataset/${dataset.dataset_uuid}" class="btn btn-sm btn-success"><i class="bi bi-download"></i> Download</a> ` +
+                              `<a href="/datasetAnalysis/${dataset.dataset_uuid}" class="btn btn-sm btn-info"><i class="bi bi-bar-chart-line"></i> Analyze</a> ` +
+                              `<button class="btn btn-sm btn-secondary btn-regenerate-dataset" data-uuid="${dataset.dataset_uuid}"><i class="bi bi-arrow-repeat"></i> Update</button> ` +
+                               actions;
                 } else if (dataset.status === 'FAILED') {
-                    actions = `<button class="btn btn-sm btn-secondary btn-regenerate-dataset" data-uuid="${dataset.dataset_uuid}">Retry</button> ` + actions;
+                    actions = `<button class="btn btn-sm btn-warning btn-regenerate-dataset" data-uuid="${dataset.dataset_uuid}"><i class="bi bi-arrow-repeat"></i> Retry</button> ` + actions;
                 }
 
                 const videos = JSON.parse(dataset.video_uuids || '[]').length;
                 const classes = JSON.parse(dataset.sorted_label_list || '[]').join(', ');
 
                 const row = `
-                    <tr>
-                        <td>${dataset.description}</td>
+                    <tr class="slide-in-up">
+                        <td><strong>${dataset.description}</strong></td>
                         <td>${getStatusBadge(dataset.status)} <small class="text-muted">${dataset.status_message || ''}</small></td>
                         <td>${videos} video(s)</td>
-                        <td>${classes}</td>
+                        <td class="text-muted">${classes || 'N/A'}</td>
                         <td>${actions}</td>
                     </tr>`;
                 datasetList.append(row);
@@ -303,11 +345,11 @@ $(document).ready(function() {
             data.models.forEach(model => {
                 const createdDate = new Date(model.create_time_ms).toLocaleString();
                 const row = `
-                    <tr>
-                        <td>${model.description}</td>
-                        <td>${createdDate}</td>
+                    <tr class="slide-in-up">
+                        <td><strong>${model.description}</strong></td>
+                        <td class="text-muted">${createdDate}</td>
                         <td>
-                            <button class="btn btn-sm btn-danger btn-delete-model" data-uuid="${model.model_uuid}">Delete</button>
+                            <button class="btn btn-sm btn-danger btn-delete-model" data-uuid="${model.model_uuid}"><i class="bi bi-trash"></i> Delete</button>
                         </td>
                     </tr>`;
                 modelList.append(row);
@@ -336,9 +378,11 @@ $(document).ready(function() {
                 if (response.success) {
                     showSuccess('Video uploaded successfully! Frame extraction has started.');
                     $('#uploadVideoModal').modal('hide');
+                    $(this).find('form').trigger('reset');
+                    $('.custom-file-label').html('Choose file...');
                     refreshVideos();
                 } else { showError(response.message); }
-            },
+            }.bind(this),
             error: function(xhr) { showError(xhr.responseJSON ? xhr.responseJSON.message : 'An unknown error occurred.'); }
         });
     });
@@ -373,9 +417,11 @@ $(document).ready(function() {
                 if (response.success) {
                     showSuccess('Model imported successfully!');
                     $('#importModelModal').modal('hide');
+                    $(this).find('form').trigger('reset');
+                    $('.custom-file-label').html('Choose file...');
                     refreshModels();
                 } else { showError(response.message); }
-            },
+            }.bind(this),
             error: function(xhr) { showError(xhr.responseJSON ? xhr.responseJSON.message : 'An unknown error occurred.'); }
         });
     });
@@ -425,13 +471,13 @@ $(document).ready(function() {
             if (data.success && data.tasks.length > 0) {
                 data.tasks.forEach(task => {
                     const row = `
-                        <tr>
+                        <tr class="slide-in-up">
                             <td>${task.assigned_to}</td>
                             <td>${task.start_frame} - ${task.end_frame}</td>
                             <td>${task.description || ''}</td>
                             <td>
-                                <a href="/labelVideo?task_uuid=${task.task_uuid}" class="btn btn-sm btn-primary">Start Labeling</a>
-                                <button class="btn btn-sm btn-danger btn-delete-task" data-task-uuid="${task.task_uuid}" data-video-uuid="${videoUuid}">Delete</button>
+                                <a href="/labelVideo?task_uuid=${task.task_uuid}" class="btn btn-sm btn-primary"><i class="bi bi-pencil-square"></i> Label</a>
+                                <button class="btn btn-sm btn-danger btn-delete-task" data-task-uuid="${task.task_uuid}" data-video-uuid="${videoUuid}"><i class="bi bi-trash"></i></button>
                             </td>
                         </tr>`;
                     taskListBody.append(row);
@@ -458,6 +504,52 @@ $(document).ready(function() {
             error: function() { showError('An error occurred while creating the task.'); }
         });
     });
+
+    // --- [RESTORED] Frame Import Functionality ---
+    let videoUuidForImport = null;
+    $(document).on("click", ".btn-import-frames", function() {
+        videoUuidForImport = $(this).data('uuid');
+        $('#frame-import-input').click(); // Trigger the hidden file input
+    });
+
+    $('#frame-import-input').on('change', function(e) {
+        if (!videoUuidForImport || e.target.files.length === 0) {
+            return;
+        }
+        const files = e.target.files;
+        const formData = new FormData();
+        formData.append('video_uuid', videoUuidForImport);
+        for (let i = 0; i < files.length; i++) {
+            formData.append('frame_files', files[i]);
+        }
+
+        alert(`Importing ${files.length} frames. This might take a moment...`);
+
+        $.ajax({
+            url: '/importFrames',
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            success: function(response) {
+                if (response.success) {
+                    showSuccess(`${response.imported_count} frames imported successfully!`);
+                    refreshVideos();
+                } else {
+                    showError(response.message);
+                }
+            },
+            error: function(xhr) {
+                showError(xhr.responseJSON ? xhr.responseJSON.message : 'An unknown error occurred during import.');
+            },
+            complete: function() {
+                // Reset for next use
+                videoUuidForImport = null;
+                $('#frame-import-input').val('');
+            }
+        });
+    });
+
 
     // --- Deletion and Update Handlers ---
     $(document).on("click", ".btn-delete-video", function() {

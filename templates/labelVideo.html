@@ -37,6 +37,7 @@
         user-select: none;
         -webkit-user-select: none;
         -moz-user-select: none;
+        border-radius: 0.25rem;
     }
 
     #class-list .list-group-item, #bbox-list .list-group-item {
@@ -46,6 +47,7 @@
     #bbox-list .list-group-item.selected {
         border-color: #007bff;
         border-width: 2px;
+        background-color: #e7f3ff;
     }
 
     #class-list .list-group-item.active {
@@ -66,6 +68,7 @@
         margin-right: 10px;
         border: 1px solid #ccc;
         vertical-align: middle;
+        border-radius: 3px;
     }
 
     .side-panel {
@@ -77,90 +80,118 @@
         position: fixed;
         bottom: 30px;
         left: 50%;
-        transform: translateX(-50%);
+        /* transform is now handled by animation classes */
         padding: 10px 20px;
         border-radius: 5px;
         background-color: #28a745;
         color: white;
         font-weight: bold;
         z-index: 9999;
-        display: none;
         box-shadow: 0 2px 10px rgba(0,0,0,0.2);
     }
 
     #track-controls {
         display: none;
         border: 2px dashed #007bff;
-        padding: 10px;
+        padding: 15px;
         margin-top: 15px;
         background-color: #f8f9fa;
+        border-radius: 0.3rem;
+    }
+
+    .shortcut-keys-container {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        margin-top: 0.5rem;
+    }
+    .shortcut-key {
+        background-color: #e9ecef;
+        border: 1px solid #dee2e6;
+        padding: 0.2rem 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.75rem;
+        font-weight: bold;
+        color: #495057;
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid">
-    <div class="d-flex justify-content-between align-items-center mb-2">
-        <h3>
-            Task for {{ task_entity.assigned_to }}: {{ video_entity.description }}
-            <small class="text-muted">(Frames {{ task_entity.start_frame }} to {{ task_entity.end_frame }})</small>
-        </h3>
-        <a href="/" class="btn btn-secondary">Back to Home</a>
+<div class="container-fluid slide-in-up">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h3 class="mb-0">
+                <span class="text-muted">Task for {{ task_entity.assigned_to }}:</span> {{ video_entity.description }}
+            </h3>
+            <p class="lead mb-0">(Frames {{ task_entity.start_frame }} to {{ task_entity.end_frame }})</p>
+        </div>
+        <a href="/" class="btn btn-secondary"><i class="bi bi-arrow-left-circle"></i> Back to Home</a>
     </div>
 
     <div class="row">
-        <div class="col-md-9">
-            <div id="canvas-container">
-                <img id="frame-image" src="{{ first_frame_url }}" class="img-fluid" alt="Video Frame" draggable="false"/>
-                <canvas id="crosshair-canvas"></canvas>
-                <canvas id="drawing-canvas"></canvas>
-            </div>
-            <div class="mt-2">
-                <label for="frame-slider">
-                    Frame: <span id="frame-number-display">{{ task_entity.start_frame }}</span> / {{ task_entity.end_frame }}
-                </label>
-                <input type="range" class="form-control-range" id="frame-slider"
-                       min="{{ task_entity.start_frame }}"
-                       max="{{ task_entity.end_frame }}"
-                       value="{{ task_entity.start_frame }}">
-                 <small class="form-text text-muted">
-                     <b>Shortcuts:</b>
-                     (S) Save/Update | (A) Prev Frame | (D) Next Frame | (Ctrl+Z) Undo | (Ctrl+Y) Redo | (Del/Bksp) Delete Selected
-                 </small>
+        <!-- Left Panel: Canvas and Frame Controls -->
+        <div class="col-lg-8 col-xl-9">
+            <div class="canvas-area">
+                <div id="canvas-container">
+                    <img id="frame-image" src="{{ first_frame_url }}" class="img-fluid" alt="Video Frame" draggable="false"/>
+                    <canvas id="crosshair-canvas"></canvas>
+                    <canvas id="drawing-canvas"></canvas>
+                </div>
+                <div class="mt-3">
+                    <label for="frame-slider">
+                        Frame: <span id="frame-number-display" class="font-weight-bold">{{ task_entity.start_frame }}</span> / {{ task_entity.end_frame }}
+                    </label>
+                    <input type="range" class="form-control-range" id="frame-slider"
+                           min="{{ task_entity.start_frame }}"
+                           max="{{ task_entity.end_frame }}"
+                           value="{{ task_entity.start_frame }}">
+                     <div class="shortcut-keys-container">
+                         <span class="shortcut-key">S</span> Save/Update
+                         <span class="shortcut-key">A</span> Prev
+                         <span class="shortcut-key">D</span> Next
+                         <span class="shortcut-key">Ctrl+Z</span> Undo
+                         <span class="shortcut-key">Ctrl+Y</span> Redo
+                         <span class="shortcut-key">Del</span> Delete
+                     </div>
+                </div>
             </div>
         </div>
-        <div class="col-md-3 side-panel">
-            <h4>Classes</h4>
-            <div class="input-group mb-3">
-                <input type="text" id="new-class-name" class="form-control" placeholder="New class name">
-                <div class="input-group-append">
-                    <button id="add-class-btn" class="btn btn-outline-secondary" type="button">Add</button>
+        <!-- Right Panel: Classes and BBoxes -->
+        <div class="col-lg-4 col-xl-3">
+            <div class="side-panel">
+                <h4><i class="bi bi-tags"></i> Classes</h4>
+                <div class="input-group mb-3">
+                    <input type="text" id="new-class-name" class="form-control" placeholder="New class name">
+                    <div class="input-group-append">
+                        <button id="add-class-btn" class="btn btn-outline-secondary" type="button">Add</button>
+                    </div>
                 </div>
-            </div>
-            <ul id="class-list" class="list-group mb-3"></ul>
+                <ul id="class-list" class="list-group mb-3"></ul>
 
-            <hr>
-
-            <h4>Bounding Boxes</h4>
-            <p><small>Select a class, then draw. Click a box to select it.</small></p>
-            <button id="save-bboxes" class="btn btn-primary btn-block mb-2">Save BBoxes (S)</button>
-            <button id="sam-toggle-btn" class="btn btn-info btn-block mb-2">Enable SAM (Click Point)</button>
-            <button id="sam2-track-btn" class="btn btn-success btn-block mb-3">Track Objects with SAM2</button>
-
-            <div id="track-controls">
-                <h5 id="track-status-header">Tracking...</h5>
-                <div class="progress mb-2">
-                    <div id="track-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%;">0%</div>
-                </div>
-                <button id="stop-sam2-track-btn" class="btn btn-danger btn-block">Stop Tracking</button>
                 <hr>
-                <h5>Review Mode</h5>
-                <p><small>Use A/D to review. Correct boxes. Press (S) to update a frame in cache.</small></p>
-                <button id="save-all-tracked-btn" class="btn btn-warning btn-block" disabled>Save All Reviewed Frames</button>
-                <button id="exit-track-mode-btn" class="btn btn-secondary btn-block mt-2">Exit & Discard</button>
-            </div>
 
-            <ul id="bbox-list" class="list-group"></ul>
+                <h4><i class="bi bi-bounding-box"></i> Bounding Boxes</h4>
+                <p><small class="text-muted">Select a class, then draw. Click a box to select it.</small></p>
+                <button id="save-bboxes" class="btn btn-primary btn-block mb-2"><i class="bi bi-save"></i> Save BBoxes (S)</button>
+                <button id="sam-toggle-btn" class="btn btn-info btn-block mb-2"><i class="bi bi-magic"></i> Enable SAM (Click Point)</button>
+                <button id="sam2-track-btn" class="btn btn-success btn-block mb-3"><i class="bi bi-play-circle"></i> Track Objects with SAM2</button>
+
+                <div id="track-controls">
+                    <h5 id="track-status-header">Tracking...</h5>
+                    <div class="progress mb-2" style="height: 20px;">
+                        <div id="track-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%;">0%</div>
+                    </div>
+                    <button id="stop-sam2-track-btn" class="btn btn-danger btn-block"><i class="bi bi-stop-circle"></i> Stop Tracking</button>
+                    <hr>
+                    <h5>Review Mode</h5>
+                    <p><small class="text-muted">Use A/D to review. Correct boxes. Press (S) to update a frame in cache.</small></p>
+                    <button id="save-all-tracked-btn" class="btn btn-warning btn-block" disabled><i class="bi bi-check2-all"></i> Save All Reviewed Frames</button>
+                    <button id="exit-track-mode-btn" class="btn btn-secondary btn-block mt-2"><i class="bi bi-x-circle"></i> Exit & Discard</button>
+                </div>
+
+                <ul id="bbox-list" class="list-group"></ul>
+            </div>
         </div>
     </div>
 </div>
@@ -268,35 +299,25 @@ $(document).ready(function() {
         });
     }
 
-    // =========================================================================
-    //  核心修复点 1: 逻辑重构
-    //  将“处理数据”和“更新UI”绑定。此函数现在是更新bboxes状态和重绘UI的唯一入口。
-    // =========================================================================
     const processFrameDataAndUpdateUI = (frameData) => {
         bboxes = parseBboxesFromString(frameData ? frameData.bboxes_text : '');
         history = [JSON.parse(JSON.stringify(bboxes))];
         historyIndex = 0;
         selectedBboxIndex = -1;
-
-        // 数据更新后，立即重绘界面
         redrawCanvas();
         renderBboxList();
     };
 
     function loadBboxesForFrame(frameNumber) {
-        // 在 Review 模式下，数据来自缓存
         if (isReviewMode) {
             const bboxesText = trackedBboxCache[frameNumber];
             processFrameDataAndUpdateUI({ bboxes_text: bboxesText || '' });
             return;
         }
-
-        // 检查全局缓存
         if (window.cachedFrames) {
             const frameData = window.cachedFrames.find(f => f.frame_number == frameNumber);
             processFrameDataAndUpdateUI(frameData);
         } else {
-            // 如果无缓存，则通过Ajax获取，并在成功回调中更新UI
             $.ajax({
                 url: '/retrieveVideoFrames',
                 type: 'POST',
@@ -313,20 +334,10 @@ $(document).ready(function() {
         }
     }
 
-    // =========================================================================
-    //  核心修复点 2: 修改图片加载逻辑
-    //  `onload`现在只负责调整画布大小和触发数据加载。
-    //  真正的数据绘制由`loadBboxesForFrame`内部逻辑确保在数据加载后执行。
-    // =========================================================================
     frameImage.onload = function() {
-        // 清空旧数据，防止在数据加载完成前，resizeCanvas中的redrawCanvas绘制上一帧的残留数据
         bboxes = [];
         selectedBboxIndex = -1;
-
-        // 调整画布大小，这会用空白状态重绘一次画布，避免了旧数据闪烁
         resizeCanvas();
-
-        // 加载新数据，此函数内部会负责在数据到达后进行正确的绘制
         loadBboxesForFrame(frameSlider.val());
     };
 
@@ -337,20 +348,17 @@ $(document).ready(function() {
         const frameNumber = $(this).val();
         $("#frame-number-display").text(frameNumber);
         const imageUrl = `/media/frames/${videoUuid}/frame_${String(frameNumber).padStart(5, "0")}.jpg`;
-
-        // 只有当图片URL真的改变时才重新加载
         if (frameImage.src !== window.location.origin + imageUrl) {
             frameImage.src = imageUrl;
         } else if (frameImage.complete) {
-            // 如果URL未变但需要强制刷新（例如，退出review模式），手动触发
             loadBboxesForFrame(frameNumber);
         }
     });
 
     function setTrackingUiState(isTracking) {
         isReviewMode = isTracking;
-        $('#track-controls').toggle(isTracking);
-        $('#save-bboxes, #sam-toggle-btn, #sam2-track-btn').toggle(!isTracking);
+        $('#track-controls').slideToggle(isTracking);
+        $('#save-bboxes, #sam-toggle-btn, #sam2-track-btn').slideToggle(!isTracking);
         if (!isTracking) {
             $('#track-progress-bar').css('width', '0%').text('0%').removeClass('bg-success bg-danger').addClass('progress-bar-animated');
             $('#track-status-header').text('Tracking...');
@@ -377,13 +385,11 @@ $(document).ready(function() {
                 trackedBboxCache[data.frame_number] = data.bboxes_text;
                 const percent = data.total > 0 ? Math.round((data.progress / data.total) * 100) : 0;
                 $('#track-progress-bar').css('width', percent + '%').text(percent + '%');
-
                 const currentFrame = data.frame_number;
                 if (currentFrame <= parseInt(frameSlider.attr('max'))) {
                     frameSlider.val(currentFrame);
                     $("#frame-number-display").text(currentFrame);
                     const imageUrl = `/media/frames/${videoUuid}/frame_${String(currentFrame).padStart(5, "0")}.jpg`;
-                    // 设置新图片源会触发 onload 事件, 从而以正确的顺序加载和绘制数据
                     if (frameImage.src !== window.location.origin + imageUrl) {
                         frameImage.src = imageUrl;
                     }
@@ -433,15 +439,51 @@ $(document).ready(function() {
         }
     }
 
-    // --- Helper & UI Functions --- (No other changes below this line)
+    // --- [UPDATED] Helper & UI Functions ---
+    let toastTimeout;
+    function showToast(message, duration = 3000) {
+        const toast = $("#toast-notification");
+        toast.text(message).addClass('show');
+        if (toastTimeout) clearTimeout(toastTimeout);
+        toastTimeout = setTimeout(() => {
+            toast.removeClass('show');
+        }, duration);
+    }
+    function renderBboxList(){
+        const list = $("#bbox-list");
+        list.empty();
+        bboxes.forEach((box, index) => {
+            const template = document.getElementById("bbox-item-template").content.cloneNode(true);
+            const color = stringToColor(box.label);
+            const li = $(template).find("li");
+            li.attr("data-index", index).addClass('slide-in-up'); // Add animation class
+            if(index === selectedBboxIndex) li.addClass("selected");
+            $(template).find(".color-swatch").css("background-color", color);
+            $(template).find(".bbox-label").text(box.label);
+            $(template).find(".delete-bbox-btn").attr("data-index", index);
+            list.append(template);
+        });
+    }
+    function renderClassList(){
+        const list = $("#class-list");
+        list.empty();
+        availableClasses.forEach(name => {
+            const color = stringToColor(name);
+            const swatch = `<span class="color-swatch" style="background-color: ${color};"></span>`;
+            const li = $(`<li class="list-group-item slide-in-up">${swatch}${name}</li>`); // Add animation class
+            li.attr("data-class-name", name);
+            if(name === activeClass){
+                li.addClass("active").css({"background-color": color, "border-color": color});
+            }
+            list.append(li);
+        });
+    }
+
     function stringToColor(t){let e=0;for(let s=0;s<t.length;s++)e=t.charCodeAt(s)+((e<<5)-e);return`hsl(${(e%360+360)%360}, 80%, 50%)`}
-    function resizeCanvas(){const t=window.devicePixelRatio||1;const e=frameImage.getBoundingClientRect();[drawingCanvas,crosshairCanvas].forEach(s=>{s.style.width=e.width+"px",s.style.height=e.height+"px",s.width=Math.round(e.width*t),s.height=Math.round(e.height*t)}),drawingCtx.scale(t,t),crosshairCtx.scale(t,t);const s=document.getElementById("canvas-container"),a=document.querySelector(".side-panel");s&&a&&(a.style.maxHeight=s.clientHeight+"px"),redrawCanvas()}
+    function resizeCanvas(){const t=window.devicePixelRatio||1;const e=frameImage.getBoundingClientRect();[drawingCanvas,crosshairCanvas].forEach(s=>{s.style.width=e.width+"px",s.style.height=e.height+"px",s.width=Math.round(e.width*t),s.height=Math.round(e.height*t)}),drawingCtx.scale(t,t),crosshairCtx.scale(t,t);redrawCanvas()}
     function drawCrosshairs(t,e){if(isSamModeActive||isDrawing||isReviewMode)return;const s=window.devicePixelRatio||1;crosshairCtx.clearRect(0,0,crosshairCanvas.width/s,crosshairCanvas.height/s),crosshairCtx.strokeStyle="rgba(0, 0, 255, 0.7)",crosshairCtx.lineWidth=1/s,crosshairCtx.setLineDash([4/s,4/s]),crosshairCtx.beginPath(),crosshairCtx.moveTo(0,e),crosshairCtx.lineTo(crosshairCanvas.width/s,e),crosshairCtx.stroke(),crosshairCtx.beginPath(),crosshairCtx.moveTo(t,0),crosshairCtx.lineTo(t,crosshairCanvas.height/s),crosshairCtx.stroke()}
     function clearCrosshairs(){const t=window.devicePixelRatio||1;crosshairCtx.clearRect(0,0,crosshairCanvas.width/t,crosshairCanvas.height/t)}
     function getMousePos(t,e){const s=t.getBoundingClientRect();return{x:e.clientX-s.left,y:e.clientY-s.top}}
-    let toastTimeout;function showToast(t,e=2e3){const s=$("#toast-notification");s.text(t).fadeIn(),toastTimeout&&clearTimeout(toastTimeout),toastTimeout=setTimeout(()=>{s.fadeOut()},e)}
-    function renderBboxList(){const t=$("#bbox-list");t.empty(),bboxes.forEach((e,s)=>{const a=document.getElementById("bbox-item-template").content.cloneNode(!0),i=stringToColor(e.label),n=$(a).find("li");n.attr("data-index",s),s===selectedBboxIndex&&n.addClass("selected"),$(a).find(".color-swatch").css("background-color",i),$(a).find(".bbox-label").text(e.label),$(a).find(".delete-bbox-btn").attr("data-index",s),t.append(a)})}
-    function renderClassList(){const t=$("#class-list");t.empty(),availableClasses.forEach(e=>{const s=stringToColor(e),a=`<span class="color-swatch" style="background-color: ${s};"></span>`,i=$(`<li class="list-group-item">${a}${e}</li>`);i.attr("data-class-name",e),e===activeClass&&(i.addClass("active"),i.css({"background-color":s,"border-color":s})),t.append(i)})}
     function addClass(t){if(!t||availableClasses.includes(t))return;$.ajax({url:"/addClass",type:"POST",contentType:"application/json",data:JSON.stringify({label_name:t}),success:function(){availableClasses.push(t),renderClassList()},error:function(){showToast("Error: Failed to add new class.",3e3)}})}
     function formatBboxesToString(){const validBboxes=bboxes.filter(t=>null!=t.x1&&null!=t.y1&&null!=t.x2&&null!=t.y2&&!isNaN(t.x1)&&!isNaN(t.y1)&&!isNaN(t.x2)&&!isNaN(t.y2));return validBboxes.map(t=>`${t.x1},${t.y1},${t.x2},${t.y2},${t.label}`).join("\n")}
     function parseBboxesFromString(t){if(!t)return[];const e=t.split("\n").filter(t=>""!==t.trim()).map(t=>{const e=t.split(",");if(e.length<5)return null;return{x1:parseInt(e[0]),y1:parseInt(e[1]),x2:parseInt(e[2]),y2:parseInt(e[3]),label:e.slice(4).join(",")}}).filter(t=>null!==t);return e}
@@ -637,8 +679,8 @@ $(document).ready(function() {
         isSamModeActive = !isSamModeActive;
         $(this).toggleClass('active', isSamModeActive);
         canvasContainer.toggleClass('sam-active', isSamModeActive);
-        if (isSamModeActive) { $(this).text('SAM Enabled (Click to label)'); clearCrosshairs(); }
-        else { $(this).text('Enable SAM (Click Point)'); }
+        if (isSamModeActive) { $(this).html('<i class="bi bi-magic"></i> SAM Enabled (Click to label)'); clearCrosshairs(); }
+        else { $(this).html('<i class="bi bi-magic"></i> Enable SAM (Click Point)'); }
     });
 
     $(document).on("keydown",function(t){
@@ -669,6 +711,7 @@ $(document).ready(function() {
                         frameSlider.val(frameNumber);
                     }
                 }
+                resizeCanvas();
                 frameSlider.trigger('input');
             }
         });
