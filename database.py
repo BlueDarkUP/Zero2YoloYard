@@ -12,6 +12,23 @@ def get_db_connection():
     return conn
 
 
+def _add_column_if_not_exists(cursor, table_name, column_name, column_type):
+    cursor.execute(f"PRAGMA table_info({table_name})")
+    columns = [row['name'] for row in cursor.fetchall()]
+    if column_name not in columns:
+        cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
+        print(f"Added column '{column_name}' to table '{table_name}'.")
+
+def migrate_db():
+    """Applies necessary schema migrations to the database."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    _add_column_if_not_exists(cursor, 'datasets', 'eval_percent', 'REAL')
+    _add_column_if_not_exists(cursor, 'datasets', 'test_percent', 'REAL')
+    conn.commit()
+    conn.close()
+
+
 def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -54,7 +71,9 @@ def init_db():
         status TEXT, -- 'PENDING', 'PROCESSING', 'READY', 'FAILED'
         status_message TEXT,
         zip_path TEXT,
-        sorted_label_list TEXT
+        sorted_label_list TEXT,
+        eval_percent REAL,
+        test_percent REAL
     )
     ''')
 
@@ -285,12 +304,12 @@ def delete_class_label(label_name):
     conn.close()
 
 
-def create_dataset_entry(description, video_uuids, create_time_ms):
+def create_dataset_entry(description, video_uuids, create_time_ms, eval_percent, test_percent):
     conn = get_db_connection()
     dataset_uuid = str(uuid.uuid4().hex)
     conn.execute(
-        'INSERT INTO datasets (dataset_uuid, description, video_uuids, create_time_ms, status) VALUES (?, ?, ?, ?, ?)',
-        (dataset_uuid, description, json.dumps(video_uuids), create_time_ms, 'PENDING')
+        'INSERT INTO datasets (dataset_uuid, description, video_uuids, create_time_ms, status, eval_percent, test_percent) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        (dataset_uuid, description, json.dumps(video_uuids), create_time_ms, 'PENDING', eval_percent, test_percent)
     )
     conn.commit()
     conn.close()

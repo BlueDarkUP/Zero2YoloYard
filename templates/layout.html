@@ -6,12 +6,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <title>FTC-ML Local</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <!-- Add Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    <!-- Link to our new custom stylesheet -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     {% block head %}{% endblock %}
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-        <a class="navbar-brand" href="/">Zero 2 YOLO Yard</a>
+        <a class="navbar-brand" href="/">
+            <i class="bi bi-robot"></i> <!-- Added Icon -->
+            Zero 2 YOLO Yard
+        </a>
         <div class="collapse navbar-collapse">
             <ul class="navbar-nav mr-auto">
             </ul>
@@ -21,9 +27,9 @@
         </div>
     </nav>
 
-    <div class="container-fluid mt-3">
+    <main class="container-fluid mt-4" role="main">
         {% block content %}{% endblock %}
-    </div>
+    </main>
 
     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.4/dist/umd/popper.min.js"></script>

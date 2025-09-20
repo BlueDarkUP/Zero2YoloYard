@@ -234,6 +234,16 @@ def start_tracking_task(video_uuid, tracker_uuid, tracker_name, scale, init_fram
 def create_dataset_task(dataset_uuid, video_uuids, eval_percent, test_percent):
     logging.info(f"Starting dataset creation task for UUID: {dataset_uuid}")
     try:
+        # --- FIX START ---
+        # Provide default values if percentages are None (for backward compatibility)
+        if eval_percent is None:
+            logging.warning("eval_percent is None, defaulting to 20.0")
+            eval_percent = 20.0
+        if test_percent is None:
+            logging.warning("test_percent is None, defaulting to 10.0")
+            test_percent = 10.0
+        # --- FIX END ---
+
         if eval_percent + test_percent >= 100.0:
             raise ValueError(
                 f"The sum of validation ({eval_percent}%) and test ({test_percent}%) percentages must be less than 100.")
