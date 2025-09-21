@@ -4,6 +4,7 @@ import logging
 import numpy as np
 import config
 
+
 def __convert_bbox_to_text(bbox, scale, x_max, y_max):
     p0 = bbox[:2].astype(float)
     p1 = p0 + bbox[2:].astype(float)
@@ -22,8 +23,9 @@ def __convert_bbox_to_text(bbox, scale, x_max, y_max):
         int(min(p1[0], x_max)),
         int(min(p1[1], y_max)))
 
+
 def __convert_bboxes_and_labels_to_text(bboxes, scale, max_x, max_y, labels):
-    assert(len(bboxes) == len(labels))
+    assert (len(bboxes) == len(labels))
     bboxes_text = ""
     for i in range(len(bboxes)):
         bbox = bboxes[i]
@@ -32,6 +34,7 @@ def __convert_bboxes_and_labels_to_text(bboxes, scale, max_x, max_y, labels):
             continue
         bboxes_text += "%s,%s\n" % (__convert_bbox_to_text(bbox, scale, max_x, max_y), label)
     return bboxes_text
+
 
 def __convert_rects_to_bboxes(rects):
     bboxes = []
@@ -42,6 +45,7 @@ def __convert_rects_to_bboxes(rects):
         bbox = np.array([p0, size]).reshape(-1)
         bboxes.append(bbox)
     return bboxes
+
 
 def validate_bboxes_text(s):
     if s is None:
@@ -61,6 +65,7 @@ def validate_bboxes_text(s):
                 raise ValueError(message)
     return s
 
+
 def convert_text_to_rects_and_labels(bboxes_text):
     """
     稳健地将多行边界框文本解析为矩形和标签列表。
@@ -74,7 +79,6 @@ def convert_text_to_rects_and_labels(bboxes_text):
     lines = [line for line in bboxes_text.split('\n') if line.strip()]
     for line in lines:
         try:
-            # 在前4个逗号处分割。第5个元素将是整个标签字符串。
             parts = line.strip().split(',', 4)
             if len(parts) != 5:
                 logging.warning(f"Skipping malformed bbox line (not enough parts): '{line}'")
@@ -83,7 +87,14 @@ def convert_text_to_rects_and_labels(bboxes_text):
             rect_str = parts[:4]
             label = parts[4]
 
-            rect = np.array(rect_str, dtype=float).astype(int)
+            coords = np.array(rect_str, dtype=float).astype(int)
+
+            # --- MODIFICATION START ---
+            # 确保 x1 < x2 and y1 < y2，纠正反向绘制的框
+            x1, y1, x2, y2 = coords
+            rect = np.array([min(x1, x2), min(y1, y2), max(x1, x2), max(y1, y2)])
+            # --- MODIFICATION END ---
+
             rects.append(rect)
             labels.append(label)
         except (ValueError, IndexError) as e:
@@ -91,15 +102,18 @@ def convert_text_to_rects_and_labels(bboxes_text):
             continue
     return rects, labels
 
+
 def count_boxes(bboxes_text):
     if not bboxes_text:
         return 0
     return len([line for line in bboxes_text.split('\n') if line.strip()])
 
+
 def __convert_text_to_bboxes_and_labels(bboxes_text):
     rects, labels = convert_text_to_rects_and_labels(bboxes_text)
     bboxes = __convert_rects_to_bboxes(rects)
     return bboxes, labels
+
 
 def __scale_bboxes(bboxes, scale):
     scaled_bboxes = []
@@ -117,17 +131,21 @@ def __scale_bboxes(bboxes, scale):
             scaled_bboxes.append(np.array([p0, p1 - p0]).reshape(-1))
     return scaled_bboxes
 
+
 def parse_bboxes_text(bboxes_text, scale=1):
     bboxes_, labels = __convert_text_to_bboxes_and_labels(bboxes_text)
     bboxes = __scale_bboxes(bboxes_, scale)
     return bboxes, labels
 
+
 def extract_labels(bboxes_text):
     _, labels = convert_text_to_rects_and_labels(bboxes_text)
     return labels
 
+
 def format_bboxes_text(bboxes, labels, scale, max_x, max_y):
     return __convert_bboxes_and_labels_to_text(bboxes, 1 / scale, max_x, max_y, labels)
+
 
 def convert_to_yolo_format(bboxes_text, class_map, image_width, image_height):
     rects, labels = convert_text_to_rects_and_labels(bboxes_text)

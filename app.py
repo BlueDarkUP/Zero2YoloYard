@@ -9,10 +9,12 @@ import logging
 import cv2
 import numpy as np
 import io
+import base64
 from collections import Counter
 from skimage import io as skio
 from skimage.color import rgb2gray
-import itertools  # Added for finding combinations of boxes
+import itertools
+import random
 
 import settings_manager
 import config
@@ -67,7 +69,6 @@ def string_to_color_bgr(s):
 
 
 def calculate_iou(boxA, boxB):
-    """Calculates Intersection over Union for two bounding boxes."""
     xA = max(boxA[0], boxB[0])
     yA = max(boxA[1], boxB[1])
     xB = min(boxA[2], boxB[2])
@@ -82,6 +83,69 @@ def calculate_iou(boxA, boxB):
 
     iou = interArea / float(boxAArea + boxBArea - interArea)
     return iou
+
+
+def generate_mosaic_previews(sample_pool, selected_video_uuid, selected_frame_number):
+    if len(sample_pool) < 4:
+        sample_pool.extend(sample_pool * (4 - len(sample_pool)))
+
+    all_labels = database.get_all_class_labels()
+    class_map = {name: i for i, name in enumerate(all_labels)}
+
+    conn = database.get_db_connection()
+    image_infos = []
+    for sample in sample_pool:
+        video_info = database.get_video_entity(sample['video_uuid'])
+        frame_info = conn.execute(
+            'SELECT bboxes_text FROM video_frames WHERE video_uuid = ? AND frame_number = ?',
+            (sample['video_uuid'], sample['frame_number'])
+        ).fetchone()
+
+        if video_info and frame_info and frame_info['bboxes_text']:
+            image_infos.append({
+                "video_uuid": sample['video_uuid'],
+                "frame_number": sample['frame_number'],
+                "bboxes_text": frame_info['bboxes_text'],
+                "width": video_info['width'],
+                "height": video_info['height']
+            })
+    conn.close()
+
+    if len(image_infos) < 4:
+        return jsonify({'success': False,
+                        'message': 'Not enough labeled images in the sample pool to generate a mosaic preview.'}), 400
+
+    previews = []
+    selected_image_info = next((info for info in image_infos if info['video_uuid'] == selected_video_uuid and info[
+        'frame_number'] == selected_frame_number), None)
+
+    for _ in range(6):
+        other_images = [info for info in image_infos if info != selected_image_info]
+        random.shuffle(other_images)
+
+        mosaic_set = [selected_image_info] + other_images[:3] if selected_image_info else other_images[:4]
+        random.shuffle(mosaic_set)
+
+        mosaic_img, final_bboxes = file_storage.create_mosaic_image(mosaic_set, class_map)
+
+        h, w, _ = mosaic_img.shape
+        vis_image = mosaic_img.copy()
+        for bbox_data in final_bboxes:
+            class_index, x_center, y_center, width_norm, height_norm = bbox_data
+            class_name = all_labels[class_index]
+            color = string_to_color_bgr(class_name)
+
+            x1 = int((x_center - width_norm / 2) * w)
+            y1 = int((y_center - height_norm / 2) * h)
+            x2 = int((x_center + width_norm / 2) * w)
+            y2 = int((y_center + height_norm / 2) * h)
+            cv2.rectangle(vis_image, (x1, y1), (x2, y2), color, 2)
+
+        _, buffer = cv2.imencode('.jpg', vis_image)
+        img_base64 = base64.b64encode(buffer).decode('utf-8')
+        previews.append(f"data:image/jpeg;base64,{img_base64}")
+
+    return previews
 
 
 @app.route('/')
@@ -548,6 +612,7 @@ def create_dataset():
     video_uuids = data.get('video_uuids')
     eval_percent = float(data.get('eval_percent', 20.0))
     test_percent = float(data.get('test_percent', 10.0))
+    augmentation_options = data.get('augmentation_options', {})
 
     is_valid, message = validate_description(desc, [d['description'] for d in database.get_dataset_list()])
     if not is_valid:
@@ -559,7 +624,7 @@ def create_dataset():
     dataset_uuid = database.create_dataset_entry(desc, video_uuids, create_time, eval_percent, test_percent)
 
     threading.Thread(target=background_tasks.create_dataset_task, args=(
-        dataset_uuid, video_uuids, eval_percent, test_percent
+        dataset_uuid, video_uuids, eval_percent, test_percent, augmentation_options
     ), name=f"Dataset-{dataset_uuid[:6]}").start()
 
     return jsonify({'success': True, 'dataset_uuid': dataset_uuid})
@@ -581,8 +646,10 @@ def regenerate_dataset():
     eval_percent = dataset.get('eval_percent')
     test_percent = dataset.get('test_percent')
 
+    augmentation_options = {'enabled': False}
+
     threading.Thread(target=background_tasks.create_dataset_task, args=(
-        dataset_uuid, video_uuids, eval_percent, test_percent
+        dataset_uuid, video_uuids, eval_percent, test_percent, augmentation_options
     ), name=f"Dataset-Regen-{dataset_uuid[:6]}").start()
 
     return jsonify({'success': True, 'message': 'Dataset regeneration started.'})
@@ -619,14 +686,26 @@ def list_models():
 def import_model():
     desc = request.form.get('description')
     model_file = request.files.get('model_file')
+    label_file = request.files.get('label_file')
+    model_type = request.form.get('model_type')
+
     is_valid, message = validate_description(desc, [m['description'] for m in database.get_model_list()])
     if not is_valid:
         return jsonify({'success': False, 'message': message}), 400
+
     if not model_file or not model_file.filename.endswith('.tflite'):
-        return jsonify({'success': False, 'message': 'Please provide a .tflite file.'}), 400
+        return jsonify({'success': False, 'message': 'Please provide a .tflite model file.'}), 400
+    if not label_file or not (label_file.filename.endswith('.txt') or label_file.filename.endswith('.labels')):
+        return jsonify({'success': False, 'message': 'Please provide a .txt or .labels file.'}), 400
+    if not model_type in ['float32', 'uint8']:
+        return jsonify({'success': False, 'message': 'Invalid model type selected.'}), 400
+
     create_time = int(time.time() * 1000)
-    model_uuid = database.import_model_metadata(desc, create_time)
+    model_uuid = database.import_model_metadata(desc, label_file.filename, model_type, create_time)
+
     file_storage.save_imported_model(model_file, model_uuid)
+    file_storage.save_imported_label_file(label_file, model_uuid)
+
     return jsonify({'success': True, 'model_uuid': model_uuid})
 
 
@@ -635,7 +714,61 @@ def delete_model():
     model_uuid = request.json.get('model_uuid')
     database.delete_model(model_uuid)
     file_storage.delete_model_file(model_uuid)
+    file_storage.delete_label_file(model_uuid)
     return jsonify({'success': True})
+
+
+@app.route('/startPreAnnotation', methods=['POST'])
+def start_pre_annotation():
+    data = request.json
+    video_uuid = data.get('video_uuid')
+    model_uuid = data.get('model_uuid')
+    options = data.get('options', {})
+
+    if not video_uuid or not model_uuid:
+        return jsonify({'success': False, 'message': 'Video UUID and Model UUID are required.'}), 400
+
+    video = database.get_video_entity(video_uuid)
+    if not video:
+        return jsonify({'success': False, 'message': 'Video not found.'}), 404
+    if video['status'] != 'READY':
+        return jsonify({'success': False, 'message': f"Video must be in READY state, but is {video['status']}."}), 400
+
+    if background_tasks.active_tasks.get(video_uuid):
+        return jsonify({'success': False, 'message': 'Another task is already running for this video.'}), 409
+
+    try:
+        options['start_frame'] = int(options.get('start_frame', 0))
+        options['end_frame'] = int(options.get('end_frame', video['frame_count'] - 1))
+        options['confidence'] = float(options.get('confidence', 0.5))
+        options['merge_strategy'] = options.get('merge_strategy', 'overwrite')
+    except (ValueError, TypeError) as e:
+        return jsonify({'success': False, 'message': f'Invalid options provided: {e}'}), 400
+
+    threading.Thread(
+        target=background_tasks.pre_annotate_video_task,
+        args=(video_uuid, model_uuid, options),
+        name=f"PreAnnotator-{video_uuid[:6]}"
+    ).start()
+
+    return jsonify({'success': True, 'message': 'Pre-annotation task started.'})
+
+
+@app.route('/cancelTask', methods=['POST'])
+def cancel_task():
+    video_uuid = request.json.get('video_uuid')
+    if not video_uuid:
+        return jsonify({'success': False, 'message': 'Video UUID is required.'}), 400
+
+    video = database.get_video_entity(video_uuid)
+    if not video:
+        return jsonify({'success': False, 'message': 'Video not found.'}), 404
+
+    if video['status'] == 'PRE_ANNOTATING':
+        database.update_video_status(video_uuid, 'CANCELLING', 'Cancellation requested by user.')
+        return jsonify({'success': True, 'message': 'Cancellation request sent.'})
+    else:
+        return jsonify({'success': False, 'message': f'Cannot cancel task, video status is {video["status"]}.'}), 400
 
 
 @app.route('/datasetAnalysis/<dataset_uuid>')
@@ -643,7 +776,9 @@ def dataset_analysis(dataset_uuid):
     dataset = database.get_dataset_entity(dataset_uuid)
     if not dataset:
         return "Dataset not found", 404
-    return render_template('dataset_analysis.html', dataset=sanitize_dict(dataset))
+    return render_template('dataset_analysis.html',
+                           dataset=sanitize_dict(dataset),
+                           limit_data=config.get_limit_data_for_render_template())
 
 
 @app.route('/api/datasetAnalysis/<dataset_uuid>', methods=['GET'])
@@ -736,7 +871,6 @@ def get_dataset_analysis_data(dataset_uuid):
         'task_uuid': get_task_for_frame(f['video_uuid'], f['frame_number'])
     } for f in all_frames]
 
-    # Generate Summary and Warnings
     warnings = []
     total_instances = sum(class_counts.values())
     if class_counts:
@@ -774,6 +908,96 @@ def get_dataset_analysis_data(dataset_uuid):
         'image_class_map': image_class_map,
         'gallery_images': gallery_images
     })
+
+
+@app.route('/api/previewAugmentations', methods=['POST'])
+def preview_augmentations():
+    if not background_tasks.A:
+        return jsonify({'success': False, 'message': 'Albumentations library not installed on server.'}), 501
+
+    data = request.json
+    video_uuid = data.get('video_uuid')
+    frame_number = data.get('frame_number')
+    augmentation_options = data.get('augmentation_options')
+    sample_pool = data.get('sample_pool')
+
+    if not all([video_uuid, frame_number is not None, augmentation_options]):
+        return jsonify({'success': False, 'message': 'Missing required data.'}), 400
+
+    try:
+        if augmentation_options.get('mosaic', {}).get('enabled'):
+            if not sample_pool:
+                return jsonify({'success': False, 'message': 'Sample pool is required for Mosaic preview.'}), 400
+
+            if random.random() < augmentation_options['mosaic'].get('p', 1.0):
+                previews = generate_mosaic_previews(sample_pool, video_uuid, frame_number)
+                return jsonify({'success': True, 'previews': previews})
+
+        frame_path = file_storage.get_frame_path(video_uuid, frame_number)
+        if not os.path.exists(frame_path):
+            return jsonify({'success': False, 'message': 'Frame image not found.'}), 404
+
+        image = cv2.imread(frame_path)
+        image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+        video_info = database.get_video_entity(video_uuid)
+
+        conn = database.get_db_connection()
+        frame_db_info = conn.execute(
+            'SELECT bboxes_text FROM video_frames WHERE video_uuid = ? AND frame_number = ?',
+            (video_uuid, frame_number)
+        ).fetchone()
+        conn.close()
+
+        if not frame_db_info or not frame_db_info['bboxes_text']:
+            return jsonify({'success': False, 'message': 'No labels found for this frame.'}), 404
+
+        augmentation_options['mosaic'] = {'enabled': False}
+        pipeline = background_tasks.build_augmentation_pipeline(augmentation_options)
+        if not pipeline:
+            return jsonify({'success': False, 'message': 'No valid augmentations selected.'}), 400
+
+        all_labels = database.get_all_class_labels()
+        class_map = {name: i for i, name in enumerate(all_labels)}
+
+        yolo_bboxes, class_indices = file_storage.get_yolo_bboxes(
+            frame_db_info['bboxes_text'], video_info['width'], video_info['height'], class_map
+        )
+        if not yolo_bboxes:
+            return jsonify({'success': False, 'message': 'Could not parse labels into YOLO format.'}), 500
+
+        previews = []
+        for _ in range(6):
+            transformed = pipeline(image=image_rgb, bboxes=yolo_bboxes, class_labels=class_indices)
+
+            aug_image_rgb = transformed['image']
+            aug_bboxes_yolo = transformed['bboxes']
+            aug_labels_indices = transformed['class_labels']
+
+            h, w, _ = aug_image_rgb.shape
+            vis_image = aug_image_rgb.copy()
+            for i, bbox in enumerate(aug_bboxes_yolo):
+                class_index = int(aug_labels_indices[i])
+                class_name = all_labels[class_index]
+                color = string_to_color_bgr(class_name)
+
+                x_center, y_center, width_norm, height_norm = bbox
+                x1 = int((x_center - width_norm / 2) * w)
+                y1 = int((y_center - height_norm / 2) * h)
+                x2 = int((x_center + width_norm / 2) * w)
+                y2 = int((y_center + height_norm / 2) * h)
+                cv2.rectangle(vis_image, (x1, y1), (x2, y2), color, 2)
+
+            vis_image_bgr = cv2.cvtColor(vis_image, cv2.COLOR_RGB2BGR)
+            _, buffer = cv2.imencode('.jpg', vis_image_bgr)
+            img_base64 = base64.b64encode(buffer).decode('utf-8')
+            previews.append(f"data:image/jpeg;base64,{img_base64}")
+
+        return jsonify({'success': True, 'previews': previews})
+
+    except Exception as e:
+        logging.error(f"Augmentation preview failed: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 
 def startup_ai_models():

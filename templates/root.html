@@ -1,4 +1,3 @@
-<!-- templates/root.html -->
 {% extends "layout.html" %}
 {% from "_macros.html" import render_modal %}
 
@@ -12,7 +11,6 @@
     </ul>
 
     <div class="tab-content pt-4">
-        <!-- Videos Tab -->
         <div class="tab-pane fade show active" id="videos" role="tabpanel">
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <h2 class="mb-0">Videos Management</h2>
@@ -30,7 +28,6 @@
             </div>
         </div>
 
-        <!-- Datasets Tab -->
         <div class="tab-pane fade" id="datasets" role="tabpanel">
              <div class="d-flex justify-content-between align-items-center mb-3">
                 <h2 class="mb-0">Dataset Hub</h2>
@@ -55,7 +52,6 @@
             </div>
         </div>
 
-        <!-- Models Tab -->
         <div class="tab-pane fade" id="models" role="tabpanel">
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <h2 class="mb-0">Model Repository</h2>
@@ -69,6 +65,8 @@
                     <thead class="thead-light">
                         <tr>
                             <th>Description</th>
+                            <th>Model Type</th>
+                            <th>Label File</th>
                             <th>Created Date</th>
                             <th>Actions</th>
                         </tr>
@@ -78,15 +76,12 @@
             </div>
         </div>
 
-        <!-- Settings Tab -->
         <div class="tab-pane fade" id="settings" role="tabpanel">
             <h2 class="mb-3">Application Settings</h2>
             <p class="text-muted">Changes to the SAM model will take effect on the next annotation or tracking task.</p>
             <form id="settings-form" class="mt-4 col-md-10 col-lg-8">
                 <div class="card mb-4">
-                    <div class="card-header">
-                        <i class="bi bi-magic"></i> AI Model Settings
-                    </div>
+                    <div class="card-header"><i class="bi bi-magic"></i> AI Model Settings</div>
                     <div class="card-body">
                         <div class="form-group">
                             <label for="setting-sam-model"><strong>Annotation Assistance Model (SAM)</strong></label>
@@ -100,38 +95,29 @@
                         </div>
                     </div>
                 </div>
-
                 <div class="card">
-                    <div class="card-header">
-                        <i class="bi bi-gear-fill"></i> General Settings
-                    </div>
+                    <div class="card-header"><i class="bi bi-gear-fill"></i> General Settings</div>
                     <div class="card-body">
                         <div class="form-group">
                             <label for="setting-jpeg-quality"><strong>Frame Extraction JPEG Quality</strong></label>
                             <input type="number" id="setting-jpeg-quality" class="form-control" min="10" max="100" step="5">
-                             <small class="form-text text-muted">Affects disk space usage and image quality for new video uploads (10-100).</small>
+                            <small class="form-text text-muted">Affects disk space usage and image quality for new video uploads (10-100).</small>
                         </div>
                         <div class="form-group">
                             <label for="setting-opencv-tracker"><strong>Default OpenCV Tracker</strong></label>
                             <select id="setting-opencv-tracker" class="form-control">
-                                {% for tracker in tracker_fns %}
-                                <option value="{{ tracker }}">{{ tracker }}</option>
-                                {% endfor %}
+                                {% for tracker in tracker_fns %}<option value="{{ tracker }}">{{ tracker }}</option>{% endfor %}
                             </select>
                             <small class="form-text text-muted">This is for the legacy object tracking feature.</small>
                         </div>
                     </div>
                 </div>
-
-                <button type="submit" class="btn btn-primary mt-4">
-                    <i class="bi bi-check-circle"></i> Save Settings
-                </button>
+                <button type="submit" class="btn btn-primary mt-4"><i class="bi bi-check-circle"></i> Save Settings</button>
             </form>
         </div>
     </div>
 </div>
 
-<!-- Modals -->
 {% call render_modal('uploadVideoModal', 'Upload a New Video') %}
     <form id="upload-video-form">
         <div class="form-group">
@@ -158,8 +144,7 @@
         </div>
         <div class="form-group">
             <label for="dataset-videos">Select Videos (must be READY and have labeled frames)</label>
-            <select multiple class="form-control" id="dataset-videos" required size="8">
-            </select>
+            <select multiple class="form-control" id="dataset-videos" required size="5"></select>
             <small class="form-text text-muted">Hold Ctrl/Cmd to select multiple videos.</small>
         </div>
         <div class="row">
@@ -172,7 +157,23 @@
                 <input type="number" class="form-control" id="test-percent" value="10" min="0" max="50" step="1">
             </div>
         </div>
-        <button type="submit" class="btn btn-primary w-100"><i class="bi bi-plus-circle"></i> Create</button>
+        <hr>
+        <div class="d-flex justify-content-between align-items-center">
+            <h5><i class="bi bi-magic"></i> Data Augmentation Options</h5>
+            <div class="custom-control custom-switch">
+                <input type="checkbox" class="custom-control-input" id="aug-enabled">
+                <label class="custom-control-label" for="aug-enabled"><strong>Enable</strong></label>
+            </div>
+        </div>
+        <div id="augmentation-options-panel" class="mt-3" style="display: none;">
+            <div class="form-group">
+                <label for="aug-multiply-factor">Dataset Multiplication Factor</label>
+                <input type="number" class="form-control" id="aug-multiply-factor" value="3" min="2" max="20">
+                <small class="form-text text-muted">Creates N-1 augmented versions for each original image.</small>
+            </div>
+            {% include '_augmentation_controls.html' %}
+        </div>
+        <button type="submit" class="btn btn-primary w-100 mt-3"><i class="bi bi-plus-circle"></i> Create</button>
     </form>
 {% endcall %}
 
@@ -186,11 +187,65 @@
             <label for="model-file">TFLite File</label>
              <div class="custom-file">
                 <input type="file" class="custom-file-input" id="model-file" name="model_file" accept=".tflite" required>
-                <label class="custom-file-label" for="model-file">Choose file...</label>
+                <label class="custom-file-label" for="model-file">Choose .tflite file...</label>
             </div>
             <small class="form-text text-muted">Only .tflite models are supported.</small>
         </div>
+        <div class="form-group">
+            <label for="label-file">Label File</label>
+             <div class="custom-file">
+                <input type="file" class="custom-file-input" id="label-file" name="label_file" accept=".txt,.labels" required>
+                <label class="custom-file-label" for="label-file">Choose .txt or .labels file...</label>
+            </div>
+            <small class="form-text text-muted">A text file with one class name per line.</small>
+        </div>
+        <div class="form-group">
+            <label for="model-type">Model Type</label>
+            <select class="form-control" id="model-type" name="model_type" required>
+                <option value="" disabled selected>-- Select Model Type --</option>
+                <option value="float32">Float32 (FP32)</option>
+                <option value="uint8">Integer (UINT8 Quantized)</option>
+            </select>
+             <small class="form-text text-muted">Select the data type the model was trained or converted with.</small>
+        </div>
         <button type="submit" class="btn btn-primary w-100"><i class="bi bi-box-arrow-in-down"></i> Import</button>
+    </form>
+{% endcall %}
+
+{% call render_modal('preAnnotateModal', 'Advanced Pre-annotation') %}
+    <form id="pre-annotate-form">
+        <input type="hidden" id="pre-annotate-video-uuid" data-frame-count="0" data-labeled-count="0">
+        <div class="form-group">
+            <label for="pre-annotate-model-select">Select Model</label>
+            <select id="pre-annotate-model-select" class="form-control" required></select>
+        </div>
+        <div class="form-row">
+            <div class="form-group col-md-6">
+                <label for="pre-annotate-start-frame">Start Frame</label>
+                <input type="number" id="pre-annotate-start-frame" class="form-control" min="0" value="0">
+            </div>
+             <div class="form-group col-md-6">
+                <label for="pre-annotate-end-frame">End Frame</label>
+                <input type="number" id="pre-annotate-end-frame" class="form-control" min="0">
+            </div>
+        </div>
+         <div class="form-group">
+            <label for="pre-annotate-confidence">Confidence Threshold: <span id="confidence-value">0.5</span></label>
+            <input type="range" class="form-control-range" id="pre-annotate-confidence" min="0.1" max="0.95" step="0.05" value="0.5">
+        </div>
+         <div class="form-group">
+            <label>Merge Strategy</label>
+            <div class="custom-control custom-radio">
+                <input type="radio" id="strategy-overwrite" name="merge_strategy" value="overwrite" class="custom-control-input" checked>
+                <label class="custom-control-label" for="strategy-overwrite">Overwrite all existing labels in range</label>
+            </div>
+            <div class="custom-control custom-radio">
+                <input type="radio" id="strategy-skip" name="merge_strategy" value="skip_labeled" class="custom-control-input">
+                <label class="custom-control-label" for="strategy-skip">Skip frames that already have labels</label>
+            </div>
+        </div>
+        <hr>
+        <button type="submit" class="btn btn-primary w-100"><i class="bi bi-robot"></i> Start Pre-annotation</button>
     </form>
 {% endcall %}
 
@@ -199,9 +254,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="manageTasksModalTitle">Manage Annotation Tasks for: </h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                </button>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
             </div>
             <div class="modal-body">
                 <h6><i class="bi bi-list-task"></i> Existing Tasks</h6>
@@ -241,364 +294,97 @@
         </div>
     </div>
 </div>
-
 {% endblock %}
 
 {% block scripts %}
 <script>
 $(document).ready(function() {
-    // --- Custom File Input Label ---
-    $('.custom-file-input').on('change', function() {
-       let fileName = $(this).val().split('\\').pop();
-       $(this).next('.custom-file-label').addClass("selected").html(fileName);
+    $('.custom-file-input').on('change', function() { let fileName = $(this).val().split('\\').pop(); $(this).next('.custom-file-label').addClass("selected").html(fileName); });
+    function getStatusBadge(status, message) { let badgeClass = 'secondary'; if (status === 'READY') { badgeClass = message ? 'warning' : 'success'; } else if (['PROCESSING', 'EXTRACTING', 'PENDING', 'PRE_ANNOTATING'].includes(status)) { badgeClass = 'info'; } else if (status === 'CANCELLING') { badgeClass = 'warning'; } else if (status === 'FAILED') { badgeClass = 'danger'; } return `<span class="badge badge-${badgeClass}">${status}</span>`; }
+    function showSuccess(message) { alert(message); }
+    function showError(message) { alert('Error: ' + message); }
+    function refreshVideos() { $.get('/listVideos', function(data) { const videoList = $('#video-list'); videoList.empty(); data.all_videos.forEach(video => { const isReady = video.status === 'READY'; let actions = ` <button class="btn btn-sm btn-info btn-import-frames" data-uuid="${video.video_uuid}" ${isReady ? '' : 'disabled'}><i class="bi bi-images"></i> Import</button> <button class="btn btn-sm btn-danger btn-delete-video" data-uuid="${video.video_uuid}"><i class="bi bi-trash"></i> Delete</button> `; if (isReady) { actions = ` <button class="btn btn-sm btn-warning btn-pre-annotate" data-uuid="${video.video_uuid}" data-frame-count="${video.frame_count}" data-labeled-count="${video.labeled_frame_count}"><i class="bi bi-robot"></i> Pre-annotate</button> <button class="btn btn-sm btn-success btn-manage-tasks" data-uuid="${video.video_uuid}" data-description="${video.description}" data-frameCount="${video.frame_count}"><i class="bi bi-card-checklist"></i> Manage Tasks</button> ` + actions; } if (video.status === 'PRE_ANNOTATING') { actions = `<button class="btn btn-sm btn-danger btn-cancel-task" data-uuid="${video.video_uuid}"><i class="bi bi-x-circle"></i> Cancel</button>` + actions; } const row = `<tr class="slide-in-up"><td><strong>${video.description}</strong></td><td class="text-muted">${video.video_filename || ''}</td><td>${getStatusBadge(video.status, video.status_message)} <small class="text-muted">${video.status_message || ''}</small></td><td>${video.extracted_frame_count} / ${video.frame_count || '?'}</td><td>${video.labeled_frame_count}</td><td>${actions}</td></tr>`; videoList.append(row); }); const datasetVideoSelect = $('#dataset-videos'); datasetVideoSelect.empty(); data.ready_videos_for_dataset.forEach(video => { datasetVideoSelect.append(`<option value="${video.video_uuid}">${video.description} (${video.labeled_frame_count} labeled frames)</option>`); }); }); }
+    function refreshDatasets() { $.get('/listDatasets', function(data) { const datasetList = $('#dataset-list'); datasetList.empty(); data.datasets.forEach(dataset => { let actions = `<button class="btn btn-sm btn-danger btn-delete-dataset" data-uuid="${dataset.dataset_uuid}"><i class="bi bi-trash"></i> Delete</button>`; if (dataset.status === 'READY') { actions = `<a href="/downloadDataset/${dataset.dataset_uuid}" class="btn btn-sm btn-success"><i class="bi bi-download"></i> Download</a> <a href="/datasetAnalysis/${dataset.dataset_uuid}" class="btn btn-sm btn-info"><i class="bi bi-bar-chart-line"></i> Analyze</a> <button class="btn btn-sm btn-secondary btn-regenerate-dataset" data-uuid="${dataset.dataset_uuid}"><i class="bi bi-arrow-repeat"></i> Update</button> ` + actions; } else if (dataset.status === 'FAILED') { actions = `<button class="btn btn-sm btn-warning btn-regenerate-dataset" data-uuid="${dataset.dataset_uuid}"><i class="bi bi-arrow-repeat"></i> Retry</button> ` + actions; } const videos = JSON.parse(dataset.video_uuids || '[]').length; const classes = JSON.parse(dataset.sorted_label_list || '[]').join(', '); const row = `<tr class="slide-in-up"><td><strong>${dataset.description}</strong></td><td>${getStatusBadge(dataset.status)} <small class="text-muted">${dataset.status_message || ''}</small></td><td>${videos} video(s)</td><td class="text-muted">${classes || 'N/A'}</td><td>${actions}</td></tr>`; datasetList.append(row); }); }); }
+    function refreshModels() { $.get('/listModels', function(data) { const modelList = $('#model-list'); modelList.empty(); data.models.forEach(model => { const createdDate = new Date(model.create_time_ms).toLocaleString(); const modelTypeBadge = model.model_type === 'uint8' ? `<span class="badge badge-info">UINT8</span>` : `<span class="badge badge-primary">FP32</span>`; const row = `<tr class="slide-in-up"><td><strong>${model.description}</strong></td><td>${modelTypeBadge}</td><td class="text-muted">${model.label_filename || 'N/A'}</td><td class="text-muted">${createdDate}</td><td><button class="btn btn-sm btn-danger btn-delete-model" data-uuid="${model.model_uuid}"><i class="bi bi-trash"></i> Delete</button></td></tr>`; modelList.append(row); }); }); }
+    function loadSettings() { $.get('/api/settings', function(data) { if (data.success) { const settings = data.settings; $('#setting-sam-model').val(settings.sam_model_checkpoint); $('#setting-jpeg-quality').val(settings.frame_extraction_jpeg_quality); $('#setting-opencv-tracker').val(settings.default_opencv_tracker); } }); }
+
+    function setupAugmentationListeners(contextSelector) {
+        const context = $(contextSelector);
+        context.on('input', 'input[type="range"]', function() {
+            $(this).closest('div').find('.val-display').text($(this).val());
+        });
+        context.on('change', '.aug-option input[type="checkbox"]', function() {
+            const controlsId = $(this).closest('.aug-option').data('controls');
+            context.find('#' + controlsId).toggle($(this).is(':checked'));
+        });
+        context.find('.aug-option input[type="checkbox"]').each(function() {
+            const controlsId = $(this).closest('.aug-option').data('controls');
+            context.find('#' + controlsId).toggle($(this).is(':checked'));
+        });
+    }
+
+    $('#aug-enabled').on('change', function() {
+        $('#augmentation-options-panel').slideToggle($(this).is(':checked'));
     });
 
-    // --- Helper Functions ---
-    function getStatusBadge(status) {
-        let badgeClass = 'secondary';
-        if (status === 'READY') badgeClass = 'success';
-        if (status === 'PROCESSING' || status === 'EXTRACTING' || status === 'PENDING') badgeClass = 'info';
-        if (status === 'FAILED') badgeClass = 'danger';
-        return `<span class="badge badge-${badgeClass}">${status}</span>`;
+    setupAugmentationListeners('#createDatasetModal');
+
+    function getAugmentationOptions(contextSelector) {
+        const context = $(contextSelector);
+        const getVal = (selector, type = 'float') => type === 'int' ? parseInt(context.find(selector).val()) : parseFloat(context.find(selector).val());
+        const isEnabled = (selector) => context.find(selector).is(':checked');
+
+        return {
+            enabled: isEnabled('#aug-enabled'),
+            multiply_factor: getVal('#aug-multiply-factor', 'int'),
+            hflip: { enabled: isEnabled('#aug-hflip-enabled'), p: getVal('#aug-hflip-p') },
+            vflip: { enabled: isEnabled('#aug-vflip-enabled'), p: getVal('#aug-vflip-p') },
+            rotate90: { enabled: isEnabled('#aug-rotate90-enabled'), p: getVal('#aug-rotate90-p') },
+            rotate: { enabled: isEnabled('#aug-rotate-enabled'), p: getVal('#aug-rotate-p'), limit: getVal('#aug-rotate-limit', 'int') },
+            ssr: { enabled: isEnabled('#aug-ssr-enabled'), p: getVal('#aug-ssr-p'), rotate: getVal('#aug-ssr-rotate', 'int'), shift: getVal('#aug-ssr-shift'), scale: getVal('#aug-ssr-scale') },
+            affine: { enabled: isEnabled('#aug-affine-enabled'), p: getVal('#aug-affine-p'), shear: getVal('#aug-affine-shear', 'int') },
+            crop: { enabled: isEnabled('#aug-crop-enabled'), p: getVal('#aug-crop-p') },
+            grayscale: { enabled: isEnabled('#aug-grayscale-enabled'), p: getVal('#aug-grayscale-p') },
+            hsv: { enabled: isEnabled('#aug-hsv-enabled'), p: getVal('#aug-hsv-p'), h: getVal('#aug-hsv-h', 'int'), s: getVal('#aug-hsv-s', 'int'), v: getVal('#aug-hsv-v', 'int') },
+            bc: { enabled: isEnabled('#aug-bc-enabled'), p: getVal('#aug-bc-p'), b: getVal('#aug-bc-b'), c: getVal('#aug-bc-c') },
+            blur: { enabled: isEnabled('#aug-blur-enabled'), p: getVal('#aug-blur-p'), limit: getVal('#aug-blur-limit', 'int') },
+            noise: { enabled: isEnabled('#aug-noise-enabled'), p: getVal('#aug-noise-p'), limit: getVal('#aug-noise-limit') },
+            cutout: { enabled: isEnabled('#aug-cutout-enabled'), p: getVal('#aug-cutout-p'), holes: getVal('#aug-cutout-holes', 'int'), size: getVal('#aug-cutout-size', 'int') },
+            mosaic: { enabled: isEnabled('#aug-mosaic-enabled'), p: getVal('#aug-mosaic-p') }
+        };
     }
-
-    function showSuccess(message) {
-        alert(message);
-    }
-
-    function showError(message) {
-        alert('Error: ' + message);
-    }
-
-    // --- Refresh Functions ---
-    function refreshVideos() {
-        $.get('/listVideos', function(data) {
-            const videoList = $('#video-list');
-            videoList.empty();
-            data.all_videos.forEach(video => {
-                const actionBtnDisabled = video.status !== 'READY' ? 'disabled' : '';
-                const row = `
-                    <tr class="slide-in-up">
-                        <td><strong>${video.description}</strong></td>
-                        <td class="text-muted">${video.video_filename || ''}</td>
-                        <td>${getStatusBadge(video.status)} <small class="text-muted">${video.status_message || ''}</small></td>
-                        <td>${video.extracted_frame_count} / ${video.frame_count || '?'}</td>
-                        <td>${video.labeled_frame_count}</td>
-                        <td>
-                            <button class="btn btn-sm btn-success btn-manage-tasks"
-                                    data-uuid="${video.video_uuid}"
-                                    data-description="${video.description}"
-                                    data-frameCount="${video.frame_count}"
-                                    ${actionBtnDisabled}>
-                                <i class="bi bi-card-checklist"></i> Manage Tasks
-                            </button>
-                            <button class="btn btn-sm btn-info btn-import-frames ${actionBtnDisabled}" data-uuid="${video.video_uuid}"><i class="bi bi-images"></i> Import</button>
-                            <button class="btn btn-sm btn-danger btn-delete-video" data-uuid="${video.video_uuid}"><i class="bi bi-trash"></i> Delete</button>
-                        </td>
-                    </tr>`;
-                videoList.append(row);
-            });
-
-            const datasetVideoSelect = $('#dataset-videos');
-            datasetVideoSelect.empty();
-            data.ready_videos_for_dataset.forEach(video => {
-                 datasetVideoSelect.append(`<option value="${video.video_uuid}">${video.description} (${video.labeled_frame_count} labeled frames)</option>`);
-            });
-        });
-    }
-
-    function refreshDatasets() {
-        $.get('/listDatasets', function(data) {
-            const datasetList = $('#dataset-list');
-            datasetList.empty();
-            data.datasets.forEach(dataset => {
-                let actions = `<button class="btn btn-sm btn-danger btn-delete-dataset" data-uuid="${dataset.dataset_uuid}"><i class="bi bi-trash"></i> Delete</button>`;
-                if (dataset.status === 'READY') {
-                    actions = `<a href="/downloadDataset/${dataset.dataset_uuid}" class="btn btn-sm btn-success"><i class="bi bi-download"></i> Download</a> ` +
-                              `<a href="/datasetAnalysis/${dataset.dataset_uuid}" class="btn btn-sm btn-info"><i class="bi bi-bar-chart-line"></i> Analyze</a> ` +
-                              `<button class="btn btn-sm btn-secondary btn-regenerate-dataset" data-uuid="${dataset.dataset_uuid}"><i class="bi bi-arrow-repeat"></i> Update</button> ` +
-                               actions;
-                } else if (dataset.status === 'FAILED') {
-                    actions = `<button class="btn btn-sm btn-warning btn-regenerate-dataset" data-uuid="${dataset.dataset_uuid}"><i class="bi bi-arrow-repeat"></i> Retry</button> ` + actions;
-                }
-
-                const videos = JSON.parse(dataset.video_uuids || '[]').length;
-                const classes = JSON.parse(dataset.sorted_label_list || '[]').join(', ');
-
-                const row = `
-                    <tr class="slide-in-up">
-                        <td><strong>${dataset.description}</strong></td>
-                        <td>${getStatusBadge(dataset.status)} <small class="text-muted">${dataset.status_message || ''}</small></td>
-                        <td>${videos} video(s)</td>
-                        <td class="text-muted">${classes || 'N/A'}</td>
-                        <td>${actions}</td>
-                    </tr>`;
-                datasetList.append(row);
-            });
-        });
-    }
-
-    function refreshModels() {
-        $.get('/listModels', function(data) {
-            const modelList = $('#model-list');
-            modelList.empty();
-            data.models.forEach(model => {
-                const createdDate = new Date(model.create_time_ms).toLocaleString();
-                const row = `
-                    <tr class="slide-in-up">
-                        <td><strong>${model.description}</strong></td>
-                        <td class="text-muted">${createdDate}</td>
-                        <td>
-                            <button class="btn btn-sm btn-danger btn-delete-model" data-uuid="${model.model_uuid}"><i class="bi bi-trash"></i> Delete</button>
-                        </td>
-                    </tr>`;
-                modelList.append(row);
-            });
-        });
-    }
-
-    function loadSettings() {
-        $.get('/api/settings', function(data) {
-            if (data.success) {
-                const settings = data.settings;
-                $('#setting-sam-model').val(settings.sam_model_checkpoint);
-                $('#setting-jpeg-quality').val(settings.frame_extraction_jpeg_quality);
-                $('#setting-opencv-tracker').val(settings.default_opencv_tracker);
-            }
-        });
-    }
-
-    // --- Form Submission Handlers ---
-    $('#upload-video-form').on('submit', function(e) {
-        e.preventDefault();
-        const formData = new FormData(this);
-        $.ajax({
-            url: '/uploadVideo', type: 'POST', data: formData, processData: false, contentType: false,
-            success: function(response) {
-                if (response.success) {
-                    showSuccess('Video uploaded successfully! Frame extraction has started.');
-                    $('#uploadVideoModal').modal('hide');
-                    $(this).find('form').trigger('reset');
-                    $('.custom-file-label').html('Choose file...');
-                    refreshVideos();
-                } else { showError(response.message); }
-            }.bind(this),
-            error: function(xhr) { showError(xhr.responseJSON ? xhr.responseJSON.message : 'An unknown error occurred.'); }
-        });
-    });
 
     $('#create-dataset-form').on('submit', function(e) {
         e.preventDefault();
+        const augmentation_options = getAugmentationOptions('#createDatasetModal');
         const datasetData = {
-            description: $('#dataset-description').val(),
-            video_uuids: $('#dataset-videos').val(),
-            eval_percent: $('#eval-percent').val(),
-            test_percent: $('#test-percent').val()
+            description: $('#dataset-description').val(), video_uuids: $('#dataset-videos').val(),
+            eval_percent: $('#eval-percent').val(), test_percent: $('#test-percent').val(),
+            augmentation_options: augmentation_options
         };
-        $.ajax({
-            url: '/createDataset', type: 'POST', contentType: 'application/json', data: JSON.stringify(datasetData),
-            success: function(response) {
-                if (response.success) {
-                    showSuccess('Dataset creation started!');
-                    $('#createDatasetModal').modal('hide');
-                    refreshDatasets();
-                } else { showError(response.message); }
-            },
-            error: function(xhr) { showError(xhr.responseJSON ? xhr.responseJSON.message : 'An unknown error occurred.'); }
-        });
+        $.ajax({ url: '/createDataset', type: 'POST', contentType: 'application/json', data: JSON.stringify(datasetData), success: function(response) { if (response.success) { showSuccess('Dataset creation started!'); $('#createDatasetModal').modal('hide'); refreshDatasets(); } else { showError(response.message); } }, error: function(xhr) { showError(xhr.responseJSON ? xhr.responseJSON.message : 'An unknown error occurred.'); } });
     });
 
-    $('#import-model-form').on('submit', function(e) {
-        e.preventDefault();
-        const formData = new FormData(this);
-        $.ajax({
-            url: '/importModel', type: 'POST', data: formData, processData: false, contentType: false,
-            success: function(response) {
-                if (response.success) {
-                    showSuccess('Model imported successfully!');
-                    $('#importModelModal').modal('hide');
-                    $(this).find('form').trigger('reset');
-                    $('.custom-file-label').html('Choose file...');
-                    refreshModels();
-                } else { showError(response.message); }
-            }.bind(this),
-            error: function(xhr) { showError(xhr.responseJSON ? xhr.responseJSON.message : 'An unknown error occurred.'); }
-        });
-    });
+    $('#upload-video-form').on('submit', function(e) { e.preventDefault(); const formData = new FormData(this); $.ajax({ url: '/uploadVideo', type: 'POST', data: formData, processData: false, contentType: false, success: function(response) { if (response.success) { showSuccess('Video uploaded successfully! Frame extraction has started.'); $('#uploadVideoModal').modal('hide'); $(this).find('form').trigger('reset'); $('.custom-file-label').html('Choose file...'); refreshVideos(); } else { showError(response.message); } }.bind(this), error: function(xhr) { showError(xhr.responseJSON ? xhr.responseJSON.message : 'An unknown error occurred.'); } }); });
+    $('#import-model-form').on('submit', function(e) { e.preventDefault(); const formData = new FormData(this); $.ajax({ url: '/importModel', type: 'POST', data: formData, processData: false, contentType: false, success: function(response) { if (response.success) { showSuccess('Model imported successfully!'); $('#importModelModal').modal('hide'); $(this).find('form').trigger('reset'); $('.custom-file-label').html('Choose file...'); refreshModels(); } else { showError(response.message); } }.bind(this), error: function(xhr) { showError(xhr.responseJSON ? xhr.responseJSON.message : 'An unknown error occurred.'); } }); });
+    $('#settings-form').on('submit', function(e) { e.preventDefault(); const selectedOption = $('#setting-sam-model').find('option:selected'); const settingsData = { sam_model_checkpoint: selectedOption.val(), sam_model_name: selectedOption.data('name'), frame_extraction_jpeg_quality: parseInt($('#setting-jpeg-quality').val()), default_opencv_tracker: $('#setting-opencv-tracker').val() }; $.ajax({ url: '/api/settings', type: 'POST', contentType: 'application/json', data: JSON.stringify(settingsData), success: function(response) { if (response.success) { if (response.restart_required) { alert("Settings saved! The SAM model was changed. The new model will be loaded automatically for the next task."); } else { alert("Settings saved successfully!"); } } else { showError(response.message); } }, error: function(xhr) { showError(xhr.responseJSON ? xhr.responseJSON.message : 'An unknown error occurred.'); } }); });
+    $(document).on("click", ".btn-manage-tasks", function() { const videoUuid = $(this).data("uuid"); const videoDesc = $(this).data("description"); const frameCount = $(this).data("framecount"); $('#manageTasksModalTitle').text('Manage Annotation Tasks for: ' + videoDesc); $('#task-video-uuid').val(videoUuid); $('#task-start-frame').attr('max', frameCount - 1); $('#task-end-frame').attr('max', frameCount - 1); refreshTasksInModal(videoUuid); $('#manageTasksModal').modal('show'); });
+    function refreshTasksInModal(videoUuid) { const taskListBody = $('#task-list-in-modal'); taskListBody.empty().append('<tr><td colspan="4">Loading...</td></tr>'); $.get(`/listTasks?video_uuid=${videoUuid}`, function(data) { taskListBody.empty(); if (data.success && data.tasks.length > 0) { data.tasks.forEach(task => { const row = `<tr class="slide-in-up"><td>${task.assigned_to}</td><td>${task.start_frame} - ${task.end_frame}</td><td>${task.description || ''}</td><td><a href="/labelVideo?task_uuid=${task.task_uuid}" class="btn btn-sm btn-primary"><i class="bi bi-pencil-square"></i> Label</a> <button class="btn btn-sm btn-danger btn-delete-task" data-task-uuid="${task.task_uuid}" data-video-uuid="${videoUuid}"><i class="bi bi-trash"></i></button></td></tr>`; taskListBody.append(row); }); } else { taskListBody.append('<tr><td colspan="4">No tasks created for this video yet.</td></tr>'); } }); }
+    $('#create-task-form').on('submit', function(e) { e.preventDefault(); const videoUuid = $('#task-video-uuid').val(); const taskData = { video_uuid: videoUuid, assigned_to: $('#task-assigned-to').val(), description: $('#task-description').val(), start_frame: $('#task-start-frame').val(), end_frame: $('#task-end-frame').val(), }; $.ajax({ url: '/createTask', type: 'POST', contentType: 'application/json', data: JSON.stringify(taskData), success: function(response) { if (response.success) { showSuccess('Task created successfully!'); $('#create-task-form')[0].reset(); refreshTasksInModal(videoUuid); } else { showError(response.message); } }, error: function() { showError('An error occurred while creating the task.'); } }); });
+    $(document).on("click", ".btn-pre-annotate", function() { const videoUuid = $(this).data('uuid'); const frameCount = parseInt($(this).data('frame-count')); const labeledCount = parseInt($(this).data('labeled-count')); $('#pre-annotate-video-uuid').val(videoUuid).data('frame-count', frameCount).data('labeled-count', labeledCount); const modelSelect = $('#pre-annotate-model-select'); modelSelect.empty().append('<option>Loading models...</option>'); $('#pre-annotate-start-frame').val(0).attr('max', frameCount - 1); $('#pre-annotate-end-frame').val(frameCount - 1).attr('max', frameCount - 1); $.get('/listModels', function(data) { modelSelect.empty(); if (data.models && data.models.length > 0) { data.models.forEach(model => { modelSelect.append(`<option value="${model.model_uuid}">${model.description} (${model.model_type})</option>`); }); } else { modelSelect.append('<option disabled>No models have been imported.</option>'); } }); $('#preAnnotateModal').modal('show'); });
+    $('#pre-annotate-confidence').on('input', function() { $('#confidence-value').text($(this).val()); });
+    $('#pre-annotate-form').on('submit', function(e) { e.preventDefault(); const videoUuid = $('#pre-annotate-video-uuid').val(); const modelUuid = $('#pre-annotate-model-select').val(); const labeledCount = parseInt($('#pre-annotate-video-uuid').data('labeled-count')); if (!modelUuid) { showError("Please select a model."); return; } let warningMessage = "This will start the pre-annotation process. Are you sure you want to continue?"; if (labeledCount > 0 && $('input[name="merge_strategy"]:checked').val() === 'overwrite') { warningMessage = `WARNING: This video has ${labeledCount} manually labeled frames. This action will OVERWRITE ALL existing labels in the selected range. Are you sure you want to continue?`; } if (!confirm(warningMessage)) return; const options = { start_frame: $('#pre-annotate-start-frame').val(), end_frame: $('#pre-annotate-end-frame').val(), confidence: $('#pre-annotate-confidence').val(), merge_strategy: $('input[name="merge_strategy"]:checked').val() }; $.ajax({ url: '/startPreAnnotation', type: 'POST', contentType: 'application/json', data: JSON.stringify({ video_uuid: videoUuid, model_uuid: modelUuid, options: options }), success: function(response) { if (response.success) { showSuccess('Pre-annotation started! The video status will update automatically.'); $('#preAnnotateModal').modal('hide'); refreshVideos(); } else { showError(response.message); } }, error: function(xhr) { showError(xhr.responseJSON ? xhr.responseJSON.message : 'An unknown error occurred.'); } }); });
+    let videoUuidForImport = null; $(document).on("click", ".btn-import-frames", function() { videoUuidForImport = $(this).data('uuid'); $('#frame-import-input').click(); });
+    $('#frame-import-input').on('change', function(e) { if (!videoUuidForImport || e.target.files.length === 0) return; const files = e.target.files; const formData = new FormData(); formData.append('video_uuid', videoUuidForImport); for (let i = 0; i < files.length; i++) { formData.append('frame_files', files[i]); } alert(`Importing ${files.length} frames. This might take a moment...`); $.ajax({ url: '/importFrames', type: 'POST', data: formData, processData: false, contentType: false, success: function(response) { if (response.success) { showSuccess(`${response.imported_count} frames imported successfully!`); refreshVideos(); } else { showError(response.message); } }, error: function(xhr) { showError(xhr.responseJSON ? xhr.responseJSON.message : 'An unknown error occurred during import.'); }, complete: function() { videoUuidForImport = null; $('#frame-import-input').val(''); } }); });
+    $(document).on("click", ".btn-delete-video", function() { if (confirm('Are you sure you want to delete this video and all its data?')) { $.ajax({url: '/deleteVideo', type: 'POST', contentType: 'application/json', data: JSON.stringify({ video_uuid: $(this).data('uuid') }), success: refreshVideos }); } });
+    $(document).on("click", ".btn-delete-task", function() { const videoUuid = $(this).data('video-uuid'); if (confirm('Are you sure you want to delete this task?')) { $.ajax({url: '/deleteTask', type: 'POST', contentType: 'application/json', data: JSON.stringify({ task_uuid: $(this).data('task-uuid') }), success: function() { refreshTasksInModal(videoUuid); } }); } });
+    $(document).on("click", ".btn-delete-dataset", function() { if (confirm('Are you sure you want to delete this dataset?')) { $.ajax({url: '/deleteDataset', type: 'POST', contentType: 'application/json', data: JSON.stringify({ dataset_uuid: $(this).data('uuid') }), success: refreshDatasets }); } });
+    $(document).on("click", ".btn-delete-model", function() { if (confirm('Are you sure you want to delete this model?')) { $.ajax({url: '/deleteModel', type: 'POST', contentType: 'application/json', data: JSON.stringify({ model_uuid: $(this).data('uuid') }), success: refreshModels }); } });
+    $(document).on("click", ".btn-regenerate-dataset", function() { const uuid = $(this).data('uuid'); if (confirm('Are you sure you want to update this dataset? This will delete the old zip file and regenerate it with the latest annotations.')) { $.ajax({ url: '/regenerateDataset', type: 'POST', contentType: 'application/json', data: JSON.stringify({ dataset_uuid: uuid }), success: function(response) { if(response.success) { alert('Dataset update process has started.'); refreshDatasets(); } else { alert('Error: ' + response.message); } }, error: function() { alert('An error occurred while starting the dataset update.'); } }); } });
+    $(document).on("click", ".btn-cancel-task", function() { const uuid = $(this).data('uuid'); if (confirm('Are you sure you want to cancel this running task?')) { $.ajax({ url: '/cancelTask', type: 'POST', contentType: 'application/json', data: JSON.stringify({ video_uuid: uuid }), success: function(response) { if(response.success) { alert('Task cancellation requested.'); refreshVideos(); } else { alert('Error: ' + response.message); } }, error: function() { alert('An error occurred while sending the cancellation request.'); } }); } });
 
-    $('#settings-form').on('submit', function(e) {
-        e.preventDefault();
-        const selectedOption = $('#setting-sam-model').find('option:selected');
-        const settingsData = {
-            sam_model_checkpoint: selectedOption.val(),
-            sam_model_name: selectedOption.data('name'),
-            frame_extraction_jpeg_quality: parseInt($('#setting-jpeg-quality').val()),
-            default_opencv_tracker: $('#setting-opencv-tracker').val()
-        };
-        $.ajax({
-            url: '/api/settings', type: 'POST', contentType: 'application/json', data: JSON.stringify(settingsData),
-            success: function(response) {
-                if (response.success) {
-                    if (response.restart_required) {
-                        alert("Settings saved! The SAM model was changed. The new model will be loaded automatically for the next task.");
-                    } else {
-                        alert("Settings saved successfully!");
-                    }
-                } else { showError(response.message); }
-            },
-            error: function(xhr) { showError(xhr.responseJSON ? xhr.responseJSON.message : 'An unknown error occurred.'); }
-        });
-    });
-
-    // --- Task Management ---
-    $(document).on("click", ".btn-manage-tasks", function() {
-        const videoUuid = $(this).data("uuid");
-        const videoDesc = $(this).data("description");
-        const frameCount = $(this).data("framecount");
-        $('#manageTasksModalTitle').text('Manage Annotation Tasks for: ' + videoDesc);
-        $('#task-video-uuid').val(videoUuid);
-        $('#task-start-frame').attr('max', frameCount - 1);
-        $('#task-end-frame').attr('max', frameCount - 1);
-        refreshTasksInModal(videoUuid);
-        $('#manageTasksModal').modal('show');
-    });
-
-    function refreshTasksInModal(videoUuid) {
-        const taskListBody = $('#task-list-in-modal');
-        taskListBody.empty().append('<tr><td colspan="4">Loading...</td></tr>');
-        $.get(`/listTasks?video_uuid=${videoUuid}`, function(data) {
-            taskListBody.empty();
-            if (data.success && data.tasks.length > 0) {
-                data.tasks.forEach(task => {
-                    const row = `
-                        <tr class="slide-in-up">
-                            <td>${task.assigned_to}</td>
-                            <td>${task.start_frame} - ${task.end_frame}</td>
-                            <td>${task.description || ''}</td>
-                            <td>
-                                <a href="/labelVideo?task_uuid=${task.task_uuid}" class="btn btn-sm btn-primary"><i class="bi bi-pencil-square"></i> Label</a>
-                                <button class="btn btn-sm btn-danger btn-delete-task" data-task-uuid="${task.task_uuid}" data-video-uuid="${videoUuid}"><i class="bi bi-trash"></i></button>
-                            </td>
-                        </tr>`;
-                    taskListBody.append(row);
-                });
-            } else {
-                taskListBody.append('<tr><td colspan="4">No tasks created for this video yet.</td></tr>');
-            }
-        });
-    }
-
-    $('#create-task-form').on('submit', function(e) {
-        e.preventDefault();
-        const videoUuid = $('#task-video-uuid').val();
-        const taskData = { video_uuid: videoUuid, assigned_to: $('#task-assigned-to').val(), description: $('#task-description').val(), start_frame: $('#task-start-frame').val(), end_frame: $('#task-end-frame').val(), };
-        $.ajax({
-            url: '/createTask', type: 'POST', contentType: 'application/json', data: JSON.stringify(taskData),
-            success: function(response) {
-                if (response.success) {
-                    showSuccess('Task created successfully!');
-                    $('#create-task-form')[0].reset();
-                    refreshTasksInModal(videoUuid);
-                } else { showError(response.message); }
-            },
-            error: function() { showError('An error occurred while creating the task.'); }
-        });
-    });
-
-    // --- [RESTORED] Frame Import Functionality ---
-    let videoUuidForImport = null;
-    $(document).on("click", ".btn-import-frames", function() {
-        videoUuidForImport = $(this).data('uuid');
-        $('#frame-import-input').click(); // Trigger the hidden file input
-    });
-
-    $('#frame-import-input').on('change', function(e) {
-        if (!videoUuidForImport || e.target.files.length === 0) {
-            return;
-        }
-        const files = e.target.files;
-        const formData = new FormData();
-        formData.append('video_uuid', videoUuidForImport);
-        for (let i = 0; i < files.length; i++) {
-            formData.append('frame_files', files[i]);
-        }
-
-        alert(`Importing ${files.length} frames. This might take a moment...`);
-
-        $.ajax({
-            url: '/importFrames',
-            type: 'POST',
-            data: formData,
-            processData: false,
-            contentType: false,
-            success: function(response) {
-                if (response.success) {
-                    showSuccess(`${response.imported_count} frames imported successfully!`);
-                    refreshVideos();
-                } else {
-                    showError(response.message);
-                }
-            },
-            error: function(xhr) {
-                showError(xhr.responseJSON ? xhr.responseJSON.message : 'An unknown error occurred during import.');
-            },
-            complete: function() {
-                // Reset for next use
-                videoUuidForImport = null;
-                $('#frame-import-input').val('');
-            }
-        });
-    });
-
-
-    // --- Deletion and Update Handlers ---
-    $(document).on("click", ".btn-delete-video", function() {
-        if (confirm('Are you sure you want to delete this video and all its data?')) { $.ajax({url: '/deleteVideo', type: 'POST', contentType: 'application/json', data: JSON.stringify({ video_uuid: $(this).data('uuid') }), success: refreshVideos }); }
-    });
-    $(document).on("click", ".btn-delete-task", function() {
-        const videoUuid = $(this).data('video-uuid');
-        if (confirm('Are you sure you want to delete this task?')) { $.ajax({url: '/deleteTask', type: 'POST', contentType: 'application/json', data: JSON.stringify({ task_uuid: $(this).data('task-uuid') }), success: function() { refreshTasksInModal(videoUuid); } }); }
-    });
-    $(document).on("click", ".btn-delete-dataset", function() {
-        if (confirm('Are you sure you want to delete this dataset?')) { $.ajax({url: '/deleteDataset', type: 'POST', contentType: 'application/json', data: JSON.stringify({ dataset_uuid: $(this).data('uuid') }), success: refreshDatasets }); }
-    });
-    $(document).on("click", ".btn-delete-model", function() {
-        if (confirm('Are you sure you want to delete this model?')) { $.ajax({url: '/deleteModel', type: 'POST', contentType: 'application/json', data: JSON.stringify({ model_uuid: $(this).data('uuid') }), success: refreshModels }); }
-    });
-
-    $(document).on("click", ".btn-regenerate-dataset", function() {
-        const uuid = $(this).data('uuid');
-        if (confirm('Are you sure you want to update this dataset? This will delete the old zip file and regenerate it with the latest annotations.')) {
-            $.ajax({
-                url: '/regenerateDataset',
-                type: 'POST',
-                contentType: 'application/json',
-                data: JSON.stringify({ dataset_uuid: uuid }),
-                success: function(response) {
-                    if(response.success) {
-                        alert('Dataset update process has started.');
-                        refreshDatasets();
-                    } else {
-                        alert('Error: ' + response.message);
-                    }
-                },
-                error: function() {
-                    alert('An error occurred while starting the dataset update.');
-                }
-            });
-        }
-    });
-
-    // --- Initial Load & Refresh Interval ---
-    function runAllRefreshes() {
-        refreshVideos();
-        refreshDatasets();
-        refreshModels();
-    }
-
-    loadSettings();
-    runAllRefreshes();
-    setInterval(runAllRefreshes, 5000);
+    function runAllRefreshes() { refreshVideos(); refreshDatasets(); refreshModels(); }
+    loadSettings(); runAllRefreshes(); setInterval(runAllRefreshes, 5000);
 });
 </script>
 {% endblock %}

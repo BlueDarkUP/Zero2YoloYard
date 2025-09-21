@@ -19,12 +19,18 @@ def _add_column_if_not_exists(cursor, table_name, column_name, column_type):
         cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
         print(f"Added column '{column_name}' to table '{table_name}'.")
 
+
 def migrate_db():
     """Applies necessary schema migrations to the database."""
     conn = get_db_connection()
     cursor = conn.cursor()
     _add_column_if_not_exists(cursor, 'datasets', 'eval_percent', 'REAL')
     _add_column_if_not_exists(cursor, 'datasets', 'test_percent', 'REAL')
+    _add_column_if_not_exists(cursor, 'models', 'label_filename', 'TEXT')
+    _add_column_if_not_exists(cursor, 'models', 'model_type', 'TEXT')
+    _add_column_if_not_exists(cursor, 'videos', 'last_pre_annotation_info', 'TEXT')
+    # --- 新增迁移 ---
+    _add_column_if_not_exists(cursor, 'video_frames', 'tags', 'TEXT')  # 为帧添加标签字段
     conn.commit()
     conn.close()
 
@@ -39,7 +45,7 @@ def init_db():
         video_filename TEXT,
         file_size INTEGER,
         create_time_ms INTEGER,
-        status TEXT, -- 'UPLOADING', 'EXTRACTING', 'READY', 'FAILED'
+        status TEXT, -- 'UPLOADING', 'EXTRACTING', 'READY', 'FAILED', 'PRE_ANNOTATING', 'CANCELLING'
         status_message TEXT,
         width INTEGER,
         height INTEGER,
@@ -47,7 +53,8 @@ def init_db():
         frame_count INTEGER,
         extracted_frame_count INTEGER DEFAULT 0,
         included_frame_count INTEGER DEFAULT 0,
-        labeled_frame_count INTEGER DEFAULT 0
+        labeled_frame_count INTEGER DEFAULT 0,
+        last_pre_annotation_info TEXT 
     )
     ''')
 
@@ -57,6 +64,7 @@ def init_db():
         video_uuid TEXT,
         frame_number INTEGER,
         bboxes_text TEXT,
+        tags TEXT, -- <<< 新增字段, 存储 JSON 数组字符串 e.g., '["day", "sunny"]'
         include_frame_in_dataset INTEGER, -- 0 for false, 1 for true
         FOREIGN KEY (video_uuid) REFERENCES videos (video_uuid) ON DELETE CASCADE
     )
@@ -81,7 +89,9 @@ def init_db():
     CREATE TABLE IF NOT EXISTS models (
         model_uuid TEXT PRIMARY KEY,
         description TEXT NOT NULL UNIQUE,
-        create_time_ms INTEGER
+        create_time_ms INTEGER,
+        label_filename TEXT,
+        model_type TEXT
     )
     ''')
 
@@ -89,11 +99,11 @@ def init_db():
     CREATE TABLE IF NOT EXISTS annotation_tasks (
         task_uuid TEXT PRIMARY KEY,
         video_uuid TEXT NOT NULL,
-        assigned_to TEXT NOT NULL,      -- 任务分配给谁 (简单文本)
-        description TEXT,               -- 任务描述
+        assigned_to TEXT NOT NULL,
+        description TEXT,
         start_frame INTEGER NOT NULL,
         end_frame INTEGER NOT NULL,
-        status TEXT,                    -- 'PENDING', 'IN_PROGRESS', 'COMPLETED'
+        status TEXT,
         create_time_ms INTEGER,
         FOREIGN KEY (video_uuid) REFERENCES videos (video_uuid) ON DELETE CASCADE
     )
@@ -103,6 +113,15 @@ def init_db():
     CREATE TABLE IF NOT EXISTS class_labels (
         label_id INTEGER PRIMARY KEY AUTOINCREMENT,
         label_name TEXT NOT NULL UNIQUE,
+        create_time_ms INTEGER
+    )
+    ''')
+
+    # --- 新增表：用于存储全局图像分类标签 ---
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS class_tags (
+        tag_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tag_name TEXT NOT NULL UNIQUE,
         create_time_ms INTEGER
     )
     ''')
@@ -122,6 +141,7 @@ def create_video_entry(description, video_filename, file_size, create_time_ms):
     conn.close()
     return video_uuid
 
+
 def get_ready_videos_with_labels():
     conn = get_db_connection()
     videos = conn.execute(
@@ -129,11 +149,13 @@ def get_ready_videos_with_labels():
     conn.close()
     return [dict(row) for row in videos]
 
+
 def get_all_video_list():
     conn = get_db_connection()
     videos = conn.execute('SELECT * FROM videos ORDER BY create_time_ms DESC').fetchall()
     conn.close()
     return [dict(row) for row in videos]
+
 
 def get_video_entity(video_uuid):
     conn = get_db_connection()
@@ -141,11 +163,25 @@ def get_video_entity(video_uuid):
     conn.close()
     return dict(video) if video else None
 
+
 def update_video_status(video_uuid, status, message=""):
     conn = get_db_connection()
     conn.execute('UPDATE videos SET status = ?, status_message = ? WHERE video_uuid = ?', (status, message, video_uuid))
     conn.commit()
     conn.close()
+
+
+def update_pre_annotation_info(video_uuid, model_uuid, model_desc):
+    conn = get_db_connection()
+    info = {
+        "model_uuid": model_uuid,
+        "model_desc": model_desc,
+        "time_ms": int(time.time() * 1000)
+    }
+    conn.execute('UPDATE videos SET last_pre_annotation_info = ? WHERE video_uuid = ?', (json.dumps(info), video_uuid))
+    conn.commit()
+    conn.close()
+
 
 def update_video_after_extraction_start(video_uuid, width, height, fps, frame_count):
     conn = get_db_connection()
@@ -154,19 +190,21 @@ def update_video_after_extraction_start(video_uuid, width, height, fps, frame_co
         'UPDATE videos SET width=?, height=?, fps=?, frame_count=?, included_frame_count=?, status=? WHERE video_uuid=?',
         (width, height, fps, frame_count, frame_count, 'EXTRACTING', video_uuid)
     )
-    frames_to_insert = [(video_uuid, i, '', 1) for i in range(frame_count)]
+    frames_to_insert = [(video_uuid, i, '', '', 1) for i in range(frame_count)]  # tags 初始为空字符串
     cursor.executemany(
-        'INSERT INTO video_frames (video_uuid, frame_number, bboxes_text, include_frame_in_dataset) VALUES (?, ?, ?, ?)',
+        'INSERT INTO video_frames (video_uuid, frame_number, bboxes_text, tags, include_frame_in_dataset) VALUES (?, ?, ?, ?, ?)',
         frames_to_insert
     )
     conn.commit()
     conn.close()
+
 
 def update_extracted_frame_count(video_uuid, count):
     conn = get_db_connection()
     conn.execute('UPDATE videos SET extracted_frame_count = ? WHERE video_uuid = ?', (count, video_uuid))
     conn.commit()
     conn.close()
+
 
 def delete_video(video_uuid):
     conn = get_db_connection()
@@ -182,6 +220,7 @@ def get_video_frames(video_uuid):
     conn.close()
     return [dict(row) for row in frames]
 
+
 def save_frame_bboxes(video_uuid, frame_number, bboxes_text):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -190,7 +229,7 @@ def save_frame_bboxes(video_uuid, frame_number, bboxes_text):
         (bboxes_text, video_uuid, frame_number)
     )
     new_labeled_count = cursor.execute(
-        "SELECT COUNT(*) FROM video_frames WHERE video_uuid = ? AND bboxes_text IS NOT NULL AND bboxes_text != ''",
+        "SELECT COUNT(*) FROM video_frames WHERE video_uuid = ? AND ((bboxes_text IS NOT NULL AND bboxes_text != '') OR (tags IS NOT NULL AND tags != '[]' AND tags != ''))",
         (video_uuid,)
     ).fetchone()[0]
     cursor.execute(
@@ -199,6 +238,28 @@ def save_frame_bboxes(video_uuid, frame_number, bboxes_text):
     )
     conn.commit()
     conn.close()
+
+
+# --- 新增函数：保存帧的分类标签 ---
+def save_frame_tags(video_uuid, frame_number, tags_json_string):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        'UPDATE video_frames SET tags = ? WHERE video_uuid = ? AND frame_number = ?',
+        (tags_json_string, video_uuid, frame_number)
+    )
+    # 更新视频的已标注帧数（逻辑与 save_frame_bboxes 中一致）
+    new_labeled_count = cursor.execute(
+        "SELECT COUNT(*) FROM video_frames WHERE video_uuid = ? AND ((bboxes_text IS NOT NULL AND bboxes_text != '') OR (tags IS NOT NULL AND tags != '[]' AND tags != ''))",
+        (video_uuid,)
+    ).fetchone()[0]
+    cursor.execute(
+        'UPDATE videos SET labeled_frame_count = ? WHERE video_uuid = ?',
+        (new_labeled_count, video_uuid)
+    )
+    conn.commit()
+    conn.close()
+
 
 def add_frames_from_upload(video_uuid, frame_files):
     conn = get_db_connection()
@@ -213,10 +274,10 @@ def add_frames_from_upload(video_uuid, frame_files):
             new_frame_number = start_frame_number + i
             image_bytes = file_storage_obj.read()
             file_storage.save_frame_image(video_uuid, new_frame_number, image_bytes)
-            frames_to_insert.append((video_uuid, new_frame_number, '', 1))
+            frames_to_insert.append((video_uuid, new_frame_number, '', '', 1))
         if frames_to_insert:
             cursor.executemany(
-                'INSERT INTO video_frames (video_uuid, frame_number, bboxes_text, include_frame_in_dataset) VALUES (?, ?, ?, ?)',
+                'INSERT INTO video_frames (video_uuid, frame_number, bboxes_text, tags, include_frame_in_dataset) VALUES (?, ?, ?, ?, ?)',
                 frames_to_insert
             )
         new_total_frames = start_frame_number + len(frames_to_insert)
@@ -255,6 +316,7 @@ def create_annotation_task(video_uuid, assigned_to, description, start_frame, en
     conn.close()
     return task_uuid
 
+
 def get_tasks_for_video(video_uuid):
     conn = get_db_connection()
     tasks = conn.execute('SELECT * FROM annotation_tasks WHERE video_uuid = ? ORDER BY create_time_ms DESC',
@@ -262,11 +324,13 @@ def get_tasks_for_video(video_uuid):
     conn.close()
     return [dict(row) for row in tasks]
 
+
 def get_task_entity(task_uuid):
     conn = get_db_connection()
     task = conn.execute('SELECT * FROM annotation_tasks WHERE task_uuid = ?', (task_uuid,)).fetchone()
     conn.close()
     return dict(task) if task else None
+
 
 def delete_task(task_uuid):
     conn = get_db_connection()
@@ -274,22 +338,26 @@ def delete_task(task_uuid):
     conn.commit()
     conn.close()
 
+
 def update_task_status(task_uuid, status):
     conn = get_db_connection()
     conn.execute('UPDATE annotation_tasks SET status = ? WHERE task_uuid = ?', (status, task_uuid))
     conn.commit()
     conn.close()
 
+
 def add_class_label(label_name):
     conn = get_db_connection()
     try:
         create_time_ms = int(time.time() * 1000)
-        conn.execute('INSERT INTO class_labels (label_name, create_time_ms) VALUES (?, ?)', (label_name, create_time_ms))
+        conn.execute('INSERT INTO class_labels (label_name, create_time_ms) VALUES (?, ?)',
+                     (label_name, create_time_ms))
         conn.commit()
     except sqlite3.IntegrityError:
         pass
     finally:
         conn.close()
+
 
 def get_all_class_labels():
     conn = get_db_connection()
@@ -297,9 +365,37 @@ def get_all_class_labels():
     conn.close()
     return [row['label_name'] for row in labels]
 
+
 def delete_class_label(label_name):
     conn = get_db_connection()
     conn.execute('DELETE FROM class_labels WHERE label_name = ?', (label_name,))
+    conn.commit()
+    conn.close()
+
+
+# --- 新增函数集：管理全局分类标签 (Tags) ---
+def add_class_tag(tag_name):
+    conn = get_db_connection()
+    try:
+        create_time_ms = int(time.time() * 1000)
+        conn.execute('INSERT INTO class_tags (tag_name, create_time_ms) VALUES (?, ?)', (tag_name, create_time_ms))
+        conn.commit()
+    except sqlite3.IntegrityError:
+        pass  # 标签已存在，忽略错误
+    finally:
+        conn.close()
+
+
+def get_all_class_tags():
+    conn = get_db_connection()
+    tags = conn.execute('SELECT tag_name FROM class_tags ORDER BY tag_name ASC').fetchall()
+    conn.close()
+    return [row['tag_name'] for row in tags]
+
+
+def delete_class_tag(tag_name):
+    conn = get_db_connection()
+    conn.execute('DELETE FROM class_tags WHERE tag_name = ?', (tag_name,))
     conn.commit()
     conn.close()
 
@@ -314,6 +410,7 @@ def create_dataset_entry(description, video_uuids, create_time_ms, eval_percent,
     conn.commit()
     conn.close()
     return dataset_uuid
+
 
 def update_dataset_status(dataset_uuid, status, message="", zip_path="", sorted_label_list=None):
     conn = get_db_connection()
@@ -330,17 +427,20 @@ def update_dataset_status(dataset_uuid, status, message="", zip_path="", sorted_
     conn.commit()
     conn.close()
 
+
 def get_dataset_list():
     conn = get_db_connection()
     datasets = conn.execute('SELECT * FROM datasets ORDER BY create_time_ms DESC').fetchall()
     conn.close()
     return [dict(row) for row in datasets]
 
+
 def get_dataset_entity(dataset_uuid):
     conn = get_db_connection()
     dataset = conn.execute('SELECT * FROM datasets WHERE dataset_uuid = ?', (dataset_uuid,)).fetchone()
     conn.close()
     return dict(dataset) if dataset else None
+
 
 def delete_dataset(dataset_uuid):
     conn = get_db_connection()
@@ -349,16 +449,17 @@ def delete_dataset(dataset_uuid):
     conn.close()
 
 
-def import_model_metadata(description, create_time_ms):
+def import_model_metadata(description, label_filename, model_type, create_time_ms):
     conn = get_db_connection()
     model_uuid = str(uuid.uuid4().hex)
     conn.execute(
-        'INSERT INTO models (model_uuid, description, create_time_ms) VALUES (?, ?, ?)',
-        (model_uuid, description, create_time_ms)
+        'INSERT INTO models (model_uuid, description, label_filename, model_type, create_time_ms) VALUES (?, ?, ?, ?, ?)',
+        (model_uuid, description, label_filename, model_type, create_time_ms)
     )
     conn.commit()
     conn.close()
     return model_uuid
+
 
 def get_model_list():
     conn = get_db_connection()
@@ -366,8 +467,17 @@ def get_model_list():
     conn.close()
     return [dict(row) for row in models]
 
+
+def get_model_entity(model_uuid):
+    conn = get_db_connection()
+    model = conn.execute('SELECT * FROM models WHERE model_uuid = ?', (model_uuid,)).fetchone()
+    conn.close()
+    return dict(model) if model else None
+
+
 def delete_model(model_uuid):
     conn = get_db_connection()
     conn.execute('DELETE FROM models WHERE model_uuid = ?', (model_uuid,))
     conn.commit()
     conn.close()
+

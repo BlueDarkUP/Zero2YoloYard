@@ -50,12 +50,6 @@
         display: block;
         margin-bottom: 5px;
     }
-    .outlier-controls {
-        background-color: #f8f9fa;
-        padding: 15px;
-        border-radius: 5px;
-        border: 1px solid #dee2e6;
-    }
     #loading-indicator {
         height: 50vh;
         display: flex;
@@ -63,6 +57,33 @@
         justify-content: center;
         align-items: center;
         text-align: center;
+    }
+    #aug-preview-gallery {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        gap: 15px;
+    }
+    #aug-preview-gallery img {
+        width: 100%;
+        border-radius: 4px;
+        border: 1px solid #ccc;
+    }
+    .aug-preview-source-img {
+        max-width: 150px;
+        border: 2px solid #007bff;
+        border-radius: 4px;
+        cursor: pointer;
+        opacity: 0.6;
+        transition: opacity 0.2s ease-in-out;
+    }
+    .aug-preview-source-img.active, .aug-preview-source-img:hover {
+        opacity: 1;
+        border-color: #0056b3;
+    }
+    #preview-aug-controls {
+        max-height: 50vh;
+        overflow-y: auto;
+        padding-right: 15px;
     }
 </style>
 {% endblock %}
@@ -84,110 +105,69 @@
     </div>
 
     <div id="analysis-content" style="display: none;">
-        <!-- Row 0: Summary and Warnings -->
         <div class="card mb-4">
             <div class="card-header bg-light"><strong><i class="bi bi-info-circle"></i> Summary & Warnings</strong></div>
             <div class="card-body" id="summary-container"></div>
         </div>
-
-        <!-- Row 1: Core Stats -->
         <div class="row">
-            <div class="col-lg-6 col-xl-4 mb-4">
-                <div class="card h-100">
-                    <div class="card-header">Instance Counts by Class</div>
-                    <div class="card-body chart-card-body">
-                        <div class="chart-container">
-                            <canvas id="class-counts-chart"></canvas>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-lg-6 col-xl-4 mb-4">
-                 <div class="card h-100">
-                    <div class="card-header">Objects per Image Distribution</div>
-                    <div class="card-body chart-card-body">
-                        <div class="chart-container">
-                           <canvas id="objects-per-image-chart"></canvas>
-                       </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-lg-6 col-xl-4 mb-4">
-                <div class="card h-100">
-                    <div class="card-header">Brightness Distribution</div>
-                    <div class="card-body chart-card-body">
-                        <div class="chart-container">
-                           <canvas id="brightness-chart"></canvas>
-                       </div>
-                    </div>
-                </div>
-            </div>
+            <div class="col-lg-6 col-xl-4 mb-4"><div class="card h-100"><div class="card-header">Instance Counts by Class</div><div class="card-body chart-card-body"><div class="chart-container"><canvas id="class-counts-chart"></canvas></div></div></div></div>
+            <div class="col-lg-6 col-xl-4 mb-4"><div class="card h-100"><div class="card-header">Objects per Image Distribution</div><div class="card-body chart-card-body"><div class="chart-container"><canvas id="objects-per-image-chart"></canvas></div></div></div></div>
+            <div class="col-lg-6 col-xl-4 mb-4"><div class="card h-100"><div class="card-header">Brightness Distribution</div><div class="card-body chart-card-body"><div class="chart-container"><canvas id="brightness-chart"></canvas></div></div></div></div>
+        </div>
+        <div class="row">
+             <div class="col-lg-5 col-xl-4 mb-4"><div class="card h-100"><div class="card-header">Aspect Ratio Distribution</div><div class="card-body chart-card-body"><div class="chart-container"><canvas id="aspect-ratio-chart"></canvas></div></div></div></div>
+            <div class="col-lg-7 col-xl-8 mb-4"><div class="card h-100"><div class="card-header">Bounding Box Center Heatmap</div><div class="card-body chart-card-body"><div class="chart-container" style="background-image: linear-gradient(to right, #f8f9fa, #e9ecef);"><canvas id="bbox-center-scatter-plot"></canvas></div></div></div></div>
         </div>
 
-        <!-- Row 2: Shape and Position -->
         <div class="row">
-             <div class="col-lg-5 col-xl-4 mb-4">
-                <div class="card h-100">
-                    <div class="card-header">Aspect Ratio Distribution</div>
-                    <div class="card-body chart-card-body">
-                        <div class="chart-container">
-                           <canvas id="aspect-ratio-chart"></canvas>
-                       </div>
+            <div class="col-12">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <strong><i class="bi bi-magic"></i> Augmentation Previewer</strong>
                     </div>
-                </div>
-            </div>
-            <div class="col-lg-7 col-xl-8 mb-4">
-                <div class="card h-100">
-                    <div class="card-header">Bounding Box Center Heatmap</div>
-                    <div class="card-body chart-card-body">
-                        <div class="chart-container" style="background-image: linear-gradient(to right, #f8f9fa, #e9ecef);">
-                           <canvas id="bbox-center-scatter-plot"></canvas>
-                       </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Row 3: Annotator Statistics (Now full width) -->
-        <div class="row">
-            <div class="col-lg-12 mb-4">
-                <div class="card">
-                    <div class="card-header">Annotator Statistics</div>
-                    <div class="card-body chart-card-body">
-                         <div class="chart-container">
-                            <canvas id="annotator-chart"></canvas>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-lg-4 border-right">
+                                <h5>1. Configure Augmentations</h5>
+                                <p class="text-muted small">Changes here will instantly update the image previews on the right.</p>
+                                <div id="preview-aug-controls">
+                                    {% include '_augmentation_controls.html' %}
+                                </div>
+                            </div>
+                            <div class="col-lg-8">
+                                <h5>2. Preview on Sample Images</h5>
+                                <div id="aug-preview-source-selector" class="mb-3 d-flex flex-wrap" style="gap: 0.5rem;">
+                                </div>
+                                <div id="aug-preview-gallery-container">
+                                    <div id="aug-preview-gallery"></div>
+                                    <div id="aug-preview-loader" class="text-center mt-4" style="display: none;">
+                                        <div class="spinner-border text-primary" role="status"></div>
+                                        <p>Generating previews...</p>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
 
+        <div class="row">
+            <div class="col-lg-12 mb-4"><div class="card"><div class="card-header">Annotator Statistics</div><div class="card-body chart-card-body"><div class="chart-container"><canvas id="annotator-chart"></canvas></div></div></div></div>
+        </div>
 
-        <!-- Row 4: Gallery and Outlier Browser -->
         <div class="row">
             <div class="col-12">
                  <div class="card">
                     <div class="card-header d-flex justify-content-between align-items-center">
-                        <div>
-                            <strong><i class="bi bi-images"></i> Image Gallery</strong>
-                            (<span id="gallery-count">0</span> images)
-                        </div>
+                        <div><strong><i class="bi bi-images"></i> Original Image Gallery</strong> (<span id="gallery-count">0</span> images)</div>
                         <div class="d-flex align-items-center">
                             <label class="mr-2 mb-0"><strong>Filter & Browser:</strong></label>
-                            <select id="outlier-filter" class="form-control form-control-sm mr-2" style="width: auto;">
-                                <option value="none">-- Select a Filter Type --</option>
-                                <option value="area_smallest">Smallest Area (Top 10)</option>
-                                <option value="area_largest">Largest Area (Top 10)</option>
-                                <option value="ar_smallest">Most Squarish AR (Top 10)</option>
-                                <option value="ar_largest">Most Extreme AR (Top 10)</option>
-                                <option value="iou_high">High Overlap (IoU > 0.95)</option>
-                            </select>
+                            <select id="outlier-filter" class="form-control form-control-sm mr-2" style="width: auto;"><option value="none">-- Select a Filter Type --</option><option value="area_smallest">Smallest Area (Top 10)</option><option value="area_largest">Largest Area (Top 10)</option><option value="ar_smallest">Most Squarish AR (Top 10)</option><option value="ar_largest">Most Extreme AR (Top 10)</option><option value="iou_high">High Overlap (IoU > 0.95)</option></select>
                             <button id="reset-filter-btn" class="btn btn-sm btn-secondary"><i class="bi bi-x-lg"></i> Reset</button>
                         </div>
                     </div>
-                    <div class="card-body">
-                        <div id="gallery"></div>
-                    </div>
+                    <div class="card-body"><div id="gallery"></div></div>
                  </div>
             </div>
         </div>
@@ -202,236 +182,177 @@
 <script>
 $(document).ready(function() {
     const datasetUuid = "{{ dataset.dataset_uuid }}";
-    // --- Global variables for new features ---
+    let originalAnalysisData = null;
     let fullGalleryData = [];
+    let samplePoolData = [];
     let allBboxesData = [];
     let suspiciousPairsData = [];
     let imageClassMap = {};
-    let classChart = null; // To hold the chart instance for interaction
+
+    let charts = {
+        classCounts: null,
+        objectsPerImage: null,
+        brightness: null,
+        aspectRatio: null,
+        centerScatter: null,
+        annotator: null
+    };
+
+    function setupAugmentationListeners(contextSelector) {
+        const context = $(contextSelector);
+        // Correctly separated listener for range sliders
+        context.on('input', 'input[type="range"]', function() {
+            $(this).closest('div').find('.val-display').text($(this).val());
+            if (contextSelector === '#preview-aug-controls') {
+                triggerAugmentationPreview();
+            }
+        });
+        // Correctly separated listener for checkboxes
+        context.on('change', '.aug-option input[type="checkbox"]', function() {
+            const controlsId = $(this).closest('.aug-option').data('controls');
+            context.find('#' + controlsId).toggle($(this).is(':checked'));
+            if (contextSelector === '#preview-aug-controls') {
+                triggerAugmentationPreview();
+            }
+        });
+        // Initial setup on page load
+        context.find('.aug-option input[type="checkbox"]').each(function() {
+            const controlsId = $(this).closest('.aug-option').data('controls');
+            context.find('#' + controlsId).toggle($(this).is(':checked'));
+        });
+    }
+
+    function getAugmentationOptions(isForPreview) {
+        const context = $('#preview-aug-controls');
+        const getVal = (selector, type = 'float') => type === 'int' ? parseInt(context.find(selector).val()) : parseFloat(context.find(selector).val());
+        const isEnabled = (selector) => context.find(selector).is(':checked');
+
+        let augOptions = {
+            enabled: true,
+            hflip: { enabled: isEnabled('#aug-hflip-enabled'), p: getVal('#aug-hflip-p') },
+            vflip: { enabled: isEnabled('#aug-vflip-enabled'), p: getVal('#aug-vflip-p') },
+            rotate90: { enabled: isEnabled('#aug-rotate90-enabled'), p: getVal('#aug-rotate90-p') },
+            rotate: { enabled: isEnabled('#aug-rotate-enabled'), p: getVal('#aug-rotate-p'), limit: getVal('#aug-rotate-limit', 'int') },
+            ssr: { enabled: isEnabled('#aug-ssr-enabled'), p: getVal('#aug-ssr-p'), rotate: getVal('#aug-ssr-rotate', 'int'), shift: getVal('#aug-ssr-shift'), scale: getVal('#aug-ssr-scale') },
+            affine: { enabled: isEnabled('#aug-affine-enabled'), p: getVal('#aug-affine-p'), shear: getVal('#aug-affine-shear', 'int') },
+            crop: { enabled: isEnabled('#aug-crop-enabled'), p: getVal('#aug-crop-p') },
+            grayscale: { enabled: isEnabled('#aug-grayscale-enabled'), p: getVal('#aug-grayscale-p') },
+            hsv: { enabled: isEnabled('#aug-hsv-enabled'), p: getVal('#aug-hsv-p'), h: getVal('#aug-hsv-h', 'int'), s: getVal('#aug-hsv-s', 'int'), v: getVal('#aug-hsv-v', 'int') },
+            bc: { enabled: isEnabled('#aug-bc-enabled'), p: getVal('#aug-bc-p'), b: getVal('#aug-bc-b'), c: getVal('#aug-bc-c') },
+            blur: { enabled: isEnabled('#aug-blur-enabled'), p: getVal('#aug-blur-p'), limit: getVal('#aug-blur-limit', 'int') },
+            noise: { enabled: isEnabled('#aug-noise-enabled'), p: getVal('#aug-noise-p'), limit: getVal('#aug-noise-limit') },
+            cutout: { enabled: isEnabled('#aug-cutout-enabled'), p: getVal('#aug-cutout-p'), holes: getVal('#aug-cutout-holes', 'int'), size: getVal('#aug-cutout-size', 'int') },
+            mosaic: { enabled: isEnabled('#aug-mosaic-enabled'), p: getVal('#aug-mosaic-p') }
+        };
+
+        if(!isForPreview){
+             augOptions.multiply_factor = 3; // Simulate a multiplication factor for stats
+        }
+        return augOptions;
+    }
+
+    let previewTimeout;
+    function triggerAugmentationPreview() {
+        clearTimeout(previewTimeout);
+        previewTimeout = setTimeout(() => {
+            const activeSource = $('#aug-preview-source-selector .active');
+            if (activeSource.length > 0) {
+                const videoUuid = activeSource.data('video-uuid');
+                const frameNumber = activeSource.data('frame-number');
+                fetchAugmentationPreviews(videoUuid, frameNumber);
+            }
+        }, 300);
+    }
+
+    function fetchAugmentationPreviews(videoUuid, frameNumber) {
+        const gallery = $('#aug-preview-gallery');
+        const loader = $('#aug-preview-loader');
+        gallery.empty();
+        loader.show();
+        const augOptions = getAugmentationOptions(true);
+        const payload = {
+            video_uuid: videoUuid, frame_number: frameNumber,
+            augmentation_options: augOptions, sample_pool: samplePoolData
+        };
+        $.ajax({
+            url: '/api/previewAugmentations', type: 'POST', contentType: 'application/json',
+            data: JSON.stringify(payload),
+            success: function(response) {
+                if (response.success) {
+                    response.previews.forEach(imgData => { gallery.append(`<div><img src="${imgData}" alt="Augmented Preview"></div>`); });
+                } else { gallery.html(`<div class="alert alert-danger">${response.message}</div>`); }
+            },
+            error: function() { gallery.html('<div class="alert alert-danger">Server error fetching previews.</div>'); },
+            complete: function() { loader.hide(); }
+        });
+    }
+
+    function renderAllCharts(data) {
+        renderClassCounts(data.class_counts);
+        renderObjectsPerImage(data.objects_per_image);
+        renderAspectRatio(data.aspect_ratios);
+        renderCenterScatterPlot(data.center_points);
+        if (data.brightness_levels) renderBrightness(data.brightness_levels);
+        if (data.annotator_stats) renderAnnotatorStats(data.annotator_stats);
+    }
 
     $.ajax({
-        url: `/api/datasetAnalysis/${datasetUuid}`,
-        type: 'GET',
+        url: `/api/datasetAnalysis/${datasetUuid}`, type: 'GET',
         success: function(response) {
             if (response.success) {
                 $('#loading-indicator').hide();
                 $('#analysis-content').show();
 
-                // --- Store all data from backend ---
+                originalAnalysisData = response; // Store the original full response
                 fullGalleryData = response.gallery_images;
                 allBboxesData = response.all_bboxes;
                 suspiciousPairsData = response.suspicious_pairs;
                 imageClassMap = response.image_class_map;
 
-                // --- Render all components ---
                 renderSummaryAndWarnings(response.summary_text, response.warnings);
-                renderClassCounts(response.class_counts);
-                renderObjectsPerImage(response.objects_per_image);
-                renderBrightness(response.brightness_levels);
-                renderAspectRatio(response.aspect_ratios);
-                renderCenterScatterPlot(response.center_points);
-                renderAnnotatorStats(response.annotator_stats);
+                renderAllCharts(response);
                 renderGallery(fullGalleryData);
-            } else {
-                $('#loading-indicator').html(`<div class="alert alert-danger">Error loading analysis: ${response.message}</div>`);
-            }
+
+                setupAugmentationListeners('#preview-aug-controls');
+                const sourceSelector = $('#aug-preview-source-selector');
+                const sampleImages = fullGalleryData.slice(0, 5);
+                samplePoolData = sampleImages.map(img => ({ video_uuid: img.video_uuid, frame_number: img.frame }));
+
+                sampleImages.forEach((img, index) => {
+                    const thumb = $(`<img src="${img.original_url}" class="aug-preview-source-img" data-video-uuid="${img.video_uuid}" data-frame-number="${img.frame}">`);
+                    if (index === 0) thumb.addClass('active');
+                    sourceSelector.append(thumb);
+                });
+
+                if (sampleImages.length > 0) {
+                    triggerAugmentationPreview();
+                } else {
+                    $('#aug-preview-gallery-container').html('<p class="text-muted">No images available in this dataset to generate previews.</p>');
+                }
+
+                sourceSelector.on('click', 'img', function() {
+                    sourceSelector.find('img').removeClass('active');
+                    $(this).addClass('active');
+                    triggerAugmentationPreview();
+                });
+            } else { $('#loading-indicator').html(`<div class="alert alert-danger">Error loading analysis: ${response.message}</div>`); }
         },
-        error: function() {
-            $('#loading-indicator').html('<div class="alert alert-danger">Failed to fetch analysis data from the server.</div>');
-        }
+        error: function() { $('#loading-indicator').html('<div class="alert alert-danger">Failed to fetch analysis data from the server.</div>'); }
     });
 
-    function createHistogramData(data, bins = 10, min, max) {
-        if (data.length === 0) return { labels: [], counts: [] };
-        min = min ?? Math.min(...data);
-        max = max ?? Math.max(...data);
-        if (min === max) { min -= 0.5; max += 0.5; }
-        const binSize = (max - min) / bins;
-        const counts = Array(bins).fill(0);
-        const labels = [];
-        for (let i = 0; i < bins; i++) {
-            const binStart = min + i * binSize;
-            const binEnd = binStart + binSize;
-            labels.push(`${binStart.toFixed(2)}-${binEnd.toFixed(2)}`);
-        }
-        for (const value of data) {
-            let binIndex = Math.floor((value - min) / binSize);
-            binIndex = Math.max(0, Math.min(bins - 1, binIndex));
-            if (value === max) binIndex = bins - 1;
-            counts[binIndex]++;
-        }
-        return { labels, counts };
-    }
-
-    // --- NEW: Function to render summary and warnings ---
-    function renderSummaryAndWarnings(summary, warnings) {
-        const container = $('#summary-container');
-        container.empty();
-        if (summary) {
-            container.append(`<div class="alert alert-info">${summary}</div>`);
-        }
-        if (warnings && warnings.length > 0) {
-            const warningsList = $('<ul class="list-group"></ul>');
-            warnings.forEach(warning => {
-                warningsList.append(`<li class="list-group-item list-group-item-warning">${warning}</li>`);
-            });
-            container.append(warningsList);
-        }
-    }
-
-    function renderCenterScatterPlot(points) {
-        const ctx = document.getElementById('bbox-center-scatter-plot').getContext('2d');
-        new Chart(ctx, {
-            type: 'scatter',
-            data: {
-                datasets: [{
-                    label: 'BBox Center', data: points, backgroundColor: 'rgba(54, 162, 235, 0.6)',
-                    pointRadius: 3, pointHoverRadius: 5
-                }]
-            },
-            options: {
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: {
-                    x: { type: 'linear', position: 'bottom', min: 0, max: 1, title: { display: true, text: 'Normalized X Position' }},
-                    y: { min: 0, max: 1, reverse: true, title: { display: true, text: 'Normalized Y Position' }}
-                }
-            }
-        });
-    }
-
-    function renderGallery(images) {
-        const gallery = $('#gallery');
-        gallery.empty();
-        $('#gallery-count').text(images.length);
-        images.forEach((image, index) => {
-            const annotatedUrl = `/media/annotated_frame/${image.video_uuid}/${image.frame}.jpg`;
-            const goToLabelUrl = image.task_uuid ? `/labelVideo?task_uuid=${image.task_uuid}&frame=${image.frame}` : '#';
-            const buttonDisabled = image.task_uuid ? '' : 'disabled';
-            const item = $(`
-                <div class="gallery-item" data-index="${index}">
-                    <img src="${annotatedUrl}" alt="Frame ${image.frame}" loading="lazy">
-                    <div class="caption">
-                        <span class="caption-text">${image.video} / F ${image.frame}</span>
-                        <a href="${goToLabelUrl}" class="btn btn-sm btn-primary" ${buttonDisabled}>Go to Label</a>
-                    </div>
-                </div>
-            `);
-            item.find('img').on('click', () => window.open(image.original_url, '_blank'));
-            gallery.append(item);
-        });
-    }
-
-    // --- NEW: Function to filter gallery by class name ---
-    function filterGalleryByClass(className) {
-        const classImageIndices = [];
-        for (const [imageIndex, classList] of Object.entries(imageClassMap)) {
-            if (classList.includes(className)) {
-                classImageIndices.push(parseInt(imageIndex));
-            }
-        }
-        $('#outlier-filter').val('none');
-        $('#gallery .gallery-item').each(function() {
-            const itemIndex = parseInt($(this).data('index'));
-            $(this).toggleClass('hidden', !classImageIndices.includes(itemIndex));
-        });
-    }
-
-    // --- NEW: Function to reset all gallery filters ---
-    function resetGalleryFilter() {
-        $('#outlier-filter').val('none');
-        $('#gallery .gallery-item').removeClass('hidden');
-    }
-
-    $('#outlier-filter').on('change', function() {
-        const filterType = $(this).val();
-        if (filterType === 'none') {
-             $('#gallery .gallery-item').removeClass('hidden');
-             return;
-        }
-        let sortedBboxes, targetImageIndices;
-        switch(filterType) {
-            case 'area_smallest': sortedBboxes = [...allBboxesData].sort((a, b) => a.area - b.area); break;
-            case 'area_largest': sortedBboxes = [...allBboxesData].sort((a, b) => b.area - a.area); break;
-            case 'ar_smallest': sortedBboxes = [...allBboxesData].sort((a, b) => Math.abs(a.aspect_ratio - 1) - Math.abs(b.aspect_ratio - 1)); break;
-            case 'ar_largest': sortedBboxes = [...allBboxesData].sort((a, b) => Math.abs(b.aspect_ratio - 1) - Math.abs(a.aspect_ratio - 1)); break;
-            case 'iou_high':
-                targetImageIndices = [...new Set(suspiciousPairsData.map(p => p.image_index))];
-                break;
-        }
-
-        if (sortedBboxes) {
-            targetImageIndices = [...new Set(sortedBboxes.slice(0, 10).map(b => b.image_index))];
-        }
-
-        $('#gallery .gallery-item').each(function() {
-            const itemIndex = parseInt($(this).data('index'));
-            $(this).toggleClass('hidden', !targetImageIndices.includes(itemIndex));
-        });
-    });
-
+    function createHistogramData(data, bins = 10, min, max) { if (data.length === 0) return { labels: [], counts: [] }; min = min ?? Math.min(...data); max = max ?? Math.max(...data); if (min === max) { min -= 0.5; max += 0.5; } const binSize = (max - min) / bins; const counts = Array(bins).fill(0); const labels = []; for (let i = 0; i < bins; i++) { const binStart = min + i * binSize; const binEnd = binStart + binSize; labels.push(`${binStart.toFixed(2)}-${binEnd.toFixed(2)}`); } for (const value of data) { let binIndex = Math.floor((value - min) / binSize); binIndex = Math.max(0, Math.min(bins - 1, binIndex)); if (value === max) binIndex = bins - 1; counts[binIndex]++; } return { labels, counts }; }
+    function renderSummaryAndWarnings(summary, warnings) { const container = $('#summary-container'); container.empty(); if (summary) { container.append(`<div class="alert alert-info">${summary}</div>`); } if (warnings && warnings.length > 0) { const warningsList = $('<ul class="list-group"></ul>'); warnings.forEach(warning => { warningsList.append(`<li class="list-group-item list-group-item-warning">${warning}</li>`); }); container.append(warningsList); } }
+    function renderCenterScatterPlot(points) { if(charts.centerScatter) charts.centerScatter.destroy(); charts.centerScatter = new Chart(document.getElementById('bbox-center-scatter-plot').getContext('2d'), { type: 'scatter', data: { datasets: [{ label: 'BBox Center', data: points, backgroundColor: 'rgba(54, 162, 235, 0.6)', pointRadius: 3, pointHoverRadius: 5 }] }, options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { type: 'linear', position: 'bottom', min: 0, max: 1, title: { display: true, text: 'Normalized X Position' }}, y: { min: 0, max: 1, reverse: true, title: { display: true, text: 'Normalized Y Position' }} } } }); }
+    function renderGallery(images) { const gallery = $('#gallery'); gallery.empty(); $('#gallery-count').text(images.length); images.forEach((image, index) => { const annotatedUrl = `/media/annotated_frame/${image.video_uuid}/${image.frame}.jpg`; const goToLabelUrl = image.task_uuid ? `/labelVideo?task_uuid=${image.task_uuid}&frame=${image.frame}` : '#'; const buttonDisabled = image.task_uuid ? '' : 'disabled'; const item = $(`<div class="gallery-item" data-index="${index}"><img src="${annotatedUrl}" alt="Frame ${image.frame}" loading="lazy"><div class="caption"><span class="caption-text">${image.video} / F ${image.frame}</span><a href="${goToLabelUrl}" class="btn btn-sm btn-primary" ${buttonDisabled}>Go to Label</a></div></div>`); item.find('img').on('click', () => window.open(image.original_url, '_blank')); gallery.append(item); }); }
+    function filterGalleryByClass(className) { const classImageIndices = []; for (const [imageIndex, classList] of Object.entries(imageClassMap)) { if (classList.includes(className)) { classImageIndices.push(parseInt(imageIndex)); } } $('#outlier-filter').val('none'); $('#gallery .gallery-item').each(function() { const itemIndex = parseInt($(this).data('index')); $(this).toggleClass('hidden', !classImageIndices.includes(itemIndex)); }); }
+    function resetGalleryFilter() { $('#outlier-filter').val('none'); $('#gallery .gallery-item').removeClass('hidden'); }
+    $('#outlier-filter').on('change', function() { const filterType = $(this).val(); if (filterType === 'none') { $('#gallery .gallery-item').removeClass('hidden'); return; } let sortedBboxes, targetImageIndices; switch(filterType) { case 'area_smallest': sortedBboxes = [...allBboxesData].sort((a, b) => a.area - b.area); break; case 'area_largest': sortedBboxes = [...allBboxesData].sort((a, b) => b.area - a.area); break; case 'ar_smallest': sortedBboxes = [...allBboxesData].sort((a, b) => Math.abs(a.aspect_ratio - 1) - Math.abs(b.aspect_ratio - 1)); break; case 'ar_largest': sortedBboxes = [...allBboxesData].sort((a, b) => Math.abs(b.aspect_ratio - 1) - Math.abs(a.aspect_ratio - 1)); break; case 'iou_high': targetImageIndices = [...new Set(suspiciousPairsData.map(p => p.image_index))]; break; } if (sortedBboxes) { targetImageIndices = [...new Set(sortedBboxes.slice(0, 10).map(b => b.image_index))]; } $('#gallery .gallery-item').each(function() { const itemIndex = parseInt($(this).data('index')); $(this).toggleClass('hidden', !targetImageIndices.includes(itemIndex)); }); });
     $('#reset-filter-btn').on('click', resetGalleryFilter);
-
-    // --- UPDATED: Class counts chart is now interactive ---
-    function renderClassCounts(classCounts) {
-        const chartData = { labels: Object.keys(classCounts), datasets: [{ label: '# of Instances', data: Object.values(classCounts), backgroundColor: 'rgba(54, 162, 235, 0.6)' }]};
-        if (classChart) { classChart.destroy(); } // Destroy old chart instance if it exists
-        const ctx = document.getElementById('class-counts-chart');
-        classChart = new Chart(ctx, {
-            type: 'bar',
-            data: chartData,
-            options: {
-                maintainAspectRatio: false,
-                scales: { y: { beginAtZero: true } },
-                onHover: (event, chartElement) => {
-                    event.native.target.style.cursor = chartElement[0] ? 'pointer' : 'default';
-                },
-                onClick: (event, elements) => {
-                    if (elements.length > 0) {
-                        const clickedIndex = elements[0].index;
-                        const className = classChart.data.labels[clickedIndex];
-                        filterGalleryByClass(className);
-                    } else {
-                        // If user clicks on the background, reset the filter
-                        resetGalleryFilter();
-                    }
-                }
-            }
-        });
-    }
-
-    function renderObjectsPerImage(data) {
-        const counts = data.reduce((acc, val) => { acc[val] = (acc[val] || 0) + 1; return acc; }, {});
-        const chartData = { labels: Object.keys(counts), datasets: [{ label: '# of Images', data: Object.values(counts), backgroundColor: 'rgba(75, 192, 192, 0.6)' }] };
-        new Chart($('#objects-per-image-chart'), { type: 'bar', data: chartData, options: { maintainAspectRatio: false, scales: { x: { title: { display: true, text: 'Number of Objects in Image' } }, y: { beginAtZero: true } } } });
-    }
-    function renderBrightness(data) {
-        const histData = createHistogramData(data, 20, 0, 255);
-        const chartData = { labels: histData.labels, datasets: [{ label: 'Image Count', data: histData.counts, backgroundColor: 'rgba(255, 206, 86, 0.6)' }] };
-        new Chart($('#brightness-chart'), { type: 'bar', data: chartData, options: { maintainAspectRatio: false, scales: { y: { beginAtZero: true } } } });
-    }
-    function renderAspectRatio(data) {
-        const logData = data.map(d => d > 0 ? Math.log10(d) : 0);
-        const minLog = logData.length > 0 ? Math.min(...logData) : 0;
-        const maxLog = logData.length > 0 ? Math.max(...logData) : 1;
-        const histData = createHistogramData(logData, 15, minLog, maxLog);
-        histData.labels = histData.labels.map(l => {
-            const range = l.split('-').map(parseFloat);
-            return `${Math.pow(10, range[0]).toFixed(2)}-${Math.pow(10, range[1]).toFixed(2)}`;
-        });
-        const chartData = { labels: histData.labels, datasets: [{ label: 'BBox Count', data: histData.counts, backgroundColor: 'rgba(153, 102, 255, 0.6)' }] };
-        new Chart($('#aspect-ratio-chart'), { type: 'bar', data: chartData, options: { maintainAspectRatio: false, scales: { x: { title: {display: true, text: 'Width / Height'}}, y: { beginAtZero: true } } } });
-    }
-    function renderAnnotatorStats(stats) {
-        const users = Object.keys(stats);
-        if (users.length === 0) {
-            $('#annotator-chart').parent().html('<p class="text-muted">No annotator data found. Ensure tasks are assigned.</p>');
-            return;
-        }
-        const imageCounts = users.map(u => stats[u].image_count);
-        const chartData = { labels: users, datasets: [{ label: '# Labeled Images', data: imageCounts, backgroundColor: 'rgba(255, 159, 64, 0.6)' }] };
-        new Chart($('#annotator-chart'), { type: 'bar', data: chartData, options: { maintainAspectRatio: false, scales: { y: { beginAtZero: true } } } });
-    }
+    function renderClassCounts(classCounts) { const chartData = { labels: Object.keys(classCounts), datasets: [{ label: '# of Instances', data: Object.values(classCounts), backgroundColor: 'rgba(54, 162, 235, 0.6)' }]}; if (charts.classCounts) { charts.classCounts.destroy(); } const ctx = document.getElementById('class-counts-chart'); charts.classCounts = new Chart(ctx, { type: 'bar', data: chartData, options: { maintainAspectRatio: false, scales: { y: { beginAtZero: true } }, onHover: (event, chartElement) => { event.native.target.style.cursor = chartElement[0] ? 'pointer' : 'default'; }, onClick: (event, elements) => { if (elements.length > 0) { const clickedIndex = elements[0].index; const className = charts.classCounts.data.labels[clickedIndex]; filterGalleryByClass(className); } else { resetGalleryFilter(); } } } }); }
+    function renderObjectsPerImage(data) { const counts = data.reduce((acc, val) => { acc[val] = (acc[val] || 0) + 1; return acc; }, {}); const chartData = { labels: Object.keys(counts), datasets: [{ label: '# of Images', data: Object.values(counts), backgroundColor: 'rgba(75, 192, 192, 0.6)' }] }; if(charts.objectsPerImage) charts.objectsPerImage.destroy(); charts.objectsPerImage = new Chart($('#objects-per-image-chart'), { type: 'bar', data: chartData, options: { maintainAspectRatio: false, scales: { x: { title: { display: true, text: 'Number of Objects in Image' } }, y: { beginAtZero: true } } } }); }
+    function renderBrightness(data) { const histData = createHistogramData(data, 20, 0, 255); const chartData = { labels: histData.labels, datasets: [{ label: 'Image Count', data: histData.counts, backgroundColor: 'rgba(255, 206, 86, 0.6)' }] }; if(charts.brightness) charts.brightness.destroy(); charts.brightness = new Chart($('#brightness-chart'), { type: 'bar', data: chartData, options: { maintainAspectRatio: false, scales: { y: { beginAtZero: true } } } }); }
+    function renderAspectRatio(data) { const logData = data.map(d => d > 0 ? Math.log10(d) : 0); const minLog = logData.length > 0 ? Math.min(...logData) : 0; const maxLog = logData.length > 0 ? Math.max(...logData) : 1; const histData = createHistogramData(logData, 15, minLog, maxLog); histData.labels = histData.labels.map(l => { const range = l.split('-').map(parseFloat); return `${Math.pow(10, range[0]).toFixed(2)}-${Math.pow(10, range[1]).toFixed(2)}`; }); const chartData = { labels: histData.labels, datasets: [{ label: 'BBox Count', data: histData.counts, backgroundColor: 'rgba(153, 102, 255, 0.6)' }] }; if(charts.aspectRatio) charts.aspectRatio.destroy(); charts.aspectRatio = new Chart($('#aspect-ratio-chart'), { type: 'bar', data: chartData, options: { maintainAspectRatio: false, scales: { x: { title: {display: true, text: 'Width / Height'}}, y: { beginAtZero: true } } } }); }
+    function renderAnnotatorStats(stats) { const users = Object.keys(stats); if (users.length === 0) { $('#annotator-chart').parent().html('<p class="text-muted">No annotator data found. Ensure tasks are assigned.</p>'); return; } const imageCounts = users.map(u => stats[u].image_count); const chartData = { labels: users, datasets: [{ label: '# Labeled Images', data: imageCounts, backgroundColor: 'rgba(255, 159, 64, 0.6)' }] }; if(charts.annotator) charts.annotator.destroy(); charts.annotator = new Chart($('#annotator-chart'), { type: 'bar', data: chartData, options: { maintainAspectRatio: false, scales: { y: { beginAtZero: true } } } }); }
 });
 </script>
 {% endblock %}
