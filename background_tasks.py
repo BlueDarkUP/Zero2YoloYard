@@ -1,3 +1,5 @@
+# background_tasks.py
+
 import cv2
 import time
 import logging
@@ -12,10 +14,12 @@ import torch
 import tensorflow as tf
 import json
 
+# --- 本地模块导入 ---
 import config
 import database
 import file_storage
-from bbox_writer import extract_labels
+import ai_models  # <<< 核心改动：导入新的AI模块
+from bbox_writer import extract_labels, format_bboxes_text, convert_text_to_rects_and_labels
 
 try:
     import ultralytics_sam_tasks
@@ -25,8 +29,7 @@ except ImportError:
 try:
     import albumentations as A
 
-    # 创建一个对 Bbox友好的 CoarseDropout 版本
-    # 它显式地定义了一个什么都不做的 apply_to_bbox 方法，以兼容带有 bbox_params 的流水线
+
     class BboxSafeCoarseDropout(A.CoarseDropout):
         def apply_to_bbox(self, bbox, **params):
             return bbox
@@ -40,6 +43,90 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 active_tasks = {}
 tracking_sessions = {}
+
+
+def apply_prototypes_to_video_task(video_uuid, class_name, negative_samples, app_context):
+    if active_tasks.get(video_uuid):
+        logging.warning(f"Cannot start applying prototypes for {video_uuid}, another task is active.")
+        return
+
+    active_tasks[video_uuid] = 'APPLYING_PROTOTYPES'
+    logging.info(f"Starting to apply prototypes for class '{class_name}' to video {video_uuid}")
+
+    try:
+        with app_context:
+            database.update_video_status(video_uuid, 'APPLYING_PROTOTYPES', f"Initializing for '{class_name}'...")
+
+            # --- 步骤1: 构建正样本原型 ---
+            database.update_video_status(video_uuid, 'APPLYING_PROTOTYPES', f"Building positive prototypes for '{class_name}'...")
+            positive_prototypes = ai_models.get_prototypes_for_class(class_name)
+            if positive_prototypes is None or len(positive_prototypes) == 0:
+                raise ValueError(f"Could not build positive prototypes for class '{class_name}'.")
+            logging.info(f"Successfully built {len(positive_prototypes)} positive prototypes for '{class_name}'.")
+
+            # --- 步骤2: (新) 构建负样本原型 ---
+            negative_prototypes = None
+            has_negative_prototypes = False
+            if negative_samples:
+                database.update_video_status(video_uuid, 'APPLYING_PROTOTYPES', "Building negative prototypes...")
+                negative_prototypes = ai_models.get_prototypes_from_drawn_boxes(negative_samples)
+                if negative_prototypes is not None and len(negative_prototypes) > 0:
+                    has_negative_prototypes = True
+                    logging.info(f"Successfully built {len(negative_prototypes)} negative prototypes from user samples.")
+                else:
+                    logging.warning("User provided negative samples, but failed to build prototypes from them.")
+
+            # --- 步骤3: 遍历视频帧进行预测 ---
+            all_frames = database.get_video_frames(video_uuid)
+            unlabeled_frames = [f for f in all_frames if not f['bboxes_text'].strip()]
+            total_frames = len(unlabeled_frames)
+            logging.info(f"Found {total_frames} unlabeled frames to process in video {video_uuid}.")
+
+            for i, frame_info in enumerate(unlabeled_frames):
+                frame_number = frame_info['frame_number']
+                current_status = database.get_video_entity(video_uuid)['status']
+                if current_status == 'CANCELLING':
+                    logging.info(f"Task for {video_uuid} cancelled by user.")
+                    database.update_video_status(video_uuid, 'READY', 'Task was cancelled.')
+                    return
+
+                database.update_video_status(video_uuid, 'APPLYING_PROTOTYPES',
+                                             f"Processing frame {i + 1}/{total_frames}")
+
+                try:
+                    # 使用正负原型进行预测
+                    predictions = ai_models.predict_with_prototypes(
+                        video_uuid, frame_number, positive_prototypes,
+                        has_negative_prototypes=has_negative_prototypes,
+                        negative_prototypes=negative_prototypes
+                    )
+
+                    high_conf_preds = [p for p in predictions if p['score'] > 0.5]
+                    if high_conf_preds:
+                        suggested_text = "\n".join(
+                            [f"{int(p['box'][0])},{int(p['box'][1])},{int(p['box'][2])},{int(p['box'][3])},{class_name}"
+                             for p in high_conf_preds])
+                        database.save_frame_suggestions(video_uuid, frame_number, suggested_text)
+
+                except Exception as frame_e:
+                    logging.error(f"Failed to process frame {frame_number} for {video_uuid}: {frame_e}")
+
+                cache_key = f"{video_uuid}_{frame_number}"
+                if cache_key in ai_models.PREPROCESSED_DATA_CACHE:
+                    del ai_models.PREPROCESSED_DATA_CACHE[cache_key]
+
+            database.update_video_status(video_uuid, 'READY',
+                                         f"Finished applying '{class_name}' prototypes. Review suggestions.")
+            logging.info(f"Task for {video_uuid} completed successfully.")
+
+    except Exception as e:
+        error_message = f"Failed to apply prototypes to video {video_uuid}"
+        logging.error(f"{error_message}: {e}")
+        logging.error(traceback.format_exc())
+        database.update_video_status(video_uuid, status="FAILED", message=str(e))
+    finally:
+        if active_tasks.get(video_uuid) == 'APPLYING_PROTOTYPES':
+            del active_tasks[video_uuid]
 
 
 def start_sam2_tracking_task(video_uuid, tracker_uuid, start_frame, end_frame, init_bboxes_text):
@@ -375,8 +462,9 @@ def build_augmentation_pipeline(options):
 
     # Dropout
     if options.get('cutout', {}).get('enabled'):
-        transforms.append(BboxSafeCoarseDropout(max_holes=options['cutout']['holes'], max_height=options['cutout']['size'],
-                                          max_width=options['cutout']['size'], fill_value=0, p=options['cutout']['p']))
+        transforms.append(
+            BboxSafeCoarseDropout(max_holes=options['cutout']['holes'], max_height=options['cutout']['size'],
+                                  max_width=options['cutout']['size'], fill_value=0, p=options['cutout']['p']))
 
     if not transforms: return None
     return A.Compose(transforms,

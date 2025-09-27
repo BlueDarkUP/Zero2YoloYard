@@ -17,7 +17,7 @@ except ImportError:
 import config
 import database
 import file_storage
-from bbox_writer import convert_text_to_rects_and_labels
+from bbox_writer import parse_bboxes_text
 import settings_manager
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"

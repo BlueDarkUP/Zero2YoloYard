@@ -8,31 +8,20 @@ import uuid
 import logging
 import cv2
 import numpy as np
-import io
 import base64
 from collections import Counter
 from skimage import io as skio
-from skimage.color import rgb2gray
 import itertools
 import random
 
+# --- 本地模块导入 ---
 import settings_manager
 import config
 import database
 import file_storage
 import background_tasks
-from bbox_writer import validate_bboxes_text, count_boxes, convert_text_to_rects_and_labels, extract_labels
-
-try:
-    import ultralytics_sam_tasks as sam_tasks
-except ImportError:
-    logging.warning("ultralytics_sam_tasks.py not found or failed to import. All SAM features will be disabled.")
-    sam_tasks = None
-
-app = flask.Flask(__name__)
-app.secret_key = os.urandom(24)
-
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(threadName)s - %(message)s')
+import ai_models  # <<< 导入新的AI模块
+from bbox_writer import validate_bboxes_text, convert_text_to_rects_and_labels, extract_labels
 
 try:
     import yaml
@@ -40,11 +29,18 @@ except ImportError:
     logging.error("PyYAML is not installed! Dataset export will fail. Please run 'pip install pyyaml'.")
     yaml = None
 
+# --- Flask应用设置 ---
+app = flask.Flask(__name__)
+app.secret_key = os.urandom(24)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(threadName)s - %(message)s')
+
 with app.app_context():
     database.init_db()
     database.migrate_db()
     file_storage.init_storage()
 
+
+# --- 通用辅助函数 ---
 
 def validate_description(desc, existing_descriptions):
     if not (1 <= len(desc) <= config.MAX_DESCRIPTION_LENGTH):
@@ -147,6 +143,8 @@ def generate_mosaic_previews(sample_pool, selected_video_uuid, selected_frame_nu
 
     return previews
 
+
+# --- 标准Flask路由 ---
 
 @app.route('/')
 def index():
@@ -420,9 +418,12 @@ def save_settings():
     if settings_manager.save_settings(new_settings):
         if sam_model_changed:
             logging.info("SAM model setting changed. The model will be reloaded on the next request.")
-            if sam_tasks:
-                sam_tasks._sam_model_cache["model"] = None
-                sam_tasks._sam_model_cache["path"] = None
+            try:
+                from ultralytics_sam_tasks import _sam_model_cache
+                _sam_model_cache["model"] = None
+                _sam_model_cache["path"] = None
+            except (ImportError, AttributeError):
+                logging.warning("Could not clear SAM model cache.")
 
         return jsonify({
             'success': True,
@@ -435,9 +436,12 @@ def save_settings():
 
 @app.route('/samPredict', methods=['POST'])
 def sam_predict():
-    if not sam_tasks or not sam_tasks.get_sam_model():
-        return jsonify(
-            {'success': False, 'message': 'Ultralytics SAM model is not available or not installed on server.'}), 501
+    try:
+        from ultralytics_sam_tasks import predict_box_from_point_ultralytics, get_sam_model
+        if not get_sam_model():
+            return jsonify({'success': False, 'message': 'Ultralytics SAM model is not available.'}), 501
+    except ImportError:
+        return jsonify({'success': False, 'message': 'SAM features are not installed on server.'}), 501
 
     data = request.json
     video_uuid = data.get('video_uuid')
@@ -454,7 +458,7 @@ def sam_predict():
 
         coords_tuple = (int(point_coords['x']), int(point_coords['y']))
 
-        bbox = sam_tasks.predict_box_from_point_ultralytics(image_path, coords_tuple)
+        bbox = predict_box_from_point_ultralytics(image_path, coords_tuple)
 
         if bbox:
             return jsonify({'success': True, 'bbox': bbox})
@@ -466,11 +470,160 @@ def sam_predict():
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
+# --- AI API 路由 ---
+
+@app.route('/interactive_segment/preprocess', methods=['POST'])
+def interactive_segment_preprocess_route():
+    data = request.json
+    video_uuid = data.get('video_uuid')
+    frame_number = int(data.get('frame_number'))
+    hyperparameters = data.get('hyperparameters', {})
+
+    if video_uuid is None or frame_number is None:
+        return jsonify({'success': False, 'message': 'Missing video_uuid or frame_number.'}), 400
+
+    try:
+        ai_models._preprocess_and_get_embeddings(video_uuid, frame_number, hyperparameters)
+        cache_key = f"{video_uuid}_{frame_number}"
+        return jsonify({'success': True, 'message': 'Preprocessing successful', 'cache_key': cache_key})
+    except Exception as e:
+        logging.error(f"智能选择预处理失败: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': f'Internal Server Error: {str(e)}'}), 500
+
+
+@app.route('/interactive_segment/predict', methods=['POST'])
+def interactive_segment_predict_route():
+    data = request.json
+    cache_key = data.get('cache_key')
+    prompt_boxes = data.get('prompt_boxes', [])
+    negative_boxes = data.get('negative_boxes', [])
+
+    if cache_key not in ai_models.PREPROCESSED_DATA_CACHE:
+        return jsonify({'success': False, 'message': 'Cache key not found. Please preprocess first.'}), 404
+
+    try:
+        cached_data = ai_models.PREPROCESSED_DATA_CACHE[cache_key]
+        all_boxes = cached_data["all_boxes"]
+        all_embeddings = cached_data["all_embeddings"]
+
+        if not prompt_boxes:
+            return jsonify({'success': False, 'message': 'Positive prompt boxes are required.'}), 400
+
+        pos_indices = ai_models.find_best_matching_masks_by_iou(np.array(prompt_boxes), all_boxes)
+        if len(pos_indices) == 0: return jsonify({'success': False, 'message': 'Could not match any positive prompts.'})
+        positive_prototypes = all_embeddings[pos_indices]
+
+        negative_prototypes = None
+        if negative_boxes:
+            neg_indices = ai_models.find_best_matching_masks_by_iou(np.array(negative_boxes), all_boxes)
+            if len(neg_indices) > 0:
+                negative_prototypes = all_embeddings[neg_indices]
+
+        final_scores = ai_models._calculate_similarity_scores(all_embeddings, positive_prototypes, negative_prototypes)
+        from torchvision.ops import nms
+        kept_indices = nms(all_boxes, final_scores, 0.5)
+
+        final_results = []
+        final_scores_np = final_scores.cpu().numpy()
+        for i in kept_indices:
+            final_results.append(
+                {"box": all_boxes[i].cpu().numpy().astype(int).tolist(), "score": float(final_scores_np[i])})
+
+        return jsonify({'success': True, 'results': final_results})
+
+    except Exception as e:
+        logging.error(f"智能选择预测失败: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': f'Internal Server Error: {str(e)}'}), 500
+
+
+@app.route('/interactive_segment/predict_from_dataset', methods=['POST'])
+def predict_from_dataset_route():
+    data = request.json
+    video_uuid = data.get('video_uuid')
+    frame_number = int(data.get('frame_number'))
+    class_name = data.get('class_name')
+    hyperparameters = data.get('hyperparameters', {})
+
+    if not all([video_uuid, frame_number is not None, class_name]):
+        return jsonify({'success': False, 'message': 'Missing required data.'}), 400
+
+    try:
+        positive_prototypes = ai_models.get_prototypes_for_class(class_name, hyperparameters)
+        if positive_prototypes is None or len(positive_prototypes) == 0:
+            return jsonify({'success': False,
+                            'message': f"No labeled examples found for class '{class_name}' in the dataset, or failed to extract features."})
+
+        results = ai_models.predict_with_prototypes(video_uuid, frame_number, positive_prototypes,
+                                                    hyperparameters=hyperparameters)
+        return jsonify({'success': True, 'results': results})
+
+    except Exception as e:
+        logging.error(f"Dataset-driven prediction failed: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': f'Internal Server Error: {str(e)}'}), 500
+
+
+@app.route('/api/get_random_frames_for_neg_sampling', methods=['POST'])
+def get_random_frames_for_neg_sampling():
+    data = request.json
+    video_uuid = data.get('video_uuid')
+    count = int(data.get('count', 10))
+
+    if not video_uuid:
+        return jsonify({'success': False, 'message': 'Video UUID is required.'}), 400
+
+    try:
+        all_frame_numbers = database.get_frame_numbers_for_video(video_uuid)
+        if len(all_frame_numbers) < count:
+            sampled_numbers = all_frame_numbers
+        else:
+            sampled_numbers = random.sample(all_frame_numbers, count)
+
+        frames_data = []
+        for fn in sorted(sampled_numbers):
+            frames_data.append({
+                'video_uuid': video_uuid,
+                'frame_number': fn,
+                'image_url': f"/media/frames/{video_uuid}/frame_{fn:05d}.jpg"
+            })
+
+        return jsonify({'success': True, 'frames': frames_data})
+    except Exception as e:
+        logging.error(f"Error getting random frames: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/apply_prototypes_to_video', methods=['POST'])
+def apply_prototypes_to_video_route():
+    data = request.json
+    video_uuid = data.get('video_uuid')
+    class_name = data.get('class_name')
+    negative_samples = data.get('negative_samples', None)
+
+    if not video_uuid or not class_name:
+        return jsonify({'success': False, 'message': 'Video UUID and Class Name are required.'}), 400
+
+    if background_tasks.active_tasks.get(video_uuid):
+        return jsonify({'success': False, 'message': 'Another task is already running for this video.'}), 409
+
+    threading.Thread(
+        target=background_tasks.apply_prototypes_to_video_task,
+        args=(video_uuid, class_name, negative_samples, app.app_context()),
+        name=f"ApplyPrototypes-{video_uuid[:6]}"
+    ).start()
+
+    return jsonify({'success': True, 'message': 'Task to apply prototypes has started.'})
+
+
+# --- 跟踪路由 ---
+
 @app.route('/startSam2Tracking', methods=['POST'])
 def start_sam2_tracking():
-    if not sam_tasks:
-        return jsonify(
-            {'success': False, 'message': 'SAM video tracking feature is not available on the server.'}), 501
+    try:
+        from ultralytics_sam_tasks import get_sam_model
+        if not get_sam_model():
+            return jsonify({'success': False, 'message': 'SAM tracking feature is not available on the server.'}), 501
+    except ImportError:
+        return jsonify({'success': False, 'message': 'SAM features are not installed on server.'}), 501
 
     data = request.json
     video_uuid = data.get('video_uuid')
@@ -599,6 +752,8 @@ def stop_tracking():
     return jsonify({'success': True})
 
 
+# --- 数据集、模型和其他管理路由 ---
+
 @app.route('/listDatasets', methods=['GET'])
 def list_datasets():
     datasets = database.get_dataset_list()
@@ -645,7 +800,6 @@ def regenerate_dataset():
     video_uuids = json.loads(dataset['video_uuids'])
     eval_percent = dataset.get('eval_percent')
     test_percent = dataset.get('test_percent')
-
     augmentation_options = {'enabled': False}
 
     threading.Thread(target=background_tasks.create_dataset_task, args=(
@@ -660,7 +814,6 @@ def download_dataset(dataset_uuid):
     dataset = database.get_dataset_entity(dataset_uuid)
     if not dataset or dataset['status'] != 'READY' or not dataset['zip_path']:
         return "Dataset not found or not ready.", 404
-
     try:
         return send_file(dataset['zip_path'], as_attachment=True)
     except Exception as e:
@@ -764,7 +917,7 @@ def cancel_task():
     if not video:
         return jsonify({'success': False, 'message': 'Video not found.'}), 404
 
-    if video['status'] == 'PRE_ANNOTATING':
+    if video['status'] in ['PRE_ANNOTATING', 'APPLYING_PROTOTYPES']:
         database.update_video_status(video_uuid, 'CANCELLING', 'Cancellation requested by user.')
         return jsonify({'success': True, 'message': 'Cancellation request sent.'})
     else:
@@ -788,7 +941,6 @@ def get_dataset_analysis_data(dataset_uuid):
         return jsonify({'success': False, 'message': 'Dataset not found.'}), 404
 
     video_uuids = json.loads(dataset.get('video_uuids', '[]'))
-
     tasks_by_video = {vu: database.get_tasks_for_video(vu) for vu in video_uuids}
     video_info_cache = {vu: database.get_video_entity(vu) for vu in video_uuids}
 
@@ -928,7 +1080,6 @@ def preview_augmentations():
         if augmentation_options.get('mosaic', {}).get('enabled'):
             if not sample_pool:
                 return jsonify({'success': False, 'message': 'Sample pool is required for Mosaic preview.'}), 400
-
             if random.random() < augmentation_options['mosaic'].get('p', 1.0):
                 previews = generate_mosaic_previews(sample_pool, video_uuid, frame_number)
                 return jsonify({'success': True, 'previews': previews})
@@ -939,14 +1090,10 @@ def preview_augmentations():
 
         image = cv2.imread(frame_path)
         image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-
         video_info = database.get_video_entity(video_uuid)
-
         conn = database.get_db_connection()
-        frame_db_info = conn.execute(
-            'SELECT bboxes_text FROM video_frames WHERE video_uuid = ? AND frame_number = ?',
-            (video_uuid, frame_number)
-        ).fetchone()
+        frame_db_info = conn.execute('SELECT bboxes_text FROM video_frames WHERE video_uuid = ? AND frame_number = ?',
+                                     (video_uuid, frame_number)).fetchone()
         conn.close()
 
         if not frame_db_info or not frame_db_info['bboxes_text']:
@@ -959,28 +1106,23 @@ def preview_augmentations():
 
         all_labels = database.get_all_class_labels()
         class_map = {name: i for i, name in enumerate(all_labels)}
-
-        yolo_bboxes, class_indices = file_storage.get_yolo_bboxes(
-            frame_db_info['bboxes_text'], video_info['width'], video_info['height'], class_map
-        )
+        yolo_bboxes, class_indices = file_storage.get_yolo_bboxes(frame_db_info['bboxes_text'], video_info['width'],
+                                                                  video_info['height'], class_map)
         if not yolo_bboxes:
             return jsonify({'success': False, 'message': 'Could not parse labels into YOLO format.'}), 500
 
         previews = []
         for _ in range(6):
             transformed = pipeline(image=image_rgb, bboxes=yolo_bboxes, class_labels=class_indices)
-
             aug_image_rgb = transformed['image']
             aug_bboxes_yolo = transformed['bboxes']
             aug_labels_indices = transformed['class_labels']
-
             h, w, _ = aug_image_rgb.shape
             vis_image = aug_image_rgb.copy()
             for i, bbox in enumerate(aug_bboxes_yolo):
                 class_index = int(aug_labels_indices[i])
                 class_name = all_labels[class_index]
                 color = string_to_color_bgr(class_name)
-
                 x_center, y_center, width_norm, height_norm = bbox
                 x1 = int((x_center - width_norm / 2) * w)
                 y1 = int((y_center - height_norm / 2) * h)
@@ -1000,17 +1142,14 @@ def preview_augmentations():
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
-def startup_ai_models():
-    if sam_tasks:
-        logging.info("Starting initial AI model load based on settings...")
-        sam_tasks.get_sam_model()
-
-
+# --- 应用启动 ---
 if __name__ == '__main__':
     from waitress import serve
 
-    logging.info("Starting AI model initialization in a background thread...")
-    threading.Thread(target=startup_ai_models, name="AI-Initializers").start()
+    logging.info("正在初始化AI模型，请稍候...")
+    # 直接在主线程中调用，确保模型加载完成后再启动服务器
+    ai_models.startup_ai_models()
+
     print("=" * 60)
     print("FTC-ML Server is running.")
     print("Open your web browser and go to http://127.0.0.1:5000")

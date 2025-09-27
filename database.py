@@ -30,7 +30,8 @@ def migrate_db():
     _add_column_if_not_exists(cursor, 'models', 'model_type', 'TEXT')
     _add_column_if_not_exists(cursor, 'videos', 'last_pre_annotation_info', 'TEXT')
     # --- 新增迁移 ---
-    _add_column_if_not_exists(cursor, 'video_frames', 'tags', 'TEXT')  # 为帧添加标签字段
+    _add_column_if_not_exists(cursor, 'video_frames', 'tags', 'TEXT')
+    _add_column_if_not_exists(cursor, 'video_frames', 'suggested_bboxes_text', 'TEXT') # 新增: AI建议字段
     conn.commit()
     conn.close()
 
@@ -45,7 +46,7 @@ def init_db():
         video_filename TEXT,
         file_size INTEGER,
         create_time_ms INTEGER,
-        status TEXT, -- 'UPLOADING', 'EXTRACTING', 'READY', 'FAILED', 'PRE_ANNOTATING', 'CANCELLING'
+        status TEXT, -- 'UPLOADING', 'EXTRACTING', 'READY', 'FAILED', 'PRE_ANNOTATING', 'APPLYING_PROTOTYPES', 'CANCELLING'
         status_message TEXT,
         width INTEGER,
         height INTEGER,
@@ -64,8 +65,9 @@ def init_db():
         video_uuid TEXT,
         frame_number INTEGER,
         bboxes_text TEXT,
-        tags TEXT, -- <<< 新增字段, 存储 JSON 数组字符串 e.g., '["day", "sunny"]'
-        include_frame_in_dataset INTEGER, -- 0 for false, 1 for true
+        suggested_bboxes_text TEXT, -- <<< 新增字段：存储AI生成的建议标注
+        tags TEXT,
+        include_frame_in_dataset INTEGER,
         FOREIGN KEY (video_uuid) REFERENCES videos (video_uuid) ON DELETE CASCADE
     )
     ''')
@@ -117,7 +119,6 @@ def init_db():
     )
     ''')
 
-    # --- 新增表：用于存储全局图像分类标签 ---
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS class_tags (
         tag_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -190,9 +191,9 @@ def update_video_after_extraction_start(video_uuid, width, height, fps, frame_co
         'UPDATE videos SET width=?, height=?, fps=?, frame_count=?, included_frame_count=?, status=? WHERE video_uuid=?',
         (width, height, fps, frame_count, frame_count, 'EXTRACTING', video_uuid)
     )
-    frames_to_insert = [(video_uuid, i, '', '', 1) for i in range(frame_count)]  # tags 初始为空字符串
+    frames_to_insert = [(video_uuid, i, '', '', '', 1) for i in range(frame_count)]  # suggested_bboxes_text, tags 初始为空字符串
     cursor.executemany(
-        'INSERT INTO video_frames (video_uuid, frame_number, bboxes_text, tags, include_frame_in_dataset) VALUES (?, ?, ?, ?, ?)',
+        'INSERT INTO video_frames (video_uuid, frame_number, bboxes_text, suggested_bboxes_text, tags, include_frame_in_dataset) VALUES (?, ?, ?, ?, ?, ?)',
         frames_to_insert
     )
     conn.commit()
@@ -224,9 +225,10 @@ def get_video_frames(video_uuid):
 def save_frame_bboxes(video_uuid, frame_number, bboxes_text):
     conn = get_db_connection()
     cursor = conn.cursor()
+    # 当用户手动保存时，意味着该帧已被审核，因此清除AI建议
     cursor.execute(
-        'UPDATE video_frames SET bboxes_text = ? WHERE video_uuid = ? AND frame_number = ?',
-        (bboxes_text, video_uuid, frame_number)
+        'UPDATE video_frames SET bboxes_text = ?, suggested_bboxes_text = ? WHERE video_uuid = ? AND frame_number = ?',
+        (bboxes_text, '', video_uuid, frame_number)
     )
     new_labeled_count = cursor.execute(
         "SELECT COUNT(*) FROM video_frames WHERE video_uuid = ? AND ((bboxes_text IS NOT NULL AND bboxes_text != '') OR (tags IS NOT NULL AND tags != '[]' AND tags != ''))",
@@ -239,8 +241,18 @@ def save_frame_bboxes(video_uuid, frame_number, bboxes_text):
     conn.commit()
     conn.close()
 
+# --- 新增函数：仅保存AI建议，不影响人工标注 ---
+def save_frame_suggestions(video_uuid, frame_number, suggested_bboxes_text):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        'UPDATE video_frames SET suggested_bboxes_text = ? WHERE video_uuid = ? AND frame_number = ?',
+        (suggested_bboxes_text, video_uuid, frame_number)
+    )
+    conn.commit()
+    conn.close()
 
-# --- 新增函数：保存帧的分类标签 ---
+
 def save_frame_tags(video_uuid, frame_number, tags_json_string):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -248,7 +260,6 @@ def save_frame_tags(video_uuid, frame_number, tags_json_string):
         'UPDATE video_frames SET tags = ? WHERE video_uuid = ? AND frame_number = ?',
         (tags_json_string, video_uuid, frame_number)
     )
-    # 更新视频的已标注帧数（逻辑与 save_frame_bboxes 中一致）
     new_labeled_count = cursor.execute(
         "SELECT COUNT(*) FROM video_frames WHERE video_uuid = ? AND ((bboxes_text IS NOT NULL AND bboxes_text != '') OR (tags IS NOT NULL AND tags != '[]' AND tags != ''))",
         (video_uuid,)
@@ -274,10 +285,10 @@ def add_frames_from_upload(video_uuid, frame_files):
             new_frame_number = start_frame_number + i
             image_bytes = file_storage_obj.read()
             file_storage.save_frame_image(video_uuid, new_frame_number, image_bytes)
-            frames_to_insert.append((video_uuid, new_frame_number, '', '', 1))
+            frames_to_insert.append((video_uuid, new_frame_number, '', '', '', 1))
         if frames_to_insert:
             cursor.executemany(
-                'INSERT INTO video_frames (video_uuid, frame_number, bboxes_text, tags, include_frame_in_dataset) VALUES (?, ?, ?, ?, ?)',
+                'INSERT INTO video_frames (video_uuid, frame_number, bboxes_text, suggested_bboxes_text, tags, include_frame_in_dataset) VALUES (?, ?, ?, ?, ?, ?)',
                 frames_to_insert
             )
         new_total_frames = start_frame_number + len(frames_to_insert)
@@ -373,7 +384,31 @@ def delete_class_label(label_name):
     conn.close()
 
 
-# --- 新增函数集：管理全局分类标签 (Tags) ---
+# --- 新增函数：获取数据集中某个特定类的所有已标注样本 ---
+def get_all_frames_with_class(class_name):
+    conn = get_db_connection()
+    # 使用 LIKE 操作符来查找包含特定类名的 bboxes_text
+    # 注意：这假设标签名中不包含SQL通配符，并且格式稳定
+    query = f"""
+        SELECT T1.*, T2.width, T2.height FROM video_frames AS T1
+        INNER JOIN videos AS T2 ON T1.video_uuid = T2.video_uuid
+        WHERE T1.bboxes_text LIKE '%{class_name}%'
+    """
+    frames = conn.execute(query).fetchall()
+
+    # 客户端进一步过滤，确保是完整的类名匹配
+    result_frames = []
+    for frame in frames:
+        lines = frame['bboxes_text'].strip().split('\n')
+        for line in lines:
+            parts = line.strip().split(',', 4)
+            if len(parts) >= 5 and parts[4] == class_name:
+                result_frames.append(dict(frame))
+                break # 找到一个匹配就够了，避免重复添加
+    conn.close()
+    return result_frames
+
+
 def add_class_tag(tag_name):
     conn = get_db_connection()
     try:
@@ -381,7 +416,7 @@ def add_class_tag(tag_name):
         conn.execute('INSERT INTO class_tags (tag_name, create_time_ms) VALUES (?, ?)', (tag_name, create_time_ms))
         conn.commit()
     except sqlite3.IntegrityError:
-        pass  # 标签已存在，忽略错误
+        pass
     finally:
         conn.close()
 
@@ -481,3 +516,10 @@ def delete_model(model_uuid):
     conn.commit()
     conn.close()
 
+def get_frame_numbers_for_video(video_uuid):
+    """获取指定视频的所有帧号列表"""
+    conn = get_db_connection()
+    frames = conn.execute('SELECT frame_number FROM video_frames WHERE video_uuid = ? ORDER BY frame_number ASC',
+                          (video_uuid,)).fetchall()
+    conn.close()
+    return [row['frame_number'] for row in frames]

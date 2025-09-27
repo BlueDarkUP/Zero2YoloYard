@@ -70,6 +70,7 @@ def convert_text_to_rects_and_labels(bboxes_text):
     """
     稳健地将多行边界框文本解析为矩形和标签列表。
     使用 split(',', 4) 来确保标签内的逗号不会导致解析错误。
+    新增：自动纠正反向绘制的框 (x1 > x2 或 y1 > y2)。
     """
     rects = []
     labels = []
