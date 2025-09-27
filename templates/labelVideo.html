@@ -1,4 +1,3 @@
-<!-- templates/labelVideo.html -->
 {% extends "layout.html" %}
 
 {% block head %}
@@ -41,7 +40,8 @@
         border-radius: 0.25rem;
     }
 
-    #class-list .list-group-item, #bbox-list .list-group-item {
+    #class-list .list-group-item,
+    #bbox-list .list-group-item {
         cursor: pointer;
     }
 
@@ -56,7 +56,8 @@
         border-width: 2px;
     }
 
-    #sam-toggle-btn.active, #interactive-mode-toggle.active {
+    #sam-toggle-btn.active,
+    #interactive-mode-toggle.active {
         background-color: #28a745;
         border-color: #28a745;
         color: white;
@@ -88,7 +89,7 @@
         color: white;
         font-weight: bold;
         z-index: 9999;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
         opacity: 0;
         visibility: hidden;
         transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
@@ -97,6 +98,19 @@
     #toast-notification.show {
         opacity: 1;
         visibility: visible;
+    }
+
+    #interpolation-banner {
+        display: none;
+        padding: 0.75rem 1.25rem;
+        margin-bottom: 1rem;
+        border: 1px solid transparent;
+        border-radius: 0.25rem;
+        background-color: #d1ecf1;
+        border-color: #bee5eb;
+        color: #0c5460;
+        font-weight: bold;
+        text-align: center;
     }
 
     #track-controls {
@@ -123,6 +137,7 @@
         flex-wrap: wrap;
         margin-top: 0.5rem;
     }
+
     .shortcut-key {
         background-color: #e9ecef;
         border: 1px solid #dee2e6;
@@ -132,19 +147,18 @@
         font-weight: bold;
         color: #495057;
     }
+
     .adv-settings-label {
         font-size: 0.8rem;
         font-weight: bold;
         margin-bottom: 0.2rem;
     }
 
-    /* --- START: Bbox Editing Styles --- */
     #drawing-canvas.cursor-move { cursor: move; }
     #drawing-canvas.cursor-nwse-resize { cursor: nwse-resize; }
     #drawing-canvas.cursor-nesw-resize { cursor: nesw-resize; }
     #drawing-canvas.cursor-ns-resize { cursor: ns-resize; }
     #drawing-canvas.cursor-ew-resize { cursor: ew-resize; }
-    /* --- END: Bbox Editing Styles --- */
 </style>
 {% endblock %}
 
@@ -161,11 +175,13 @@
     </div>
 
     <div class="row">
-        <!-- Left Panel: Canvas and Frame Controls -->
         <div class="col-lg-8 col-xl-9">
+            <div id="interpolation-banner">
+                <i class="bi bi-bezier"></i> **INTERPOLATION MODE ACTIVE**: Go to target frame, adjust the box, and click 'Confirm'. Press 'Esc' to cancel.
+            </div>
             <div class="canvas-area">
                 <div id="canvas-container">
-                    <img id="frame-image" src="{{ first_frame_url }}" class="img-fluid" alt="Video Frame" draggable="false"/>
+                    <img id="frame-image" src="{{ first_frame_url }}" class="img-fluid" alt="Video Frame" draggable="false" />
                     <canvas id="crosshair-canvas"></canvas>
                     <canvas id="drawing-canvas"></canvas>
                 </div>
@@ -173,23 +189,21 @@
                     <label for="frame-slider">
                         Frame: <span id="frame-number-display" class="font-weight-bold">{{ task_entity.start_frame }}</span> / {{ task_entity.end_frame }}
                     </label>
-                    <input type="range" class="form-control-range" id="frame-slider"
-                           min="{{ task_entity.start_frame }}"
-                           max="{{ task_entity.end_frame }}"
-                           value="{{ task_entity.start_frame }}">
-                     <div class="shortcut-keys-container">
-                         <span class="shortcut-key">S</span> Save/Update
-                         <span class="shortcut-key">A</span> Prev
-                         <span class="shortcut-key">D</span> Next
-                         <span class="shortcut-key">C</span> Cycle Boxes
-                         <span class="shortcut-key">Ctrl+Z</span> Undo
-                         <span class="shortcut-key">Ctrl+Y</span> Redo
-                         <span class="shortcut-key">Del</span> Delete
-                     </div>
+                    <input type="range" class="form-control-range" id="frame-slider" min="{{ task_entity.start_frame }}" max="{{ task_entity.end_frame }}" value="{{ task_entity.start_frame }}">
+                    <div class="shortcut-keys-container">
+                        <span class="shortcut-key">S</span> Save/Update
+                        <span class="shortcut-key">A</span> Prev
+                        <span class="shortcut-key">D</span> Next
+                        <span class="shortcut-key">C</span> Cycle Boxes
+                        <span class="shortcut-key">Esc</span> Cancel Interpolation
+                        <span class="shortcut-key">Ctrl+Z</span> Undo
+                        <span class="shortcut-key">Ctrl+Y</span> Redo
+                        <span class="shortcut-key">Del</span> Delete
+                    </div>
                 </div>
             </div>
         </div>
-        <!-- Right Panel: Classes and BBoxes -->
+
         <div class="col-lg-4 col-xl-3">
             <div class="side-panel">
                 <div class="d-flex justify-content-between align-items-center">
@@ -227,9 +241,9 @@
                         <div class="card">
                             <div class="card-header p-0" id="headingOne">
                                 <h2 class="mb-0">
-                                <button class="btn btn-link btn-block text-left" type="button" data-toggle="collapse" data-target="#collapseAdvanced" aria-expanded="true" aria-controls="collapseAdvanced">
-                                    <i class="bi bi-sliders"></i> Advanced Settings
-                                </button>
+                                    <button class="btn btn-link btn-block text-left" type="button" data-toggle="collapse" data-target="#collapseAdvanced" aria-expanded="true" aria-controls="collapseAdvanced">
+                                        <i class="bi bi-sliders"></i> Advanced Settings
+                                    </button>
                                 </h2>
                             </div>
                             <div id="collapseAdvanced" class="collapse" aria-labelledby="headingOne" data-parent="#advanced-settings-accordion">
@@ -261,8 +275,8 @@
                         <h5>Review & Assign</h5>
                         <p><small class="text-muted">Select a class, then click on a blue box to assign it. Hold <strong>C</strong> to cycle through overlapping boxes.</small></p>
                         <div class="form-group">
-                             <label for="result-threshold">Confidence Threshold: <strong id="threshold-value">0.50</strong></label>
-                             <input type="range" class="form-control-range" id="result-threshold" min="0.1" max="0.99" step="0.01" value="0.50">
+                            <label for="result-threshold">Confidence Threshold: <strong id="threshold-value">0.50</strong></label>
+                            <input type="range" class="form-control-range" id="result-threshold" min="0.1" max="0.99" step="0.01" value="0.50">
                         </div>
                         <button id="accept-visible-btn" class="btn btn-success btn-block mt-2"><i class="bi bi-check2-all"></i> Accept All Visible</button>
                         <button id="apply-to-video-btn" class="btn btn-warning btn-block mt-1" disabled><i class="bi bi-fast-forward-fill"></i> Apply to Video</button>
@@ -296,762 +310,1752 @@
         <div>
             <span class="color-swatch"></span>
             <span class="bbox-label font-weight-bold"></span>
+            <small class="bbox-id text-muted ml-2"></small>
         </div>
-        <button class="btn btn-danger btn-sm delete-bbox-btn">&times;</button>
+        <div>
+            <button class="btn btn-info btn-sm interpolate-btn" title="Start keyframe interpolation for this object">
+                <i class="bi bi-bezier"></i>
+            </button>
+            <button class="btn btn-danger btn-sm delete-bbox-btn">&times;</button>
+        </div>
     </li>
 </template>
 
 {% from "_macros.html" import render_modal %}
 {% call render_modal('negative-sampling-modal', 'Step 2: Refine with Negative Samples') %}
-    <div id="neg-sampling-body">
-        <p class="text-info">Draw boxes around areas you want the model to **avoid** (e.g., background, other objects). These are temporary and only used for this task.</p>
-        <div class="text-center mb-3">
-            <div id="neg-canvas-container" style="position: relative; display: inline-block; max-width: 100%;">
-                <img id="neg-frame-image" src="" class="img-fluid" alt="Negative Sample Frame" draggable="false"/>
-                <canvas id="neg-drawing-canvas" style="position: absolute; top: 0; left: 0; cursor: crosshair;"></canvas>
-            </div>
-        </div>
-        <div class="d-flex justify-content-between align-items-center mt-3">
-            <button id="neg-prev-btn" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Previous</button>
-            <strong id="neg-frame-counter">Frame 1 / 10</strong>
-            <button id="neg-next-btn" class="btn btn-secondary">Next <i class="bi bi-arrow-right"></i></button>
+<div id="neg-sampling-body">
+    <p class="text-info">Draw boxes around areas you want the model to **avoid** (e.g., background, other objects). These are temporary and only used for this task.</p>
+    <div class="text-center mb-3">
+        <div id="neg-canvas-container" style="position: relative; display: inline-block; max-width: 100%;">
+            <img id="neg-frame-image" src="" class="img-fluid" alt="Negative Sample Frame" draggable="false" />
+            <canvas id="neg-drawing-canvas" style="position: absolute; top: 0; left: 0; cursor: crosshair;"></canvas>
         </div>
     </div>
-    <div class="modal-footer">
-        <button type="button" class="btn btn-danger" data-dismiss="modal">Cancel</button>
-        <button type="button" id="finish-neg-sampling-btn" class="btn btn-primary"><i class="bi bi-check2-circle"></i> Finish & Refine Model</button>
+    <div class="d-flex justify-content-between align-items-center mt-3">
+        <button id="neg-prev-btn" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Previous</button>
+        <strong id="neg-frame-counter">Frame 1 / 10</strong>
+        <button id="neg-next-btn" class="btn btn-secondary">Next <i class="bi bi-arrow-right"></i></button>
     </div>
+</div>
+<div class="modal-footer">
+    <button type="button" class="btn btn-danger" data-dismiss="modal">Cancel</button>
+    <button type="button" id="finish-neg-sampling-btn" class="btn btn-primary"><i class="bi bi-check2-circle"></i> Finish & Refine Model</button>
+</div>
 {% endcall %}
 
 {% endblock %}
 
 {% block scripts %}
 <script>
-$(document).ready(function() {
-    // --- State Variables ---
-    const videoUuid = "{{ video_entity.video_uuid }}";
-    const task = {{ task_entity | tojson }};
-    const frameCount = task.end_frame + 1;
-    let availableClasses = [], activeClass = null, bboxes = [], selectedBboxIndex = -1;
-    let history = [], historyIndex = -1, isDrawing = false, startX, startY;
-    let isSamModeActive = false, sam2TrackerUuid = null, sam2EventSource = null;
-    let isReviewMode = false, trackedBboxCache = {};
-    let isInteractiveMode = false, interactiveDrawMode = 'positive';
-    let positiveExampleBboxes = [], negativeExampleBboxes = [], previewBboxes = [];
-    let currentCacheKey = null, lastProcessedFrame = -1, lastDatasetClassName = null;
-    let hoveredPreviewIndex = -1, overlappingCycleIndex = 0, lastClickPosForCycle = null;
-    const canvasContainer = $('#canvas-container');
-    const drawingCanvas = document.getElementById('drawing-canvas'), drawingCtx = drawingCanvas.getContext('2d');
-    const crosshairCanvas = document.getElementById('crosshair-canvas'), crosshairCtx = crosshairCanvas.getContext('2d');
-    const frameImage = document.getElementById('frame-image'), frameSlider = $('#frame-slider');
+    $(document).ready(function() {
+        const videoUuid = "{{ video_entity.video_uuid }}";
+        const task = {{ task_entity | tojson }};
+        const frameCount = task.end_frame + 1;
 
-    // --- Bbox Editing State Variables ---
-    let editMode = null; // Can be 'resize', 'move', or null
-    let draggedHandle = null; // e.g., 'top-left', 'bottom-right'
-    let draggedBboxInitialState = null;
-    let isDraggingBbox = false;
+        let availableClasses = [];
+        let activeClass = null;
+        let bboxes = [];
+        let selectedBboxIndex = -1;
 
-    // --- Negative Sampling Variables ---
-    let negSamplingFrames = [];
-    let currentNegSampleIndex = 0;
-    let negativeSamplesStore = {};
-    const negCanvas = document.getElementById('neg-drawing-canvas'), negCtx = negCanvas.getContext('2d');
-    const negImage = document.getElementById('neg-frame-image');
-    let isDrawingNeg = false, negStartX, negStartY;
+        let history = [];
+        let historyIndex = -1;
 
-    let isCKeyPressed = false;
+        let isDrawing = false;
+        let startX, startY;
 
-    // --- Core Functions ---
-    function saveStateToHistory() { history = history.slice(0, historyIndex + 1); history.push(JSON.parse(JSON.stringify(bboxes))); historyIndex = history.length - 1; }
-    function undo() { if(historyIndex>0){historyIndex--;bboxes=JSON.parse(JSON.stringify(history[historyIndex]));selectedBboxIndex=-1;redrawCanvas();renderBboxList()} }
-    function redo() { if(historyIndex<history.length-1){historyIndex++;bboxes=JSON.parse(JSON.stringify(history[historyIndex]));selectedBboxIndex=-1;redrawCanvas();renderBboxList()} }
+        let isSamModeActive = false;
+        let sam2TrackerUuid = null;
+        let sam2EventSource = null;
+        let isReviewMode = false;
+        let trackedBboxCache = {};
 
-    function redrawCanvas() {
-        if (!frameImage.complete || frameImage.naturalWidth === 0) return;
-        const dpr = window.devicePixelRatio || 1;
-        drawingCtx.clearRect(0, 0, drawingCanvas.width / dpr, drawingCanvas.height / dpr);
-        const scaleX = frameImage.clientWidth / frameImage.naturalWidth;
-        const scaleY = frameImage.clientHeight / frameImage.naturalHeight;
+        let isInteractiveMode = false;
+        let interactiveDrawMode = 'positive';
+        let positiveExampleBboxes = [];
+        let negativeExampleBboxes = [];
+        let previewBboxes = [];
+        let currentCacheKey = null;
+        let lastProcessedFrame = -1;
+        let lastDatasetClassName = null;
+        let hoveredPreviewIndex = -1;
+        let overlappingCycleIndex = 0;
+        let lastClickPosForCycle = null;
+        let isCKeyPressed = false;
 
-        // --- MODIFICATION: Draw handles on selected bbox ---
-        bboxes.forEach((box, index) => {
-            const color = stringToColor(box.label);
-            drawingCtx.strokeStyle = color;
-            drawingCtx.lineWidth = (index === selectedBboxIndex) ? 4 / dpr : 2 / dpr;
-            drawingCtx.shadowColor = (index === selectedBboxIndex) ? 'black' : 'transparent';
-            drawingCtx.shadowBlur = (index === selectedBboxIndex) ? 6 / dpr : 0;
-            const x=box.x1*scaleX, y=box.y1*scaleY, w=(box.x2-box.x1)*scaleX, h=(box.y2-box.y1)*scaleY;
-            drawingCtx.strokeRect(x, y, w, h);
-            drawingCtx.shadowBlur = 0;
-            drawingCtx.fillStyle = color;
-            drawingCtx.font = `${12/dpr}px Arial`;
-            const tm=drawingCtx.measureText(box.label), tW=tm.width, tH=14/dpr;
-            drawingCtx.fillRect(x, y-tH, tW+(4/dpr), tH);
-            drawingCtx.fillStyle = 'white';
-            drawingCtx.fillText(box.label, x+(2/dpr), y-(2/dpr));
+        let interpolationState = {
+            isActive: false,
+            objectId: null,
+            startFrameData: null
+        };
 
-            // Draw resize handles if this bbox is selected
-            if (index === selectedBboxIndex && !isInteractiveMode) {
-                const handleSize = 8 / dpr;
-                const halfHandle = handleSize / 2;
-                const handles = {
-                    'top-left':     { x: x, y: y }, 'top-middle':   { x: x + w/2, y: y }, 'top-right':    { x: x + w, y: y },
-                    'middle-left':  { x: x, y: y + h/2 }, 'middle-right': { x: x + w, y: y + h },
-                    'bottom-left':  { x: x, y: y + h }, 'bottom-middle':{ x: x + w/2, y: y + h }, 'bottom-right': { x: x + w, y: y + h }
-                };
+        let editMode = null;
+        let draggedHandle = null;
+        let draggedBboxInitialState = null;
+        let isDraggingBbox = false;
 
-                drawingCtx.fillStyle = '#007bff';
-                for (const key in handles) {
-                    const pos = handles[key];
-                    drawingCtx.fillRect(pos.x - halfHandle, pos.y - halfHandle, handleSize, handleSize);
-                }
-            }
-        });
-        // --- END MODIFICATION ---
+        let negSamplingFrames = [];
+        let currentNegSampleIndex = 0;
+        let negativeSamplesStore = {};
+        let isDrawingNeg = false;
+        let negStartX, negStartY;
 
-        if((isInteractiveMode || previewBboxes.length > 0) && previewBboxes.length > 0) {
-            const threshold = parseFloat($('#result-threshold').val());
-            previewBboxes.forEach((res, index) => {
-                if (res.score >= threshold) {
-                    const box = res.box;
-                    if (index === hoveredPreviewIndex) {
-                        drawingCtx.strokeStyle = 'rgba(255, 193, 7, 1.0)';
-                        drawingCtx.lineWidth = 3 / dpr;
-                    } else {
-                        drawingCtx.strokeStyle = 'rgba(0, 123, 255, 0.8)';
-                        drawingCtx.lineWidth = 2 / dpr;
-                    }
-                    const x=box[0]*scaleX, y=box[1]*scaleY, w=(box[2]-box[0])*scaleX, h=(box[3]-box[1])*scaleY;
-                    drawingCtx.strokeRect(x, y, w, h);
-                    const scoreText = res.score.toFixed(2);
-                    drawingCtx.fillStyle = (index === hoveredPreviewIndex) ? 'rgba(255, 193, 7, 1.0)' : 'rgba(0, 123, 255, 0.8)';
-                    drawingCtx.font = `${10/dpr}px Arial`;
-                    drawingCtx.fillText(scoreText, x+2/dpr, y+10/dpr);
-                }
+        let toastTimeout;
+
+        const canvasContainer = $('#canvas-container');
+        const drawingCanvas = document.getElementById('drawing-canvas');
+        const drawingCtx = drawingCanvas.getContext('2d');
+        const crosshairCanvas = document.getElementById('crosshair-canvas');
+        const crosshairCtx = crosshairCanvas.getContext('2d');
+        const frameImage = document.getElementById('frame-image');
+        const frameSlider = $('#frame-slider');
+        const negCanvas = document.getElementById('neg-drawing-canvas');
+        const negCtx = negCanvas.getContext('2d');
+        const negImage = document.getElementById('neg-frame-image');
+
+        function resizeCanvas() {
+            const dpr = window.devicePixelRatio || 1;
+            const rect = frameImage.getBoundingClientRect();
+            [drawingCanvas, crosshairCanvas].forEach(canvas => {
+                canvas.style.width = `${rect.width}px`;
+                canvas.style.height = `${rect.height}px`;
+                canvas.width = Math.round(rect.width * dpr);
+                canvas.height = Math.round(rect.height * dpr);
             });
+            drawingCtx.scale(dpr, dpr);
+            crosshairCtx.scale(dpr, dpr);
+            redrawCanvas();
         }
-        if (isInteractiveMode) {
-            const drawExampleBox = (box, color) => {
-                drawingCtx.strokeStyle = color;
+
+        function redrawCanvas() {
+            if (!frameImage.complete || frameImage.naturalWidth === 0) return;
+
+            const dpr = window.devicePixelRatio || 1;
+            drawingCtx.clearRect(0, 0, drawingCanvas.width / dpr, drawingCanvas.height / dpr);
+            const scaleX = frameImage.clientWidth / frameImage.naturalWidth;
+            const scaleY = frameImage.clientHeight / frameImage.naturalHeight;
+
+            if (interpolationState.isActive) {
+                const startBox = interpolationState.startFrameData.bbox;
+                const x = startBox.x1 * scaleX,
+                    y = startBox.y1 * scaleY,
+                    w = (startBox.x2 - startBox.x1) * scaleX,
+                    h = (startBox.y2 - startBox.y1) * scaleY;
+                drawingCtx.strokeStyle = 'rgba(255, 193, 7, 0.5)';
                 drawingCtx.lineWidth = 2 / dpr;
-                drawingCtx.setLineDash([5 / dpr, 3 / dpr]);
-                const x=box.x1*scaleX, y=box.y1*scaleY, w=(box.x2-box.x1)*scaleX, h=(box.y2-box.y1)*scaleY;
+                drawingCtx.setLineDash([4 / dpr, 4 / dpr]);
                 drawingCtx.strokeRect(x, y, w, h);
                 drawingCtx.setLineDash([]);
-            };
-            positiveExampleBboxes.forEach(box => drawExampleBox(box, 'rgba(40, 167, 69, 0.9)'));
-            negativeExampleBboxes.forEach(box => drawExampleBox(box, 'rgba(220, 53, 69, 0.9)'));
-        }
-    }
-
-    // --- Helper and Init Functions ---
-    const processFrameDataAndUpdateUI = (frameData) => {
-        const manualBboxes = parseBboxesFromString(frameData ? frameData.bboxes_text : '');
-        clearInteractiveSession(false);
-        if (manualBboxes.length > 0) {
-            bboxes = manualBboxes;
-        } else {
-            bboxes = [];
-            const suggestedBboxesText = frameData ? frameData.suggested_bboxes_text : '';
-            const suggestedBboxes = parseBboxesFromString(suggestedBboxesText);
-            if (suggestedBboxes.length > 0) {
-                 previewBboxes = suggestedBboxes.map(b => ({ box: [b.x1, b.y1, b.x2, b.y2], score: 0.99, label: b.label }));
-                 $('#interactive-results-controls').slideDown();
-                 showToast(`${suggestedBboxes.length} AI suggestions loaded for review.`, 3000);
             }
-        }
-        history = [JSON.parse(JSON.stringify(bboxes))];
-        historyIndex = 0;
-        selectedBboxIndex = -1;
-        redrawCanvas();
-        renderBboxList();
-    };
-    function loadBboxesForFrame(frameNumber) {
-        if(isReviewMode){const t=trackedBboxCache[frameNumber];return void processFrameDataAndUpdateUI({bboxes_text:t||""})}
-        if(window.cachedFrames) {
-            processFrameDataAndUpdateUI(window.cachedFrames.find(f => f.frame_number == frameNumber));
-        } else {
-            $.ajax({
-                url: "/retrieveVideoFrames", type: "POST", contentType: "application/json",
-                data: JSON.stringify({ video_uuid: videoUuid }),
-                success: function(response) {
-                    if (response.success) {
-                        window.cachedFrames = response.frames;
-                        processFrameDataAndUpdateUI(window.cachedFrames.find(f => f.frame_number == frameNumber));
+
+            bboxes.forEach((box, index) => {
+                const color = stringToColor(box.label);
+                drawingCtx.strokeStyle = color;
+                drawingCtx.lineWidth = (index === selectedBboxIndex) ? 4 / dpr : 2 / dpr;
+                drawingCtx.shadowColor = (index === selectedBboxIndex) ? 'black' : 'transparent';
+                drawingCtx.shadowBlur = (index === selectedBboxIndex) ? 6 / dpr : 0;
+
+                if (interpolationState.isActive && box.id === interpolationState.objectId) {
+                    drawingCtx.strokeStyle = '#28a745';
+                    drawingCtx.shadowColor = 'black';
+                    drawingCtx.shadowBlur = 8 / dpr;
+                    drawingCtx.setLineDash([5 / dpr, 3 / dpr]);
+                }
+
+                const x = box.x1 * scaleX,
+                    y = box.y1 * scaleY,
+                    w = (box.x2 - box.x1) * scaleX,
+                    h = (box.y2 - box.y1) * scaleY;
+                drawingCtx.strokeRect(x, y, w, h);
+                drawingCtx.setLineDash([]);
+                drawingCtx.shadowBlur = 0;
+
+                drawingCtx.fillStyle = interpolationState.isActive && box.id === interpolationState.objectId ? '#28a745' : color;
+                drawingCtx.font = `${12/dpr}px Arial`;
+                const textMetrics = drawingCtx.measureText(box.label);
+                const textWidth = textMetrics.width;
+                const textHeight = 14 / dpr;
+                drawingCtx.fillRect(x, y - textHeight, textWidth + (4 / dpr), textHeight);
+                drawingCtx.fillStyle = 'white';
+                drawingCtx.fillText(box.label, x + (2 / dpr), y - (2 / dpr));
+
+                if (index === selectedBboxIndex && !isInteractiveMode) {
+                    const handleSize = 8 / dpr;
+                    const halfHandle = handleSize / 2;
+                    const handles = {
+                        'top-left': { x: x, y: y },
+                        'top-middle': { x: x + w / 2, y: y },
+                        'top-right': { x: x + w, y: y },
+                        'middle-left': { x: x, y: y + h / 2 },
+                        'middle-right': { x: x + w, y: y + h / 2 },
+                        'bottom-left': { x: x, y: y + h },
+                        'bottom-middle': { x: x + w / 2, y: y + h },
+                        'bottom-right': { x: x + w, y: y + h }
+                    };
+                    drawingCtx.fillStyle = '#007bff';
+                    for (const key in handles) {
+                        const pos = handles[key];
+                        drawingCtx.fillRect(pos.x - halfHandle, pos.y - halfHandle, handleSize, handleSize);
                     }
                 }
             });
-        }
-    }
-    frameImage.onload = function() {
-        bboxes = [];
-        selectedBboxIndex = -1;
-        resizeCanvas();
-        loadBboxesForFrame(frameSlider.val());
-        const currentFrame = parseInt(frameSlider.val());
-        if (lastProcessedFrame !== -1 && lastProcessedFrame !== currentFrame) {
-             clearInteractiveSession();
-        }
-    };
-    frameImage.addEventListener('dragstart', (e) => e.preventDefault());
-    window.onresize = resizeCanvas;
-    frameSlider.on("input", function() {
-        const frameNumber = $(this).val();
-        $("#frame-number-display").text(frameNumber);
-        const imageUrl = `/media/frames/${videoUuid}/frame_${String(frameNumber).padStart(5, "0")}.jpg`;
-        if (frameImage.src.endsWith(imageUrl) === false) {
-            frameImage.src = imageUrl;
-        } else if (frameImage.complete) {
-            loadBboxesForFrame(frameNumber);
-        }
-    });
-    let toastTimeout; function showToast(t,e=3e3){const s=$("#toast-notification");s.text(t).addClass("show"),toastTimeout&&clearTimeout(toastTimeout),toastTimeout=setTimeout(()=>{s.removeClass("show")},e)}
-    function renderBboxList(){const list=$("#bbox-list");list.empty();bboxes.forEach((box,index)=>{const t=document.getElementById("bbox-item-template").content.cloneNode(!0),e=stringToColor(box.label),s=$(t).find("li");s.attr("data-index",index),index===selectedBboxIndex&&s.addClass("selected"),$(t).find(".color-swatch").css("background-color",e),$(t).find(".bbox-label").text(box.label),$(t).find(".delete-bbox-btn").attr("data-index",index),list.append(t)})}
-    function renderClassList(){const list=$("#class-list");list.empty(),availableClasses.forEach(t=>{const e=stringToColor(t),s=`<span class="color-swatch" style="background-color: ${e};"></span>`,o=$(`<li class="list-group-item">${s}${t}</li>`);o.attr("data-class-name",t),t===activeClass&&o.addClass("active").css({"background-color":e,"border-color":e}),list.append(o)})}
-    function stringToColor(t){let e=0;for(let s=0;s<t.length;s++)e=t.charCodeAt(s)+((e<<5)-e);return`hsl(${(e%360+360)%360}, 80%, 50%)`}
-    function resizeCanvas(){const t=window.devicePixelRatio||1,e=frameImage.getBoundingClientRect();[drawingCanvas,crosshairCanvas].forEach(s=>{s.style.width=`${e.width}px`,s.style.height=`${e.height}px`,s.width=Math.round(e.width*t),s.height=Math.round(e.height*t)}),drawingCtx.scale(t,t),crosshairCtx.scale(t,t),redrawCanvas()}
-    function drawCrosshairs(x, y){if(isDrawing || isReviewMode || isDraggingBbox) return; const dpr=window.devicePixelRatio||1;crosshairCtx.clearRect(0,0,crosshairCanvas.width/dpr,crosshairCanvas.height/dpr);crosshairCtx.strokeStyle="rgba(0,0,255,0.7)";crosshairCtx.lineWidth=1/dpr;crosshairCtx.setLineDash([4/dpr,4/dpr]);crosshairCtx.beginPath();crosshairCtx.moveTo(0,y);crosshairCtx.lineTo(crosshairCanvas.width/dpr,y);crosshairCtx.stroke();crosshairCtx.beginPath();crosshairCtx.moveTo(x,0);crosshairCtx.lineTo(x,crosshairCanvas.height/dpr);crosshairCtx.stroke()}
-    function clearCrosshairs(){const t=window.devicePixelRatio||1;crosshairCtx.clearRect(0,0,crosshairCanvas.width/t,crosshairCanvas.height/t)}
-    function getMousePos(t,e){const s=t.getBoundingClientRect();return{x:e.clientX-s.left,y:e.clientY-s.top}}
 
-    // --- New Helper for Bbox Editing ---
-    function getHandleAtPos(x, y) {
-        if (selectedBboxIndex === -1) return null;
-
-        const dpr = window.devicePixelRatio || 1;
-        const scaleX = frameImage.clientWidth / frameImage.naturalWidth;
-        const scaleY = frameImage.clientHeight / frameImage.naturalHeight;
-        const box = bboxes[selectedBboxIndex];
-        const bx = box.x1 * scaleX, by = box.y1 * scaleY, bw = (box.x2 - box.x1) * scaleX, bh = (box.y2 - box.y1) * scaleY;
-
-        const handleSize = 8; // Use a slightly larger hit area
-        const handles = {
-            'top-left':     { x: bx, y: by }, 'top-middle':   { x: bx + bw/2, y: by }, 'top-right':    { x: bx + bw, y: by },
-            'middle-left':  { x: bx, y: by + bh/2 }, 'middle-right': { x: bx + bw, y: by + bh/2 },
-            'bottom-left':  { x: bx, y: by + bh }, 'bottom-middle':{ x: bx + bw/2, y: by + bh }, 'bottom-right': { x: bx + bw, y: by + bh }
-        };
-
-        for (const key in handles) {
-            const pos = handles[key];
-            if (x >= pos.x - handleSize && x <= pos.x + handleSize &&
-                y >= pos.y - handleSize && y <= pos.y + handleSize) {
-                return key;
-            }
-        }
-        return null;
-    }
-
-    function addClass(t){t&&!availableClasses.includes(t)&&$.ajax({url:"/addClass",type:"POST",contentType:"application/json",data:JSON.stringify({label_name:t}),success:function(){availableClasses.push(t),renderClassList()},error:function(){showToast("Error: Failed to add new class.",3e3)}})}
-    function formatBboxesToString(){return bboxes.filter(t=>null!=t.x1&&null!=t.y1&&null!=t.x2&&null!=t.y2&&!isNaN(t.x1)&&!isNaN(t.y1)&&!isNaN(t.x2)&&!isNaN(t.y2)).map(t=>`${t.x1},${t.y1},${t.x2},${t.y2},${t.label}`).join("\n")}
-    function parseBboxesFromString(t){if(!t)return[];return t.split("\n").filter(l=>l.trim()!=="").map(l=>{const p=l.split(",");return p.length<5?null:{x1:parseInt(p[0]),y1:parseInt(p[1]),x2:parseInt(p[2]),y2:parseInt(p[3]),label:p.slice(4).join(",")}}).filter(b=>b!==null)}
-
-    // ... [All AI, Tracking, and other functions remain the same] ...
-    function setTrackingUiState(t){isReviewMode=t,$("#track-controls").slideToggle(t),$("#save-bboxes, #sam-toggle-btn, #sam2-track-btn, #interactive-mode-toggle").slideToggle(!t),t||($("#track-progress-bar").css("width","0%").text("0%").removeClass("bg-success bg-danger").addClass("progress-bar-animated"),$("#track-status-header").text("Tracking..."),$("#stop-sam2-track-btn").prop("disabled",!1).text("Stop Tracking"),$("#save-all-tracked-btn").prop("disabled",!0),sam2TrackerUuid=null,sam2EventSource&&(sam2EventSource.close(),sam2EventSource=null))}
-    function exitReviewMode(){setTrackingUiState(!1),trackedBboxCache={},showToast("Exited tracking/review mode.",2e3),frameSlider.trigger("input")}
-    function handleSseEvent(t){switch(t.event){case"update":trackedBboxCache[t.frame_number]=t.bboxes_text;const e=t.total>0?Math.round(t.progress/t.total*100):0;$("#track-progress-bar").css("width",e+"%").text(e+"%");const s=t.frame_number;if(s<=parseInt(frameSlider.attr("max"))){frameSlider.val(s),$("#frame-number-display").text(s);const o=`/media/frames/${videoUuid}/frame_${String(s).padStart(5,"0")}.jpg`;frameImage.src.endsWith(o)||(frameImage.src=o)}break;case"completed":case"stopped":case"failed":handleTrackingEnd(t.event.toUpperCase(),t.message);break;case"error":alert("Tracking Stream Error: "+t.message),handleTrackingEnd("FAILED",t.message)}}
-    function handleTrackingEnd(t,e){sam2EventSource&&(sam2EventSource.close(),sam2EventSource=null),$("#sam2-track-btn").prop("disabled",!1),$("#stop-sam2-track-btn").prop("disabled",!0);const s=$("#track-progress-bar");s.removeClass("progress-bar-animated");let o="Review Results";"COMPLETED"===t?(o="Tracking Completed. Review Results.",s.css("width","100%").text("100%").addClass("bg-success")):"STOPPED"===t?o="Tracking Stopped. Review Results.":"FAILED"===t&&(o="Tracking Failed. Review Partial Results.",s.addClass("bg-danger")),$("#track-status-header").text(o),$("#save-all-tracked-btn").prop("disabled",0===Object.keys(trackedBboxCache).length),showToast(o+(e?` (${e})`:""),4e3);const a=Math.min(...Object.keys(trackedBboxCache).map(Number));isFinite(a)&&frameSlider.val(a).trigger("input")}
-    $('#sam2-track-btn').on('click',function(){if(0===bboxes.length)return void alert("Please label at least one object on the current frame to start tracking.");const t=parseInt(frameSlider.val()),e=parseInt(frameSlider.attr("max"));confirm(`This will start tracking ${bboxes.length} object(s) from frame ${t} to ${e}. Continue?`)&&($(this).prop("disabled",!0),setTrackingUiState(!0),trackedBboxCache={},trackedBboxCache[t]=formatBboxesToString(),$.ajax({url:"/startSam2Tracking",type:"POST",contentType:"application/json",data:JSON.stringify({video_uuid:videoUuid,start_frame:t,end_frame:e,init_bboxes_text:formatBboxesToString()}),success:res=>{res.success?(sam2TrackerUuid=res.tracker_uuid,sam2EventSource=new EventSource(`/streamSam2Tracking/${sam2TrackerUuid}`),sam2EventSource.onmessage=function(t){const e=JSON.parse(t.data);handleSseEvent(e)},sam2EventSource.onerror=function(t){showToast("Connection to tracking stream lost.",3e3),console.error("EventSource failed:",t),handleTrackingEnd("FAILED","Connection lost"),sam2EventSource&&sam2EventSource.close()}):(alert("Error starting tracking: "+res.message),exitReviewMode())},error:()=>{alert("Server error starting tracking."),exitReviewMode()}}))});
-    $('#stop-sam2-track-btn').on('click',function(){sam2TrackerUuid&&($(this).prop("disabled",!0).text("Stopping..."),$.ajax({url:"/stopSam2Tracking",type:"POST",contentType:"application/json",data:JSON.stringify({tracker_uuid:sam2TrackerUuid})} ))});
-    $('#exit-track-mode-btn').on('click',exitReviewMode);
-    $('#save-all-tracked-btn').on('click',function(){if(confirm(`This will save all ${Object.keys(trackedBboxCache).length} reviewed annotations to the database. Are you sure?`)){const t=Object.entries(trackedBboxCache).map(([e,s])=>$.ajax({url:"/storeVideoFrameBboxesText",type:"POST",contentType:"application/json",data:JSON.stringify({video_uuid:videoUuid,frame_number:parseInt(e),bboxes_text:s})}));showToast(`Saving ${t.length} frames...`,5e3),Promise.all(t).then(()=>{showToast("All tracked frames saved successfully!",3e3),window.cachedFrames=null,exitReviewMode()}).catch(t=>{alert("An error occurred while saving some frames."),console.error(t)})}});
-    $('#interactive-mode-toggle').on('click', function() {isInteractiveMode = !isInteractiveMode;$(this).toggleClass('active', isInteractiveMode);$('#interactive-segment-controls').slideToggle(isInteractiveMode);if (isInteractiveMode) {$(this).html('<i class="bi bi-stars"></i> Smart Select ON');clearCrosshairs();} else {$(this).html('<i class="bi bi-stars"></i> Enable Smart Select');clearInteractiveSession();}updateSamButtonText();});
-    $('#draw-positive-btn').on('click', function() { interactiveDrawMode='positive'; $(this).addClass('active'); $('#draw-negative-btn').removeClass('active'); });
-    $('#draw-negative-btn').on('click', function() { interactiveDrawMode='negative'; $(this).addClass('active'); $('#draw-positive-btn').removeClass('active'); });
-    $('#clear-samples-btn').on('click', function() { clearInteractiveSession(); showToast('Sample boxes cleared.', 2000); });
-    function getHyperparameters() {return {weights: [parseFloat($('#w1').val()), parseFloat($('#w2').val()), parseFloat($('#w3').val()), parseFloat($('#w4').val())],batch_size: parseInt($('#batch-size').val()),interpolation_size: parseInt($('#interp-size').val()),};}
-    $('#find-similar-btn').on('click', function() {if(positiveExampleBboxes.length===0){alert('Please create at least one positive sample box first!');return}lastDatasetClassName = null; $('#apply-to-video-btn').prop('disabled', true);const frameNumber=parseInt(frameSlider.val()),$button=$(this);$button.prop('disabled',!0).html('<span class="spinner-border spinner-border-sm"></span> Finding...');const runPrediction=()=>{showToast('Predicting with current samples...',4e3);const payload={cache_key:currentCacheKey,prompt_boxes:positiveExampleBboxes.map(b=>[b.x1,b.y1,b.x2,b.y2]),negative_boxes:negativeExampleBboxes.map(b=>[b.x1,b.y1,b.x2,b.y2]),hyperparameters: getHyperparameters()};$.ajax({url:'/interactive_segment/predict',type:'POST',contentType:'application/json',data:JSON.stringify(payload),success:res=>{if(res.success){previewBboxes=res.results;$('#interactive-results-controls').slideDown();$('#result-threshold').trigger('input');redrawCanvas()}else alert('Prediction failed: '+res.message)},error:()=>alert('Server error during prediction.'),complete:()=>$button.prop('disabled',!1).html('<i class="bi bi-search"></i> Find Similar Objects')})};if(lastProcessedFrame!==frameNumber){showToast('Preprocessing frame... (this may take a moment)',1e4);const payload = { video_uuid:videoUuid, frame_number:frameNumber, hyperparameters: getHyperparameters() };$.ajax({url:'/interactive_segment/preprocess',type:'POST',contentType:'application/json',data:JSON.stringify(payload),success:res=>{if(res.success){currentCacheKey=res.cache_key;lastProcessedFrame=frameNumber;runPrediction()}else{alert('Preprocessing failed: '+res.message);$button.prop('disabled',!1).html('<i class="bi bi-search"></i> Find Similar Objects')}},error:()=>{alert('Server error during preprocessing.');$button.prop('disabled',!1).html('<i class="bi bi-search"></i> Find Similar Objects')}})}else runPrediction()});
-    $('#find-from-dataset-btn').on('click', function() {
-        if (!activeClass) { alert('Please select a class first!'); return; }
-        const frameNumber = parseInt(frameSlider.val());
-        const $button = $(this);
-        $button.prop('disabled', true);
-        showToast(`Learning from all '${activeClass}' examples in the dataset...`, 10000);
-        const payload = { video_uuid: videoUuid, frame_number: frameNumber, class_name: activeClass, hyperparameters: getHyperparameters() };
-        $.ajax({
-            url: '/interactive_segment/predict_from_dataset', type: 'POST', contentType: 'application/json', data: JSON.stringify(payload),
-            success: function(res) {
-                if (res.success) {
-                    previewBboxes = res.results;
-                    lastDatasetClassName = activeClass;
-                    $('#interactive-results-controls').slideDown();
-                    $('#result-threshold').trigger('input');
-                    redrawCanvas();
-                    showToast(`Found ${res.results.length} potential '${activeClass}' objects.`, 4000);
-                    setTimeout(() => {
-                        if (confirm(`Find from Dataset for '${activeClass}' successful.\n\nDo you want to refine the model by adding negative samples (e.g., background)? This can improve accuracy.`)) {
-                            const frameCountStr = prompt("How many random frames would you like to label for negative samples?", "10");
-                            const frameCount = frameCountStr ? parseInt(frameCountStr) : 0;
-                            if (frameCount && !isNaN(frameCount) && frameCount > 0) {
-                                startNegativeSampling(frameCount);
-                            } else {
-                                $('#apply-to-video-btn').prop('disabled', false);
-                            }
+            if ((isInteractiveMode || previewBboxes.length > 0) && previewBboxes.length > 0) {
+                const threshold = parseFloat($('#result-threshold').val());
+                previewBboxes.forEach((res, index) => {
+                    if (res.score >= threshold) {
+                        const box = res.box;
+                        if (index === hoveredPreviewIndex) {
+                            drawingCtx.strokeStyle = 'rgba(255, 193, 7, 1.0)';
+                            drawingCtx.lineWidth = 3 / dpr;
                         } else {
-                            $('#apply-to-video-btn').prop('disabled', false);
+                            drawingCtx.strokeStyle = 'rgba(0, 123, 255, 0.8)';
+                            drawingCtx.lineWidth = 2 / dpr;
                         }
-                    }, 500);
-                } else { alert('Dataset-driven prediction failed: ' + res.message); }
-            },
-            error: function() { alert('Server error during dataset-driven prediction.'); },
-            complete: function() { $button.prop('disabled', false); }
-        });
-    });
-    function startNegativeSampling(count) {
-        showToast(`Fetching ${count} random frames for negative sampling...`);
-        $.ajax({
-            url: '/api/get_random_frames_for_neg_sampling', type: 'POST',
-            contentType: 'application/json',
-            data: JSON.stringify({ video_uuid: videoUuid, count: count }),
-            success: function(res) {
-                if (res.success && res.frames.length > 0) {
-                    negSamplingFrames = res.frames;
-                    currentNegSampleIndex = 0;
-                    negativeSamplesStore = {};
-                    loadNegativeSampleFrame();
-                    $('#negative-sampling-modal').modal({backdrop: 'static', keyboard: false});
-                } else {
-                    alert("Failed to fetch random frames: " + (res.message || "No frames returned."));
+                        const x = box[0] * scaleX,
+                            y = box[1] * scaleY,
+                            w = (box[2] - box[0]) * scaleX,
+                            h = (box[3] - box[1]) * scaleY;
+                        drawingCtx.strokeRect(x, y, w, h);
+
+                        const scoreText = res.score.toFixed(2);
+                        drawingCtx.fillStyle = (index === hoveredPreviewIndex) ? 'rgba(255, 193, 7, 1.0)' : 'rgba(0, 123, 255, 0.8)';
+                        drawingCtx.font = `${10/dpr}px Arial`;
+                        drawingCtx.fillText(scoreText, x + 2 / dpr, y + 10 / dpr);
+                    }
+                });
+            }
+
+            if (isInteractiveMode) {
+                const drawExampleBox = (box, color) => {
+                    drawingCtx.strokeStyle = color;
+                    drawingCtx.lineWidth = 2 / dpr;
+                    drawingCtx.setLineDash([5 / dpr, 3 / dpr]);
+                    const x = box.x1 * scaleX,
+                        y = box.y1 * scaleY,
+                        w = (box.x2 - box.x1) * scaleX,
+                        h = (box.y2 - box.y1) * scaleY;
+                    drawingCtx.strokeRect(x, y, w, h);
+                    drawingCtx.setLineDash([]);
+                };
+                positiveExampleBboxes.forEach(box => drawExampleBox(box, 'rgba(40, 167, 69, 0.9)'));
+                negativeExampleBboxes.forEach(box => drawExampleBox(box, 'rgba(220, 53, 69, 0.9)'));
+            }
+        }
+
+        function renderBboxList() {
+            const list = $("#bbox-list");
+            list.empty();
+            bboxes.forEach((box, index) => {
+                const template = document.getElementById("bbox-item-template").content.cloneNode(true);
+                const color = stringToColor(box.label);
+                const listItem = $(template).find("li");
+
+                listItem.attr("data-index", index);
+                if (index === selectedBboxIndex) {
+                    listItem.addClass("selected");
                 }
-            },
-            error: function() { alert("Server error while fetching random frames."); }
-        });
-    }
-    function loadNegativeSampleFrame() {
-        if (currentNegSampleIndex < 0 || currentNegSampleIndex >= negSamplingFrames.length) return;
-        const frameData = negSamplingFrames[currentNegSampleIndex];
-        $('#neg-frame-counter').text(`Frame ${currentNegSampleIndex + 1} / ${negSamplingFrames.length}`);
-        negImage.onload = () => {
-            const dpr = window.devicePixelRatio || 1;
-            const rect = negImage.getBoundingClientRect();
-            negCanvas.style.width = `${rect.width}px`;
-            negCanvas.style.height = `${rect.height}px`;
-            negCanvas.width = Math.round(rect.width * dpr);
-            negCanvas.height = Math.round(rect.height * dpr);
-            negCtx.scale(dpr, dpr);
-            redrawNegCanvas();
-        };
-        negImage.src = frameData.image_url;
-    }
-    function redrawNegCanvas() {
-        const dpr = window.devicePixelRatio || 1;
-        negCtx.clearRect(0, 0, negCanvas.width / dpr, negCanvas.height / dpr);
-        if (negSamplingFrames.length === 0) return;
-        const frameData = negSamplingFrames[currentNegSampleIndex];
-        const frameKey = `${frameData.video_uuid};${frameData.frame_number}`;
-        const boxes = negativeSamplesStore[frameKey] || [];
-        if (!negImage.naturalWidth) return;
-        const scaleX = negImage.clientWidth / negImage.naturalWidth;
-        const scaleY = negImage.clientHeight / negImage.naturalHeight;
-        boxes.forEach(box => {
-            negCtx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
-            negCtx.lineWidth = 2 / dpr;
-            negCtx.setLineDash([5 / dpr, 3 / dpr]);
-            const x = box[0] * scaleX, y = box[1] * scaleY;
-            const w = (box[2] - box[0]) * scaleX, h = (box[3] - box[1]) * scaleY;
-            negCtx.strokeRect(x, y, w, h);
-            negCtx.setLineDash([]);
-        });
-    }
-    $('#neg-canvas-container').on('mousedown', function(e) {
-        isDrawingNeg = true;
-        const pos = getMousePos(negCanvas, e);
-        negStartX = pos.x;
-        negStartY = pos.y;
-    }).on('mousemove', function(e) {
-        if (!isDrawingNeg) return;
-        redrawNegCanvas();
-        const pos = getMousePos(negCanvas, e);
-        const dpr = window.devicePixelRatio || 1;
-        negCtx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
-        negCtx.lineWidth = 2 / dpr;
-        negCtx.setLineDash([5 / dpr, 3 / dpr]);
-        negCtx.strokeRect(negStartX, negStartY, pos.x - negStartX, pos.y - negStartY);
-        negCtx.setLineDash([]);
-    }).on('mouseup', function(e) {
-        if (!isDrawingNeg) return;
-        isDrawingNeg = false;
-        const pos = getMousePos(negCanvas, e);
-        const scaleX = negImage.naturalWidth / negImage.clientWidth;
-        const scaleY = negImage.naturalHeight / negImage.clientHeight;
-        const x1 = Math.round(Math.min(negStartX, pos.x) * scaleX);
-        const y1 = Math.round(Math.min(negStartY, pos.y) * scaleY);
-        const x2 = Math.round(Math.max(negStartX, pos.x) * scaleX);
-        const y2 = Math.round(Math.max(negStartY, pos.y) * scaleY);
-        if (Math.abs(x1 - x2) < 5 || Math.abs(y1 - y2) < 5) { redrawNegCanvas(); return; }
-        const frameData = negSamplingFrames[currentNegSampleIndex];
-        const frameKey = `${frameData.video_uuid};${frameData.frame_number}`;
-        if (!negativeSamplesStore[frameKey]) { negativeSamplesStore[frameKey] = []; }
-        negativeSamplesStore[frameKey].push([x1, y1, x2, y2]);
-        redrawNegCanvas();
-    });
-    $('#neg-prev-btn').on('click', function() { if (currentNegSampleIndex > 0) { currentNegSampleIndex--; loadNegativeSampleFrame(); } });
-    $('#neg-next-btn').on('click', function() { if (currentNegSampleIndex < negSamplingFrames.length - 1) { currentNegSampleIndex++; loadNegativeSampleFrame(); } });
-    $('#finish-neg-sampling-btn').on('click', function() {
-        $('#negative-sampling-modal').modal('hide');
-        const finalNegativeSamples = Object.fromEntries( Object.entries(negativeSamplesStore).filter(([key, value]) => value.length > 0) );
-        if (Object.keys(finalNegativeSamples).length > 0) { showToast(`Refining model with ${Object.keys(finalNegativeSamples).length} frames of negative samples.`); } else { showToast("No negative samples were added. Applying original model."); }
-        triggerApplyToVideo(finalNegativeSamples);
-    });
-    $('#apply-to-video-btn').on('click', function() { triggerApplyToVideo(null); });
-    function undoNegativeSample() {
-        if (currentNegSampleIndex < 0 || currentNegSampleIndex >= negSamplingFrames.length) return;
-        const frameData = negSamplingFrames[currentNegSampleIndex];
-        const frameKey = `${frameData.video_uuid};${frameData.frame_number}`;
-        if (negativeSamplesStore[frameKey] && negativeSamplesStore[frameKey].length > 0) {
-            negativeSamplesStore[frameKey].pop();
-            redrawNegCanvas();
-            showToast('Last negative sample removed.', 1500);
-        } else {
-            showToast('Nothing to undo on this frame.', 1500);
-        }
-    }
-    function clearCurrentNegativeSamples() {
-        if (currentNegSampleIndex < 0 || currentNegSampleIndex >= negSamplingFrames.length) return;
-        const frameData = negSamplingFrames[currentNegSampleIndex];
-        const frameKey = `${frameData.video_uuid};${frameData.frame_number}`;
-        if (negativeSamplesStore[frameKey] && negativeSamplesStore[frameKey].length > 0) {
-            negativeSamplesStore[frameKey] = [];
-            redrawNegCanvas();
-            showToast('All negative samples cleared for this frame.', 1500);
-        }
-    }
-    function triggerApplyToVideo(negativeSamples) {
-        if (!lastDatasetClassName) { alert("An error occurred. The class to apply is unknown."); return; }
-        const confirmMessage = negativeSamples && Object.keys(negativeSamples).length > 0
-            ? `This will start a background task to apply the REFINED model for '${lastDatasetClassName}' to all unlabeled frames. Continue?`
-            : `This will start a background task to apply the learned features for '${lastDatasetClassName}' to all unlabeled frames. Continue?`;
-        if (confirm(confirmMessage)) {
-            const payload = { video_uuid: videoUuid, class_name: lastDatasetClassName, negative_samples: negativeSamples };
-            $('#apply-to-video-btn').prop('disabled', true);
-            $.ajax({
-                url: '/apply_prototypes_to_video', type: 'POST', contentType: 'application/json', data: JSON.stringify(payload),
-                success: function(res) {
-                    if (res.success) {
-                        alert("Task started successfully! You can now close this page. The video status will update on the main page.");
-                        window.location.href = "/";
+
+                $(template).find(".color-swatch").css("background-color", color);
+                $(template).find(".bbox-label").text(box.label);
+                $(template).find(".bbox-id").text(box.id ? `ID: ${box.id.substring(0, 4)}` : 'No ID');
+                $(template).find(".delete-bbox-btn").attr("data-index", index);
+
+                const interpolateBtn = $(template).find(".interpolate-btn");
+                if (interpolationState.isActive) {
+                    if (interpolationState.objectId === box.id) {
+                        interpolateBtn.removeClass('btn-info').addClass('btn-success')
+                            .html('<i class="bi bi-check-circle"></i> Confirm')
+                            .attr('title', `Confirm interpolation from frame ${interpolationState.startFrameData.frame_number}`)
+                            .prop('disabled', false);
                     } else {
-                        alert("Failed to start task: " + res.message);
-                        $('#apply-to-video-btn').prop('disabled', false);
-                    }
-                },
-                error: function() {
-                    alert("Server error when trying to start the task.");
-                    $('#apply-to-video-btn').prop('disabled', false);
-                }
-            });
-        }
-    }
-    $('#result-threshold').on('input', function() { const t=parseFloat($(this).val());$('#threshold-value').text(t.toFixed(2));redrawCanvas() });
-    $('#accept-visible-btn').on('click', function() {
-        if(!activeClass){alert('Please select a class before accepting results.');return}
-        const threshold = parseFloat($('#result-threshold').val());
-        let addedCount = 0;
-        const remainingPreviews = [];
-        previewBboxes.forEach(res => {
-            if (res.score >= threshold) {
-                const b = res.box;
-                bboxes.push({ x1: b[0], y1: b[1], x2: b[2], y2: b[3], label: res.label || activeClass });
-                addedCount++;
-            } else {
-                remainingPreviews.push(res);
-            }
-        });
-        if (addedCount > 0) {
-            previewBboxes = remainingPreviews;
-            saveStateToHistory(); renderBboxList(); redrawCanvas();
-            showToast(`${addedCount} new bounding boxes added.`, 2000);
-        } else {
-            showToast('No boxes above the current threshold to accept.', 2000);
-        }
-    });
-    $('#finish-interactive-btn').on('click', clearInteractiveSession);
-    function clearInteractiveSession(shouldRedraw = true) {
-        positiveExampleBboxes = []; negativeExampleBboxes = []; previewBboxes = [];
-        lastDatasetClassName = null;
-        $('#apply-to-video-btn').prop('disabled', true);
-        hoveredPreviewIndex = -1;
-        overlappingCycleIndex = 0;
-        lastClickPosForCycle = null;
-        $('#interactive-results-controls').slideUp();
-        if (shouldRedraw) redrawCanvas();
-    }
-
-    // --- Rewritten Mouse Event Handlers for Bbox Editing ---
-    canvasContainer.on('mousedown', function(e) {
-        if (isReviewMode || isSamModeActive) return; // Editing not allowed in these modes
-
-        const pos = getMousePos(drawingCanvas, e);
-
-        // --- Logic for Interactive Mode (unchanged) ---
-        if((isInteractiveMode || previewBboxes.length > 0) && previewBboxes.length > 0) {
-            if(!activeClass){alert("Please select a class from the list to assign it."); return}
-            const threshold = parseFloat($('#result-threshold').val());
-            const scaleX = frameImage.clientWidth/frameImage.naturalWidth, scaleY=frameImage.clientHeight/frameImage.naturalHeight;
-            let targetBoxIndex = -1;
-            const overlappingIndices = [];
-            previewBboxes.forEach((res, index) => {
-                if (res.score >= threshold) {
-                    const b = res.box;
-                    if(pos.x > b[0]*scaleX && pos.x < b[2]*scaleX && pos.y > b[1]*scaleY && pos.y < b[3]*scaleY) {
-                        overlappingIndices.unshift(index);
+                        interpolateBtn.prop('disabled', true);
                     }
                 }
+                list.append(template);
             });
-            if (overlappingIndices.length > 0) {
-                e.preventDefault();
-                if (isCKeyPressed) {
-                    const isSameClickLocation = lastClickPosForCycle && Math.abs(lastClickPosForCycle.x-pos.x)<5 && Math.abs(lastClickPosForCycle.y-pos.y)<5;
-                    overlappingCycleIndex = isSameClickLocation ? (overlappingCycleIndex + 1) % overlappingIndices.length : 0;
-                    targetBoxIndex = overlappingIndices[overlappingCycleIndex];
-                    lastClickPosForCycle = pos;
-                } else {
-                    targetBoxIndex = overlappingIndices[0];
-                    lastClickPosForCycle = null;
+        }
+
+        function renderClassList() {
+            const list = $("#class-list");
+            list.empty();
+            availableClasses.forEach(className => {
+                const color = stringToColor(className);
+                const colorSwatch = `<span class="color-swatch" style="background-color: ${color};"></span>`;
+                const listItem = $(`<li class="list-group-item">${colorSwatch}${className}</li>`);
+                listItem.attr("data-class-name", className);
+                if (className === activeClass) {
+                    listItem.addClass("active").css({
+                        "background-color": color,
+                        "border-color": color
+                    });
                 }
-                const res = previewBboxes[targetBoxIndex];
-                const b = res.box;
-                bboxes.push({x1:b[0], y1:b[1], x2:b[2], y2:b[3], label: res.label || activeClass});
-                previewBboxes.splice(targetBoxIndex, 1);
-                saveStateToHistory(); renderBboxList(); hoveredPreviewIndex = -1; redrawCanvas();
-                return;
-            }
-        }
-        if (isInteractiveMode) {
-            isDrawing = true; startX = pos.x; startY = pos.y; clearCrosshairs();
-            return;
-        }
-        // --- End of Interactive Mode Logic ---
-
-        // --- Start of New Editing/Drawing Logic ---
-        draggedHandle = getHandleAtPos(pos.x, pos.y);
-        if (draggedHandle) {
-            isDraggingBbox = true;
-            editMode = 'resize';
-            draggedBboxInitialState = JSON.parse(JSON.stringify(bboxes[selectedBboxIndex]));
-            return;
+                list.append(listItem);
+            });
         }
 
-        const scaleX = frameImage.clientWidth / frameImage.naturalWidth;
-        const scaleY = frameImage.clientHeight / frameImage.naturalHeight;
-        let clickedOnBoxIndex = -1;
-        for (let i = bboxes.length - 1; i >= 0; i--) {
-            const box = bboxes[i];
-            const bx = box.x1 * scaleX, by = box.y1 * scaleY, bw = (box.x2 - box.x1) * scaleX, bh = (box.y2 - box.y1) * scaleY;
-            if (pos.x > bx && pos.x < bx + bw && pos.y > by && pos.y < by + bh) {
-                clickedOnBoxIndex = i;
-                break;
-            }
-        }
-
-        if (clickedOnBoxIndex !== -1) {
-            selectedBboxIndex = clickedOnBoxIndex;
-            isDraggingBbox = true;
-            editMode = 'move';
-            draggedBboxInitialState = JSON.parse(JSON.stringify(bboxes[selectedBboxIndex]));
-            startX = pos.x;
-            startY = pos.y;
-            renderBboxList();
-            redrawCanvas();
-        } else {
-            selectedBboxIndex = -1;
-            renderBboxList();
-            redrawCanvas();
-            if (activeClass) {
-                isDrawing = true;
-                startX = pos.x;
-                startY = pos.y;
-                clearCrosshairs();
-            }
-        }
-    });
-
-    $(document).on('mousemove', function(e) {
-        if (!$(e.target).closest('#canvas-container').length) {
-            if (hoveredPreviewIndex !== -1) { hoveredPreviewIndex = -1; redrawCanvas(); }
-            $(drawingCanvas).removeClass((index, className) => (className.match(/\bcursor-\S+/g) || []).join(' '));
-            return;
-        }
-
-        const pos = getMousePos(drawingCanvas, e);
-
-        if (isDrawing) {
-            // Standard drawing logic
-            redrawCanvas();
+        function drawCrosshairs(x, y) {
+            if (isDrawing || isReviewMode || isDraggingBbox) return;
             const dpr = window.devicePixelRatio || 1;
-            let currentX = Math.max(0, Math.min(pos.x, frameImage.clientWidth));
-            let currentY = Math.max(0, Math.min(pos.y, frameImage.clientHeight));
-            drawingCtx.lineWidth = 2 / dpr;
-            drawingCtx.strokeStyle = isInteractiveMode ? (interactiveDrawMode==='positive' ? 'rgba(40,167,69,0.9)' : 'rgba(220,53,69,0.9)') : stringToColor(activeClass || 'blue');
-            drawingCtx.setLineDash(isInteractiveMode ? [5/dpr, 3/dpr] : []);
-            drawingCtx.strokeRect(startX, startY, currentX - startX, currentY - startY);
-            drawingCtx.setLineDash([]);
-        } else if (isDraggingBbox) {
-            // Bbox editing/moving logic
-            const scaleX = frameImage.naturalWidth / frameImage.clientWidth;
-            const scaleY = frameImage.naturalHeight / frameImage.clientHeight;
-            let currentBox = bboxes[selectedBboxIndex];
+            crosshairCtx.clearRect(0, 0, crosshairCanvas.width / dpr, crosshairCanvas.height / dpr);
+            crosshairCtx.strokeStyle = "rgba(0,0,255,0.7)";
+            crosshairCtx.lineWidth = 1 / dpr;
+            crosshairCtx.setLineDash([4 / dpr, 4 / dpr]);
+            crosshairCtx.beginPath();
+            crosshairCtx.moveTo(0, y);
+            crosshairCtx.lineTo(crosshairCanvas.width / dpr, y);
+            crosshairCtx.stroke();
+            crosshairCtx.beginPath();
+            crosshairCtx.moveTo(x, 0);
+            crosshairCtx.lineTo(x, crosshairCanvas.height / dpr);
+            crosshairCtx.stroke();
+        }
 
-            if (editMode === 'move') {
-                const dx = (pos.x - startX) * scaleX;
-                const dy = (pos.y - startY) * scaleY;
-                currentBox.x1 = draggedBboxInitialState.x1 + dx;
-                currentBox.y1 = draggedBboxInitialState.y1 + dy;
-                currentBox.x2 = draggedBboxInitialState.x2 + dx;
-                currentBox.y2 = draggedBboxInitialState.y2 + dy;
-            } else if (editMode === 'resize') {
-                const newX = pos.x * scaleX;
-                const newY = pos.y * scaleY;
-                const i = draggedBboxInitialState;
+        function clearCrosshairs() {
+            const dpr = window.devicePixelRatio || 1;
+            crosshairCtx.clearRect(0, 0, crosshairCanvas.width / dpr, crosshairCanvas.height / dpr);
+        }
 
-                if (draggedHandle.includes('left')) currentBox.x1 = Math.min(newX, i.x2 - 1);
-                if (draggedHandle.includes('right')) currentBox.x2 = Math.max(newX, i.x1 + 1);
-                if (draggedHandle.includes('top')) currentBox.y1 = Math.min(newY, i.y2 - 1);
-                if (draggedHandle.includes('bottom')) currentBox.y2 = Math.max(newY, i.y1 + 1);
+        function showToast(message, duration = 3000) {
+            const notification = $("#toast-notification");
+            notification.text(message).addClass("show");
+            if (toastTimeout) {
+                clearTimeout(toastTimeout);
             }
-            redrawCanvas();
-        } else {
-            // Hover logic
-            drawCrosshairs(pos.x, pos.y);
-            const handle = getHandleAtPos(pos.x, pos.y);
-            $(drawingCanvas).removeClass((index, className) => (className.match(/\bcursor-\S+/g) || []).join(' '));
-            if(handle) {
-                if (handle.includes('top-left') || handle.includes('bottom-right')) $(drawingCanvas).addClass('cursor-nwse-resize');
-                else if (handle.includes('top-right') || handle.includes('bottom-left')) $(drawingCanvas).addClass('cursor-nesw-resize');
-                else if (handle.includes('top') || handle.includes('bottom')) $(drawingCanvas).addClass('cursor-ns-resize');
-                else if (handle.includes('left') || handle.includes('right')) $(drawingCanvas).addClass('cursor-ew-resize');
-            } else {
-                const scaleX = frameImage.clientWidth / frameImage.naturalWidth;
-                const scaleY = frameImage.clientHeight / frameImage.naturalHeight;
-                let onBox = false;
-                for(let i=0; i<bboxes.length; i++){
-                    const box = bboxes[i];
-                    if(pos.x > box.x1*scaleX && pos.x < box.x2*scaleX && pos.y > box.y1*scaleY && pos.y < box.y2*scaleY) {
-                        onBox = true; break;
-                    }
-                }
-                if (onBox) $(drawingCanvas).addClass('cursor-move');
-            }
-            if((isInteractiveMode || previewBboxes.length > 0) && previewBboxes.length > 0) {
-                const scaleX=frameImage.clientWidth/frameImage.naturalWidth,scaleY=frameImage.clientHeight/frameImage.naturalHeight,threshold=parseFloat($('#result-threshold').val()); let foundIndex=-1;
-                for(let i=previewBboxes.length-1;i>=0;i--){const res=previewBboxes[i];if(res.score>=threshold){const b=res.box;if(pos.x>b[0]*scaleX&&pos.x<b[2]*scaleX&&pos.y>b[1]*scaleY&&pos.y<b[3]*scaleY){foundIndex=i;break}}}
-                if(foundIndex!==hoveredPreviewIndex){hoveredPreviewIndex=foundIndex;redrawCanvas()}
-            }
-        }
-    }).on('mouseup', function(e) {
-        if (isDrawing) {
-            isDrawing = false;
-            const pos = getMousePos(drawingCanvas, e);
-            let endX = Math.max(0, Math.min(pos.x, frameImage.clientWidth));
-            let endY = Math.max(0, Math.min(pos.y, frameImage.clientHeight));
-            if (Math.abs(startX - endX) < 5 || Math.abs(startY - endY) < 5) { redrawCanvas(); return; }
-
-            const scaleX = frameImage.naturalWidth / frameImage.clientWidth;
-            const scaleY = frameImage.naturalHeight / frameImage.clientHeight;
-            const newBoxRaw = {
-                x1: Math.round(Math.min(startX, endX) * scaleX),
-                y1: Math.round(Math.min(startY, endY) * scaleY),
-                x2: Math.round(Math.max(startX, endX) * scaleX),
-                y2: Math.round(Math.max(startY, endY) * scaleY)
-            };
-            if(isInteractiveMode) {
-                if(interactiveDrawMode === 'positive') positiveExampleBboxes.push(newBoxRaw); else negativeExampleBboxes.push(newBoxRaw);
-            } else if (activeClass) {
-                const newBox = { ...newBoxRaw, label: activeClass };
-                bboxes.push(newBox);
-                saveStateToHistory();
-                selectedBboxIndex = bboxes.length - 1;
-                renderBboxList();
-            }
-            redrawCanvas();
-        } else if (isDraggingBbox) {
-            // Finalize bbox coordinates to prevent reverse boxes
-            let finalBox = bboxes[selectedBboxIndex];
-            finalBox.x1 = Math.round(finalBox.x1);
-            finalBox.y1 = Math.round(finalBox.y1);
-            finalBox.x2 = Math.round(finalBox.x2);
-            finalBox.y2 = Math.round(finalBox.y2);
-            if (finalBox.x1 > finalBox.x2) [finalBox.x1, finalBox.x2] = [finalBox.x2, finalBox.x1];
-            if (finalBox.y1 > finalBox.y2) [finalBox.y1, finalBox.y2] = [finalBox.y2, finalBox.y1];
-
-            saveStateToHistory();
-            isDraggingBbox = false;
-            editMode = null;
-            draggedHandle = null;
-            draggedBboxInitialState = null;
-            redrawCanvas();
-        }
-    });
-
-    $('#canvas-container').on('mouseleave', function() {
-        clearCrosshairs();
-        $(drawingCanvas).removeClass((index, className) => (className.match(/\bcursor-\S+/g) || []).join(' '));
-    });
-
-    $('#new-class-name').on("keydown",function(t){"Enter"===t.key&&(t.preventDefault(),$("#add-class-btn").click())});
-    $('#bbox-list').on("click",".list-group-item",function(){selectedBboxIndex=parseInt($(this).data("index")),redrawCanvas(),renderBboxList()});
-    $("#add-class-btn").on("click",function(){const t=$("#new-class-name").val().trim();t&&(addClass(t),$("#new-class-name").val(""))});
-    $("#class-list").on("click", ".list-group-item", function() { const clickedClass = $(this).data("class-name"); activeClass = activeClass === clickedClass ? null : clickedClass; renderClassList(); });
-    $("#bbox-list").on("click",".delete-bbox-btn",function(t){t.stopPropagation();const e=parseInt($(this).data("index"));bboxes.splice(e,1),saveStateToHistory(),selectedBboxIndex=-1,redrawCanvas(),renderBboxList()});
-    $("#save-bboxes").on("click",function(){const t=frameSlider.val();isReviewMode?(trackedBboxCache[t]=formatBboxesToString(),showToast(`Frame ${t} updated in review cache.`,1500)):$.ajax({url:"/storeVideoFrameBboxesText",type:"POST",contentType:"application/json",data:JSON.stringify({video_uuid:videoUuid,frame_number:t,bboxes_text:formatBboxesToString()}),success:function(t){t.success&&(showToast("Frame "+frameSlider.val()+" saved successfully!"),window.cachedFrames=null)},error:function(){showToast("Error: Failed to save bounding boxes.",3e3)}})});
-    function updateSamButtonText() {const t=$("#sam-toggle-btn");isSamModeActive?t.html(`<i class="bi bi-magic"></i> ${isInteractiveMode?"SAM ON (for Samples)":"SAM ON (for Annotation)"}`):t.html('<i class="bi bi-magic"></i> Enable SAM (Point)')}
-    $('#sam-toggle-btn').on('click', function() {isSamModeActive=!isSamModeActive,$(this).toggleClass('active',isSamModeActive),canvasContainer.toggleClass('sam-active',isSamModeActive),updateSamButtonText(),isSamModeActive&&clearCrosshairs()});
-
-    // --- Keyboard Shortcuts Handler ---
-    $(document).on("keydown",function(t){
-        if($(t.target).is("input, textarea")) return;
-
-        const isNegModalVisible = $('#negative-sampling-modal').is(':visible');
-        const key = t.key.toLowerCase();
-
-        if (key === 'c') {
-            t.preventDefault();
-            isCKeyPressed = true;
+            toastTimeout = setTimeout(() => {
+                notification.removeClass("show");
+            }, duration);
         }
 
-        if (t.ctrlKey && key === "z") {
-            t.preventDefault();
-            if (isNegModalVisible) { undoNegativeSample(); } else { undo(); }
+        function saveStateToHistory() {
+            history = history.slice(0, historyIndex + 1);
+            history.push(JSON.parse(JSON.stringify(bboxes)));
+            historyIndex = history.length - 1;
         }
-        else if (t.ctrlKey && (key === "y" || (t.shiftKey && key === "z"))) {
-            if (!isNegModalVisible) { t.preventDefault(); redo(); }
-        }
-        else if (t.key === "Delete" || t.key === "Backspace") {
-            t.preventDefault();
-            if (isNegModalVisible) {
-                clearCurrentNegativeSamples();
-            } else if (selectedBboxIndex !== -1) {
-                bboxes.splice(selectedBboxIndex, 1);
-                saveStateToHistory();
+
+        function undo() {
+            if (historyIndex > 0) {
+                historyIndex--;
+                bboxes = JSON.parse(JSON.stringify(history[historyIndex]));
                 selectedBboxIndex = -1;
                 redrawCanvas();
                 renderBboxList();
             }
         }
-        else {
-            switch(key){
-                case "s": if (!isNegModalVisible) { t.preventDefault(); $("#save-bboxes").click(); } break;
-                case "a":
-                    t.preventDefault();
-                    if (isNegModalVisible) { $('#neg-prev-btn').click(); }
-                    else { let pf = parseInt(frameSlider.val())-1; if(pf >= task.start_frame) frameSlider.val(pf).trigger("input"); }
+
+        function redo() {
+            if (historyIndex < history.length - 1) {
+                historyIndex++;
+                bboxes = JSON.parse(JSON.stringify(history[historyIndex]));
+                selectedBboxIndex = -1;
+                redrawCanvas();
+                renderBboxList();
+            }
+        }
+
+        function getMousePos(canvas, event) {
+            const rect = canvas.getBoundingClientRect();
+            return {
+                x: event.clientX - rect.left,
+                y: event.clientY - rect.top
+            };
+        }
+
+        function getHandleAtPos(x, y) {
+            if (selectedBboxIndex === -1) return null;
+            const scaleX = frameImage.clientWidth / frameImage.naturalWidth;
+            const scaleY = frameImage.clientHeight / frameImage.naturalHeight;
+            const box = bboxes[selectedBboxIndex];
+            const bx = box.x1 * scaleX,
+                by = box.y1 * scaleY,
+                bw = (box.x2 - box.x1) * scaleX,
+                bh = (box.y2 - box.y1) * scaleY;
+            const handleSize = 8;
+            const handles = {
+                'top-left': { x: bx, y: by },
+                'top-middle': { x: bx + bw / 2, y: by },
+                'top-right': { x: bx + bw, y: by },
+                'middle-left': { x: bx, y: by + bh / 2 },
+                'middle-right': { x: bx + bw, y: by + bh / 2 },
+                'bottom-left': { x: bx, y: by + bh },
+                'bottom-middle': { x: bx + bw / 2, y: by + bh },
+                'bottom-right': { x: bx + bw, y: by + bh }
+            };
+
+            for (const key in handles) {
+                const pos = handles[key];
+                if (x >= pos.x - handleSize && x <= pos.x + handleSize && y >= pos.y - handleSize && y <= pos.y + handleSize) {
+                    return key;
+                }
+            }
+            return null;
+        }
+
+        function stringToColor(str) {
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) {
+                hash = str.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            return `hsl(${(hash % 360 + 360) % 360}, 80%, 50%)`;
+        }
+
+        function formatBboxesToString() {
+            return bboxes
+                .filter(b => b.x1 != null && b.y1 != null && b.x2 != null && b.y2 != null && !isNaN(b.x1) && !isNaN(b.y1) && !isNaN(b.x2) && !isNaN(b.y2))
+                .map(b => {
+                    const objectId = b.id || self.crypto.randomUUID();
+                    b.id = objectId;
+                    return `${b.x1},${b.y1},${b.x2},${b.y2},${b.label},${objectId}`;
+                }).join("\n");
+        }
+
+        function parseBboxesFromString(text) {
+            if (!text) return [];
+            return text.split("\n")
+                .filter(line => line.trim() !== "")
+                .map(line => {
+                    const parts = line.split(",");
+                    if (parts.length < 5) return null;
+                    const hasId = parts.length > 5 && (parts[parts.length - 1].length === 36 || parts[parts.length - 1].length === 32);
+                    const label = parts.slice(4, parts.length - (hasId ? 1 : 0)).join(',');
+                    const id = hasId ? parts[parts.length - 1] : null;
+                    return {
+                        x1: parseInt(parts[0]),
+                        y1: parseInt(parts[1]),
+                        x2: parseInt(parts[2]),
+                        y2: parseInt(parts[3]),
+                        label: label,
+                        id: id
+                    };
+                }).filter(b => b !== null);
+        }
+
+        function loadBboxesForFrame(frameNumber) {
+            if (isReviewMode) {
+                const bboxesText = trackedBboxCache[frameNumber] || "";
+                processFrameDataAndUpdateUI({
+                    bboxes_text: bboxesText
+                });
+                return;
+            }
+
+            if (window.cachedFrames) {
+                const frameData = window.cachedFrames.find(f => f.frame_number == frameNumber);
+                processFrameDataAndUpdateUI(frameData);
+            } else {
+                $.ajax({
+                    url: "/retrieveVideoFrames",
+                    type: "POST",
+                    contentType: "application/json",
+                    data: JSON.stringify({
+                        video_uuid: videoUuid
+                    }),
+                    success: function(response) {
+                        if (response.success) {
+                            window.cachedFrames = response.frames;
+                            const frameData = window.cachedFrames.find(f => f.frame_number == frameNumber);
+                            processFrameDataAndUpdateUI(frameData);
+                        }
+                    }
+                });
+            }
+        }
+
+        function processFrameDataAndUpdateUI(frameData) {
+            const currentFrameNum = parseInt(frameSlider.val());
+            const manualBboxes = parseBboxesFromString(frameData ? frameData.bboxes_text : '');
+            clearInteractiveSession(false);
+
+            if (manualBboxes.length > 0) {
+                bboxes = manualBboxes;
+            } else {
+                bboxes = [];
+                const suggestedBboxesText = frameData ? frameData.suggested_bboxes_text : '';
+                const suggestedBboxes = parseBboxesFromString(suggestedBboxesText);
+                if (suggestedBboxes.length > 0) {
+                    previewBboxes = suggestedBboxes.map(b => ({
+                        box: [b.x1, b.y1, b.x2, b.y2],
+                        score: 0.99,
+                        label: b.label
+                    }));
+                    $('#interactive-results-controls').slideDown();
+                    showToast(`${suggestedBboxes.length} AI suggestions loaded for review.`, 3000);
+                }
+            }
+
+            if (interpolationState.isActive && currentFrameNum !== interpolationState.startFrameData.frame_number) {
+                const existingBox = bboxes.find(b => b.id === interpolationState.objectId);
+                if (!existingBox) {
+                    const ghostBox = JSON.parse(JSON.stringify(interpolationState.startFrameData.bbox));
+                    bboxes.push(ghostBox);
+                    selectedBboxIndex = bboxes.length - 1;
+                } else {
+                    selectedBboxIndex = bboxes.findIndex(b => b.id === interpolationState.objectId);
+                }
+            } else if (!interpolationState.isActive) {
+                selectedBboxIndex = -1;
+            }
+
+            history = [JSON.parse(JSON.stringify(bboxes))];
+            historyIndex = 0;
+            redrawCanvas();
+            renderBboxList();
+        }
+
+        function addClass(className) {
+            if (className && !availableClasses.includes(className)) {
+                $.ajax({
+                    url: "/addClass",
+                    type: "POST",
+                    contentType: "application/json",
+                    data: JSON.stringify({
+                        label_name: className
+                    }),
+                    success: function() {
+                        availableClasses.push(className);
+                        renderClassList();
+                    },
+                    error: function() {
+                        showToast("Error: Failed to add new class.", 3000);
+                    }
+                });
+            }
+        }
+
+        function updateSamButtonText() {
+            const button = $("#sam-toggle-btn");
+            if (isSamModeActive) {
+                const text = isInteractiveMode ? "SAM ON (for Samples)" : "SAM ON (for Annotation)";
+                button.html(`<i class="bi bi-magic"></i> ${text}`);
+            } else {
+                button.html('<i class="bi bi-magic"></i> Enable SAM (Point)');
+            }
+        }
+
+        function setTrackingUiState(isReview) {
+            isReviewMode = isReview;
+            $("#track-controls").slideToggle(isReview);
+            $("#save-bboxes, #sam-toggle-btn, #sam2-track-btn, #interactive-mode-toggle").slideToggle(!isReview);
+
+            if (!isReview) {
+                $("#track-progress-bar").css("width", "0%").text("0%").removeClass("bg-success bg-danger").addClass("progress-bar-animated");
+                $("#track-status-header").text("Tracking...");
+                $("#stop-sam2-track-btn").prop("disabled", false).text("Stop Tracking");
+                $("#save-all-tracked-btn").prop("disabled", true);
+                sam2TrackerUuid = null;
+                if (sam2EventSource) {
+                    sam2EventSource.close();
+                    sam2EventSource = null;
+                }
+            }
+        }
+
+        function exitReviewMode() {
+            setTrackingUiState(false);
+            trackedBboxCache = {};
+            showToast("Exited tracking/review mode.", 2000);
+            frameSlider.trigger("input");
+        }
+
+        function handleSseEvent(eventData) {
+            switch (eventData.event) {
+                case "update":
+                    trackedBboxCache[eventData.frame_number] = eventData.bboxes_text;
+                    const percentage = eventData.total > 0 ? Math.round(eventData.progress / eventData.total * 100) : 0;
+                    $("#track-progress-bar").css("width", percentage + "%").text(percentage + "%");
+
+                    const frameNumber = eventData.frame_number;
+                    if (frameNumber <= parseInt(frameSlider.attr("max"))) {
+                        frameSlider.val(frameNumber);
+                        $("#frame-number-display").text(frameNumber);
+                        const imageUrl = `/media/frames/${videoUuid}/frame_${String(frameNumber).padStart(5, "0")}.jpg`;
+                        if (!frameImage.src.endsWith(imageUrl)) {
+                            frameImage.src = imageUrl;
+                        }
+                    }
                     break;
-                case "d":
-                    t.preventDefault();
-                    if (isNegModalVisible) { $('#neg-next-btn').click(); }
-                    else { let nf = parseInt(frameSlider.val())+1; if(nf < frameCount) frameSlider.val(nf).trigger("input"); }
+
+                case "completed":
+                case "stopped":
+                case "failed":
+                    handleTrackingEnd(eventData.event.toUpperCase(), eventData.message);
+                    break;
+
+                case "error":
+                    alert("Tracking Stream Error: " + eventData.message);
+                    handleTrackingEnd("FAILED", eventData.message);
                     break;
             }
         }
-    }).on("keyup", function(t) {
-        if (t.key.toLowerCase() === 'c') {
-            isCKeyPressed = false;
+
+        function handleTrackingEnd(status, message) {
+            if (sam2EventSource) {
+                sam2EventSource.close();
+                sam2EventSource = null;
+            }
+
+            $("#sam2-track-btn").prop("disabled", false);
+            $("#stop-sam2-track-btn").prop("disabled", true);
+            const progressBar = $("#track-progress-bar");
+            progressBar.removeClass("progress-bar-animated");
+
+            let statusText = "Review Results";
+            if (status === "COMPLETED") {
+                statusText = "Tracking Completed. Review Results.";
+                progressBar.css("width", "100%").text("100%").addClass("bg-success");
+            } else if (status === "STOPPED") {
+                statusText = "Tracking Stopped. Review Results.";
+            } else if (status === "FAILED") {
+                statusText = "Tracking Failed. Review Partial Results.";
+                progressBar.addClass("bg-danger");
+            }
+
+            $("#track-status-header").text(statusText);
+            $("#save-all-tracked-btn").prop("disabled", Object.keys(trackedBboxCache).length === 0);
+            showToast(statusText + (message ? ` (${message})` : ""), 4000);
+
+            const firstFrame = Math.min(...Object.keys(trackedBboxCache).map(Number));
+            if (isFinite(firstFrame)) {
+                frameSlider.val(firstFrame).trigger("input");
+            }
+        }
+
+        function clearInteractiveSession(shouldRedraw = true) {
+            positiveExampleBboxes = [];
+            negativeExampleBboxes = [];
+            previewBboxes = [];
+            lastDatasetClassName = null;
+            $('#apply-to-video-btn').prop('disabled', true);
+            hoveredPreviewIndex = -1;
+            overlappingCycleIndex = 0;
+            lastClickPosForCycle = null;
+            $('#interactive-results-controls').slideUp();
+            if (shouldRedraw) {
+                redrawCanvas();
+            }
+        }
+
+        function getHyperparameters() {
+            return {
+                weights: [
+                    parseFloat($('#w1').val()),
+                    parseFloat($('#w2').val()),
+                    parseFloat($('#w3').val()),
+                    parseFloat($('#w4').val())
+                ],
+                batch_size: parseInt($('#batch-size').val()),
+                interpolation_size: parseInt($('#interp-size').val()),
+            };
+        }
+
+        function startNegativeSampling(count) {
+            $.ajax({
+                url: '/api/get_random_frames_for_neg_sampling',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    video_uuid: videoUuid,
+                    count: count
+                }),
+                success: function(res) {
+                    if (res.success && res.frames.length > 0) {
+                        negSamplingFrames = res.frames;
+                        currentNegSampleIndex = 0;
+                        negativeSamplesStore = {};
+                        loadNegativeSampleFrame();
+                        $('#negative-sampling-modal').modal({
+                            backdrop: 'static',
+                            keyboard: false
+                        });
+                    } else {
+                        alert("Failed to fetch random frames: " + (res.message || "No frames returned."));
+                    }
+                },
+                error: function() {
+                    alert("Server error while fetching random frames.");
+                }
+            });
+        }
+
+        function loadNegativeSampleFrame() {
+            if (currentNegSampleIndex < 0 || currentNegSampleIndex >= negSamplingFrames.length) return;
+            const frameData = negSamplingFrames[currentNegSampleIndex];
+            $('#neg-frame-counter').text(`Frame ${currentNegSampleIndex + 1} / ${negSamplingFrames.length}`);
+
+            negImage.onload = () => {
+                const dpr = window.devicePixelRatio || 1;
+                const rect = negImage.getBoundingClientRect();
+                negCanvas.style.width = `${rect.width}px`;
+                negCanvas.style.height = `${rect.height}px`;
+                negCanvas.width = Math.round(rect.width * dpr);
+                negCanvas.height = Math.round(rect.height * dpr);
+                negCtx.scale(dpr, dpr);
+                redrawNegCanvas();
+            };
+            negImage.src = frameData.image_url;
+        }
+
+        function redrawNegCanvas() {
+            const dpr = window.devicePixelRatio || 1;
+            negCtx.clearRect(0, 0, negCanvas.width / dpr, negCanvas.height / dpr);
+            if (negSamplingFrames.length === 0) return;
+
+            const frameData = negSamplingFrames[currentNegSampleIndex];
+            const frameKey = `${frameData.video_uuid};${frameData.frame_number}`;
+            const boxes = negativeSamplesStore[frameKey] || [];
+
+            if (!negImage.naturalWidth) return;
+            const scaleX = negImage.clientWidth / negImage.naturalWidth;
+            const scaleY = negImage.clientHeight / negImage.naturalHeight;
+
+            boxes.forEach(box => {
+                negCtx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
+                negCtx.lineWidth = 2 / dpr;
+                negCtx.setLineDash([5 / dpr, 3 / dpr]);
+                const x = box[0] * scaleX,
+                    y = box[1] * scaleY;
+                const w = (box[2] - box[0]) * scaleX,
+                    h = (box[3] - box[1]) * scaleY;
+                negCtx.strokeRect(x, y, w, h);
+                negCtx.setLineDash([]);
+            });
+        }
+
+        function triggerApplyToVideo(negativeSamples) {
+            if (!lastDatasetClassName) {
+                alert("An error occurred. The class to apply is unknown.");
+                return;
+            }
+            const confirmMessage = negativeSamples && Object.keys(negativeSamples).length > 0 ?
+                `This will start a background task to apply the REFINED model for '${lastDatasetClassName}' to all unlabeled frames. Continue?` :
+                `This will start a background task to apply the learned features for '${lastDatasetClassName}' to all unlabeled frames. Continue?`;
+
+            if (confirm(confirmMessage)) {
+                const payload = {
+                    video_uuid: videoUuid,
+                    class_name: lastDatasetClassName,
+                    negative_samples: negativeSamples
+                };
+                $('#apply-to-video-btn').prop('disabled', true);
+                $.ajax({
+                    url: '/apply_prototypes_to_video',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(payload),
+                    success: function(res) {
+                        if (res.success) {
+                            alert("Task started successfully! You can now close this page. The video status will update on the main page.");
+                            window.location.href = "/";
+                        } else {
+                            alert("Failed to start task: " + res.message);
+                            $('#apply-to-video-btn').prop('disabled', false);
+                        }
+                    },
+                    error: function() {
+                        alert("Server error when trying to start the task.");
+                        $('#apply-to-video-btn').prop('disabled', false);
+                    }
+                });
+            }
+        }
+
+        function undoNegativeSample() {
+            if (currentNegSampleIndex < 0 || currentNegSampleIndex >= negSamplingFrames.length) return;
+            const frameData = negSamplingFrames[currentNegSampleIndex];
+            const frameKey = `${frameData.video_uuid};${frameData.frame_number}`;
+            if (negativeSamplesStore[frameKey] && negativeSamplesStore[frameKey].length > 0) {
+                negativeSamplesStore[frameKey].pop();
+                redrawNegCanvas();
+                showToast('Last negative sample removed.', 1500);
+            } else {
+                showToast('Nothing to undo on this frame.', 1500);
+            }
+        }
+
+        function clearCurrentNegativeSamples() {
+            if (currentNegSampleIndex < 0 || currentNegSampleIndex >= negSamplingFrames.length) return;
+            const frameData = negSamplingFrames[currentNegSampleIndex];
+            const frameKey = `${frameData.video_uuid};${frameData.frame_number}`;
+            if (negativeSamplesStore[frameKey] && negativeSamplesStore[frameKey].length > 0) {
+                negativeSamplesStore[frameKey] = [];
+                redrawNegCanvas();
+                showToast('All negative samples cleared for this frame.', 1500);
+            }
+        }
+
+        function resetInterpolationState(reloadFrame = false) {
+            interpolationState = {
+                isActive: false,
+                objectId: null,
+                startFrameData: null
+            };
+            $('#interpolation-banner').slideUp();
+            if (reloadFrame) {
+                frameSlider.trigger("input");
+            } else {
+                renderBboxList();
+                redrawCanvas();
+            }
+        }
+
+        frameImage.onload = function() {
+            bboxes = [];
+            selectedBboxIndex = -1;
+            resizeCanvas();
+            loadBboxesForFrame(frameSlider.val());
+            const currentFrame = parseInt(frameSlider.val());
+            if (lastProcessedFrame !== -1 && lastProcessedFrame !== currentFrame) {
+                clearInteractiveSession();
+            }
+        };
+
+        frameImage.addEventListener('dragstart', (e) => e.preventDefault());
+        window.onresize = resizeCanvas;
+
+        frameSlider.on("input", function() {
+            const frameNumber = $(this).val();
+            $("#frame-number-display").text(frameNumber);
+            const imageUrl = `/media/frames/${videoUuid}/frame_${String(frameNumber).padStart(5, "0")}.jpg`;
+            if (frameImage.src.endsWith(imageUrl) === false) {
+                frameImage.src = imageUrl;
+            } else if (frameImage.complete) {
+                loadBboxesForFrame(frameNumber);
+            }
+        });
+
+        canvasContainer.on('mousedown', function(e) {
+            if (isSamModeActive) {
+                e.preventDefault();
+                const pos = getMousePos(drawingCanvas, e);
+                const scaleX = frameImage.naturalWidth / frameImage.clientWidth;
+                const scaleY = frameImage.naturalHeight / frameImage.clientHeight;
+                canvasContainer.addClass('sam-loading');
+                showToast('SAM is thinking...', 5000);
+
+                $.ajax({
+                    url: "/samPredict",
+                    type: "POST",
+                    contentType: "application/json",
+                    data: JSON.stringify({
+                        video_uuid: videoUuid,
+                        frame_number: frameSlider.val(),
+                        point: {
+                            x: Math.round(pos.x * scaleX),
+                            y: Math.round(pos.y * scaleY)
+                        }
+                    }),
+                    success: function(response) {
+                        if (!response.success) {
+                            showToast(response.message || "SAM failed to find an object.", 3000);
+                            return;
+                        }
+
+                        if (isInteractiveMode) {
+                            const newSampleBox = response.bbox;
+                            if (interactiveDrawMode === 'positive') {
+                                positiveExampleBboxes.push(newSampleBox);
+                                showToast('Positive SAM sample added.', 2000);
+                            } else {
+                                negativeExampleBboxes.push(newSampleBox);
+                                showToast('Negative SAM sample added.', 2000);
+                            }
+                            redrawCanvas();
+                        } else {
+                            if (activeClass) {
+                                const newBox = { ...response.bbox,
+                                    label: activeClass,
+                                    id: self.crypto.randomUUID()
+                                };
+                                bboxes.push(newBox);
+                                saveStateToHistory();
+                                selectedBboxIndex = bboxes.length - 1;
+                                renderBboxList();
+                                redrawCanvas();
+                                showToast('SAM found an object!', 2000);
+                            } else {
+                                showToast('Please select a class before using SAM.', 3000);
+                            }
+                        }
+                    },
+                    error: function(xhr) {
+                        const errorMsg = xhr.responseJSON ? xhr.responseJSON.message : 'Unknown error';
+                        showToast('Server error during SAM prediction: ' + errorMsg, 4000);
+                    },
+                    complete: function() {
+                        canvasContainer.removeClass('sam-loading');
+                    }
+                });
+                return;
+            }
+
+            if (isReviewMode) return;
+            const pos = getMousePos(drawingCanvas, e);
+
+            if ((isInteractiveMode || previewBboxes.length > 0) && previewBboxes.length > 0) {
+                if (!activeClass) {
+                    alert("Please select a class from the list to assign it.");
+                    return;
+                }
+                const threshold = parseFloat($('#result-threshold').val());
+                const scaleX = frameImage.clientWidth / frameImage.naturalWidth;
+                const scaleY = frameImage.clientHeight / frameImage.naturalHeight;
+                let targetBoxIndex = -1;
+
+                const overlappingIndices = [];
+                previewBboxes.forEach((res, index) => {
+                    if (res.score >= threshold) {
+                        const b = res.box;
+                        if (pos.x > b[0] * scaleX && pos.x < b[2] * scaleX && pos.y > b[1] * scaleY && pos.y < b[3] * scaleY) {
+                            overlappingIndices.unshift(index);
+                        }
+                    }
+                });
+
+                if (overlappingIndices.length > 0) {
+                    e.preventDefault();
+                    if (isCKeyPressed) {
+                        const isSameClick = lastClickPosForCycle && Math.abs(lastClickPosForCycle.x - pos.x) < 5 && Math.abs(lastClickPosForCycle.y - pos.y) < 5;
+                        overlappingCycleIndex = isSameClick ? (overlappingCycleIndex + 1) % overlappingIndices.length : 0;
+                        targetBoxIndex = overlappingIndices[overlappingCycleIndex];
+                        lastClickPosForCycle = pos;
+                    } else {
+                        targetBoxIndex = overlappingIndices[0];
+                        lastClickPosForCycle = null;
+                    }
+
+                    const res = previewBboxes[targetBoxIndex];
+                    const b = res.box;
+                    bboxes.push({
+                        x1: b[0],
+                        y1: b[1],
+                        x2: b[2],
+                        y2: b[3],
+                        label: res.label || activeClass
+                    });
+                    previewBboxes.splice(targetBoxIndex, 1);
+                    saveStateToHistory();
+                    renderBboxList();
+                    hoveredPreviewIndex = -1;
+                    redrawCanvas();
+                    return;
+                }
+            }
+
+            if (isInteractiveMode) {
+                isDrawing = true;
+                startX = pos.x;
+                startY = pos.y;
+                clearCrosshairs();
+                return;
+            }
+
+            draggedHandle = getHandleAtPos(pos.x, pos.y);
+            if (draggedHandle) {
+                isDraggingBbox = true;
+                editMode = 'resize';
+                draggedBboxInitialState = JSON.parse(JSON.stringify(bboxes[selectedBboxIndex]));
+                return;
+            }
+
+            const scaleX = frameImage.clientWidth / frameImage.naturalWidth;
+            const scaleY = frameImage.clientHeight / frameImage.naturalHeight;
+            let clickedOnBoxIndex = -1;
+            for (let i = bboxes.length - 1; i >= 0; i--) {
+                const box = bboxes[i];
+                const bx = box.x1 * scaleX,
+                    by = box.y1 * scaleY,
+                    bw = (box.x2 - box.x1) * scaleX,
+                    bh = (box.y2 - box.y1) * scaleY;
+                if (pos.x > bx && pos.x < bx + bw && pos.y > by && pos.y < by + bh) {
+                    clickedOnBoxIndex = i;
+                    break;
+                }
+            }
+
+            if (clickedOnBoxIndex !== -1) {
+                selectedBboxIndex = clickedOnBoxIndex;
+                isDraggingBbox = true;
+                editMode = 'move';
+                draggedBboxInitialState = JSON.parse(JSON.stringify(bboxes[selectedBboxIndex]));
+                startX = pos.x;
+                startY = pos.y;
+                renderBboxList();
+                redrawCanvas();
+            } else {
+                selectedBboxIndex = -1;
+                renderBboxList();
+                redrawCanvas();
+                if (activeClass) {
+                    isDrawing = true;
+                    startX = pos.x;
+                    startY = pos.y;
+                    clearCrosshairs();
+                }
+            }
+        });
+
+        $(document).on('mousemove', function(e) {
+            if (!$(e.target).closest('#canvas-container').length) {
+                if (hoveredPreviewIndex !== -1) {
+                    hoveredPreviewIndex = -1;
+                    redrawCanvas();
+                }
+                $(drawingCanvas).removeClass((index, className) => (className.match(/\bcursor-\S+/g) || []).join(' '));
+                return;
+            }
+
+            const pos = getMousePos(drawingCanvas, e);
+
+            if (isDrawing) {
+                redrawCanvas();
+                const dpr = window.devicePixelRatio || 1;
+                let currentX = Math.max(0, Math.min(pos.x, frameImage.clientWidth));
+                let currentY = Math.max(0, Math.min(pos.y, frameImage.clientHeight));
+                drawingCtx.lineWidth = 2 / dpr;
+                drawingCtx.strokeStyle = isInteractiveMode ? (interactiveDrawMode === 'positive' ? 'rgba(40,167,69,0.9)' : 'rgba(220,53,69,0.9)') : stringToColor(activeClass || 'blue');
+                drawingCtx.setLineDash(isInteractiveMode ? [5 / dpr, 3 / dpr] : []);
+                drawingCtx.strokeRect(startX, startY, currentX - startX, currentY - startY);
+                drawingCtx.setLineDash([]);
+
+            } else if (isDraggingBbox) {
+                const scaleX = frameImage.naturalWidth / frameImage.clientWidth;
+                const scaleY = frameImage.naturalHeight / frameImage.clientHeight;
+                let currentBox = bboxes[selectedBboxIndex];
+
+                if (editMode === 'move') {
+                    const dx = (pos.x - startX) * scaleX;
+                    const dy = (pos.y - startY) * scaleY;
+                    currentBox.x1 = draggedBboxInitialState.x1 + dx;
+                    currentBox.y1 = draggedBboxInitialState.y1 + dy;
+                    currentBox.x2 = draggedBboxInitialState.x2 + dx;
+                    currentBox.y2 = draggedBboxInitialState.y2 + dy;
+                } else if (editMode === 'resize') {
+                    const newX = pos.x * scaleX;
+                    const newY = pos.y * scaleY;
+                    const initialState = draggedBboxInitialState;
+                    if (draggedHandle.includes('left')) currentBox.x1 = Math.min(newX, initialState.x2 - 1);
+                    if (draggedHandle.includes('right')) currentBox.x2 = Math.max(newX, initialState.x1 + 1);
+                    if (draggedHandle.includes('top')) currentBox.y1 = Math.min(newY, initialState.y2 - 1);
+                    if (draggedHandle.includes('bottom')) currentBox.y2 = Math.max(newY, initialState.y1 + 1);
+                }
+                redrawCanvas();
+
+            } else {
+                drawCrosshairs(pos.x, pos.y);
+                const handle = getHandleAtPos(pos.x, pos.y);
+                $(drawingCanvas).removeClass((index, className) => (className.match(/\bcursor-\S+/g) || []).join(' '));
+                if (handle) {
+                    if (handle.includes('top-left') || handle.includes('bottom-right')) $(drawingCanvas).addClass('cursor-nwse-resize');
+                    else if (handle.includes('top-right') || handle.includes('bottom-left')) $(drawingCanvas).addClass('cursor-nesw-resize');
+                    else if (handle.includes('top') || handle.includes('bottom')) $(drawingCanvas).addClass('cursor-ns-resize');
+                    else if (handle.includes('left') || handle.includes('right')) $(drawingCanvas).addClass('cursor-ew-resize');
+                } else {
+                    const scaleX = frameImage.clientWidth / frameImage.naturalWidth;
+                    const scaleY = frameImage.clientHeight / frameImage.naturalHeight;
+                    let onBox = false;
+                    for (let i = 0; i < bboxes.length; i++) {
+                        const box = bboxes[i];
+                        if (pos.x > box.x1 * scaleX && pos.x < box.x2 * scaleX && pos.y > box.y1 * scaleY && pos.y < box.y2 * scaleY) {
+                            onBox = true;
+                            break;
+                        }
+                    }
+                    if (onBox) $(drawingCanvas).addClass('cursor-move');
+                }
+
+                if ((isInteractiveMode || previewBboxes.length > 0) && previewBboxes.length > 0) {
+                    const scaleX = frameImage.clientWidth / frameImage.naturalWidth;
+                    const scaleY = frameImage.clientHeight / frameImage.naturalHeight;
+                    const threshold = parseFloat($('#result-threshold').val());
+                    let foundIndex = -1;
+                    for (let i = previewBboxes.length - 1; i >= 0; i--) {
+                        const res = previewBboxes[i];
+                        if (res.score >= threshold) {
+                            const b = res.box;
+                            if (pos.x > b[0] * scaleX && pos.x < b[2] * scaleX && pos.y > b[1] * scaleY && pos.y < b[3] * scaleY) {
+                                foundIndex = i;
+                                break;
+                            }
+                        }
+                    }
+                    if (foundIndex !== hoveredPreviewIndex) {
+                        hoveredPreviewIndex = foundIndex;
+                        redrawCanvas();
+                    }
+                }
+            }
+        }).on('mouseup', function(e) {
+            if (isDrawing) {
+                isDrawing = false;
+                const pos = getMousePos(drawingCanvas, e);
+                let endX = Math.max(0, Math.min(pos.x, frameImage.clientWidth));
+                let endY = Math.max(0, Math.min(pos.y, frameImage.clientHeight));
+
+                if (Math.abs(startX - endX) < 5 || Math.abs(startY - endY) < 5) {
+                    redrawCanvas();
+                    return;
+                }
+
+                const scaleX = frameImage.naturalWidth / frameImage.clientWidth;
+                const scaleY = frameImage.naturalHeight / frameImage.clientHeight;
+                const newBoxRaw = {
+                    x1: Math.round(Math.min(startX, endX) * scaleX),
+                    y1: Math.round(Math.min(startY, endY) * scaleY),
+                    x2: Math.round(Math.max(startX, endX) * scaleX),
+                    y2: Math.round(Math.max(startY, endY) * scaleY)
+                };
+
+                if (isInteractiveMode) {
+                    if (interactiveDrawMode === 'positive') positiveExampleBboxes.push(newBoxRaw);
+                    else negativeExampleBboxes.push(newBoxRaw);
+                } else if (activeClass) {
+                    const newBox = { ...newBoxRaw,
+                        label: activeClass,
+                        id: self.crypto.randomUUID()
+                    };
+                    bboxes.push(newBox);
+                    saveStateToHistory();
+                    selectedBboxIndex = bboxes.length - 1;
+                    renderBboxList();
+                }
+                redrawCanvas();
+
+            } else if (isDraggingBbox) {
+                let finalBox = bboxes[selectedBboxIndex];
+                finalBox.x1 = Math.round(finalBox.x1);
+                finalBox.y1 = Math.round(finalBox.y1);
+                finalBox.x2 = Math.round(finalBox.x2);
+                finalBox.y2 = Math.round(finalBox.y2);
+
+                if (finalBox.x1 > finalBox.x2) [finalBox.x1, finalBox.x2] = [finalBox.x2, finalBox.x1];
+                if (finalBox.y1 > finalBox.y2) [finalBox.y1, finalBox.y2] = [finalBox.y2, finalBox.y1];
+
+                saveStateToHistory();
+                isDraggingBbox = false;
+                editMode = null;
+                draggedHandle = null;
+                draggedBboxInitialState = null;
+                redrawCanvas();
+            }
+        });
+
+        $('#canvas-container').on('mouseleave', function() {
+            clearCrosshairs();
+            $(drawingCanvas).removeClass((index, className) => (className.match(/\bcursor-\S+/g) || []).join(' '));
+        });
+
+        $('#add-class-btn').on('click', function() {
+            const className = $('#new-class-name').val().trim();
+            if (className) {
+                addClass(className);
+                $('#new-class-name').val('');
+            }
+        });
+
+        $('#new-class-name').on("keydown", function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                $('#add-class-btn').click();
+            }
+        });
+
+        $("#class-list").on("click", ".list-group-item", function() {
+            const clickedClass = $(this).data("class-name");
+            activeClass = activeClass === clickedClass ? null : clickedClass;
+            renderClassList();
+        });
+
+        $('#bbox-list').on("click", ".list-group-item", function() {
+            selectedBboxIndex = parseInt($(this).data("index"));
+            redrawCanvas();
+            renderBboxList();
+        });
+
+        $("#bbox-list").on("click", ".delete-bbox-btn", function(e) {
+            e.stopPropagation();
+            const index = parseInt($(this).data("index"));
+            bboxes.splice(index, 1);
+            saveStateToHistory();
+            selectedBboxIndex = -1;
+            redrawCanvas();
+            renderBboxList();
+        });
+
+        $("#save-bboxes").on("click", function() {
+            const frameNumber = frameSlider.val();
+            if (isReviewMode) {
+                trackedBboxCache[frameNumber] = formatBboxesToString();
+                showToast(`Frame ${frameNumber} updated in review cache.`, 1500);
+            } else {
+                $.ajax({
+                    url: "/storeVideoFrameBboxesText",
+                    type: "POST",
+                    contentType: "application/json",
+                    data: JSON.stringify({
+                        video_uuid: videoUuid,
+                        frame_number: frameNumber,
+                        bboxes_text: formatBboxesToString()
+                    }),
+                    success: function(response) {
+                        if (response.success) {
+                            showToast("Frame " + frameSlider.val() + " saved successfully!");
+                            window.cachedFrames = null;
+                        }
+                    },
+                    error: function() {
+                        showToast("Error: Failed to save bounding boxes.", 3000);
+                    }
+                });
+            }
+        });
+
+        $('#sam-toggle-btn').on('click', function() {
+            isSamModeActive = !isSamModeActive;
+            $(this).toggleClass('active', isSamModeActive);
+            canvasContainer.toggleClass('sam-active', isSamModeActive);
+            updateSamButtonText();
+            if (isSamModeActive) {
+                clearCrosshairs();
+            }
+        });
+
+        $('#sam2-track-btn').on('click', function() {
+            if (bboxes.length === 0) {
+                alert("Please label at least one object on the current frame to start tracking.");
+                return;
+            }
+            const startFrame = parseInt(frameSlider.val());
+            const endFrame = parseInt(frameSlider.attr("max"));
+
+            if (confirm(`This will start tracking ${bboxes.length} object(s) from frame ${startFrame} to ${endFrame}. Continue?`)) {
+                $(this).prop("disabled", true);
+                setTrackingUiState(true);
+                trackedBboxCache = {};
+                trackedBboxCache[startFrame] = formatBboxesToString();
+
+                $.ajax({
+                    url: "/startSam2Tracking",
+                    type: "POST",
+                    contentType: "application/json",
+                    data: JSON.stringify({
+                        video_uuid: videoUuid,
+                        start_frame: startFrame,
+                        end_frame: endFrame,
+                        init_bboxes_text: formatBboxesToString()
+                    }),
+                    success: (res) => {
+                        if (res.success) {
+                            sam2TrackerUuid = res.tracker_uuid;
+                            sam2EventSource = new EventSource(`/streamSam2Tracking/${sam2TrackerUuid}`);
+                            sam2EventSource.onmessage = function(event) {
+                                const data = JSON.parse(event.data);
+                                handleSseEvent(data);
+                            };
+                            sam2EventSource.onerror = function(err) {
+                                showToast("Connection to tracking stream lost.", 3000);
+                                handleTrackingEnd("FAILED", "Connection lost");
+                                if (sam2EventSource) sam2EventSource.close();
+                            };
+                        } else {
+                            alert("Error starting tracking: " + res.message);
+                            exitReviewMode();
+                        }
+                    },
+                    error: () => {
+                        alert("Server error starting tracking.");
+                        exitReviewMode();
+                    }
+                });
+            }
+        });
+
+        $('#stop-sam2-track-btn').on('click', function() {
+            if (sam2TrackerUuid) {
+                $(this).prop("disabled", true).text("Stopping...");
+                $.ajax({
+                    url: "/stopSam2Tracking",
+                    type: "POST",
+                    contentType: "application/json",
+                    data: JSON.stringify({
+                        tracker_uuid: sam2TrackerUuid
+                    })
+                });
+            }
+        });
+
+        $('#exit-track-mode-btn').on('click', exitReviewMode);
+
+        $('#save-all-tracked-btn').on('click', function() {
+            const frameCount = Object.keys(trackedBboxCache).length;
+            if (confirm(`This will save all ${frameCount} reviewed annotations to the database. Are you sure?`)) {
+                const savePromises = Object.entries(trackedBboxCache).map(([frame_number, bboxes_text]) =>
+                    $.ajax({
+                        url: "/storeVideoFrameBboxesText",
+                        type: "POST",
+                        contentType: "application/json",
+                        data: JSON.stringify({
+                            video_uuid: videoUuid,
+                            frame_number: parseInt(frame_number),
+                            bboxes_text: bboxes_text
+                        })
+                    })
+                );
+                showToast(`Saving ${savePromises.length} frames...`, 5000);
+                Promise.all(savePromises).then(() => {
+                    showToast("All tracked frames saved successfully!", 3000);
+                    window.cachedFrames = null;
+                    exitReviewMode();
+                }).catch(err => {
+                    alert("An error occurred while saving some frames.");
+                });
+            }
+        });
+
+        $('#bbox-list').on('click', '.interpolate-btn', function(e) {
+            e.stopPropagation();
+            const boxIndex = parseInt($(this).closest('li').data('index'));
+            const clickedBox = bboxes[boxIndex];
+            const currentFrame = parseInt(frameSlider.val());
+
+            if (!clickedBox.id) {
+                showToast("Error: This object has no ID. Please save first.", 3000);
+                return;
+            }
+
+            if (!interpolationState.isActive) {
+                interpolationState.isActive = true;
+                interpolationState.objectId = clickedBox.id;
+                interpolationState.startFrameData = {
+                    frame_number: currentFrame,
+                    bbox: JSON.parse(JSON.stringify(clickedBox))
+                };
+                $('#interpolation-banner').slideDown();
+                showToast(`Keyframe 1 set for object ${clickedBox.id.substring(0,4)}. Go to another frame, adjust the box, and click the green 'Confirm' button.`, 5000);
+            } else if (interpolationState.objectId === clickedBox.id) {
+                if (currentFrame === interpolationState.startFrameData.frame_number) {
+                    showToast("You are on the same frame. Move to a different frame to set the second keyframe.", 3000);
+                    return;
+                }
+                const endFrameData = {
+                    frame_number: currentFrame,
+                    bbox: JSON.parse(JSON.stringify(clickedBox))
+                };
+                const $btn = $(this);
+                $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span>');
+
+                $.ajax({
+                    url: "/api/interpolateBboxes",
+                    type: "POST",
+                    contentType: "application/json",
+                    data: JSON.stringify({
+                        video_uuid: videoUuid,
+                        object_id: interpolationState.objectId,
+                        start_frame: interpolationState.startFrameData,
+                        end_frame: endFrameData
+                    }),
+                    success: function(response) {
+                        if (response.success) {
+                            showToast(response.message, 4000);
+                            window.cachedFrames = null;
+                        } else {
+                            showToast("Error: " + response.message, 5000);
+                        }
+                    },
+                    error: function() {
+                        showToast("Server error during interpolation.", 5000);
+                    },
+                    complete: function() {
+                        const nextFrame = Math.min(parseInt(interpolationState.startFrameData.frame_number), parseInt(endFrameData.frame_number)) + 1;
+                        resetInterpolationState(false);
+                        if (nextFrame < frameCount && nextFrame > 0) {
+                            frameSlider.val(nextFrame).trigger("input");
+                        } else {
+                            frameSlider.trigger("input");
+                        }
+                    }
+                });
+            }
+            renderBboxList();
+            redrawCanvas();
+        });
+
+        $('#interactive-mode-toggle').on('click', function() {
+            isInteractiveMode = !isInteractiveMode;
+            $(this).toggleClass('active', isInteractiveMode);
+            $('#interactive-segment-controls').slideToggle(isInteractiveMode);
+            if (isInteractiveMode) {
+                $(this).html('<i class="bi bi-stars"></i> Smart Select ON');
+                clearCrosshairs();
+            } else {
+                $(this).html('<i class="bi bi-stars"></i> Enable Smart Select');
+                clearInteractiveSession();
+            }
+            updateSamButtonText();
+        });
+
+        $('#draw-positive-btn').on('click', function() {
+            interactiveDrawMode = 'positive';
+            $(this).addClass('active');
+            $('#draw-negative-btn').removeClass('active');
+        });
+
+        $('#draw-negative-btn').on('click', function() {
+            interactiveDrawMode = 'negative';
+            $(this).addClass('active');
+            $('#draw-positive-btn').removeClass('active');
+        });
+
+        $('#clear-samples-btn').on('click', function() {
+            clearInteractiveSession();
+            showToast('Sample boxes cleared.', 2000);
+        });
+
+        $('#find-similar-btn').on('click', function() {
+            if (positiveExampleBboxes.length === 0) {
+                alert('Please create at least one positive sample box first!');
+                return;
+            }
+            lastDatasetClassName = null;
+            $('#apply-to-video-btn').prop('disabled', true);
+            const frameNumber = parseInt(frameSlider.val());
+            const $button = $(this);
+            $button.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> Finding...');
+
+            const runPrediction = () => {
+                showToast('Predicting with current samples...', 4000);
+                const payload = {
+                    cache_key: currentCacheKey,
+                    prompt_boxes: positiveExampleBboxes.map(b => [b.x1, b.y1, b.x2, b.y2]),
+                    negative_boxes: negativeExampleBboxes.map(b => [b.x1, b.y1, b.x2, b.y2]),
+                    hyperparameters: getHyperparameters()
+                };
+                $.ajax({
+                    url: '/interactive_segment/predict',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(payload),
+                    success: res => {
+                        if (res.success) {
+                            previewBboxes = res.results;
+                            $('#interactive-results-controls').slideDown();
+                            $('#result-threshold').trigger('input');
+                            redrawCanvas();
+                        } else {
+                            alert('Prediction failed: ' + res.message);
+                        }
+                    },
+                    error: () => alert('Server error during prediction.'),
+                    complete: () => $button.prop('disabled', false).html('<i class="bi bi-search"></i> Find Similar Objects')
+                });
+            };
+
+            if (lastProcessedFrame !== frameNumber) {
+                showToast('Preprocessing frame... (this may take a moment)', 10000);
+                const payload = {
+                    video_uuid: videoUuid,
+                    frame_number: frameNumber,
+                    hyperparameters: getHyperparameters()
+                };
+                $.ajax({
+                    url: '/interactive_segment/preprocess',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(payload),
+                    success: res => {
+                        if (res.success) {
+                            currentCacheKey = res.cache_key;
+                            lastProcessedFrame = frameNumber;
+                            runPrediction();
+                        } else {
+                            alert('Preprocessing failed: ' + res.message);
+                            $button.prop('disabled', false).html('<i class="bi bi-search"></i> Find Similar Objects');
+                        }
+                    },
+                    error: () => {
+                        alert('Server error during preprocessing.');
+                        $button.prop('disabled', false).html('<i class="bi bi-search"></i> Find Similar Objects');
+                    }
+                });
+            } else {
+                runPrediction();
+            }
+        });
+
+        $('#find-from-dataset-btn').on('click', function() {
+            if (!activeClass) {
+                alert('Please select a class first!');
+                return;
+            }
+            const frameNumber = parseInt(frameSlider.val());
+            const $button = $(this);
+            $button.prop('disabled', true);
+            showToast(`Learning from all '${activeClass}' examples in the dataset...`, 10000);
+            const payload = {
+                video_uuid: videoUuid,
+                frame_number: frameNumber,
+                class_name: activeClass,
+                hyperparameters: getHyperparameters()
+            };
+            $.ajax({
+                url: '/interactive_segment/predict_from_dataset',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(payload),
+                success: function(res) {
+                    if (res.success) {
+                        previewBboxes = res.results;
+                        lastDatasetClassName = activeClass;
+                        $('#interactive-results-controls').slideDown();
+                        $('#result-threshold').trigger('input');
+                        redrawCanvas();
+                        showToast(`Found ${res.results.length} potential '${activeClass}' objects.`, 4000);
+
+                        setTimeout(() => {
+                            if (confirm(`Find from Dataset for '${activeClass}' successful.\n\nDo you want to refine the model by adding negative samples (e.g., background)? This can improve accuracy.`)) {
+                                const frameCountStr = prompt("How many random frames would you like to label for negative samples?", "10");
+                                const frameCount = frameCountStr ? parseInt(frameCountStr) : 0;
+                                if (frameCount && !isNaN(frameCount) && frameCount > 0) {
+                                    startNegativeSampling(frameCount);
+                                } else {
+                                    $('#apply-to-video-btn').prop('disabled', false);
+                                }
+                            } else {
+                                $('#apply-to-video-btn').prop('disabled', false);
+                            }
+                        }, 500);
+
+                    } else {
+                        alert('Dataset-driven prediction failed: ' + res.message);
+                    }
+                },
+                error: function() {
+                    alert('Server error during dataset-driven prediction.');
+                },
+                complete: function() {
+                    $button.prop('disabled', false);
+                }
+            });
+        });
+
+        $('#neg-canvas-container').on('mousedown', function(e) {
+            isDrawingNeg = true;
+            const pos = getMousePos(negCanvas, e);
+            negStartX = pos.x;
+            negStartY = pos.y;
+        }).on('mousemove', function(e) {
+            if (!isDrawingNeg) return;
+            redrawNegCanvas();
+            const pos = getMousePos(negCanvas, e);
+            const dpr = window.devicePixelRatio || 1;
+            negCtx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
+            negCtx.lineWidth = 2 / dpr;
+            negCtx.setLineDash([5 / dpr, 3 / dpr]);
+            negCtx.strokeRect(negStartX, negStartY, pos.x - negStartX, pos.y - negStartY);
+            negCtx.setLineDash([]);
+        }).on('mouseup', function(e) {
+            if (!isDrawingNeg) return;
+            isDrawingNeg = false;
+            const pos = getMousePos(negCanvas, e);
+            const scaleX = negImage.naturalWidth / negImage.clientWidth;
+            const scaleY = negImage.naturalHeight / negImage.clientHeight;
+            const x1 = Math.round(Math.min(negStartX, pos.x) * scaleX);
+            const y1 = Math.round(Math.min(negStartY, pos.y) * scaleY);
+            const x2 = Math.round(Math.max(negStartX, pos.x) * scaleX);
+            const y2 = Math.round(Math.max(negStartY, pos.y) * scaleY);
+
+            if (Math.abs(x1 - x2) < 5 || Math.abs(y1 - y2) < 5) {
+                redrawNegCanvas();
+                return;
+            }
+            const frameData = negSamplingFrames[currentNegSampleIndex];
+            const frameKey = `${frameData.video_uuid};${frameData.frame_number}`;
+            if (!negativeSamplesStore[frameKey]) {
+                negativeSamplesStore[frameKey] = [];
+            }
+            negativeSamplesStore[frameKey].push([x1, y1, x2, y2]);
+            redrawNegCanvas();
+        });
+
+        $('#neg-prev-btn').on('click', function() {
+            if (currentNegSampleIndex > 0) {
+                currentNegSampleIndex--;
+                loadNegativeSampleFrame();
+            }
+        });
+        $('#neg-next-btn').on('click', function() {
+            if (currentNegSampleIndex < negSamplingFrames.length - 1) {
+                currentNegSampleIndex++;
+                loadNegativeSampleFrame();
+            }
+        });
+
+        $('#finish-neg-sampling-btn').on('click', function() {
+            $('#negative-sampling-modal').modal('hide');
+            const finalNegativeSamples = Object.fromEntries(
+                Object.entries(negativeSamplesStore).filter(([key, value]) => value.length > 0)
+            );
+            if (Object.keys(finalNegativeSamples).length > 0) {
+                showToast(`Refining model with ${Object.keys(finalNegativeSamples).length} frames of negative samples.`);
+            } else {
+                showToast("No negative samples were added. Applying original model.");
+            }
+            triggerApplyToVideo(finalNegativeSamples);
+        });
+
+        $('#apply-to-video-btn').on('click', function() {
+            triggerApplyToVideo(null);
+        });
+
+        $('#result-threshold').on('input', function() {
+            const value = parseFloat($(this).val());
+            $('#threshold-value').text(value.toFixed(2));
+            redrawCanvas();
+        });
+
+        $('#accept-visible-btn').on('click', function() {
+            if (!activeClass) {
+                alert('Please select a class before accepting results.');
+                return
+            }
+            const threshold = parseFloat($('#result-threshold').val());
+            let addedCount = 0;
+            const remainingPreviews = [];
+            previewBboxes.forEach(res => {
+                if (res.score >= threshold) {
+                    const b = res.box;
+                    bboxes.push({
+                        x1: b[0],
+                        y1: b[1],
+                        x2: b[2],
+                        y2: b[3],
+                        label: res.label || activeClass
+                    });
+                    addedCount++;
+                } else {
+                    remainingPreviews.push(res);
+                }
+            });
+            if (addedCount > 0) {
+                previewBboxes = remainingPreviews;
+                saveStateToHistory();
+                renderBboxList();
+                redrawCanvas();
+                showToast(`${addedCount} new bounding boxes added.`, 2000);
+            } else {
+                showToast('No boxes above the current threshold to accept.', 2000);
+            }
+        });
+
+        $('#finish-interactive-btn').on('click', clearInteractiveSession);
+
+        $(document).on("keydown", function(e) {
+            if ($(e.target).is("input, textarea")) return;
+
+            const isNegModalVisible = $('#negative-sampling-modal').is(':visible');
+            const key = e.key.toLowerCase();
+
+            if (key === 'c') {
+                e.preventDefault();
+                isCKeyPressed = true;
+            }
+
+            if (e.ctrlKey && key === "z") {
+                e.preventDefault();
+                if (isNegModalVisible) {
+                    undoNegativeSample();
+                } else {
+                    undo();
+                }
+            } else if (e.ctrlKey && (key === "y" || (e.shiftKey && key === "z"))) {
+                if (!isNegModalVisible) {
+                    e.preventDefault();
+                    redo();
+                }
+            } else if (e.key === "Delete" || e.key === "Backspace") {
+                e.preventDefault();
+                if (isNegModalVisible) {
+                    clearCurrentNegativeSamples();
+                } else if (selectedBboxIndex !== -1) {
+                    bboxes.splice(selectedBboxIndex, 1);
+                    saveStateToHistory();
+                    selectedBboxIndex = -1;
+                    redrawCanvas();
+                    renderBboxList();
+                }
+            } else if (e.key === "Escape" && interpolationState.isActive) {
+                e.preventDefault();
+                resetInterpolationState(true);
+                showToast("Interpolation cancelled.", 2000);
+            } else {
+                switch (key) {
+                    case "s":
+                        if (!isNegModalVisible) {
+                            e.preventDefault();
+                            $("#save-bboxes").click();
+                        }
+                        break;
+                    case "a":
+                        e.preventDefault();
+                        if (isNegModalVisible) {
+                            $('#neg-prev-btn').click();
+                        } else {
+                            let prevFrame = parseInt(frameSlider.val()) - 1;
+                            if (prevFrame >= task.start_frame) {
+                                frameSlider.val(prevFrame).trigger("input");
+                            }
+                        }
+                        break;
+                    case "d":
+                        e.preventDefault();
+                        if (isNegModalVisible) {
+                            $('#neg-next-btn').click();
+                        } else {
+                            let nextFrame = parseInt(frameSlider.val()) + 1;
+                            if (nextFrame < frameCount) {
+                                frameSlider.val(nextFrame).trigger("input");
+                            }
+                        }
+                        break;
+                }
+            }
+        }).on("keyup", function(e) {
+            if (e.key.toLowerCase() === 'c') {
+                isCKeyPressed = false;
+            }
+        });
+
+        function performInitialLoad() {
+            $.get('/listClasses', function(response) {
+                if (response.success) {
+                    response.labels.forEach(label => {
+                        if (!availableClasses.includes(label)) {
+                            availableClasses.push(label);
+                        }
+                    });
+                    renderClassList();
+
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const frameFromUrl = urlParams.get('frame');
+                    if (frameFromUrl) {
+                        const frameNumber = parseInt(frameFromUrl);
+                        if (frameNumber >= parseInt(frameSlider.attr('min')) && frameNumber <= parseInt(frameSlider.attr('max'))) {
+                            frameSlider.val(frameNumber);
+                        }
+                    }
+                    resizeCanvas();
+                    frameSlider.trigger('input');
+                }
+            });
+        }
+
+        if (window.cachedFrames) {
+            delete window.cachedFrames;
+        }
+
+        if (frameImage.complete && frameImage.naturalWidth > 0) {
+            performInitialLoad();
+        } else {
+            $(frameImage).one('load', performInitialLoad);
         }
     });
-
-    // --- Initial Load ---
-    function performInitialLoad() {$.get('/listClasses', function(response) {if (response.success) {response.labels.forEach(lbl => { if(!availableClasses.includes(lbl)) availableClasses.push(lbl); });renderClassList();const urlParams = new URLSearchParams(window.location.search);const frameFromUrl = urlParams.get('frame');if (frameFromUrl) {const frameNumber = parseInt(frameFromUrl);if (frameNumber >= parseInt(frameSlider.attr('min')) && frameNumber <= parseInt(frameSlider.attr('max'))) {frameSlider.val(frameNumber);}}resizeCanvas();frameSlider.trigger('input');}});}
-    if (window.cachedFrames) delete window.cachedFrames;
-    if (frameImage.complete && frameImage.naturalWidth > 0) { performInitialLoad(); } else { $(frameImage).one('load', performInitialLoad); }
-});
 </script>
 {% endblock %}

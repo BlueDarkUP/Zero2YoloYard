@@ -1,5 +1,3 @@
-# ai_models.py
-
 import logging
 import os
 import torch
@@ -10,19 +8,15 @@ from torchvision.ops import nms, box_iou
 from torch.cuda.amp import autocast
 import numpy as np
 import random
-
-# 从项目其他模块导入必要的组件
 import database
 import file_storage
-from bbox_writer import parse_bboxes_text
+from bbox_writer import convert_text_to_rects_and_labels
 
 try:
     import ultralytics_sam_tasks as sam_tasks
 except ImportError:
     logging.warning("ultralytics_sam_tasks.py not found or failed to import. All SAM features will be disabled.")
     sam_tasks = None
-
-# --- 模型和配置的全局状态 ---
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 models = {}
 PREPROCESSED_DATA_CACHE = {}
@@ -32,8 +26,6 @@ DEFAULT_BATCH_SIZE = 16
 DEFAULT_FEATURE_FUSION_WEIGHTS = torch.tensor([0.1, 0.2, 0.3, 0.4], device=DEVICE).view(4, 1, 1, 1)
 SCORE_TEMPERATURE = 0.07
 
-
-# --- 模型加载 ---
 def startup_ai_models():
     """在主线程中初始化所有AI模型"""
     if 'dinov2' in models:
@@ -69,9 +61,6 @@ def startup_ai_models():
 
     except Exception as e:
         logging.error(f"加载 DINOv2 模型失败: {e}", exc_info=True)
-
-
-# --- AI核心逻辑函数 ---
 
 def postprocess_sam_results(results, nms_iou_threshold=0.7):
     if not results or not results[0].masks:
@@ -205,7 +194,7 @@ def get_prototypes_for_class(class_name, hyperparameters=None):
 
     for frame_data in sample_frames:
         try:
-            rects, labels = convert_text_to_rects_and_labels(frame_data['bboxes_text'])
+            rects, labels, _ = convert_text_to_rects_and_labels(frame_data['bboxes_text'])
             target_rects = [np.array(rects[i]) for i, label in enumerate(labels) if label == class_name]
 
             if not target_rects: continue
@@ -238,11 +227,6 @@ def get_prototypes_for_class(class_name, hyperparameters=None):
 
 
 def get_prototypes_from_drawn_boxes(drawn_samples_data, hyperparameters=None):
-    """
-    根据用户在前端临时绘制的负样本框，动态提取并生成特征原型。
-    :param drawn_samples_data: 格式为 {'video_uuid;frame_number': [[x1,y1,x2,y2], ...], ...}
-    :return: 一个包含所有负样本原型的PyTorch张量。
-    """
     all_prototypes = []
     if not drawn_samples_data:
         return None
@@ -253,12 +237,8 @@ def get_prototypes_from_drawn_boxes(drawn_samples_data, hyperparameters=None):
         try:
             video_uuid, frame_number_str = frame_key.split(';')
             frame_num = int(frame_number_str)
-
-            # 将 [x1, y1, x2, y2] 格式的 rects 转换为 numpy array
             target_rects = [np.array(rect) for rect in rects]
             if not target_rects: continue
-
-            # 使用与正样本完全相同的流程来提取特征
             processed_data = _preprocess_and_get_embeddings(video_uuid, frame_num, hyperparameters)
 
             all_boxes = processed_data.get("all_boxes")
@@ -266,8 +246,6 @@ def get_prototypes_from_drawn_boxes(drawn_samples_data, hyperparameters=None):
 
             if all_boxes is None or all_boxes.numel() == 0:
                 continue
-
-            # 找到与用户绘制的框最匹配的候选掩码，并提取它们的嵌入
             matching_indices = find_best_matching_masks_by_iou(np.array(target_rects), all_boxes)
             if matching_indices.numel() > 0:
                 embeddings = all_embeddings[matching_indices]

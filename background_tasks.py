@@ -1,25 +1,16 @@
-# background_tasks.py
-
 import cv2
 import time
 import logging
-from datetime import datetime, timedelta, timezone
 import os
-import uuid
 import numpy as np
 import traceback
-import tempfile
-import shutil
 import torch
 import tensorflow as tf
-import json
-
-# --- 本地模块导入 ---
 import config
 import database
 import file_storage
-import ai_models  # <<< 核心改动：导入新的AI模块
-from bbox_writer import extract_labels, format_bboxes_text, convert_text_to_rects_and_labels
+import ai_models
+from bbox_writer import extract_labels
 
 try:
     import ultralytics_sam_tasks
@@ -57,14 +48,12 @@ def apply_prototypes_to_video_task(video_uuid, class_name, negative_samples, app
         with app_context:
             database.update_video_status(video_uuid, 'APPLYING_PROTOTYPES', f"Initializing for '{class_name}'...")
 
-            # --- 步骤1: 构建正样本原型 ---
             database.update_video_status(video_uuid, 'APPLYING_PROTOTYPES', f"Building positive prototypes for '{class_name}'...")
             positive_prototypes = ai_models.get_prototypes_for_class(class_name)
             if positive_prototypes is None or len(positive_prototypes) == 0:
                 raise ValueError(f"Could not build positive prototypes for class '{class_name}'.")
             logging.info(f"Successfully built {len(positive_prototypes)} positive prototypes for '{class_name}'.")
 
-            # --- 步骤2: (新) 构建负样本原型 ---
             negative_prototypes = None
             has_negative_prototypes = False
             if negative_samples:
@@ -76,7 +65,6 @@ def apply_prototypes_to_video_task(video_uuid, class_name, negative_samples, app
                 else:
                     logging.warning("User provided negative samples, but failed to build prototypes from them.")
 
-            # --- 步骤3: 遍历视频帧进行预测 ---
             all_frames = database.get_video_frames(video_uuid)
             unlabeled_frames = [f for f in all_frames if not f['bboxes_text'].strip()]
             total_frames = len(unlabeled_frames)
@@ -94,7 +82,6 @@ def apply_prototypes_to_video_task(video_uuid, class_name, negative_samples, app
                                              f"Processing frame {i + 1}/{total_frames}")
 
                 try:
-                    # 使用正负原型进行预测
                     predictions = ai_models.predict_with_prototypes(
                         video_uuid, frame_number, positive_prototypes,
                         has_negative_prototypes=has_negative_prototypes,
@@ -419,8 +406,6 @@ def start_tracking_task(video_uuid, tracker_uuid, tracker_name, scale, init_fram
 def build_augmentation_pipeline(options):
     if A is None: return None
     transforms = []
-
-    # Geometric transformations
     if options.get('hflip', {}).get('enabled'):
         transforms.append(A.HorizontalFlip(p=options['hflip']['p']))
     if options.get('vflip', {}).get('enabled'):
@@ -441,9 +426,8 @@ def build_augmentation_pipeline(options):
             A.Affine(shear={'x': (-limit, limit), 'y': (-limit, limit)}, p=options['affine']['p'], cval=0))
     if options.get('crop', {}).get('enabled'):
         transforms.append(A.RandomSizedBBoxSafeCrop(height=1024, width=1024, erosion_rate=0.2,
-                                                    p=options['crop']['p']))  # Height/Width are placeholders
+                                                    p=options['crop']['p']))
 
-    # Color transformations
     if options.get('grayscale', {}).get('enabled'):
         transforms.append(A.ToGray(p=options['grayscale']['p']))
     if options.get('hsv', {}).get('enabled'):
@@ -454,13 +438,11 @@ def build_augmentation_pipeline(options):
             A.RandomBrightnessContrast(brightness_limit=options['bc']['b'], contrast_limit=options['bc']['c'],
                                        p=options['bc']['p']))
 
-    # Blur & Noise
     if options.get('blur', {}).get('enabled'):
         transforms.append(A.GaussianBlur(blur_limit=(3, options['blur']['limit']), p=options['blur']['p']))
     if options.get('noise', {}).get('enabled'):
         transforms.append(A.GaussNoise(var_limit=(10.0, options['noise']['limit']), p=options['noise']['p']))
 
-    # Dropout
     if options.get('cutout', {}).get('enabled'):
         transforms.append(
             BboxSafeCoarseDropout(max_holes=options['cutout']['holes'], max_height=options['cutout']['size'],

@@ -200,14 +200,12 @@ $(document).ready(function() {
 
     function setupAugmentationListeners(contextSelector) {
         const context = $(contextSelector);
-        // Correctly separated listener for range sliders
         context.on('input', 'input[type="range"]', function() {
             $(this).closest('div').find('.val-display').text($(this).val());
             if (contextSelector === '#preview-aug-controls') {
                 triggerAugmentationPreview();
             }
         });
-        // Correctly separated listener for checkboxes
         context.on('change', '.aug-option input[type="checkbox"]', function() {
             const controlsId = $(this).closest('.aug-option').data('controls');
             context.find('#' + controlsId).toggle($(this).is(':checked'));
@@ -215,7 +213,6 @@ $(document).ready(function() {
                 triggerAugmentationPreview();
             }
         });
-        // Initial setup on page load
         context.find('.aug-option input[type="checkbox"]').each(function() {
             const controlsId = $(this).closest('.aug-option').data('controls');
             context.find('#' + controlsId).toggle($(this).is(':checked'));
@@ -246,7 +243,7 @@ $(document).ready(function() {
         };
 
         if(!isForPreview){
-             augOptions.multiply_factor = 3; // Simulate a multiplication factor for stats
+             augOptions.multiply_factor = 3;
         }
         return augOptions;
     }
@@ -303,7 +300,7 @@ $(document).ready(function() {
                 $('#loading-indicator').hide();
                 $('#analysis-content').show();
 
-                originalAnalysisData = response; // Store the original full response
+                originalAnalysisData = response;
                 fullGalleryData = response.gallery_images;
                 allBboxesData = response.all_bboxes;
                 suspiciousPairsData = response.suspicious_pairs;

@@ -1,5 +1,3 @@
-# ultralytics_sam_tasks.py
-
 import logging
 import os
 import torch
@@ -17,7 +15,7 @@ except ImportError:
 import config
 import database
 import file_storage
-from bbox_writer import parse_bboxes_text
+from bbox_writer import convert_text_to_rects_and_labels
 import settings_manager
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
@@ -109,7 +107,7 @@ def track_video_ultralytics(video_uuid, start_frame, end_frame, init_bboxes_text
     original_width = video_info['width']
     original_height = video_info['height']
 
-    init_rects, init_labels = convert_text_to_rects_and_labels(init_bboxes_text)
+    init_rects, init_labels, _ = convert_text_to_rects_and_labels(init_bboxes_text)
     if not init_rects:
         raise ValueError("No initial bounding boxes provided for tracking.")
 

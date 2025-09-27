@@ -21,7 +21,6 @@ def _add_column_if_not_exists(cursor, table_name, column_name, column_type):
 
 
 def migrate_db():
-    """Applies necessary schema migrations to the database."""
     conn = get_db_connection()
     cursor = conn.cursor()
     _add_column_if_not_exists(cursor, 'datasets', 'eval_percent', 'REAL')
@@ -29,9 +28,8 @@ def migrate_db():
     _add_column_if_not_exists(cursor, 'models', 'label_filename', 'TEXT')
     _add_column_if_not_exists(cursor, 'models', 'model_type', 'TEXT')
     _add_column_if_not_exists(cursor, 'videos', 'last_pre_annotation_info', 'TEXT')
-    # --- 新增迁移 ---
     _add_column_if_not_exists(cursor, 'video_frames', 'tags', 'TEXT')
-    _add_column_if_not_exists(cursor, 'video_frames', 'suggested_bboxes_text', 'TEXT') # 新增: AI建议字段
+    _add_column_if_not_exists(cursor, 'video_frames', 'suggested_bboxes_text', 'TEXT')
     conn.commit()
     conn.close()
 
@@ -46,7 +44,7 @@ def init_db():
         video_filename TEXT,
         file_size INTEGER,
         create_time_ms INTEGER,
-        status TEXT, -- 'UPLOADING', 'EXTRACTING', 'READY', 'FAILED', 'PRE_ANNOTATING', 'APPLYING_PROTOTYPES', 'CANCELLING'
+        status TEXT,
         status_message TEXT,
         width INTEGER,
         height INTEGER,
@@ -65,7 +63,7 @@ def init_db():
         video_uuid TEXT,
         frame_number INTEGER,
         bboxes_text TEXT,
-        suggested_bboxes_text TEXT, -- <<< 新增字段：存储AI生成的建议标注
+        suggested_bboxes_text TEXT,
         tags TEXT,
         include_frame_in_dataset INTEGER,
         FOREIGN KEY (video_uuid) REFERENCES videos (video_uuid) ON DELETE CASCADE
@@ -76,9 +74,9 @@ def init_db():
     CREATE TABLE IF NOT EXISTS datasets (
         dataset_uuid TEXT PRIMARY KEY,
         description TEXT NOT NULL UNIQUE,
-        video_uuids TEXT, -- JSON list of video_uuids
+        video_uuids TEXT,
         create_time_ms INTEGER,
-        status TEXT, -- 'PENDING', 'PROCESSING', 'READY', 'FAILED'
+        status TEXT,
         status_message TEXT,
         zip_path TEXT,
         sorted_label_list TEXT,
@@ -191,7 +189,7 @@ def update_video_after_extraction_start(video_uuid, width, height, fps, frame_co
         'UPDATE videos SET width=?, height=?, fps=?, frame_count=?, included_frame_count=?, status=? WHERE video_uuid=?',
         (width, height, fps, frame_count, frame_count, 'EXTRACTING', video_uuid)
     )
-    frames_to_insert = [(video_uuid, i, '', '', '', 1) for i in range(frame_count)]  # suggested_bboxes_text, tags 初始为空字符串
+    frames_to_insert = [(video_uuid, i, '', '', '', 1) for i in range(frame_count)]
     cursor.executemany(
         'INSERT INTO video_frames (video_uuid, frame_number, bboxes_text, suggested_bboxes_text, tags, include_frame_in_dataset) VALUES (?, ?, ?, ?, ?, ?)',
         frames_to_insert
@@ -225,7 +223,6 @@ def get_video_frames(video_uuid):
 def save_frame_bboxes(video_uuid, frame_number, bboxes_text):
     conn = get_db_connection()
     cursor = conn.cursor()
-    # 当用户手动保存时，意味着该帧已被审核，因此清除AI建议
     cursor.execute(
         'UPDATE video_frames SET bboxes_text = ?, suggested_bboxes_text = ? WHERE video_uuid = ? AND frame_number = ?',
         (bboxes_text, '', video_uuid, frame_number)
@@ -241,7 +238,6 @@ def save_frame_bboxes(video_uuid, frame_number, bboxes_text):
     conn.commit()
     conn.close()
 
-# --- 新增函数：仅保存AI建议，不影响人工标注 ---
 def save_frame_suggestions(video_uuid, frame_number, suggested_bboxes_text):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -383,12 +379,8 @@ def delete_class_label(label_name):
     conn.commit()
     conn.close()
 
-
-# --- 新增函数：获取数据集中某个特定类的所有已标注样本 ---
 def get_all_frames_with_class(class_name):
     conn = get_db_connection()
-    # 使用 LIKE 操作符来查找包含特定类名的 bboxes_text
-    # 注意：这假设标签名中不包含SQL通配符，并且格式稳定
     query = f"""
         SELECT T1.*, T2.width, T2.height FROM video_frames AS T1
         INNER JOIN videos AS T2 ON T1.video_uuid = T2.video_uuid
@@ -396,7 +388,6 @@ def get_all_frames_with_class(class_name):
     """
     frames = conn.execute(query).fetchall()
 
-    # 客户端进一步过滤，确保是完整的类名匹配
     result_frames = []
     for frame in frames:
         lines = frame['bboxes_text'].strip().split('\n')
@@ -404,7 +395,7 @@ def get_all_frames_with_class(class_name):
             parts = line.strip().split(',', 4)
             if len(parts) >= 5 and parts[4] == class_name:
                 result_frames.append(dict(frame))
-                break # 找到一个匹配就够了，避免重复添加
+                break
     conn.close()
     return result_frames
 

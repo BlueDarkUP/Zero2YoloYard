@@ -1,13 +1,9 @@
-# config.py
-
 import os
 import sys
 
 if getattr(sys, 'frozen', False):
-    # 如果是打包后的 exe，则基目录是 exe 文件所在的目录
     BASE_DIR = os.path.dirname(sys.executable)
 else:
-    # 如果是正常的 python 环境，则基目录是.py文件所在的目录
     BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
 DATABASE_FILE = os.path.join(BASE_DIR, 'ftc_ml.db')

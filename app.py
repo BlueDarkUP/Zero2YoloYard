@@ -13,14 +13,12 @@ from collections import Counter
 from skimage import io as skio
 import itertools
 import random
-
-# --- 本地模块导入 ---
 import settings_manager
 import config
 import database
 import file_storage
 import background_tasks
-import ai_models  # <<< 导入新的AI模块
+import ai_models
 from bbox_writer import validate_bboxes_text, convert_text_to_rects_and_labels, extract_labels
 
 try:
@@ -29,7 +27,6 @@ except ImportError:
     logging.error("PyYAML is not installed! Dataset export will fail. Please run 'pip install pyyaml'.")
     yaml = None
 
-# --- Flask应用设置 ---
 app = flask.Flask(__name__)
 app.secret_key = os.urandom(24)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(threadName)s - %(message)s')
@@ -38,9 +35,6 @@ with app.app_context():
     database.init_db()
     database.migrate_db()
     file_storage.init_storage()
-
-
-# --- 通用辅助函数 ---
 
 def validate_description(desc, existing_descriptions):
     if not (1 <= len(desc) <= config.MAX_DESCRIPTION_LENGTH):
@@ -143,9 +137,6 @@ def generate_mosaic_previews(sample_pool, selected_video_uuid, selected_frame_nu
 
     return previews
 
-
-# --- 标准Flask路由 ---
-
 @app.route('/')
 def index():
     return render_template('root.html',
@@ -205,7 +196,7 @@ def serve_annotated_frame(video_uuid, frame_number):
         bboxes_text = frame_data['bboxes_text'] if frame_data else None
 
         if bboxes_text and bboxes_text.strip():
-            rects, labels = convert_text_to_rects_and_labels(bboxes_text)
+            rects, labels, _ = convert_text_to_rects_and_labels(bboxes_text)
             for i, rect in enumerate(rects):
                 label = labels[i]
                 color = string_to_color_bgr(label)
@@ -379,6 +370,60 @@ def list_classes():
     return jsonify({'success': True, 'labels': labels})
 
 
+@app.route('/api/interpolateBboxes', methods=['POST'])
+def interpolate_bboxes():
+    data = request.json
+    video_uuid = data.get('video_uuid')
+    object_id = data.get('object_id')
+    start_frame_data = data.get('start_frame')
+    end_frame_data = data.get('end_frame')
+
+    if not all([video_uuid, object_id, start_frame_data, end_frame_data]):
+        return jsonify({'success': False, 'message': 'Missing required data.'}), 400
+
+    try:
+        start_frame_num = int(start_frame_data['frame_number'])
+        end_frame_num = int(end_frame_data['frame_number'])
+        start_bbox = start_frame_data['bbox']
+        end_bbox = end_frame_data['bbox']
+        label = start_bbox['label']
+
+        if start_frame_num >= end_frame_num:
+            start_frame_num, end_frame_num = end_frame_num, start_frame_num
+            start_bbox, end_bbox = end_bbox, start_bbox
+
+        total_steps = end_frame_num - start_frame_num
+        if total_steps <= 1:
+            return jsonify({'success': True, 'message': 'No frames to interpolate.'})
+        for i in range(1, total_steps):
+            current_frame_num = start_frame_num + i
+            t = i / float(total_steps)
+            interp_x1 = int(start_bbox['x1'] + (end_bbox['x1'] - start_bbox['x1']) * t)
+            interp_y1 = int(start_bbox['y1'] + (end_bbox['y1'] - start_bbox['y1']) * t)
+            interp_x2 = int(start_bbox['x2'] + (end_bbox['x2'] - start_bbox['x2']) * t)
+            interp_y2 = int(start_bbox['y2'] + (end_bbox['y2'] - start_bbox['y2']) * t)
+
+            new_bbox_line = f"{interp_x1},{interp_y1},{interp_x2},{interp_y2},{label},{object_id}"
+            conn = database.get_db_connection()
+            frame_db = conn.execute('SELECT bboxes_text FROM video_frames WHERE video_uuid = ? AND frame_number = ?',
+                                    (video_uuid, current_frame_num)).fetchone()
+
+            existing_bboxes = frame_db['bboxes_text'] if frame_db else ''
+            lines = existing_bboxes.split('\n') if existing_bboxes else []
+            updated_lines = [line for line in lines if not line.endswith(f',{object_id}')]
+
+            updated_lines.append(new_bbox_line)
+            final_bboxes_text = '\n'.join(filter(None, updated_lines))
+
+            conn.close()
+            database.save_frame_bboxes(video_uuid, current_frame_num, final_bboxes_text)
+
+        return jsonify({'success': True, 'message': f'Interpolated {total_steps - 1} frames successfully.'})
+
+    except Exception as e:
+        logging.error(f"Interpolation failed: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': str(e)}), 500
+
 @app.route('/addClass', methods=['POST'])
 def add_class():
     data = request.json
@@ -468,9 +513,6 @@ def sam_predict():
     except Exception as e:
         logging.error(f"SAM prediction failed: {e}", exc_info=True)
         return jsonify({'success': False, 'message': str(e)}), 500
-
-
-# --- AI API 路由 ---
 
 @app.route('/interactive_segment/preprocess', methods=['POST'])
 def interactive_segment_preprocess_route():
@@ -613,9 +655,6 @@ def apply_prototypes_to_video_route():
 
     return jsonify({'success': True, 'message': 'Task to apply prototypes has started.'})
 
-
-# --- 跟踪路由 ---
-
 @app.route('/startSam2Tracking', methods=['POST'])
 def start_sam2_tracking():
     try:
@@ -750,9 +789,6 @@ def stop_tracking():
     if tracker_uuid in background_tasks.tracking_sessions:
         background_tasks.tracking_sessions[tracker_uuid]['stop_requested'] = True
     return jsonify({'success': True})
-
-
-# --- 数据集、模型和其他管理路由 ---
 
 @app.route('/listDatasets', methods=['GET'])
 def list_datasets():
@@ -965,7 +1001,7 @@ def get_dataset_analysis_data(dataset_uuid):
 
     for i, frame in enumerate(all_frames):
         video_uuid, frame_number, bboxes_text = frame['video_uuid'], frame['frame_number'], frame['bboxes_text']
-        rects, labels = convert_text_to_rects_and_labels(bboxes_text)
+        rects, labels, _ = convert_text_to_rects_and_labels(bboxes_text)
 
         image_class_map[i] = list(set(labels))
         objects_per_image.append(len(labels))

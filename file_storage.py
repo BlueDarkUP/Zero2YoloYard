@@ -66,7 +66,7 @@ def get_dataset_zip_path(dataset_uuid):
 
 
 def get_yolo_bboxes(bboxes_text, width, height, class_map):
-    rects, labels = convert_text_to_rects_and_labels(bboxes_text)
+    rects, labels, _ = convert_text_to_rects_and_labels(bboxes_text)
     if not rects: return [], []
 
     yolo_bboxes = []
@@ -79,18 +79,10 @@ def get_yolo_bboxes(bboxes_text, width, height, class_map):
         norm_y1 = y1 / height
         norm_x2 = x2 / width
         norm_y2 = y2 / height
-
-        # --- BUG FIX START ---
-        # 旧的逻辑无法正确处理大于1.0的坐标
-        # norm_x1, norm_y1 = max(0.0, norm_x1), max(0.0, norm_y1)
-        # norm_x2, norm_y2 = min(1.0, norm_x2), min(1.0, norm_y2)
-
-        # 新的逻辑确保所有坐标点都被严格限制在 [0.0, 1.0] 区间内
         norm_x1 = max(0.0, min(1.0, norm_x1))
         norm_y1 = max(0.0, min(1.0, norm_y1))
         norm_x2 = max(0.0, min(1.0, norm_x2))
         norm_y2 = max(0.0, min(1.0, norm_y2))
-        # --- BUG FIX END ---
 
         box_w = norm_x2 - norm_x1
         box_h = norm_y2 - norm_y1
@@ -117,16 +109,16 @@ def create_mosaic_image(image_infos, class_map):
         img = cv2.imread(get_frame_path(info['video_uuid'], info['frame_number']))
         h, w, _ = img.shape
 
-        if i == 0:  # top left
+        if i == 0:
             x1a, y1a, x2a, y2a = max(xc - w, 0), max(yc - h, 0), xc, yc
             x1b, y1b, x2b, y2b = w - (x2a - x1a), h - (y2a - y1a), w, h
-        elif i == 1:  # top right
+        elif i == 1:
             x1a, y1a, x2a, y2a = xc, max(yc - h, 0), min(xc + w, s * 2), yc
             x1b, y1b, x2b, y2b = 0, h - (y2a - y1a), min(w, x2a - x1a), h
-        elif i == 2:  # bottom left
+        elif i == 2:
             x1a, y1a, x2a, y2a = max(xc - w, 0), yc, xc, min(s * 2, yc + h)
             x1b, y1b, x2b, y2b = w - (x2a - x1a), 0, w, min(y2a - y1a, h)
-        elif i == 3:  # bottom right
+        elif i == 3:
             x1a, y1a, x2a, y2a = xc, yc, min(xc + w, s * 2), min(s * 2, yc + h)
             x1b, y1b, x2b, y2b = 0, 0, min(w, x2a - x1a), min(y2a - y1a, h)
 
