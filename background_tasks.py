@@ -117,6 +117,7 @@ def apply_prototypes_to_video_task(video_uuid, class_name, negative_samples, app
 
 
 def start_sam2_tracking_task(video_uuid, tracker_uuid, start_frame, end_frame, init_bboxes_text):
+    """ Handles the original INTERACTIVE tracking mode. """
     if active_tasks.get(video_uuid):
         logging.warning(f"A task is already running for video {video_uuid}.")
         tracking_sessions[tracker_uuid] = {'status': 'FAILED', 'message': 'Another task is active.'}
@@ -141,7 +142,7 @@ def start_sam2_tracking_task(video_uuid, tracker_uuid, start_frame, end_frame, i
 
     try:
         logging.info(
-            f"Starting ULTRALYTICS SAM tracking for video {video_uuid} from frame {start_frame} to {end_frame}")
+            f"Starting INTERACTIVE SAM tracking for video {video_uuid} from frame {start_frame} to {end_frame}")
         session['status'] = 'PROCESSING'
 
         ultralytics_sam_tasks.track_video_ultralytics(
@@ -153,14 +154,14 @@ def start_sam2_tracking_task(video_uuid, tracker_uuid, start_frame, end_frame, i
         )
 
         final_status = session.get('status', 'COMPLETED')
-        logging.info(f"Ultralytics SAM tracking for {tracker_uuid} finished with status: {final_status}.")
+        logging.info(f"Interactive SAM tracking for {tracker_uuid} finished with status: {final_status}.")
 
     except Exception as e:
-        logging.error(f"Error during Ultralytics SAM tracking for {video_uuid}: {e}\n{traceback.format_exc()}")
+        logging.error(f"Error during Interactive SAM tracking for {video_uuid}: {e}\n{traceback.format_exc()}")
         session['status'] = 'FAILED'
         session['message'] = str(e)
     finally:
-        logging.info(f"Cleaning up resources for Ultralytics SAM tracking task {tracker_uuid}...")
+        logging.info(f"Cleaning up resources for Interactive SAM tracking task {tracker_uuid}...")
 
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
@@ -170,6 +171,59 @@ def start_sam2_tracking_task(video_uuid, tracker_uuid, start_frame, end_frame, i
             del active_tasks[video_uuid]
 
         logging.info(f"Resource cleanup for task {tracker_uuid} complete.")
+
+
+def start_sam2_batch_tracking_task(video_uuid, tracker_uuid, start_frame, end_frame, init_bboxes_text):
+    """ Handles the new BATCH tracking mode using SAM2VideoPredictor. """
+    if active_tasks.get(video_uuid):
+        logging.warning(f"A task is already running for video {video_uuid}.")
+        tracking_sessions[tracker_uuid] = {'status': 'FAILED', 'message': 'Another task is active.'}
+        return
+
+    if ultralytics_sam_tasks is None:
+        logging.error("Ultralytics SAM Tasks module not available for batch tracking.")
+        tracking_sessions[tracker_uuid] = {'status': 'FAILED',
+                                           'message': 'Ultralytics library not installed or configured on server.'}
+        return
+
+    active_tasks[video_uuid] = tracker_uuid
+    session = {
+        'status': 'BATCH_PROCESSING',
+        'progress': 0,
+        'total': (end_frame - start_frame) + 1,
+        'results': {},
+        'stop_requested': False,  # Note: This won't work for batch mode, but kept for consistency
+        'message': 'Preparing temporary video clip...'
+    }
+    tracking_sessions[tracker_uuid] = session
+
+    try:
+        logging.info(
+            f"Starting BATCH SAM tracking for video {video_uuid} from frame {start_frame} to {end_frame}")
+
+        # This is a blocking call that performs the entire batch tracking job
+        all_results = ultralytics_sam_tasks.run_batch_tracking_with_predictor(
+            video_uuid,
+            start_frame,
+            end_frame,
+            init_bboxes_text,
+            session  # Pass session for progress updates (e.g., status message)
+        )
+
+        session['results'] = all_results
+        session['progress'] = session['total']
+        session['status'] = 'COMPLETED'
+        session['message'] = 'Batch processing complete. Ready for review.'
+        logging.info(f"Batch SAM tracking for {tracker_uuid} finished successfully.")
+
+    except Exception as e:
+        logging.error(f"Error during Batch SAM tracking for {video_uuid}: {e}\n{traceback.format_exc()}")
+        session['status'] = 'FAILED'
+        session['message'] = str(e)
+    finally:
+        if active_tasks.get(video_uuid) == tracker_uuid:
+            del active_tasks[video_uuid]
+        logging.info(f"Batch tracking task for {tracker_uuid} cleaned up.")
 
 
 def extract_frames_task(video_uuid):

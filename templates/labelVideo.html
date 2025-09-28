@@ -321,6 +321,53 @@
     </li>
 </template>
 
+<!-- START: New Tracking Options Modal -->
+<div class="modal fade" id="tracking-options-modal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Select Tracking Mode</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>Choose the best tracking method for your task.</p>
+                <div class="list-group">
+                    <label class="list-group-item list-group-item-action">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h6 class="mb-1"><input type="radio" name="tracking-mode" value="interactive" checked> Interactive Tracking</h6>
+                            <small><span class="badge badge-primary">Recommended</span></small>
+                        </div>
+                        <p class="mb-1 small text-muted">Real-time feedback, can be stopped and corrected at any time. Ideal for complex scenes or when accuracy needs supervision.</p>
+                    </label>
+                    <label class="list-group-item list-group-item-action">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h6 class="mb-1"><input type="radio" name="tracking-mode" value="batch"> High-Accuracy Batch Mode</h6>
+                             <small><span class="badge badge-success">High Quality</span></small>
+                        </div>
+                        <p class="mb-1 small text-muted">Uses the official `SAM2VideoPredictor` for potentially better results but cannot be stopped. Best for clear, stable video clips.</p>
+                    </label>
+                </div>
+
+                <div id="batch-mode-options" class="mt-3" style="display: none;">
+                    <div class="form-group">
+                        <label for="batch-end-frame"><strong>Process until frame:</strong></label>
+                        <input type="number" class="form-control" id="batch-end-frame" min="0">
+                        <small class="form-text text-muted">The tracking will run from the current frame up to this frame.</small>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                <button type="button" id="confirm-tracking-start" class="btn btn-primary"><i class="bi bi-play-circle-fill"></i> Start Tracking</button>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- END: New Tracking Options Modal -->
+
+
 {% from "_macros.html" import render_modal %}
 {% call render_modal('negative-sampling-modal', 'Step 2: Refine with Negative Samples') %}
 <div id="neg-sampling-body">
@@ -873,10 +920,17 @@
                         }
                     }
                     break;
-
+                case "batch_update": // For batch mode progress
+                    const batch_percentage = eventData.total > 0 ? Math.round(eventData.progress / eventData.total * 100) : 0;
+                     $("#track-progress-bar").css("width", batch_percentage + "%").text(batch_percentage + "%");
+                     $("#track-status-header").text(eventData.message || `Batch Tracking...`);
+                    break;
                 case "completed":
                 case "stopped":
                 case "failed":
+                    if(eventData.results) { // Batch mode returns all results at once
+                        Object.assign(trackedBboxCache, eventData.results);
+                    }
                     handleTrackingEnd(eventData.event.toUpperCase(), eventData.message);
                     break;
 
@@ -1518,55 +1572,121 @@
             }
         });
 
+        // MODIFIED: This button now opens the tracking options modal
         $('#sam2-track-btn').on('click', function() {
             if (bboxes.length === 0) {
                 alert("Please label at least one object on the current frame to start tracking.");
                 return;
             }
             const startFrame = parseInt(frameSlider.val());
-            const endFrame = parseInt(frameSlider.attr("max"));
+            const maxFrame = parseInt(frameSlider.attr("max"));
+            $('#batch-end-frame').val(maxFrame).attr('min', startFrame + 1).attr('max', maxFrame);
+            $('#tracking-options-modal').modal('show');
+        });
 
-            if (confirm(`This will start tracking ${bboxes.length} object(s) from frame ${startFrame} to ${endFrame}. Continue?`)) {
-                $(this).prop("disabled", true);
-                setTrackingUiState(true);
-                trackedBboxCache = {};
-                trackedBboxCache[startFrame] = formatBboxesToString();
+        // NEW: Handle radio button change in the modal
+        $('input[name="tracking-mode"]').on('change', function() {
+            $('#batch-mode-options').toggle($(this).val() === 'batch');
+        });
 
-                $.ajax({
-                    url: "/startSam2Tracking",
-                    type: "POST",
-                    contentType: "application/json",
-                    data: JSON.stringify({
-                        video_uuid: videoUuid,
-                        start_frame: startFrame,
-                        end_frame: endFrame,
-                        init_bboxes_text: formatBboxesToString()
-                    }),
-                    success: (res) => {
-                        if (res.success) {
-                            sam2TrackerUuid = res.tracker_uuid;
-                            sam2EventSource = new EventSource(`/streamSam2Tracking/${sam2TrackerUuid}`);
-                            sam2EventSource.onmessage = function(event) {
-                                const data = JSON.parse(event.data);
-                                handleSseEvent(data);
-                            };
-                            sam2EventSource.onerror = function(err) {
-                                showToast("Connection to tracking stream lost.", 3000);
-                                handleTrackingEnd("FAILED", "Connection lost");
-                                if (sam2EventSource) sam2EventSource.close();
-                            };
-                        } else {
-                            alert("Error starting tracking: " + res.message);
-                            exitReviewMode();
-                        }
-                    },
-                    error: () => {
-                        alert("Server error starting tracking.");
-                        exitReviewMode();
-                    }
-                });
+        // NEW: Handle the final "Start Tracking" click from the modal
+        $('#confirm-tracking-start').on('click', function() {
+            const mode = $('input[name="tracking-mode"]:checked').val();
+            const startFrame = parseInt(frameSlider.val());
+            const initBboxesText = formatBboxesToString();
+
+            $('#tracking-options-modal').modal('hide');
+            $(this).prop("disabled", true);
+            setTrackingUiState(true);
+            trackedBboxCache = {};
+            trackedBboxCache[startFrame] = initBboxesText;
+
+            if (mode === 'interactive') {
+                const endFrame = parseInt(frameSlider.attr("max"));
+                startInteractiveTracking(startFrame, endFrame, initBboxesText);
+            } else { // batch mode
+                const endFrameBatch = parseInt($('#batch-end-frame').val());
+                if (endFrameBatch <= startFrame) {
+                    alert("End frame must be after the start frame.");
+                    exitReviewMode(); // Reset UI
+                    return;
+                }
+                $("#track-status-header").text("Batch Tracking Initializing...");
+                startBatchTracking(startFrame, endFrameBatch, initBboxesText);
             }
         });
+
+        function startInteractiveTracking(startFrame, endFrame, initBboxesText) {
+             $.ajax({
+                url: "/startSam2Tracking",
+                type: "POST",
+                contentType: "application/json",
+                data: JSON.stringify({
+                    video_uuid: videoUuid,
+                    start_frame: startFrame,
+                    end_frame: endFrame,
+                    init_bboxes_text: initBboxesText
+                }),
+                success: (res) => {
+                    if (res.success) {
+                        sam2TrackerUuid = res.tracker_uuid;
+                        sam2EventSource = new EventSource(`/streamSam2Tracking/${sam2TrackerUuid}`);
+                        sam2EventSource.onmessage = function(event) {
+                            const data = JSON.parse(event.data);
+                            handleSseEvent(data);
+                        };
+                        sam2EventSource.onerror = function(err) {
+                            showToast("Connection to tracking stream lost.", 3000);
+                            handleTrackingEnd("FAILED", "Connection lost");
+                            if (sam2EventSource) sam2EventSource.close();
+                        };
+                    } else {
+                        alert("Error starting interactive tracking: " + res.message);
+                        exitReviewMode();
+                    }
+                },
+                error: () => {
+                    alert("Server error starting interactive tracking.");
+                    exitReviewMode();
+                }
+            });
+        }
+
+        function startBatchTracking(startFrame, endFrame, initBboxesText) {
+             $.ajax({
+                url: "/startSam2BatchTracking", // NEW API ENDPOINT
+                type: "POST",
+                contentType: "application/json",
+                data: JSON.stringify({
+                    video_uuid: videoUuid,
+                    start_frame: startFrame,
+                    end_frame: endFrame,
+                    init_bboxes_text: initBboxesText
+                }),
+                success: (res) => {
+                    if (res.success) {
+                        sam2TrackerUuid = res.tracker_uuid;
+                        sam2EventSource = new EventSource(`/streamSam2Tracking/${sam2TrackerUuid}`);
+                        sam2EventSource.onmessage = function(event) {
+                            const data = JSON.parse(event.data);
+                            handleSseEvent(data);
+                        };
+                         sam2EventSource.onerror = function(err) {
+                            showToast("Connection to tracking stream lost.", 3000);
+                            handleTrackingEnd("FAILED", "Connection lost");
+                            if (sam2EventSource) sam2EventSource.close();
+                        };
+                    } else {
+                        alert("Error starting batch tracking: " + res.message);
+                        exitReviewMode();
+                    }
+                },
+                error: () => {
+                    alert("Server error starting batch tracking.");
+                    exitReviewMode();
+                }
+            });
+        }
 
         $('#stop-sam2-track-btn').on('click', function() {
             if (sam2TrackerUuid) {

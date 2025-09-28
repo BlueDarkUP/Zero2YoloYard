@@ -1,5 +1,5 @@
 {
-    "sam_model_checkpoint": "sam2.1_l.pt",
+    "sam_model_checkpoint": "sam2.1_b.pt",
     "sam_model_name": "SAM 2.1 Large",
     "frame_extraction_jpeg_quality": 75,
     "default_opencv_tracker": "CSRT"

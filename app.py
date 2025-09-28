@@ -686,6 +686,39 @@ def start_sam2_tracking():
     return jsonify({'success': True, 'tracker_uuid': tracker_uuid})
 
 
+# START: NEW ROUTE FOR BATCH TRACKING
+@app.route('/startSam2BatchTracking', methods=['POST'])
+def start_sam2_batch_tracking():
+    try:
+        from ultralytics_sam_tasks import get_sam_model
+        if not get_sam_model():
+            return jsonify({'success': False, 'message': 'SAM tracking feature is not available on the server.'}), 501
+    except ImportError:
+        return jsonify({'success': False, 'message': 'SAM features are not installed on server.'}), 501
+
+    data = request.json
+    video_uuid = data.get('video_uuid')
+    start_frame = int(data.get('start_frame'))
+    end_frame = int(data.get('end_frame'))
+    init_bboxes_text = data.get('init_bboxes_text')
+
+    if not all([video_uuid, start_frame is not None, end_frame is not None, init_bboxes_text]):
+        return jsonify({'success': False, 'message': 'Missing required data for batch tracking.'}), 400
+
+    if background_tasks.active_tasks.get(video_uuid):
+        return jsonify(
+            {'success': False, 'message': 'Another task (extraction or tracking) is already running for this video.'})
+
+    tracker_uuid = str(uuid.uuid4().hex)
+
+    threading.Thread(target=background_tasks.start_sam2_batch_tracking_task, args=(
+        video_uuid, tracker_uuid, start_frame, end_frame, init_bboxes_text
+    ), name=f"SAM-Batch-Tracker-{video_uuid[:6]}").start()
+
+    return jsonify({'success': True, 'tracker_uuid': tracker_uuid})
+# END: NEW ROUTE FOR BATCH TRACKING
+
+
 @app.route('/streamSam2Tracking/<tracker_uuid>')
 def stream_sam2_tracking(tracker_uuid):
     def generate_events():
