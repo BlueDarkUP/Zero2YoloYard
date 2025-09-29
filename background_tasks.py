@@ -48,7 +48,8 @@ def apply_prototypes_to_video_task(video_uuid, class_name, negative_samples, app
         with app_context:
             database.update_video_status(video_uuid, 'APPLYING_PROTOTYPES', f"Initializing for '{class_name}'...")
 
-            database.update_video_status(video_uuid, 'APPLYING_PROTOTYPES', f"Building positive prototypes for '{class_name}'...")
+            database.update_video_status(video_uuid, 'APPLYING_PROTOTYPES',
+                                         f"Building positive prototypes for '{class_name}'...")
             positive_prototypes = ai_models.get_prototypes_for_class(class_name)
             if positive_prototypes is None or len(positive_prototypes) == 0:
                 raise ValueError(f"Could not build positive prototypes for class '{class_name}'.")
@@ -61,7 +62,8 @@ def apply_prototypes_to_video_task(video_uuid, class_name, negative_samples, app
                 negative_prototypes = ai_models.get_prototypes_from_drawn_boxes(negative_samples)
                 if negative_prototypes is not None and len(negative_prototypes) > 0:
                     has_negative_prototypes = True
-                    logging.info(f"Successfully built {len(negative_prototypes)} negative prototypes from user samples.")
+                    logging.info(
+                        f"Successfully built {len(negative_prototypes)} negative prototypes from user samples.")
                 else:
                     logging.warning("User provided negative samples, but failed to build prototypes from them.")
 
@@ -356,15 +358,38 @@ def pre_annotate_video_task(video_uuid, model_uuid, options):
             interpreter.set_tensor(input_details[0]['index'], input_data)
             interpreter.invoke()
 
-            scores = interpreter.get_tensor(output_details[0]['index'])[0]
-            boxes = interpreter.get_tensor(output_details[1]['index'])[0]
-            classes = interpreter.get_tensor(output_details[3]['index'])[0]
+            # --- START OF FIX ---
+            # Get raw output tensors
+            scores_raw = interpreter.get_tensor(output_details[0]['index'])[0]
+            boxes_raw = interpreter.get_tensor(output_details[1]['index'])[0]
+            classes_raw = interpreter.get_tensor(output_details[3]['index'])[0]
+
+            # Dequantize output tensors if model is uint8
+            # The check for 'quantization' parameter handles both float and uint8 models
+            scores_details = output_details[0]
+            if scores_details['dtype'] == np.uint8 and scores_details.get('quantization'):
+                scale, zero_point = scores_details['quantization']
+                scores = (np.float32(scores_raw) - zero_point) * scale
+            else:
+                scores = scores_raw
+
+            boxes_details = output_details[1]
+            if boxes_details['dtype'] == np.uint8 and boxes_details.get('quantization'):
+                scale, zero_point = boxes_details['quantization']
+                boxes = (np.float32(boxes_raw) - zero_point) * scale
+            else:
+                boxes = boxes_raw
+
+            # Classes are typically integers and don't need dequantization
+            classes = classes_raw
+            # --- END OF FIX ---
 
             bboxes_text_lines = []
             for j in range(len(scores)):
                 if scores[j] > confidence_threshold:
-                    ymin = int(max(1, boxes[j][0] * imH))
-                    xmin = int(max(1, boxes[j][1] * imW))
+                    # TFLite models typically output [ymin, xmin, ymax, xmax]
+                    ymin = int(max(0, boxes[j][0] * imH))
+                    xmin = int(max(0, boxes[j][1] * imW))
                     ymax = int(min(imH, boxes[j][2] * imH))
                     xmax = int(min(imW, boxes[j][3] * imW))
 
