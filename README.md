@@ -1,5 +1,6 @@
 # Zero-to-YOLO-Yard: 本地化、AI驱动的下一代计算机视觉标注工具
-<img width="1629" height="527" alt="image" src="https://github.com/user-attachments/assets/4a4ec469-a1b9-48e4-8acf-2854d61fbc72" />
+<img width="1403" height="769" alt="image" src="https://github.com/user-attachments/assets/e2fab11b-6c08-4771-a752-5e0f81355dc3" />
+
 
 **Zero-to-YOLO-Yard** 是一个专为本地化部署而深度优化的开源工具，旨在为您提供从原始视频/图像到可训练数据集的全流程解决方案。它集成了最前沿的 AI 技术，将繁琐的标注工作转变为简单、高效、甚至充满探索乐趣的体验。无论您是机器人开发者、无人机爱好者还是计算机视觉研究者，此工具都能极大地加速您的数据处理流程，且所有数据都安全地保留在您自己的计算机上。
 
