@@ -1,144 +1,171 @@
-### 阅读之前：已经有数据集？
-  - #### 使用[Yolo2TFRecord](https://github.com/BlueDarkUP/Yolo2TFRecord)轻松的将YOLOv8格式数据集转换为TFRecord
-  - #### 使用[FTC-Easy-TFLITE](https://github.com/BlueDarkUP/FTC-Easy-TFLITE)轻松构建从搭建环境到导出模型的简单流水线
+# Zero-to-YOLO-Yard: 本地化、AI驱动的下一代计算机视觉标注工具
+<img width="1629" height="527" alt="image" src="https://github.com/user-attachments/assets/4a4ec469-a1b9-48e4-8acf-2854d61fbc72" />
 
-# Zero-to-YOLO-Yard: 本地化机器学习标注工具
-
-*   [English README (英文 README)](README-EN.md)
-
-**Zero-to-YOLO-Yard** 是一个深度定制的 [FMLTC (FIRST Machine Learning Toolchain)](https://github.com/FIRST-Tech-Challenge/fmltc) 版本，专为在本地计算机上高效运行而设计，无需依赖任何云服务。它专注于提供一个从视频到数据集的完整解决方案，是机器人、无人机或其他计算机视觉项目理想的本地化数据处理工具。
+**Zero-to-YOLO-Yard** 是一个专为本地化部署而深度优化的开源工具，旨在为您提供从原始视频/图像到可训练数据集的全流程解决方案。它集成了最前沿的 AI 技术，将繁琐的标注工作转变为简单、高效、甚至充满探索乐趣的体验。无论您是机器人开发者、无人机爱好者还是计算机视觉研究者，此工具都能极大地加速您的数据处理流程，且所有数据都安全地保留在您自己的计算机上。
 
 [![Python Version](https://img.shields.io/badge/python-3.10-blue.svg)](https://www.python.org/downloads/release/python-3100/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](https://opensource.org/licenses/MIT)
-[![Status](https://img.shields.io/badge/status-active-brightgreen.svg)]()
+[![Status](https://img.shields.io/badge/status-迭代中-brightgreen.svg)]()
+
 
 ---
 
-## ✨ 核心功能
+## ✨ 核心亮点：不止于标注
 
-- **🎬 视频管理**: 轻松上传和管理您的 `.mp4` 或 `.mov` 格式的视频文件。
-- **🖼️ 智能帧提取**: 自动将视频分解为图像帧，或直接导入已有的图片文件夹。
-- **✍️ 精准图像标注**: 通过直观的界面在图像帧上绘制边界框（Bounding Box）并分配类别标签。
-- **🤖 AI 辅助标注与跟踪**:
-    - **SAM 2.1 集成**: 利用 [Segment Anything Model 2.1](https://segment-anything.com/)，通过简单的点击即可自动生成高质量的边界框。
-    - **自动对象跟踪**: 在一帧中标注对象后，即可在后续所有帧中自动跟踪，大幅提升效率。
-- **📦 一键数据集导出**: 将已标注的帧导出为 YOLO 格式，并打包为 `.zip` 文件，方便直接用于模型训练。
-- **🧠 模型管理**: 支持导入和管理您在其他平台训练好的 `.tflite` 模型。
+- **🚀 新一代 AI 辅助标注引擎**
+    - **SAM 2.1 点选成框**: 集成Meta最新的SAM 2.1模型，只需在目标物体上轻轻一点，即可自动生成像素级精确的边界框。
+    - **智能选择 (Smart Select)**: 独创的“智能选择”功能，由 **DINOv2** 强大的特征提取能力驱动。您只需框选一两个“正例”样本（甚至可以圈出“反例”来排除干扰），AI 就能在整张图中找出所有相似对象，实现一键批量标注。
+    - **数据集驱动查找**: 充分利用您已有的标注数据！选择一个类别，AI 会学习该类别在整个数据集中的特征，并自动在新图像中找出所有潜在目标。
+    - **高级对象跟踪**: 在视频首帧完成标注后，一键开启自动跟踪。提供两种模式：
+        1.  **交互模式**: 实时跟踪并反馈，可随时暂停、修正，适合复杂多变的场景。
+        2.  **高精度批处理**: 调用官方 `SAM2VideoPredictor`，一次性处理视频片段，在稳定场景下获得更高质量的跟踪结果。
+    - **关键帧插值**: 对于长时段的简单运动，只需标注起点和终点两帧，中间所有帧的边界框将自动线性插值生成。
+
+- **📊 深度数据集分析与可视化**
+    - 在导出前，对您的数据集进行一次全面“体检”。通过交互式图表洞察：
+        - **类别分布**: 检查是否存在数据不均衡问题。
+        - **目标密度**: 分析每张图的目标数量分布。
+        - **尺寸与宽高比**: 发现异常尺寸或比例的目标。
+        - **空间位置热力图**: 查看目标在图像中的常见位置。
+    - **智能筛选与浏览**: 内置“图像画廊”，可一键筛选出数据“异常点”，如面积最大/最小的目标、重叠度过高的重复标注等，帮助您快速定位并修正标注错误。
+
+- **⚙️ 强大的在线数据增强**
+    - 在创建数据集时，直接在网页上配置丰富的数据增强策略（旋转、裁剪、色彩变换、噪声、Cutout等）。
+    - **所见即所得的增强预览器**: 实时预览增强效果，直观调整参数，确保增强策略符合您的预期，无需反复试错。
+
+- **📦 完整的工作流闭环**
+    - **多源数据导入**: 支持上传 `.mp4` 视频文件，或直接导入已有的图片文件夹。
+    - **任务协同管理**: 为不同成员分配不同的标注帧范围，轻松实现团队协作。
+    - **一键导出YOLO格式**: 所有标注数据可一键打包为与YOLOv8等主流训练框架兼容的 `.zip` 数据集。
+
+- **💻 纯本地化，安全私密**
+    - 无需联网，无需云服务，所有数据和模型运算均在您的本地计算机完成，确保数据绝对安全。
+
+---
 
 ## 🚀 快速上手
 
 ### 1. 环境配置
 
-在开始之前，请确保您的系统中已安装 **Python 3.10**。
+请确保您的系统中已安装 **Python 3.10** 及 `pip`。
 
-**克隆项目**
-```bash
+**克隆项目**```bash
 git clone https://github.com/BlueDarkUP/Zero2YoloYard.git
 cd Zero-to-YOLO-Yard
 ```
 
 **安装依赖**
-我们建议使用虚拟环境来管理项目依赖。
+我们强烈建议使用虚拟环境来隔离项目依赖。
 
 ```bash
-# 创建虚拟环境 (可选但推荐)
+# 创建并激活虚拟环境 (Linux/macOS)
 python -m venv venv
-source venv/bin/activate  # on Windows use `venv\Scripts\activate`
+source venv/bin/activate
+
+# (Windows)
+python -m venv venv
+.\venv\Scripts\activate
 
 # 安装所有必需的库
+# 如果您有NVIDIA显卡，建议先根据您的CUDA版本安装对应的PyTorch
+# PyTorch官网: https://pytorch.org/get-started/locally/
 pip install -r requirements.txt
 ```
 
 ### 2. 启动应用
 
-一切准备就绪后，在项目根目录下运行以下命令启动 Web 服务器：
+在项目根目录下运行以下命令启动 Web 服务器：
 
 ```bash
 python app.py
 ```
 
-服务器成功启动后，您将在终端看到如下输出：
+服务器成功启动后，您将在终端看到类似输出：
 ```
- * Running on http://127.0.0.1:5000
+INFO:waitress:Serving on http://127.0.0.1:5000
 ```
 
-现在，打开您的浏览器并访问 [http://127.0.0.1:5000](http://127.0.0.1:5000) 即可开始使用！
+现在，打开您的浏览器并访问 **[http://127.0.0.1:5000](http://127.0.0.1:5000)** 即可开始您的 AI 标注之旅！
 
 ---
 
-## 📖 工作流程指南
+## 📖 工作流指南
 
-### 步骤 1: 上传数据
+### 步骤 1: 上传与管理数据
 
-1.  导航至 **"Videos"** 选项卡。
-2.  点击 **"Upload Video"** 并选择您的视频文件，为其指定一个项目名称。
-3.  系统将自动开始处理视频，状态会依次显示为 `UPLOADING` -> `EXTRACTING` -> `READY`。
-4.  您也可以通过点击 **"Import Frame"** 直接导入一个包含图片的文件夹作为数据集。
+1.  在 **"Videos"** 选项卡中，点击 **"Upload Video"** 上传视频，或点击视频列表中的 **"Import"** 按钮（图标为 <i class="bi bi-images"></i>）导入本地图片文件夹。
+2.  系统会自动处理数据，状态变为 `READY` 后即可开始下一步。
 
-![img.png](assets/img.png)
+### 步骤 2: 创建标注任务
 
-### 步骤 2: 分配标注任务
+1.  点击视频旁的 **"Manage Tasks"** <i class="bi bi-card-checklist"></i> 按钮。
+2.  为任务分配一个负责人名称（如 `Alice`），并指定他/她需要标注的 **起始帧** 和 **结束帧**。
 
-对于团队协作，您可以清晰地划分每个成员的工作范围。
+![任务管理截图](assets/img_1.png)
 
-1.  当视频状态变为 `READY` 后，点击 **"Manage Tasks"**。
-2.  在 **"User"** 字段中输入团队成员的名称。
-3.  在 **"Start Frame"** 和 **"End Frame"** 中定义该成员负责标注的帧范围。
+### 步骤 3: 高效标注
 
-![img_1.png](assets/img_1.png)
+进入标注界面后，您可以组合使用以下多种方式，选择最高效的工具来完成工作：
 
-### 步骤 3: 开始标注
+- **基础操作**:
+    - 在右侧 **"Classes"** 面板中创建或选择一个类别。
+    - **手动绘制**: 按住鼠标左键拖拽即可绘制矩形框。
+    - **快捷键**: `S` 保存, `A`/`D` 前后翻页, `Delete` 删除选中框, `Ctrl+Z` 撤销。
 
-1.  在任务列表中找到自己的名字，点击 **"Start Labeling"** 进入标注界面。
-2.  在右侧边栏中 **新建或选择一个类别 (Class)**。
-3.  **手动标注**:
-    - 在图像中按住并拖动鼠标，绘制边界框 (BBox)。
-    - 完成后按 `S` 键或点击 **"Save BBoxes"** 保存当前帧的标注。
-    - 使用 `A` / `D` 键或拖动下方进度条来切换帧。
-    - 新标注的 BBox 会被自动选中，您可以直接按 `Delete` 或 `Backspace` 将其删除。
+- **AI 辅助**:
+    1.  **点选标注**: 点击 **"Enable SAM (Point)"** <i class="bi bi-magic"></i>，然后在目标上单击，AI将自动为您生成边界框。
+    2.  **智能选择**:
+        - 点击 **"Enable Smart Select"** <i class="bi bi-stars"></i> 激活此模式。
+        - 默认处于 **"Positive Sample"** 模式，绘制一两个您想找的目标。
+        - （可选）切换到 **"Negative Sample"** 模式，框出您不想选择的背景或干扰物。
+        - 点击 **"Find Similar Objects"** <i class="bi bi-search"></i>，AI将展示所有找到的相似目标。
+        - 选择一个类别，然后点击蓝色的预览框即可将其采纳为正式标注。
+    3.  **自动跟踪**:
+        - 在视频的任意一帧，完成对所有目标的标注。
+        - 点击 **"Track Objects with SAM2"** <i class="bi bi-play-circle"></i>。
+        - 在弹出的窗口中选择 **"Interactive Tracking"** (实时修正) 或 **"High-Accuracy Batch Mode"** (更高质量，离线处理)。
+        - 系统将自动处理后续帧。您可以在 **"Review Mode"** 中检查、修正并批量保存结果。
 
-### 步骤 4: AI 辅助标注
+### 步骤 4: 分析与洞察 (新功能!)
 
-为了进一步提升效率，我们集成了强大的 SAM 2.1 模型。
+1.  标注完成后，在主界面的 **"Datasets"** 选项卡创建一个数据集，并关联已标注的视频。
+2.  当数据集状态变为 `READY` 后，点击 **"Analyze"** <i class="bi bi-bar-chart-line"></i> 按钮。
+3.  在分析页面，您可以：
+    - 查看各类统计图表，了解数据质量。
+    - 使用 **"Augmentation Previewer"** 实时调试数据增强效果。
+    - 在 **"Image Gallery"** 中使用筛选器快速找到并跳转到有问题的标注进行修正。
 
-**模型配置**
-1.  返回主界面，点击 **"Settings"**。
-2.  在这里，您可以选择不同的 SAM 模型（如 `Tiny`, `Small`, `Base`, `Large`），前提是模型文件已存放于 `checkpoints` 文件夹中。
-3.  跟踪器默认使用 **CSRT**，性能均衡，通常无需修改。
+### 步骤 5: 创建与导出数据集
 
-![img_2.png](assets/img_2.png)
+1.  在 **"Datasets"** 选项卡，点击 **"Create Dataset"**。
+2.  选择需要打包的视频，设置训练/验证/测试集比例。
+3.  **（可选）** 展开并启用 **"Data Augmentation Options"**，配置您需要的增强策略。
+4.  创建成功后，点击 **"Download"** <i class="bi bi-download"></i> 即可获取用于模型训练的 YOLO 格式 `.zip` 文件。
 
-**智能标注与跟踪**
-- **辅助标注 (SAM)**:
-    1.  在标注界面的右侧边栏点击 **"Enable SAM"**。
-    2.  此时鼠标光标将变为指针状。您只需在希望标注的物体上点击，SAM 将自动为您生成精确的边界框。
-- **自动跟踪 (SAM Tracker)**:
-    1.  在一帧中完成所有对象的标注后，点击 **"Track Object with SAM2"**。
-    2.  系统将从当前帧开始，自动跟踪您标注的所有对象，直到视频结束。您可以随时暂停进程并进行手动修正。
-
-### 步骤 5: 生成并导出数据集
-
-1.  返回主界面，进入 **"Dataset"** 选项卡。
-2.  点击 **"Create Dataset"**，填写数据集名称等信息。
-3.  通过 **"Select Videos"** 关联一个或多个已完成标注的项目。
-4.  设定验证集在总数据中的占比（例如 `20` 代表 20%）。
-5.  创建成功后，点击数据集旁的 **"Download"** 即可获取 YOLO 格式的 `.zip` 压缩包。
-
-> **重要提示**: 如果您在链接数据集后修改了任何标注，需要重新创建一个新的数据集以包含这些更改。
+> **提示**: 数据集一旦创建，其内容便已固定。如果您后续修改了视频标注，需要重新创建一个新的数据集版本以包含这些更新。
 
 ---
+
+## 🛠️ 技术栈核心
+
+- **后端**: Flask, Waitress
+- **数据库**: SQLite
+- **AI 模型**:
+    - **分割与跟踪**: [Ultralytics (YOLOv8-SAM)](https://github.com/ultralytics/ultralytics) & [SAM 2.1](https://github.com/facebookresearch/segment-anything)
+    - **特征提取 (智能选择)**: [DINOv2](https://github.com/facebookresearch/dinov2)
+- **数据增强**: Albumentations
+- **前端**: Bootstrap, jQuery, Chart.js
 
 ## 📂 文件结构
 
-项目的所有数据都存储在本地，确保了数据的私密性和安全性。
-
--   **`local_storage`**: 包含所有上传的视频、提取的帧、数据集和模型文件。
--   **`ftc_ml.db`**: 一个 SQLite 数据库文件，用于保存视频描述、标注信息、任务分配等所有元数据。
+-   **`local_storage/`**: 存储所有用户数据，包括视频、帧、数据集和模型。
+-   **`checkpoints/`**: 存放SAM等AI模型的权重文件（需自行下载）。
+-   **`ftc_ml.db`**: SQLite 数据库文件，管理所有元数据，如项目描述、标注信息、任务等。
 
 ## 🤝 贡献与致谢
 
-本项目是对 [FIRST-Tech-Challenge/fmltc](https://github.com/FIRST-Tech-Challenge/fmltc) 的改进和本地化实现。
+本项目是对 [FMLTC (FIRST Machine Learning Toolchain)](https://github.com/FIRST-Tech-Challenge/fmltc) 的一次重大功能扩展和本地化重构。
 
-特别感谢 **BlueDarkUP** 在项目开发中的贡献。
+特别感谢 **BlueDarkUP** 在项目开发中的卓越贡献。
 
-欢迎通过 Pull Request 或 Issues 为该项目做出贡献！
+我们欢迎任何形式的贡献，无论是功能建议、代码提交还是问题反馈。请通过 Pull Request 或 Issues 与我们交流！
