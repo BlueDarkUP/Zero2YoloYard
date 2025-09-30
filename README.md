@@ -97,12 +97,14 @@ INFO:waitress:Serving on http://127.0.0.1:5000
 1.  在 **"Videos"** 选项卡中，点击 **"Upload Video"** 上传视频，或点击视频列表中的 **"Import"** 按钮（图标为 <i class="bi bi-images"></i>）导入本地图片文件夹。
 2.  系统会自动处理数据，状态变为 `READY` 后即可开始下一步。
 
+https://github.com/user-attachments/assets/11147a8c-e949-402a-ac81-0b914f7f47b5
+
 ### 步骤 2: 创建标注任务
 
 1.  点击视频旁的 **"Manage Tasks"** <i class="bi bi-card-checklist"></i> 按钮。
 2.  为任务分配一个负责人名称（如 `Alice`），并指定他/她需要标注的 **起始帧** 和 **结束帧**。
 
-![任务管理截图](assets/img_1.png)
+https://github.com/user-attachments/assets/b4a97574-9cce-4ee4-ba4a-dcbd8115c5a5
 
 ### 步骤 3: 高效标注
 
@@ -113,19 +115,29 @@ INFO:waitress:Serving on http://127.0.0.1:5000
     - **手动绘制**: 按住鼠标左键拖拽即可绘制矩形框。
     - **快捷键**: `S` 保存, `A`/`D` 前后翻页, `Delete` 删除选中框, `Ctrl+Z` 撤销。
 
+https://github.com/user-attachments/assets/00eaf98a-7e1c-47e9-957d-9e135a4024e1
+
 - **AI 辅助**:
     1.  **点选标注**: 点击 **"Enable SAM (Point)"** <i class="bi bi-magic"></i>，然后在目标上单击，AI将自动为您生成边界框。
+
+    https://github.com/user-attachments/assets/131f2b62-da8f-4d81-8d9f-7d32208c29fd
+
     2.  **智能选择**:
         - 点击 **"Enable Smart Select"** <i class="bi bi-stars"></i> 激活此模式。
         - 默认处于 **"Positive Sample"** 模式，绘制一两个您想找的目标。
         - （可选）切换到 **"Negative Sample"** 模式，框出您不想选择的背景或干扰物。
         - 点击 **"Find Similar Objects"** <i class="bi bi-search"></i>，AI将展示所有找到的相似目标。
         - 选择一个类别，然后点击蓝色的预览框即可将其采纳为正式标注。
+
+    https://github.com/user-attachments/assets/e8d0bb47-3396-49dc-8cf3-1cba531f7c8f
+
     3.  **自动跟踪**:
         - 在视频的任意一帧，完成对所有目标的标注。
         - 点击 **"Track Objects with SAM2"** <i class="bi bi-play-circle"></i>。
         - 在弹出的窗口中选择 **"Interactive Tracking"** (实时修正) 或 **"High-Accuracy Batch Mode"** (更高质量，离线处理)。
         - 系统将自动处理后续帧。您可以在 **"Review Mode"** 中检查、修正并批量保存结果。
+
+    https://github.com/user-attachments/assets/a5bb6cb5-5bf5-4648-b52e-fbf45e0d2e35
 
 ### 步骤 4: 分析与洞察 (新功能!)
 
@@ -135,6 +147,10 @@ INFO:waitress:Serving on http://127.0.0.1:5000
     - 查看各类统计图表，了解数据质量。
     - 使用 **"Augmentation Previewer"** 实时调试数据增强效果。
     - 在 **"Image Gallery"** 中使用筛选器快速找到并跳转到有问题的标注进行修正。
+
+
+    https://github.com/user-attachments/assets/287ec74e-3a69-4504-bfe7-12f313540400
+
 
 ### 步骤 5: 创建与导出数据集
 
