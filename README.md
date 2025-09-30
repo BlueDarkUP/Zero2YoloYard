@@ -49,7 +49,8 @@
 
 请确保您的系统中已安装 **Python 3.10** 及 `pip`。
 
-**克隆项目**```bash
+**克隆项目**
+```bash
 git clone https://github.com/BlueDarkUP/Zero2YoloYard.git
 cd Zero-to-YOLO-Yard
 ```
