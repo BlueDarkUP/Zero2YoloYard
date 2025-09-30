@@ -194,7 +194,7 @@ def start_sam2_batch_tracking_task(video_uuid, tracker_uuid, start_frame, end_fr
         'progress': 0,
         'total': (end_frame - start_frame) + 1,
         'results': {},
-        'stop_requested': False,  # Note: This won't work for batch mode, but kept for consistency
+        'stop_requested': False,
         'message': 'Preparing temporary video clip...'
     }
     tracking_sessions[tracker_uuid] = session
@@ -203,13 +203,12 @@ def start_sam2_batch_tracking_task(video_uuid, tracker_uuid, start_frame, end_fr
         logging.info(
             f"Starting BATCH SAM tracking for video {video_uuid} from frame {start_frame} to {end_frame}")
 
-        # This is a blocking call that performs the entire batch tracking job
         all_results = ultralytics_sam_tasks.run_batch_tracking_with_predictor(
             video_uuid,
             start_frame,
             end_frame,
             init_bboxes_text,
-            session  # Pass session for progress updates (e.g., status message)
+            session
         )
 
         session['results'] = all_results
@@ -358,14 +357,10 @@ def pre_annotate_video_task(video_uuid, model_uuid, options):
             interpreter.set_tensor(input_details[0]['index'], input_data)
             interpreter.invoke()
 
-            # --- START OF FIX ---
-            # Get raw output tensors
             scores_raw = interpreter.get_tensor(output_details[0]['index'])[0]
             boxes_raw = interpreter.get_tensor(output_details[1]['index'])[0]
             classes_raw = interpreter.get_tensor(output_details[3]['index'])[0]
 
-            # Dequantize output tensors if model is uint8
-            # The check for 'quantization' parameter handles both float and uint8 models
             scores_details = output_details[0]
             if scores_details['dtype'] == np.uint8 and scores_details.get('quantization'):
                 scale, zero_point = scores_details['quantization']
@@ -379,15 +374,11 @@ def pre_annotate_video_task(video_uuid, model_uuid, options):
                 boxes = (np.float32(boxes_raw) - zero_point) * scale
             else:
                 boxes = boxes_raw
-
-            # Classes are typically integers and don't need dequantization
             classes = classes_raw
-            # --- END OF FIX ---
 
             bboxes_text_lines = []
             for j in range(len(scores)):
                 if scores[j] > confidence_threshold:
-                    # TFLite models typically output [ymin, xmin, ymax, xmax]
                     ymin = int(max(0, boxes[j][0] * imH))
                     xmin = int(max(0, boxes[j][1] * imW))
                     ymax = int(min(imH, boxes[j][2] * imH))

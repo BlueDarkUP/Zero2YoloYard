@@ -10,6 +10,7 @@ import numpy as np
 import random
 import database
 import file_storage
+import settings_manager
 from bbox_writer import convert_text_to_rects_and_labels
 
 try:
@@ -17,30 +18,61 @@ try:
 except ImportError:
     logging.warning("ultralytics_sam_tasks.py not found or failed to import. All SAM features will be disabled.")
     sam_tasks = None
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 models = {}
 PREPROCESSED_DATA_CACHE = {}
 
+_dinov2_model_cache = {"model": None, "name": None}
+
+
+def clear_dinov2_cache():
+    global _dinov2_model_cache
+    logging.info("Clearing DINOv2 model cache due to setting change.")
+    if _dinov2_model_cache["model"] is not None and hasattr(_dinov2_model_cache["model"], 'cpu'):
+        _dinov2_model_cache["model"].cpu()
+        del _dinov2_model_cache["model"]
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+    _dinov2_model_cache = {"model": None, "name": None}
+    if 'dinov2' in models:
+        del models['dinov2']
+
+
 DEFAULT_INTERPOLATION_SIZE = (100, 100)
 DEFAULT_BATCH_SIZE = 16
-DEFAULT_FEATURE_FUSION_WEIGHTS = torch.tensor([0.1, 0.2, 0.3, 0.4], device=DEVICE).view(4, 1, 1, 1)
+DEFAULT_FEATURE_FUSION_WEIGHTS = torch.tensor([0.1, 0.2, 0.3, 0.4], device=settings_manager.get_device()).view(4, 1, 1,
+                                                                                                               1)
 SCORE_TEMPERATURE = 0.07
 
-def startup_ai_models():
-    """在主线程中初始化所有AI模型"""
-    if 'dinov2' in models:
-        logging.info("AI models already initialized.")
-        return
 
+def startup_ai_models():
+    global _dinov2_model_cache
+    DEVICE = settings_manager.get_device()
     if sam_tasks:
-        logging.info("正在初始化 SAM 点选/跟踪模型...")
+        logging.info("正在检查 SAM 点选/跟踪模型...")
         sam_tasks.get_sam_model()
-        logging.info("SAM 点选/跟踪模型加载完成。")
+        logging.info("SAM 点选/跟踪模型检查完成。")
 
     try:
-        logging.info(f"正在加载 DINOv2 模型至 {DEVICE}...")
-        dinov2_model = torch.hub.load('facebookresearch/dinov2', 'dinov2_vitg14', trust_repo=True)
+        settings = settings_manager.load_settings()
+        target_dinov2_model_name = settings.get("dinov2_model_name", "dinov2_vits14")
+
+        if _dinov2_model_cache["model"] is not None and _dinov2_model_cache["name"] == target_dinov2_model_name:
+            logging.info(f"DINOv2 model '{target_dinov2_model_name}' is already loaded.")
+            _dinov2_model_cache["model"].to(DEVICE)
+            models['dinov2'] = _dinov2_model_cache["model"]
+            return
+
+        if _dinov2_model_cache["model"] is not None:
+            clear_dinov2_cache()
+
+        logging.info(f"正在加载 DINOv2 模型 '{target_dinov2_model_name}' 至 {DEVICE}...")
+        dinov2_model = torch.hub.load('facebookresearch/dinov2', target_dinov2_model_name, trust_repo=True)
         dinov2_model.to(DEVICE).eval()
+
+        _dinov2_model_cache["model"] = dinov2_model
+        _dinov2_model_cache["name"] = target_dinov2_model_name
         models['dinov2'] = dinov2_model
 
         models['dinov2_features'] = []
@@ -57,12 +89,17 @@ def startup_ai_models():
             transforms.ToTensor(),
             transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
         ])
-        logging.info("DINOv2 模型及特征钩子加载完成。")
+        logging.info(f"DINOv2 模型 '{target_dinov2_model_name}' 及特征钩子加载完成。")
 
     except Exception as e:
         logging.error(f"加载 DINOv2 模型失败: {e}", exc_info=True)
+        if 'dinov2' in models:
+            del models['dinov2']
+        _dinov2_model_cache = {"model": None, "name": None}
 
-def postprocess_sam_results(results, nms_iou_threshold=0.7):
+
+def postprocess_sam_results(results, nms_iou_threshold):
+    DEVICE = settings_manager.get_device()
     if not results or not results[0].masks:
         return torch.empty(0, 4, device=DEVICE), torch.empty(0, 1, 1, device=DEVICE), torch.empty(0, device=DEVICE)
     all_boxes = results[0].boxes.xyxy.to(DEVICE)
@@ -77,6 +114,7 @@ def postprocess_sam_results(results, nms_iou_threshold=0.7):
 
 
 def get_all_embeddings_batched(fused_feature_map, all_masks, batch_size, interpolation_size):
+    DEVICE = settings_manager.get_device()
     if len(all_masks) == 0:
         return torch.empty(0, fused_feature_map.shape[1], device=DEVICE)
 
@@ -101,6 +139,7 @@ def get_all_embeddings_batched(fused_feature_map, all_masks, batch_size, interpo
 
 
 def find_best_matching_masks_by_iou(reference_boxes_np, candidate_boxes_tensor):
+    DEVICE = settings_manager.get_device()
     if len(reference_boxes_np) == 0 or len(candidate_boxes_tensor) == 0:
         return torch.tensor([], dtype=torch.long, device=DEVICE)
     reference_boxes_tensor = torch.tensor(reference_boxes_np, dtype=torch.float32, device=DEVICE)
@@ -110,27 +149,42 @@ def find_best_matching_masks_by_iou(reference_boxes_np, candidate_boxes_tensor):
 
 
 def _get_hyperparams_from_request(data):
+    DEVICE = settings_manager.get_device()
     hp = data.get('hyperparameters', {})
-    weights_list = hp.get('weights', [0.1, 0.2, 0.3, 0.4])
+
+    if not hp:
+        settings = settings_manager.load_settings()
+        defaults = settings.get('smart_select_defaults', {})
+        weights_list = defaults.get('weights', [0.1, 0.2, 0.3, 0.4])
+        batch_size = defaults.get('batch_size', DEFAULT_BATCH_SIZE)
+        interp_size_val = defaults.get('interp_size', 100)
+    else:
+        weights_list = hp.get('weights', [0.1, 0.2, 0.3, 0.4])
+        batch_size = hp.get('batch_size', DEFAULT_BATCH_SIZE)
+        interp_size_val = hp.get('interpolation_size', 100)
+
     fusion_weights = torch.tensor(weights_list, device=DEVICE).view(4, 1, 1, 1)
-    batch_size = hp.get('batch_size', DEFAULT_BATCH_SIZE)
-    interp_size_val = hp.get('interpolation_size', 100)
     interpolation_size = (interp_size_val, interp_size_val)
     return fusion_weights, batch_size, interpolation_size
 
 
 def _preprocess_and_get_embeddings(video_uuid, frame_number, hyperparameters=None):
+
+    startup_ai_models()
+    if 'dinov2' not in models:
+        raise RuntimeError("DINOv2 model failed to load. Cannot perform feature extraction.")
+
+    DEVICE = settings_manager.get_device()
+    settings = settings_manager.load_settings()
+
     cache_key = f"{video_uuid}_{frame_number}"
     if cache_key in PREPROCESSED_DATA_CACHE:
         logging.info(f"Reusing cached preprocessed data for: {cache_key}")
         return PREPROCESSED_DATA_CACHE[cache_key]
 
-    if hyperparameters is None:
-        hyperparameters = {}
-
     fusion_weights, batch_size, interpolation_size = _get_hyperparams_from_request({'hyperparameters': hyperparameters})
 
-    with torch.no_grad(), autocast(enabled=torch.cuda.is_available()):
+    with torch.no_grad(), autocast(enabled=(DEVICE.type == 'cuda')):
         logging.info(f"Starting new preprocessing for {cache_key}...")
         frame_path = file_storage.get_frame_path(video_uuid, frame_number)
         if not os.path.exists(frame_path):
@@ -140,10 +194,14 @@ def _preprocess_and_get_embeddings(video_uuid, frame_number, hyperparameters=Non
         if not sam_model:
             raise RuntimeError("SAM model not loaded.")
 
-        results = sam_model(frame_path, verbose=False)
-        all_boxes, all_masks, _ = postprocess_sam_results(results, nms_iou_threshold=0.7)
+        sam_conf = settings.get('sam_mask_confidence', 0.35)
+        results = sam_model(frame_path, verbose=False, conf=sam_conf)
+
+        nms_iou = settings.get('nms_iou_threshold', 0.7)
+        all_boxes, all_masks, _ = postprocess_sam_results(results, nms_iou_threshold=nms_iou)
+
         if len(all_masks) == 0:
-            logging.warning(f"SAM found no objects in {cache_key}")
+            logging.warning(f"SAM found no objects in {cache_key} with current settings.")
             PREPROCESSED_DATA_CACHE[cache_key] = {"all_boxes": torch.empty(0, 4, device=DEVICE),
                                                   "all_masks": torch.empty(0, 1, 1, device=DEVICE),
                                                   "all_embeddings": torch.empty(0, 1, device=DEVICE)}
@@ -151,6 +209,7 @@ def _preprocess_and_get_embeddings(video_uuid, frame_number, hyperparameters=Non
 
         image = Image.open(frame_path).convert("RGB")
         processed_image = models['dinov2_transforms'](image).unsqueeze(0).to(DEVICE)
+
         models['dinov2_features'].clear()
         _ = models['dinov2'](processed_image)
 
@@ -261,6 +320,7 @@ def get_prototypes_from_drawn_boxes(drawn_samples_data, hyperparameters=None):
 
     return torch.cat(all_prototypes, dim=0)
 
+
 def predict_with_prototypes(video_uuid, frame_number, positive_prototypes, has_negative_prototypes=False,
                             negative_prototypes=None, hyperparameters=None):
     processed_data = _preprocess_and_get_embeddings(video_uuid, frame_number, hyperparameters)
@@ -273,7 +333,10 @@ def predict_with_prototypes(video_uuid, frame_number, positive_prototypes, has_n
     final_scores = _calculate_similarity_scores(all_embeddings, positive_prototypes,
                                                 negative_prototypes if has_negative_prototypes else None)
 
-    kept_indices = nms(all_boxes, final_scores, 0.5)
+    settings = settings_manager.load_settings()
+    nms_iou = settings.get('nms_iou_threshold', 0.7)
+    kept_indices = nms(all_boxes, final_scores, nms_iou)
+
     final_results = []
     final_scores_np = final_scores.cpu().numpy()
     for i in kept_indices:

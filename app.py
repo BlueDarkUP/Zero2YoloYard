@@ -52,7 +52,7 @@ def string_to_color_bgr(s):
     hash_val = 0
     for char in s:
         hash_val = ord(char) + ((hash_val << 5) - hash_val)
-    hue = hash_val % 360
+    hue = hash_val % 180
     color_hsv = np.uint8([[[hue, 200, 200]]])
     color_bgr = cv2.cvtColor(color_hsv, cv2.COLOR_HSV2BGR)[0][0]
     return tuple(map(int, color_bgr))
@@ -459,10 +459,14 @@ def save_settings():
     current_settings = settings_manager.load_settings()
 
     sam_model_changed = current_settings.get('sam_model_checkpoint') != new_settings.get('sam_model_checkpoint')
+    dinov2_model_changed = current_settings.get('dinov2_model_name') != new_settings.get('dinov2_model_name')
+    device_changed = current_settings.get('gpu_device') != new_settings.get('gpu_device')
+
+    restart_required = sam_model_changed or dinov2_model_changed or device_changed
 
     if settings_manager.save_settings(new_settings):
-        if sam_model_changed:
-            logging.info("SAM model setting changed. The model will be reloaded on the next request.")
+        if sam_model_changed or device_changed:
+            logging.info("SAM model or device setting changed. Clearing SAM cache.")
             try:
                 from ultralytics_sam_tasks import _sam_model_cache
                 _sam_model_cache["model"] = None
@@ -470,13 +474,31 @@ def save_settings():
             except (ImportError, AttributeError):
                 logging.warning("Could not clear SAM model cache.")
 
+        if dinov2_model_changed or device_changed:
+            logging.info("DINOv2 model or device setting changed. Clearing DINOv2 cache.")
+            ai_models.clear_dinov2_cache()
+
+        if device_changed:
+            settings_manager.update_device()
+
         return jsonify({
             'success': True,
             'message': 'Settings saved successfully!',
-            'restart_required': sam_model_changed
+            'restart_required': restart_required
         })
     else:
         return jsonify({'success': False, 'message': 'Failed to save settings to file.'}), 500
+
+@app.route('/api/clear_cache', methods=['POST'])
+def clear_cache():
+    try:
+        count = len(ai_models.PREPROCESSED_DATA_CACHE)
+        ai_models.PREPROCESSED_DATA_CACHE.clear()
+        logging.info(f"Cleared {count} items from PREPROCESSED_DATA_CACHE.")
+        return jsonify({'success': True, 'message': f'Successfully cleared {count} cached items.'})
+    except Exception as e:
+        logging.error(f"Failed to clear cache: {e}")
+        return jsonify({'success': False, 'message': 'An error occurred while clearing the cache.'}), 500
 
 
 @app.route('/samPredict', methods=['POST'])
@@ -685,8 +707,6 @@ def start_sam2_tracking():
 
     return jsonify({'success': True, 'tracker_uuid': tracker_uuid})
 
-
-# START: NEW ROUTE FOR BATCH TRACKING
 @app.route('/startSam2BatchTracking', methods=['POST'])
 def start_sam2_batch_tracking():
     try:
@@ -716,8 +736,6 @@ def start_sam2_batch_tracking():
     ), name=f"SAM-Batch-Tracker-{video_uuid[:6]}").start()
 
     return jsonify({'success': True, 'tracker_uuid': tracker_uuid})
-# END: NEW ROUTE FOR BATCH TRACKING
-
 
 @app.route('/streamSam2Tracking/<tracker_uuid>')
 def stream_sam2_tracking(tracker_uuid):
@@ -1210,17 +1228,14 @@ def preview_augmentations():
         logging.error(f"Augmentation preview failed: {e}", exc_info=True)
         return jsonify({'success': False, 'message': str(e)}), 500
 
-
-# --- 应用启动 ---
 if __name__ == '__main__':
     from waitress import serve
 
     logging.info("正在初始化AI模型，请稍候...")
-    # 直接在主线程中调用，确保模型加载完成后再启动服务器
     ai_models.startup_ai_models()
-
+    time.sleep(0.01)
     print("=" * 60)
-    print("FTC-ML Server is running.")
+    print("Zero2YOLOYard Server is running.")
     print("Open your web browser and go to http://127.0.0.1:5000")
     print("=" * 60)
     serve(app, host='0.0.0.0', port=5000)

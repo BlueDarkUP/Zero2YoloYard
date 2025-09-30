@@ -1,13 +1,14 @@
+import logging
 import os
-import shutil
-import zipfile
-import yaml
 import random
+import shutil
+
 import cv2
 import numpy as np
+import yaml
 
 import config
-from bbox_writer import convert_to_yolo_format, convert_text_to_rects_and_labels
+from bbox_writer import convert_text_to_rects_and_labels
 
 
 def init_storage():
@@ -73,12 +74,17 @@ def get_yolo_bboxes(bboxes_text, width, height, class_map):
     class_indices = []
 
     for i, r in enumerate(rects):
-        x1, y1, x2, y2 = r
+        x_min, y_min, x_max, y_max = r[0], r[1], r[2], r[3]
+        if x_min > x_max:
+            x_min, x_max = x_max, x_min
+        if y_min > y_max:
+            y_min, y_max = y_max, y_min
 
-        norm_x1 = x1 / width
-        norm_y1 = y1 / height
-        norm_x2 = x2 / width
-        norm_y2 = y2 / height
+        norm_x1 = x_min / width
+        norm_y1 = y_min / height
+        norm_x2 = x_max / width
+        norm_y2 = y_max / height
+
         norm_x1 = max(0.0, min(1.0, norm_x1))
         norm_y1 = max(0.0, min(1.0, norm_y1))
         norm_x2 = max(0.0, min(1.0, norm_x2))
@@ -205,7 +211,16 @@ def create_yolo_dataset_zip(dataset_uuid, frames_data, all_labels, eval_percent,
                 if not yolo_bboxes: continue
 
                 if is_augmented and augment_pipeline:
-                    transformed = augment_pipeline(image=image, bboxes=yolo_bboxes, class_labels=class_indices)
+                    try:
+                        transformed = augment_pipeline(image=image, bboxes=yolo_bboxes, class_labels=class_indices)
+                    except ValueError as e:
+                        logging.error(f"--- DEBUG INFO ---")
+                        logging.error(f"Albumentations failed for source file: {src_img_path}")
+                        logging.error(f"Image shape passed to augment: {image.shape}")
+                        logging.error(f"Problematic YOLO bboxes passed to augment: {yolo_bboxes}")
+                        logging.error(f"--- END DEBUG INFO ---")
+                        raise e
+
                     image_aug_rgb = transformed['image']
                     bboxes_aug_yolo_tuples = transformed['bboxes']
                     labels_aug_indices = transformed['class_labels']

@@ -78,11 +78,23 @@
 
         <div class="tab-pane fade" id="settings" role="tabpanel">
             <h2 class="mb-3">Application Settings</h2>
-            <p class="text-muted">Changes to the SAM model will take effect on the next annotation or tracking task.</p>
+            <p class="text-muted">Changes to the AI models will take effect on the next annotation or tracking task.</p>
             <form id="settings-form" class="mt-4 col-md-10 col-lg-8">
+                <!-- AI Model Selection -->
                 <div class="card mb-4">
-                    <div class="card-header"><i class="bi bi-magic"></i> AI Model Settings</div>
+                    <div class="card-header"><i class="bi bi-robot"></i> AI Model & Device Settings</div>
                     <div class="card-body">
+                        <div class="form-group">
+                            <label for="setting-gpu-device"><strong>Computation Device</strong></label>
+                            <select id="setting-gpu-device" class="form-control">
+                                <option value="auto">Auto-detect (Recommended)</option>
+                                <option value="cpu">CPU</option>
+                                <option value="cuda:0">NVIDIA GPU #0 (cuda:0)</option>
+                                <option value="cuda:1">NVIDIA GPU #1 (cuda:1)</option>
+                            </select>
+                            <small class="form-text text-muted">Select the device to run AI models on. Choose CPU if you don't have a powerful NVIDIA GPU.</small>
+                        </div>
+                        <hr>
                         <div class="form-group">
                             <label for="setting-sam-model"><strong>Annotation Assistance Model (SAM)</strong></label>
                             <select id="setting-sam-model" class="form-control">
@@ -93,11 +105,84 @@
                             </select>
                             <small class="form-text text-muted">Larger models are more accurate but significantly slower and use more memory.</small>
                         </div>
+                        <div class="form-group">
+                            <label for="setting-dinov2-model"><strong>Feature Extraction Model (DINOv2)</strong></label>
+                            <select id="setting-dinov2-model" class="form-control">
+                                <option value="dinov2_vits14">DINOv2 Small (ViT-S/14)</option>
+                                <option value="dinov2_vitb14">DINOv2 Base (ViT-B/14)</option>
+                                <option value="dinov2_vitl14">DINOv2 Large (ViT-L/14)</option>
+                                <option value="dinov2_vitg14">DINOv2 Giant (ViT-G/14)</option>
+                            </select>
+                            <small class="form-text text-muted">Used for the 'Smart Select' feature. Larger models are more accurate but require significantly more VRAM and are slower.</small>
+                        </div>
                     </div>
                 </div>
-                <div class="card">
-                    <div class="card-header"><i class="bi bi-gear-fill"></i> General Settings</div>
+
+                <!-- AI Parameter Tuning -->
+                <div class="card mb-4">
+                    <div class="card-header"><i class="bi bi-sliders"></i> AI Parameter Tuning</div>
                     <div class="card-body">
+                        <div class="form-group">
+                            <label for="setting-sam-mask-confidence">SAM Mask Confidence: <strong id="sam-mask-conf-val">0.35</strong></label>
+                            <input type="range" class="form-control-range" id="setting-sam-mask-confidence" min="0.1" max="0.9" step="0.05" value="0.35">
+                            <small class="form-text text-muted">Filters initial masks in 'Smart Select'. Higher values reduce noise but may miss faint objects.</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="setting-nms-iou-threshold">NMS IoU Threshold: <strong id="nms-iou-val">0.70</strong></label>
+                            <input type="range" class="form-control-range" id="setting-nms-iou-threshold" min="0.1" max="1.0" step="0.05" value="0.70">
+                            <small class="form-text text-muted">Controls merging of overlapping boxes. Lower values merge more aggressively.</small>
+                        </div>
+                         <hr>
+                         <h6>Batch Tracking Defaults</h6>
+                         <div class="form-row">
+                            <div class="form-group col-md-6">
+                               <label for="setting-batch-tracking-imgsz">Image Size</label>
+                               <input type="number" class="form-control" id="setting-batch-tracking-imgsz" value="1024" min="256" step="128">
+                               <small class="form-text text-muted">Processing resolution. Smaller is faster but less accurate.</small>
+                            </div>
+                            <div class="form-group col-md-6">
+                                <label for="setting-batch-tracking-conf">Confidence: <strong id="batch-track-conf-val">0.30</strong></label>
+                                <input type="range" class="form-control-range" id="setting-batch-tracking-conf" min="0.1" max="0.9" step="0.05" value="0.30">
+                                <small class="form-text text-muted">Minimum tracking confidence.</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Smart Select Defaults -->
+                <div class="card mb-4">
+                    <div class="card-header"><i class="bi bi-stars"></i> "Smart Select" Default Hyperparameters</div>
+                    <div class="card-body">
+                        <p class="adv-settings-label">Default Feature Fusion Weights (L-S):</p>
+                        <div class="d-flex justify-content-between">
+                            <input type="range" class="custom-range" id="setting-w1" min="0" max="1" step="0.1" value="0.1" title="Weight 1">
+                            <input type="range" class="custom-range" id="setting-w2" min="0" max="1" step="0.1" value="0.2" title="Weight 2">
+                            <input type="range" class="custom-range" id="setting-w3" min="0" max="1" step="0.1" value="0.3" title="Weight 3">
+                            <input type="range" class="custom-range" id="setting-w4" min="0" max="1" step="0.1" value="0.4" title="Weight 4">
+                        </div>
+                        <div class="row mt-2">
+                            <div class="col-6">
+                                <label class="adv-settings-label" for="setting-batch-size">Default Batch Size</label>
+                                <input type="number" id="setting-batch-size" class="form-control form-control-sm" value="16" min="1" max="64">
+                            </div>
+                            <div class="col-6">
+                                <label class="adv-settings-label" for="setting-interp-size">Default Interp. Size</label>
+                                <input type="number" id="setting-interp-size" class="form-control form-control-sm" value="100" min="32" max="224" step="8">
+                            </div>
+                        </div>
+                         <small class="form-text text-muted mt-2">These values are used by 'Smart Select' unless overridden in the Advanced Settings on the labeling page.</small>
+                    </div>
+                </div>
+
+                <!-- General Settings -->
+                <div class="card">
+                    <div class="card-header"><i class="bi bi-gear-fill"></i> General & Workflow Settings</div>
+                    <div class="card-body">
+                        <div class="form-group">
+                            <label for="setting-preannotation-conf">Default Pre-annotation Confidence: <strong id="preannotation-conf-val">0.5</strong></label>
+                            <input type="range" class="form-control-range" id="setting-preannotation-conf" min="0.1" max="0.95" step="0.05" value="0.5">
+                            <small class="form-text text-muted">Default confidence for the TFLite pre-annotation tool.</small>
+                        </div>
                         <div class="form-group">
                             <label for="setting-jpeg-quality"><strong>Frame Extraction JPEG Quality</strong></label>
                             <input type="number" id="setting-jpeg-quality" class="form-control" min="10" max="100" step="5">
@@ -112,7 +197,17 @@
                         </div>
                     </div>
                 </div>
-                <button type="submit" class="btn btn-primary mt-4"><i class="bi bi-check-circle"></i> Save Settings</button>
+
+                <!-- Cache Management -->
+                <div class="card mt-4">
+                    <div class="card-header"><i class="bi bi-trash"></i> Cache Management</div>
+                    <div class="card-body">
+                         <p class="text-muted">Clear the server's temporary data cache ('Smart Select' features). This can free up RAM and resolve some AI-related issues.</p>
+                         <button type="button" class="btn btn-warning" id="clear-cache-btn"><i class="bi bi-eraser-fill"></i> Clear 'Smart Select' Cache</button>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary mt-4"><i class="bi bi-check-circle"></i> Save All Settings</button>
             </form>
         </div>
     </div>
@@ -306,7 +401,35 @@ $(document).ready(function() {
     function refreshVideos() { $.get('/listVideos', function(data) { const videoList = $('#video-list'); videoList.empty(); data.all_videos.forEach(video => { const isReady = video.status === 'READY'; let actions = ` <button class="btn btn-sm btn-info btn-import-frames" data-uuid="${video.video_uuid}" ${isReady ? '' : 'disabled'}><i class="bi bi-images"></i> Import</button> <button class="btn btn-sm btn-danger btn-delete-video" data-uuid="${video.video_uuid}"><i class="bi bi-trash"></i> Delete</button> `; if (isReady) { actions = ` <button class="btn btn-sm btn-warning btn-pre-annotate" data-uuid="${video.video_uuid}" data-frame-count="${video.frame_count}" data-labeled-count="${video.labeled_frame_count}"><i class="bi bi-robot"></i> Pre-annotate</button> <button class="btn btn-sm btn-success btn-manage-tasks" data-uuid="${video.video_uuid}" data-description="${video.description}" data-frameCount="${video.frame_count}"><i class="bi bi-card-checklist"></i> Manage Tasks</button> ` + actions; } if (['PRE_ANNOTATING', 'APPLYING_PROTOTYPES'].includes(video.status)) { actions = `<button class="btn btn-sm btn-danger btn-cancel-task" data-uuid="${video.video_uuid}"><i class="bi bi-x-circle"></i> Cancel</button>` + actions; } const row = `<tr class="slide-in-up"><td><strong>${video.description}</strong></td><td class="text-muted">${video.video_filename || ''}</td><td>${getStatusBadge(video.status, video.status_message)} <small class="text-muted">${video.status_message || ''}</small></td><td>${video.extracted_frame_count} / ${video.frame_count || '?'}</td><td>${video.labeled_frame_count}</td><td>${actions}</td></tr>`; videoList.append(row); }); const datasetVideoSelect = $('#dataset-videos'); datasetVideoSelect.empty(); data.ready_videos_for_dataset.forEach(video => { datasetVideoSelect.append(`<option value="${video.video_uuid}">${video.description} (${video.labeled_frame_count} labeled frames)</option>`); }); }); }
     function refreshDatasets() { $.get('/listDatasets', function(data) { const datasetList = $('#dataset-list'); datasetList.empty(); data.datasets.forEach(dataset => { let actions = `<button class="btn btn-sm btn-danger btn-delete-dataset" data-uuid="${dataset.dataset_uuid}"><i class="bi bi-trash"></i> Delete</button>`; if (dataset.status === 'READY') { actions = `<a href="/downloadDataset/${dataset.dataset_uuid}" class="btn btn-sm btn-success"><i class="bi bi-download"></i> Download</a> <a href="/datasetAnalysis/${dataset.dataset_uuid}" class="btn btn-sm btn-info"><i class="bi bi-bar-chart-line"></i> Analyze</a> <button class="btn btn-sm btn-secondary btn-regenerate-dataset" data-uuid="${dataset.dataset_uuid}"><i class="bi bi-arrow-repeat"></i> Update</button> ` + actions; } else if (dataset.status === 'FAILED') { actions = `<button class="btn btn-sm btn-warning btn-regenerate-dataset" data-uuid="${dataset.dataset_uuid}"><i class="bi bi-arrow-repeat"></i> Retry</button> ` + actions; } const videos = JSON.parse(dataset.video_uuids || '[]').length; const classes = JSON.parse(dataset.sorted_label_list || '[]').join(', '); const row = `<tr class="slide-in-up"><td><strong>${dataset.description}</strong></td><td>${getStatusBadge(dataset.status)} <small class="text-muted">${dataset.status_message || ''}</small></td><td>${videos} video(s)</td><td class="text-muted">${classes || 'N/A'}</td><td>${actions}</td></tr>`; datasetList.append(row); }); }); }
     function refreshModels() { $.get('/listModels', function(data) { const modelList = $('#model-list'); modelList.empty(); data.models.forEach(model => { const createdDate = new Date(model.create_time_ms).toLocaleString(); const modelTypeBadge = model.model_type === 'uint8' ? `<span class="badge badge-info">UINT8</span>` : `<span class="badge badge-primary">FP32</span>`; const row = `<tr class="slide-in-up"><td><strong>${model.description}</strong></td><td>${modelTypeBadge}</td><td class="text-muted">${model.label_filename || 'N/A'}</td><td class="text-muted">${createdDate}</td><td><button class="btn btn-sm btn-danger btn-delete-model" data-uuid="${model.model_uuid}"><i class="bi bi-trash"></i> Delete</button></td></tr>`; modelList.append(row); }); }); }
-    function loadSettings() { $.get('/api/settings', function(data) { if (data.success) { const settings = data.settings; $('#setting-sam-model').val(settings.sam_model_checkpoint); $('#setting-jpeg-quality').val(settings.frame_extraction_jpeg_quality); $('#setting-opencv-tracker').val(settings.default_opencv_tracker); } }); }
+
+    function loadSettings() {
+        $.get('/api/settings', function(data) {
+            if (data.success) {
+                const settings = data.settings;
+                $('#setting-gpu-device').val(settings.gpu_device);
+                $('#setting-sam-model').val(settings.sam_model_checkpoint);
+                $('#setting-dinov2-model').val(settings.dinov2_model_name);
+
+                $('#setting-sam-mask-confidence').val(settings.sam_mask_confidence).trigger('input');
+                $('#setting-nms-iou-threshold').val(settings.nms_iou_threshold).trigger('input');
+                $('#setting-batch-tracking-imgsz').val(settings.batch_tracking_imgsz);
+                $('#setting-batch-tracking-conf').val(settings.batch_tracking_conf).trigger('input');
+
+                if(settings.smart_select_defaults) {
+                    $('#setting-w1').val(settings.smart_select_defaults.weights[0] || 0.1);
+                    $('#setting-w2').val(settings.smart_select_defaults.weights[1] || 0.2);
+                    $('#setting-w3').val(settings.smart_select_defaults.weights[2] || 0.3);
+                    $('#setting-w4').val(settings.smart_select_defaults.weights[3] || 0.4);
+                    $('#setting-batch-size').val(settings.smart_select_defaults.batch_size || 16);
+                    $('#setting-interp-size').val(settings.smart_select_defaults.interp_size || 100);
+                }
+
+                $('#setting-preannotation-conf').val(settings.default_preannotation_conf).trigger('input');
+                $('#setting-jpeg-quality').val(settings.frame_extraction_jpeg_quality);
+                $('#setting-opencv-tracker').val(settings.default_opencv_tracker);
+            }
+        });
+    }
 
     function setupAugmentationListeners(contextSelector) {
         const context = $(contextSelector);
@@ -367,7 +490,84 @@ $(document).ready(function() {
 
     $('#upload-video-form').on('submit', function(e) { e.preventDefault(); const formData = new FormData(this); $.ajax({ url: '/uploadVideo', type: 'POST', data: formData, processData: false, contentType: false, success: function(response) { if (response.success) { showSuccess('Video uploaded successfully! Frame extraction has started.'); $('#uploadVideoModal').modal('hide'); $(this).find('form').trigger('reset'); $('.custom-file-label').html('Choose file...'); refreshVideos(); } else { showError(response.message); } }.bind(this), error: function(xhr) { showError(xhr.responseJSON ? xhr.responseJSON.message : 'An unknown error occurred.'); } }); });
     $('#import-model-form').on('submit', function(e) { e.preventDefault(); const formData = new FormData(this); $.ajax({ url: '/importModel', type: 'POST', data: formData, processData: false, contentType: false, success: function(response) { if (response.success) { showSuccess('Model imported successfully!'); $('#importModelModal').modal('hide'); $(this).find('form').trigger('reset'); $('.custom-file-label').html('Choose file...'); refreshModels(); } else { showError(response.message); } }.bind(this), error: function(xhr) { showError(xhr.responseJSON ? xhr.responseJSON.message : 'An unknown error occurred.'); } }); });
-    $('#settings-form').on('submit', function(e) { e.preventDefault(); const selectedOption = $('#setting-sam-model').find('option:selected'); const settingsData = { sam_model_checkpoint: selectedOption.val(), sam_model_name: selectedOption.data('name'), frame_extraction_jpeg_quality: parseInt($('#setting-jpeg-quality').val()), default_opencv_tracker: $('#setting-opencv-tracker').val() }; $.ajax({ url: '/api/settings', type: 'POST', contentType: 'application/json', data: JSON.stringify(settingsData), success: function(response) { if (response.success) { if (response.restart_required) { alert("Settings saved! The SAM model was changed. The new model will be loaded automatically for the next task."); } else { alert("Settings saved successfully!"); } } else { showError(response.message); } }, error: function(xhr) { showError(xhr.responseJSON ? xhr.responseJSON.message : 'An unknown error occurred.'); } }); });
+
+    $('#settings-form').on('submit', function(e) {
+        e.preventDefault();
+        const selectedSamOption = $('#setting-sam-model').find('option:selected');
+        const settingsData = {
+            gpu_device: $('#setting-gpu-device').val(),
+            sam_model_checkpoint: selectedSamOption.val(),
+            sam_model_name: selectedSamOption.data('name'),
+            dinov2_model_name: $('#setting-dinov2-model').val(),
+
+            sam_mask_confidence: parseFloat($('#setting-sam-mask-confidence').val()),
+            nms_iou_threshold: parseFloat($('#setting-nms-iou-threshold').val()),
+            batch_tracking_imgsz: parseInt($('#setting-batch-tracking-imgsz').val()),
+            batch_tracking_conf: parseFloat($('#setting-batch-tracking-conf').val()),
+
+            smart_select_defaults: {
+                weights: [
+                    parseFloat($('#setting-w1').val()),
+                    parseFloat($('#setting-w2').val()),
+                    parseFloat($('#setting-w3').val()),
+                    parseFloat($('#setting-w4').val())
+                ],
+                batch_size: parseInt($('#setting-batch-size').val()),
+                interp_size: parseInt($('#setting-interp-size').val())
+            },
+
+            default_preannotation_conf: parseFloat($('#setting-preannotation-conf').val()),
+            frame_extraction_jpeg_quality: parseInt($('#setting-jpeg-quality').val()),
+            default_opencv_tracker: $('#setting-opencv-tracker').val()
+        };
+
+        $.ajax({
+            url: '/api/settings',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(settingsData),
+            success: function(response) {
+                if (response.success) {
+                    if (response.restart_required) {
+                        alert("Settings saved! An AI model or device setting was changed. The new configuration will be loaded for the next task.");
+                    } else {
+                        alert("Settings saved successfully!");
+                    }
+                } else {
+                    showError(response.message);
+                }
+            },
+            error: function(xhr) {
+                showError(xhr.responseJSON ? xhr.responseJSON.message : 'An unknown error occurred.');
+            }
+        });
+    });
+
+    $('#setting-sam-mask-confidence').on('input', function() { $('#sam-mask-conf-val').text(parseFloat($(this).val()).toFixed(2)); });
+    $('#setting-nms-iou-threshold').on('input', function() { $('#nms-iou-val').text(parseFloat($(this).val()).toFixed(2)); });
+    $('#setting-batch-tracking-conf').on('input', function() { $('#batch-track-conf-val').text(parseFloat($(this).val()).toFixed(2)); });
+    $('#setting-preannotation-conf').on('input', function() { $('#preannotation-conf-val').text(parseFloat($(this).val()).toFixed(2)); });
+
+    $('#clear-cache-btn').on('click', function() {
+        if (confirm("Are you sure you want to clear the 'Smart Select' temporary data cache? This cannot be undone.")) {
+            const $btn = $(this);
+            $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> Clearing...');
+            $.ajax({
+                url: '/api/clear_cache',
+                type: 'POST',
+                success: function(response) {
+                    if (response.success) {
+                        alert(response.message);
+                    } else {
+                        showError(response.message);
+                    }
+                },
+                error: function() { showError('An error occurred while clearing the cache.'); },
+                complete: function() { $btn.prop('disabled', false).html('<i class="bi bi-eraser-fill"></i> Clear \'Smart Select\' Cache'); }
+            });
+        }
+    });
+
     $(document).on("click", ".btn-manage-tasks", function() { const videoUuid = $(this).data("uuid"); const videoDesc = $(this).data("description"); const frameCount = $(this).data("framecount"); $('#manageTasksModalTitle').text('Manage Annotation Tasks for: ' + videoDesc); $('#task-video-uuid').val(videoUuid); $('#task-start-frame').attr('max', frameCount - 1); $('#task-end-frame').attr('max', frameCount - 1); refreshTasksInModal(videoUuid); $('#manageTasksModal').modal('show'); });
     function refreshTasksInModal(videoUuid) { const taskListBody = $('#task-list-in-modal'); taskListBody.empty().append('<tr><td colspan="4">Loading...</td></tr>'); $.get(`/listTasks?video_uuid=${videoUuid}`, function(data) { taskListBody.empty(); if (data.success && data.tasks.length > 0) { data.tasks.forEach(task => { const row = `<tr class="slide-in-up"><td>${task.assigned_to}</td><td>${task.start_frame} - ${task.end_frame}</td><td>${task.description || ''}</td><td><a href="/labelVideo?task_uuid=${task.task_uuid}" class="btn btn-sm btn-primary"><i class="bi bi-pencil-square"></i> Label</a> <button class="btn btn-sm btn-danger btn-delete-task" data-task-uuid="${task.task_uuid}" data-video-uuid="${videoUuid}"><i class="bi bi-trash"></i></button></td></tr>`; taskListBody.append(row); }); } else { taskListBody.append('<tr><td colspan="4">No tasks created for this video yet.</td></tr>'); } }); }
     $('#create-task-form').on('submit', function(e) { e.preventDefault(); const videoUuid = $('#task-video-uuid').val(); const taskData = { video_uuid: videoUuid, assigned_to: $('#task-assigned-to').val(), description: $('#task-description').val(), start_frame: $('#task-start-frame').val(), end_frame: $('#task-end-frame').val(), }; $.ajax({ url: '/createTask', type: 'POST', contentType: 'application/json', data: JSON.stringify(taskData), success: function(response) { if (response.success) { showSuccess('Task created successfully!'); $('#create-task-form')[0].reset(); refreshTasksInModal(videoUuid); } else { showError(response.message); } }, error: function() { showError('An error occurred while creating the task.'); } }); });

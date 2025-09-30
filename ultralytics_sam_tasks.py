@@ -21,7 +21,6 @@ import file_storage
 from bbox_writer import convert_text_to_rects_and_labels
 import settings_manager
 
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 CHUNK_SIZE = 10
 
 _sam_model_cache = {"model": None, "path": None}
@@ -29,13 +28,15 @@ _sam_model_cache = {"model": None, "path": None}
 
 def get_sam_model():
     global _sam_model_cache
+    DEVICE = settings_manager.get_device()
 
     settings = settings_manager.load_settings()
     checkpoint_filename = settings.get('sam_model_checkpoint', 'sam2.1_t.pt')
     sam_checkpoint_path = os.path.join(config.BASE_DIR, "checkpoints", checkpoint_filename)
 
-    if _sam_model_cache["path"] != sam_checkpoint_path:
-        logging.info(f"Model change detected. Reloading SAM model. New model: {checkpoint_filename}")
+    if _sam_model_cache["path"] != sam_checkpoint_path or \
+            (_sam_model_cache["model"] is not None and str(_sam_model_cache["model"].device) != str(DEVICE)):
+        logging.info(f"Model/device change detected. Reloading SAM model to {DEVICE}. New model: {checkpoint_filename}")
         _sam_model_cache["model"] = None
         _sam_model_cache["path"] = None
 
@@ -53,6 +54,7 @@ def get_sam_model():
     try:
         logging.info(f"Loading Ultralytics SAM model ('{checkpoint_filename}') to device '{DEVICE}'...")
         model = SAM(sam_checkpoint_path)
+        model.to(DEVICE)
         _sam_model_cache["model"] = model
         _sam_model_cache["path"] = sam_checkpoint_path
         logging.info("Ultralytics SAM model loaded successfully.")
@@ -182,6 +184,10 @@ def run_batch_tracking_with_predictor(video_uuid, start_frame, end_frame, init_b
 
     total_frames_to_process = end_frame - start_frame
 
+    imgsz = settings.get('batch_tracking_imgsz', 1024)
+    conf = settings.get('batch_tracking_conf', 0.30)
+    device = str(settings_manager.get_device())
+
     for i in range(0, total_frames_to_process, CHUNK_SIZE):
         chunk_start_frame = start_frame + i
         chunk_end_frame = min(start_frame + i + CHUNK_SIZE - 1, end_frame)
@@ -213,7 +219,14 @@ def run_batch_tracking_with_predictor(video_uuid, start_frame, end_frame, init_b
             current_prompts = [[int((r[0] + r[2]) / 2), int((r[1] + r[3]) / 2)] for r in last_known_rects]
             labels_prompt = [1] * len(current_prompts)
 
-            overrides = dict(conf=0.25, task="segment", mode="predict", imgsz=1024, model=model_absolute_path)
+            overrides = dict(
+                conf=conf,
+                task="segment",
+                mode="predict",
+                imgsz=imgsz,
+                model=model_absolute_path,
+                device=device
+            )
             predictor = SAM2VideoPredictor(overrides=overrides)
 
             results_generator = predictor(source=temp_video_path, points=current_prompts, labels=labels_prompt,
