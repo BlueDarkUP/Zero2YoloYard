@@ -15,6 +15,7 @@ import itertools
 import random
 import torch
 import torch.nn.functional as F
+import atexit
 import settings_manager
 import config
 import database
@@ -305,7 +306,25 @@ def store_video_frame_bboxes_text():
     video_uuid = data.get('video_uuid')
     frame_number = int(data.get('frame_number'))
     bboxes_text = validate_bboxes_text(data.get('bboxes_text'))
+
+    # 保存标注到数据库
     database.save_frame_bboxes(video_uuid, frame_number, bboxes_text)
+
+    # 新增：触发原型更新
+    try:
+        # 从标注文本中提取所有唯一的类别名称
+        unique_labels = set(extract_labels(bboxes_text))
+        for label in unique_labels:
+            if label:  # 确保标签不为空
+                # 在后台线程中更新原型，避免阻塞前端请求
+                threading.Thread(
+                    target=ai_models.update_prototype_for_class,
+                    args=(label,),
+                    name=f"PrototypeUpdate-{label}"
+                ).start()
+    except Exception as e:
+        logging.error(f"触发原型更新失败: {e}", exc_info=True)
+
     return jsonify({'success': True})
 
 
@@ -1210,6 +1229,32 @@ def run_consistency_check(dataset_uuid):
         return jsonify({'success': False, 'message': f'审查失败: {e}'}), 500
 
 
+@app.route('/lam_predict', methods=['POST'])
+def lam_predict_route():
+    data = request.json
+    video_uuid = data.get('video_uuid')
+    frame_number = data.get('frame_number')
+    point = data.get('point')
+
+    if not all([video_uuid, frame_number is not None, point]):
+        return jsonify({'success': False, 'message': '缺少必要的请求参数。'}), 400
+
+    try:
+        # 将前端坐标转换为元组
+        point_coords = (int(point['x']), int(point['y']))
+
+        # 调用核心 AI 函数
+        result, error_msg = ai_models.lam_predict(video_uuid, int(frame_number), point_coords)
+
+        if error_msg:
+            return jsonify({'success': False, 'message': error_msg})
+
+        return jsonify({'success': True, **result})
+
+    except Exception as e:
+        logging.error(f"LAM 预测失败: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': f'服务器内部错误: {str(e)}'}), 500
+
 @app.route('/api/previewAugmentations', methods=['POST'])
 def preview_augmentations():
     if not background_tasks.A:
@@ -1295,6 +1340,8 @@ if __name__ == '__main__':
 
     logging.info("正在初始化AI模型，请稍候...")
     ai_models.startup_ai_models()
+    atexit.register(ai_models.save_preprocessed_cache_to_disk)
+    atexit.register(ai_models.save_prototypes_to_disk)
     time.sleep(0.01)
     print("=" * 60)
     print("Zero2YOLOYard Server is running.")

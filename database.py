@@ -514,3 +514,23 @@ def get_frame_numbers_for_video(video_uuid):
                           (video_uuid,)).fetchall()
     conn.close()
     return [row['frame_number'] for row in frames]
+
+def get_all_frames_with_class(class_name):
+    conn = get_db_connection()
+    query = f"""
+        SELECT T1.*, T2.width, T2.height FROM video_frames AS T1
+        INNER JOIN videos AS T2 ON T1.video_uuid = T2.video_uuid
+        WHERE T1.bboxes_text LIKE '%{class_name}%'
+    """
+    frames = conn.execute(query).fetchall()
+
+    result_frames = []
+    for frame in frames:
+        lines = frame['bboxes_text'].strip().split('\n')
+        for line in lines:
+            parts = line.strip().split(',', 4)
+            if len(parts) >= 5 and parts[4] == class_name:
+                result_frames.append(dict(frame))
+                break
+    conn.close()
+    return result_frames

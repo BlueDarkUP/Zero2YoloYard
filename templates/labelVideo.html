@@ -9,7 +9,8 @@
         display: inline-block;
     }
 
-    #canvas-container.sam-active {
+    #canvas-container.sam-active,
+    #canvas-container.lam-active {
         cursor: copy;
     }
 
@@ -57,7 +58,8 @@
     }
 
     #sam-toggle-btn.active,
-    #interactive-mode-toggle.active {
+    #interactive-mode-toggle.active,
+    #lam-toggle-btn.active {
         background-color: #28a745;
         border-color: #28a745;
         color: white;
@@ -223,6 +225,7 @@
                 <h4><i class="bi bi-bounding-box"></i> Bounding Boxes</h4>
                 <p><small class="text-muted">Select a class to draw, or use an AI tool below.</small></p>
                 <button id="save-bboxes" class="btn btn-primary btn-block mb-2"><i class="bi bi-save"></i> Save BBoxes (S)</button>
+                <button id="lam-toggle-btn" class="btn btn-info btn-block mb-2"><i class="bi bi-bullseye"></i> Enable LAM (Click to Label)</button>
                 <button id="sam-toggle-btn" class="btn btn-info btn-block mb-2"><i class="bi bi-magic"></i> Enable SAM (Point)</button>
                 <button id="interactive-mode-toggle" class="btn btn-info btn-block mb-2"><i class="bi bi-stars"></i> Enable Smart Select</button>
                 <button id="sam2-track-btn" class="btn btn-success btn-block mb-3"><i class="bi bi-play-circle"></i> Track Objects with SAM2</button>
@@ -280,6 +283,14 @@
             <button class="btn btn-danger btn-sm delete-bbox-btn">&times;</button>
         </div>
     </li>
+</template>
+
+<template id="lam-suggestion-popup-template">
+    <div id="lam-suggestion-popup" style="position: absolute; z-index: 1000; width: 180px;">
+        <div class="list-group shadow-sm">
+            <!-- Suggestion items will be dynamically inserted here -->
+        </div>
+    </div>
 </template>
 
 <!-- START: New Tracking Options Modal -->
@@ -373,6 +384,7 @@
         let startX, startY;
 
         let isSamModeActive = false;
+        let isLamModeActive = false;
         let sam2TrackerUuid = null;
         let sam2EventSource = null;
         let isReviewMode = false;
@@ -839,7 +851,7 @@
         function setTrackingUiState(isReview) {
             isReviewMode = isReview;
             $("#track-controls").slideToggle(isReview);
-            $("#save-bboxes, #sam-toggle-btn, #sam2-track-btn, #interactive-mode-toggle").slideToggle(!isReview);
+            $("#save-bboxes, #sam-toggle-btn, #sam2-track-btn, #interactive-mode-toggle, #lam-toggle-btn").slideToggle(!isReview);
 
             if (!isReview) {
                 $("#track-progress-bar").css("width", "0%").text("0%").removeClass("bg-success bg-danger").addClass("progress-bar-animated");
@@ -1143,6 +1155,65 @@
             }
         }
 
+        function showLamSuggestions(bbox, suggestions, clickX, clickY) {
+            const tempBbox = { ...bbox, label: 'suggestion', id: 'temp' };
+            bboxes.push(tempBbox);
+            redrawCanvas();
+            bboxes.pop();
+
+            const template = document.getElementById('lam-suggestion-popup-template').content.cloneNode(true);
+            const popup = $(template).find('#lam-suggestion-popup');
+            const suggestionList = popup.find('.list-group');
+
+            if (suggestions.length === 0) {
+                suggestionList.append('<div class="list-group-item">No suggestions, please label manually.</div>');
+            } else {
+                suggestions.forEach(sug => {
+                    const color = stringToColor(sug.label);
+                    const scorePercent = (sug.score * 100).toFixed(1);
+                    const item = $(`
+                        <button type="button" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" data-label="${sug.label}">
+                            <div>
+                                <span class="color-swatch" style="background-color: ${color};"></span>
+                                ${sug.label}
+                            </div>
+                            <span class="badge badge-primary badge-pill">${scorePercent}%</span>
+                        </button>
+                    `);
+                    suggestionList.append(item);
+                });
+            }
+
+            $('body').append(popup);
+            popup.css({ top: `${clickY + 5}px`, left: `${clickX + 5}px` });
+
+            popup.on('click', 'button', function() {
+                const selectedLabel = $(this).data('label');
+                if (selectedLabel) {
+                    const newBox = {
+                        ...bbox,
+                        label: selectedLabel,
+                        id: self.crypto.randomUUID()
+                    };
+                    bboxes.push(newBox);
+                    saveStateToHistory();
+                    selectedBboxIndex = bboxes.length - 1;
+                    renderBboxList();
+                }
+                popup.remove();
+                redrawCanvas();
+            });
+
+            setTimeout(() => {
+                $(document).one('mousedown', function(e) {
+                    if (!$(e.target).closest('#lam-suggestion-popup').length) {
+                        popup.remove();
+                        redrawCanvas();
+                    }
+                });
+            }, 100);
+        }
+
         frameImage.onload = function() {
             bboxes = [];
             selectedBboxIndex = -1;
@@ -1169,6 +1240,46 @@
         });
 
         canvasContainer.on('mousedown', function(e) {
+            if (isLamModeActive) {
+                e.preventDefault();
+                $('#lam-suggestion-popup').remove();
+                const pos = getMousePos(drawingCanvas, e);
+                const scaleX = frameImage.naturalWidth / frameImage.clientWidth;
+                const scaleY = frameImage.naturalHeight / frameImage.clientHeight;
+
+                canvasContainer.addClass('sam-loading');
+                showToast('LAM is thinking...', 5000);
+
+                $.ajax({
+                    url: "/lam_predict",
+                    type: "POST",
+                    contentType: "application/json",
+                    data: JSON.stringify({
+                        video_uuid: videoUuid,
+                        frame_number: frameSlider.val(),
+                        point: {
+                            x: Math.round(pos.x * scaleX),
+                            y: Math.round(pos.y * scaleY)
+                        }
+                    }),
+                    success: function(response) {
+                        if (response.success) {
+                            showLamSuggestions(response.bbox, response.suggestions, e.clientX, e.clientY);
+                            showToast('Success! Please select a class.', 3000);
+                        } else {
+                            showToast(response.message || "LAM failed to identify an object.", 3000);
+                        }
+                    },
+                    error: function(xhr) {
+                        showToast('Server Error: ' + (xhr.responseJSON ? xhr.responseJSON.message : 'Unknown Error'), 4000);
+                    },
+                    complete: function() {
+                        canvasContainer.removeClass('sam-loading');
+                    }
+                });
+                return;
+            }
+
             if (isSamModeActive) {
                 e.preventDefault();
                 const pos = getMousePos(drawingCanvas, e);
@@ -1550,12 +1661,29 @@
             }
         });
 
+        $('#lam-toggle-btn').on('click', function() {
+            isLamModeActive = !isLamModeActive;
+            $(this).toggleClass('active', isLamModeActive);
+            canvasContainer.toggleClass('lam-active', isLamModeActive);
+
+            if (isLamModeActive) {
+                $(this).html('<i class="bi bi-bullseye"></i> LAM Mode ON');
+                if (isSamModeActive) $('#sam-toggle-btn').click();
+                if (isInteractiveMode) $('#interactive-mode-toggle').click();
+                showToast('LAM Mode Activated: Click an object to get class suggestions.', 3000);
+            } else {
+                $(this).html('<i class="bi bi-bullseye"></i> Enable LAM (Click to Label)');
+                $('#lam-suggestion-popup').remove();
+            }
+        });
+
         $('#sam-toggle-btn').on('click', function() {
             isSamModeActive = !isSamModeActive;
             $(this).toggleClass('active', isSamModeActive);
             canvasContainer.toggleClass('sam-active', isSamModeActive);
             updateSamButtonText();
             if (isSamModeActive) {
+                if(isLamModeActive) $('#lam-toggle-btn').click();
                 clearCrosshairs();
             }
         });
@@ -1789,6 +1917,7 @@
             $('#interactive-segment-controls').slideToggle(isInteractiveMode);
             if (isInteractiveMode) {
                 $(this).html('<i class="bi bi-stars"></i> Smart Select ON');
+                if(isLamModeActive) $('#lam-toggle-btn').click();
                 clearCrosshairs();
             } else {
                 $(this).html('<i class="bi bi-stars"></i> Enable Smart Select');

@@ -8,7 +8,8 @@ else:
 
 DATABASE_FILE = os.path.join(BASE_DIR, 'ftc_ml.db')
 STORAGE_DIR = os.path.join(BASE_DIR, 'local_storage')
-
+PROTOTYPE_FILE = os.path.join(STORAGE_DIR, 'prototype_library.pt')
+PREPROCESSED_CACHE_FILE = os.path.join(STORAGE_DIR, 'preprocessed_cache.pt')
 
 
 MAX_DESCRIPTION_LENGTH = 30

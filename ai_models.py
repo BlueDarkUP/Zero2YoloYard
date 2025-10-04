@@ -9,6 +9,9 @@ from torchvision.ops import nms, box_iou
 from torch.cuda.amp import autocast
 import numpy as np
 import random
+import time
+import threading
+import config
 import database
 import file_storage
 import settings_manager
@@ -22,9 +25,84 @@ except ImportError:
 
 models = {}
 PREPROCESSED_DATA_CACHE = {}
+PROTOTYPE_CACHE = {}
+
+# --- 关键修复：将 Lock 替换为 RLock (可重入锁) ---
+AI_MODEL_LOCK = threading.RLock()
+# --- 修复结束 ---
+
+# 原型专用锁，用于管理原型字典的并发访问
+PROTOTYPE_LOCKS = {}
+_PROTOTYPE_LOCKS_LOCK = threading.Lock()
+_cache_save_lock = threading.Lock()
+_last_cache_save_time = 0
+CACHE_SAVE_INTERVAL = 30  # 每30秒最多保存一次
+
+def _get_class_lock(class_name):
+    """安全地获取或创建一个针对特定类别的锁。"""
+    with _PROTOTYPE_LOCKS_LOCK:
+        if class_name not in PROTOTYPE_LOCKS:
+            PROTOTYPE_LOCKS[class_name] = threading.Lock()
+        return PROTOTYPE_LOCKS[class_name]
+
 
 _mobilenet_cache = {"model": None, "name": None}
-SCORE_TEMPERATURE = 0.07  # Add this back for softmax scaling
+SCORE_TEMPERATURE = 0.07
+
+
+def save_prototypes_to_disk():
+    """将内存中的原型缓存保存到本地文件。"""
+    try:
+        # 访问 PROTOTYPE_CACHE 时也加锁，保证数据一致性
+        with _get_class_lock("__global_save__"):  # 使用一个专用的锁来保存文件
+            cpu_cache = {k: v.cpu() for k, v in PROTOTYPE_CACHE.items()}
+        torch.save(cpu_cache, config.PROTOTYPE_FILE)
+        logging.info(f"成功将 {len(cpu_cache)} 个原型保存至 {config.PROTOTYPE_FILE}")
+    except Exception as e:
+        logging.error(f"保存原型文件失败: {e}", exc_info=True)
+
+
+def save_preprocessed_cache_to_disk():
+    """将帧预处理缓存（PREPROCESSED_DATA_CACHE）保存到本地文件。"""
+    global _last_cache_save_time
+    with _cache_save_lock:
+        logging.info("正在尝试保存预处理缓存...")
+        # 复制字典以避免在迭代时发生更改
+        cache_copy = dict(PREPROCESSED_DATA_CACHE)
+        if not cache_copy:
+            logging.info("预处理缓存为空，无需保存。")
+            return
+
+        try:
+            # 将所有张量移动到CPU以实现最大兼容性
+            cpu_cache = {}
+            for key, value in cache_copy.items():
+                cpu_cache[key] = {
+                    'all_boxes': value['all_boxes'].cpu(),
+                    'all_features': value['all_features'].cpu()
+                }
+
+            torch.save(cpu_cache, config.PREPROCESSED_CACHE_FILE)
+            _last_cache_save_time = time.time()
+            logging.info(f"成功将 {len(cpu_cache)} 个预处理帧数据保存至文件。")
+        except Exception as e:
+            logging.error(f"保存预处理缓存文件失败: {e}", exc_info=True)
+
+def load_prototypes_from_disk():
+    """从本地文件加载原型至内存缓存。"""
+    global PROTOTYPE_CACHE
+    DEVICE = settings_manager.get_device()
+    if os.path.exists(config.PROTOTYPE_FILE):
+        try:
+            loaded_cache = torch.load(config.PROTOTYPE_FILE, map_location=DEVICE)
+            PROTOTYPE_CACHE = loaded_cache
+            logging.info(f"成功从文件加载了 {len(PROTOTYPE_CACHE)} 个类别原型。")
+        except Exception as e:
+            logging.error(f"加载原型文件失败，将在需要时重新构建: {e}")
+            PROTOTYPE_CACHE = {}
+    else:
+        logging.info("未找到原型文件。将在首次需要时自动创建。")
+        PROTOTYPE_CACHE = {}
 
 
 def clear_feature_extractor_cache():
@@ -41,7 +119,32 @@ def clear_feature_extractor_cache():
         del models['feature_extractor']
 
 
+def load_preprocessed_cache_from_disk():
+    """从本地文件加载帧预处理缓存。"""
+    global PREPROCESSED_DATA_CACHE
+    DEVICE = settings_manager.get_device()
+    if os.path.exists(config.PREPROCESSED_CACHE_FILE):
+        try:
+            logging.info("正在从磁盘加载预处理缓存...")
+            loaded_cache = torch.load(config.PREPROCESSED_CACHE_FILE, map_location='cpu')  # 先加载到CPU
+
+            # 将张量移动到当前活动设备
+            for key, value in loaded_cache.items():
+                PREPROCESSED_DATA_CACHE[key] = {
+                    'all_boxes': value['all_boxes'].to(DEVICE),
+                    'all_features': value['all_features'].to(DEVICE)
+                }
+            logging.info(f"成功从文件加载了 {len(PREPROCESSED_DATA_CACHE)} 个预处理帧数据。")
+        except Exception as e:
+            logging.error(f"加载预处理缓存文件失败: {e}")
+            PREPROCESSED_DATA_CACHE = {}
+    else:
+        logging.info("未找到预处理缓存文件。")
+        PREPROCESSED_DATA_CACHE = {}
+
 def startup_ai_models():
+    load_prototypes_from_disk()
+    load_preprocessed_cache_from_disk()
     global _mobilenet_cache
     DEVICE = settings_manager.get_device()
     if sam_tasks:
@@ -54,7 +157,6 @@ def startup_ai_models():
         target_model_name = settings.get("feature_extractor_model_name", "mobilenet_v3_large")
 
         if _mobilenet_cache["model"] is not None and _mobilenet_cache["name"] == target_model_name:
-            logging.info(f"Feature Extractor model '{target_model_name}' is already loaded.")
             _mobilenet_cache["model"].to(DEVICE)
             models['feature_extractor'] = _mobilenet_cache["model"]
             return
@@ -106,67 +208,68 @@ def find_best_matching_masks_by_iou(reference_boxes_np, candidate_boxes_tensor):
 
 
 def get_features_for_all_masks(video_uuid, frame_number):
-    startup_ai_models()
     if 'feature_extractor' not in models:
         raise RuntimeError("Feature extractor model failed to load. Cannot perform feature extraction.")
 
     DEVICE = settings_manager.get_device()
-    settings = settings_manager.load_settings()
-
     cache_key = f"{video_uuid}_{frame_number}"
     if cache_key in PREPROCESSED_DATA_CACHE:
-        logging.info(f"Reusing cached preprocessed data for: {cache_key}")
         return PREPROCESSED_DATA_CACHE[cache_key]
 
-    with torch.no_grad(), autocast(enabled=(DEVICE.type == 'cuda')):
-        logging.info(f"Starting new preprocessing for {cache_key}...")
-        frame_path = file_storage.get_frame_path(video_uuid, frame_number)
-        if not os.path.exists(frame_path):
-            raise FileNotFoundError(f"Frame image not found at {frame_path}")
+    with AI_MODEL_LOCK:
+        if cache_key in PREPROCESSED_DATA_CACHE:
+            return PREPROCESSED_DATA_CACHE[cache_key]
 
-        sam_model = sam_tasks.get_sam_model()
-        if not sam_model:
-            raise RuntimeError("SAM model not loaded.")
+        with torch.no_grad(), autocast(enabled=(DEVICE.type == 'cuda')):
+            logging.info(f"Starting new preprocessing for {cache_key}...")
+            frame_path = file_storage.get_frame_path(video_uuid, frame_number)
+            if not os.path.exists(frame_path):
+                raise FileNotFoundError(f"Frame image not found at {frame_path}")
 
-        sam_conf = settings.get('sam_mask_confidence', 0.35)
-        results = sam_model(frame_path, verbose=False, conf=sam_conf)
-        nms_iou = settings.get('nms_iou_threshold', 0.7)
-        all_boxes, all_masks = postprocess_sam_results(results, nms_iou_threshold=nms_iou)
+            sam_model = sam_tasks.get_sam_model()
+            if not sam_model:
+                raise RuntimeError("SAM model not loaded.")
 
-        if len(all_masks) == 0:
-            logging.warning(f"SAM found no objects in {cache_key} with current settings.")
-            cached_data = {"all_boxes": torch.empty(0, 4, device=DEVICE),
-                           "all_features": torch.empty(0, 1, device=DEVICE)}
+            settings = settings_manager.load_settings()
+            results = sam_model(frame_path, verbose=False, conf=settings.get('sam_mask_confidence', 0.35))
+            all_boxes, all_masks = postprocess_sam_results(results,
+                                                           nms_iou_threshold=settings.get('nms_iou_threshold', 0.7))
+
+            if len(all_masks) == 0:
+                cached_data = {"all_boxes": torch.empty(0, 4, device=DEVICE),
+                               "all_features": torch.empty(0, 1, device=DEVICE)}
+                PREPROCESSED_DATA_CACHE[cache_key] = cached_data
+                return cached_data
+
+            pil_image = Image.open(frame_path).convert("RGB")
+            transform = models['feature_extractor_transforms']
+            preprocessed_crops = []
+
+            for i in range(all_masks.shape[0]):
+                mask = all_masks[i].cpu()
+                y_indices, x_indices = torch.where(mask > 0)
+                if len(y_indices) == 0: continue
+
+                y_min, y_max = y_indices.min().item(), y_indices.max().item()
+                x_min, x_max = x_indices.min().item(), x_indices.max().item()
+                if x_min >= x_max or y_min >= y_max: continue
+
+                cropped_pil = pil_image.crop((x_min, y_min, x_max, y_max))
+                image_input = transform(cropped_pil).unsqueeze(0)
+                preprocessed_crops.append(image_input)
+
+            if not preprocessed_crops:
+                raise RuntimeError("Could not crop any valid images from SAM masks.")
+
+            batch_tensor = torch.cat(preprocessed_crops, dim=0).to(DEVICE)
+            all_features = models['feature_extractor'](batch_tensor)
+
+            cached_data = {"all_boxes": all_boxes, "all_features": all_features}
             PREPROCESSED_DATA_CACHE[cache_key] = cached_data
+            logging.info(f"Preprocessing for {cache_key} complete and cached.")
+            if time.time() - _last_cache_save_time > CACHE_SAVE_INTERVAL:
+                threading.Thread(target=save_preprocessed_cache_to_disk).start()
             return cached_data
-
-        pil_image = Image.open(frame_path).convert("RGB")
-        transform = models['feature_extractor_transforms']
-        preprocessed_crops = []
-
-        for i in range(all_masks.shape[0]):
-            mask = all_masks[i].cpu()
-            y_indices, x_indices = torch.where(mask > 0)
-            if len(y_indices) == 0: continue
-
-            y_min, y_max = y_indices.min().item(), y_indices.max().item()
-            x_min, x_max = x_indices.min().item(), x_indices.max().item()
-            if x_min >= x_max or y_min >= y_max: continue
-
-            cropped_pil = pil_image.crop((x_min, y_min, x_max, y_max))
-            image_input = transform(cropped_pil).unsqueeze(0)
-            preprocessed_crops.append(image_input)
-
-        if not preprocessed_crops:
-            raise RuntimeError("Could not crop any valid images from SAM masks.")
-
-        batch_tensor = torch.cat(preprocessed_crops, dim=0).to(DEVICE)
-        all_features = models['feature_extractor'](batch_tensor)
-
-        cached_data = {"all_boxes": all_boxes, "all_features": all_features}
-        PREPROCESSED_DATA_CACHE[cache_key] = cached_data
-        logging.info(f"Preprocessing for {cache_key} complete and cached.")
-        return cached_data
 
 
 def get_features_for_specific_bboxes(video_uuid, frame_number, target_rects):
@@ -175,52 +278,18 @@ def get_features_for_specific_bboxes(video_uuid, frame_number, target_rects):
         all_boxes = processed_data.get("all_boxes")
         all_features = processed_data.get("all_features")
 
-        if all_boxes is None or all_boxes.numel() == 0 or all_features.numel() == 0:
-            return torch.empty(0, all_features.shape[1], device=all_features.device)
+        if all_boxes is None or all_boxes.numel() == 0 or all_features is None or all_features.numel() == 0:
+            return None
 
         matching_indices = find_best_matching_masks_by_iou(np.array(target_rects), all_boxes)
         if matching_indices.numel() > 0:
             return all_features[matching_indices]
         else:
-            return torch.empty(0, all_features.shape[1], device=all_features.device)
+            return None
 
     except Exception as e:
-        logging.warning(f"Skipping frame {frame_number} for specific feature extraction due to error: {e}",
-                        exc_info=True)
+        logging.warning(f"Skipping frame {frame_number} for specific feature extraction due to error: {e}")
         return None
-
-
-def get_prototypes_for_class(class_name):
-    sample_frames = database.get_all_frames_with_class(class_name)
-    if not sample_frames:
-        logging.warning(f"Database query returned no frames for class '{class_name}'.")
-        return None
-
-    all_prototypes = []
-    if len(sample_frames) > 50:
-        sample_frames = random.sample(sample_frames, 50)
-
-    logging.info(f"Building prototypes for '{class_name}' from {len(sample_frames)} sample frames.")
-
-    for frame_data in sample_frames:
-        try:
-            rects, labels, _ = convert_text_to_rects_and_labels(frame_data['bboxes_text'])
-            target_rects = [np.array(rects[i]) for i, label in enumerate(labels) if label == class_name]
-            if not target_rects: continue
-
-            features = get_features_for_specific_bboxes(frame_data['video_uuid'], frame_data['frame_number'],
-                                                        target_rects)
-            if features is not None and features.numel() > 0:
-                all_prototypes.append(features)
-
-        except Exception as e:
-            logging.warning(f"Skipping frame {frame_data['frame_number']} for prototype building due to error: {e}")
-
-    if not all_prototypes:
-        logging.error(f"Could not extract any valid prototypes for class '{class_name}' after processing samples.")
-        return None
-
-    return torch.cat(all_prototypes, dim=0)
 
 
 def get_prototypes_from_drawn_boxes(drawn_samples_data):
@@ -253,34 +322,34 @@ def get_prototypes_from_drawn_boxes(drawn_samples_data):
 
 
 def predict_from_one_shot(video_uuid, frame_number, positive_prompt_box):
-    processed_data = get_features_for_all_masks(video_uuid, frame_number)
-    all_boxes = processed_data.get("all_boxes")
-    all_features = processed_data.get("all_features")
+    with AI_MODEL_LOCK:
+        processed_data = get_features_for_all_masks(video_uuid, frame_number)
+        all_boxes = processed_data.get("all_boxes")
+        all_features = processed_data.get("all_features")
 
-    if all_boxes is None or all_boxes.numel() == 0: return []
+        if all_boxes is None or all_boxes.numel() == 0: return []
 
-    prompt_rect = [positive_prompt_box['x1'], positive_prompt_box['y1'], positive_prompt_box['x2'],
-                   positive_prompt_box['y2']]
+        prompt_rect = [positive_prompt_box['x1'], positive_prompt_box['y1'], positive_prompt_box['x2'],
+                       positive_prompt_box['y2']]
 
-    target_feature_tensor = get_features_for_specific_bboxes(video_uuid, frame_number, [prompt_rect])
-    if target_feature_tensor is None or target_feature_tensor.numel() == 0:
-        raise ValueError("Could not extract features for the provided positive prompt box.")
+        target_feature_tensor = get_features_for_specific_bboxes(video_uuid, frame_number, [prompt_rect])
+        if target_feature_tensor is None or target_feature_tensor.numel() == 0:
+            raise ValueError("Could not extract features for the provided positive prompt box.")
 
-    target_feature = target_feature_tensor[0].unsqueeze(0)
+        target_feature = target_feature_tensor[0].unsqueeze(0)
+        sim_scores = F.cosine_similarity(target_feature, all_features, dim=1)
 
-    sim_scores = F.cosine_similarity(target_feature, all_features, dim=1)
+        settings = settings_manager.load_settings()
+        nms_iou = settings.get('nms_iou_threshold', 0.7)
+        kept_indices = nms(all_boxes, sim_scores, nms_iou)
 
-    settings = settings_manager.load_settings()
-    nms_iou = settings.get('nms_iou_threshold', 0.7)
-    kept_indices = nms(all_boxes, sim_scores, nms_iou)
+        final_results = []
+        final_scores_np = sim_scores.cpu().numpy()
+        for i in kept_indices:
+            box_coords = all_boxes[i].cpu().numpy().astype(int).tolist()
+            final_results.append({"box": box_coords, "score": float(final_scores_np[i])})
 
-    final_results = []
-    final_scores_np = sim_scores.cpu().numpy()
-    for i in kept_indices:
-        box_coords = all_boxes[i].cpu().numpy().astype(int).tolist()
-        final_results.append({"box": box_coords, "score": float(final_scores_np[i])})
-
-    return final_results
+        return final_results
 
 
 def _calculate_similarity_scores(all_embeddings, positive_prototypes, negative_prototypes=None):
@@ -290,7 +359,6 @@ def _calculate_similarity_scores(all_embeddings, positive_prototypes, negative_p
     if negative_prototypes is not None and len(negative_prototypes) > 0:
         mean_negative_prototype = torch.mean(negative_prototypes, dim=0, keepdim=True)
         negative_scores_sim = F.cosine_similarity(all_embeddings, mean_negative_prototype)
-
         logits = torch.stack([negative_scores_sim, positive_scores_sim], dim=1)
         probabilities = F.softmax(logits / SCORE_TEMPERATURE, dim=1)
         final_scores = probabilities[:, 1]
@@ -301,23 +369,140 @@ def _calculate_similarity_scores(all_embeddings, positive_prototypes, negative_p
 
 
 def predict_with_prototypes(video_uuid, frame_number, positive_prototypes, negative_prototypes=None):
-    processed_data = get_features_for_all_masks(video_uuid, frame_number)
-    all_boxes = processed_data.get("all_boxes")
-    all_features = processed_data.get("all_features")
+    with AI_MODEL_LOCK:
+        processed_data = get_features_for_all_masks(video_uuid, frame_number)
+        all_boxes = processed_data.get("all_boxes")
+        all_features = processed_data.get("all_features")
 
-    if all_boxes is None or all_boxes.numel() == 0:
-        return []
+        if all_boxes is None or all_boxes.numel() == 0:
+            return []
 
-    final_scores = _calculate_similarity_scores(all_features, positive_prototypes, negative_prototypes)
+        final_scores = _calculate_similarity_scores(all_features, positive_prototypes, negative_prototypes)
 
-    settings = settings_manager.load_settings()
-    nms_iou = settings.get('nms_iou_threshold', 0.7)
-    kept_indices = nms(all_boxes, final_scores, nms_iou)
+        settings = settings_manager.load_settings()
+        nms_iou = settings.get('nms_iou_threshold', 0.7)
+        kept_indices = nms(all_boxes, final_scores, nms_iou)
 
-    final_results = []
-    final_scores_np = final_scores.cpu().numpy()
-    for i in kept_indices:
-        box_coords = all_boxes[i].cpu().numpy().astype(int).tolist()
-        final_results.append({"box": box_coords, "score": float(final_scores_np[i])})
+        final_results = []
+        final_scores_np = final_scores.cpu().numpy()
+        for i in kept_indices:
+            box_coords = all_boxes[i].cpu().numpy().astype(int).tolist()
+            final_results.append({"box": box_coords, "score": float(final_scores_np[i])})
 
-    return final_results
+        return final_results
+
+
+def _calculate_prototype_from_db(class_name):
+    """实际执行原型计算的函数，不直接与缓存交互。"""
+    sample_frames = database.get_all_frames_with_class(class_name)
+    if not sample_frames:
+        logging.warning(f"在数据库中找不到类别 '{class_name}' 的任何样本。")
+        return None
+
+    if len(sample_frames) > 50:
+        sample_frames = random.sample(sample_frames, 50)
+
+    logging.info(f"正在从 {len(sample_frames)} 个样本为 '{class_name}' 计算新原型...")
+
+    all_class_features = []
+    for frame_data in sample_frames:
+        try:
+            rects, labels, _ = convert_text_to_rects_and_labels(frame_data['bboxes_text'])
+            target_rects = [np.array(rects[i]) for i, label in enumerate(labels) if label == class_name]
+            if not target_rects: continue
+
+            features = get_features_for_specific_bboxes(frame_data['video_uuid'], frame_data['frame_number'],
+                                                        target_rects)
+
+            if features is not None and features.numel() > 0:
+                all_class_features.append(features)
+        except Exception as e:
+            logging.warning(f"为原型构建跳过帧 {frame_data['frame_number']} 时出错: {e}")
+
+    if not all_class_features:
+        logging.error(f"未能为类别 '{class_name}' 提取任何有效的特征向量。")
+        return None
+
+    return torch.mean(torch.cat(all_class_features, dim=0), dim=0)
+
+
+def build_prototypes_for_class(class_name):
+    """线程安全地构建或获取单个类别的原型。"""
+    if class_name in PROTOTYPE_CACHE:
+        return PROTOTYPE_CACHE[class_name]
+
+    class_lock = _get_class_lock(class_name)
+    with class_lock:
+        if class_name in PROTOTYPE_CACHE:
+            return PROTOTYPE_CACHE[class_name]
+
+        prototype_tensor = _calculate_prototype_from_db(class_name)
+
+        if prototype_tensor is not None:
+            PROTOTYPE_CACHE[class_name] = prototype_tensor
+            logging.info(f"类别 '{class_name}' 的原型构建完成并已缓存。")
+            save_prototypes_to_disk()
+
+        return prototype_tensor
+
+
+def update_prototype_for_class(class_name):
+    """在后台线程中安全地重新计算并更新一个类的原型。"""
+    class_lock = _get_class_lock(class_name)
+    with class_lock:
+        logging.info(f"后台任务开始更新类别 '{class_name}' 的原型。")
+        new_prototype = _calculate_prototype_from_db(class_name)
+
+        if new_prototype is not None:
+            PROTOTYPE_CACHE[class_name] = new_prototype
+            logging.info(f"类别 '{class_name}' 的原型已在后台成功更新。")
+            save_prototypes_to_disk()
+        else:
+            logging.error(f"后台更新原型失败: 无法为 '{class_name}' 计算新原型。")
+
+
+def get_all_prototypes():
+    """确保所有已知类别的原型都已构建并返回原型库。"""
+    all_labels = database.get_all_class_labels()
+    prototype_library = {}
+    for label in all_labels:
+        prototype = build_prototypes_for_class(label)
+        if prototype is not None:
+            prototype_library[label] = prototype
+    return prototype_library
+
+
+def lam_predict(video_uuid, frame_number, point_coords):
+    """执行 LAM 预测流程，现在是线程安全的。"""
+    with AI_MODEL_LOCK:
+        frame_path = file_storage.get_frame_path(video_uuid, frame_number)
+        sam_model = sam_tasks.get_sam_model()
+        if not sam_model:
+            raise RuntimeError("SAM 模型不可用。")
+
+        results = sam_model(frame_path, points=[point_coords], labels=[1], verbose=False)
+        if not results or not results[0].boxes or results[0].boxes.xyxy.numel() == 0:
+            return None, "SAM 未在指定点找到对象。"
+
+        box_tensor = results[0].boxes.xyxy[0]
+        bbox_coords = box_tensor.cpu().numpy()
+        bbox_dict = {'x1': int(bbox_coords[0]), 'y1': int(bbox_coords[1]), 'x2': int(bbox_coords[2]),
+                     'y2': int(bbox_coords[3])}
+
+        feature_vector = get_features_for_specific_bboxes(video_uuid, frame_number, [bbox_coords])
+        if feature_vector is None or feature_vector.numel() == 0:
+            return None, "无法为 SAM 找到的物体提取特征。"
+
+        prototype_library = get_all_prototypes()
+        if not prototype_library:
+            return {"bbox": bbox_dict, "suggestions": []}, None
+
+        scores = []
+        with torch.no_grad():
+            for class_name, prototype in prototype_library.items():
+                similarity = F.cosine_similarity(feature_vector, prototype.unsqueeze(0))
+                scores.append({"label": class_name, "score": round(similarity.item(), 4)})
+
+        sorted_suggestions = sorted(scores, key=lambda x: x['score'], reverse=True)
+
+        return {"bbox": bbox_dict, "suggestions": sorted_suggestions[:5]}, None
