@@ -9,10 +9,12 @@ import logging
 import cv2
 import numpy as np
 import base64
-from collections import Counter
+from collections import Counter, defaultdict
 from skimage import io as skio
 import itertools
 import random
+import torch
+import torch.nn.functional as F
 import settings_manager
 import config
 import database
@@ -35,6 +37,7 @@ with app.app_context():
     database.init_db()
     database.migrate_db()
     file_storage.init_storage()
+
 
 def validate_description(desc, existing_descriptions):
     if not (1 <= len(desc) <= config.MAX_DESCRIPTION_LENGTH):
@@ -136,6 +139,7 @@ def generate_mosaic_previews(sample_pool, selected_video_uuid, selected_frame_nu
         previews.append(f"data:image/jpeg;base64,{img_base64}")
 
     return previews
+
 
 @app.route('/')
 def index():
@@ -424,6 +428,7 @@ def interpolate_bboxes():
         logging.error(f"Interpolation failed: {e}", exc_info=True)
         return jsonify({'success': False, 'message': str(e)}), 500
 
+
 @app.route('/addClass', methods=['POST'])
 def add_class():
     data = request.json
@@ -459,10 +464,10 @@ def save_settings():
     current_settings = settings_manager.load_settings()
 
     sam_model_changed = current_settings.get('sam_model_checkpoint') != new_settings.get('sam_model_checkpoint')
-    dinov2_model_changed = current_settings.get('dinov2_model_name') != new_settings.get('dinov2_model_name')
+    mobilenet_model_changed = current_settings.get('feature_extractor_model_name') != new_settings.get('feature_extractor_model_name')
     device_changed = current_settings.get('gpu_device') != new_settings.get('gpu_device')
 
-    restart_required = sam_model_changed or dinov2_model_changed or device_changed
+    restart_required = sam_model_changed or mobilenet_model_changed or device_changed
 
     if settings_manager.save_settings(new_settings):
         if sam_model_changed or device_changed:
@@ -474,9 +479,9 @@ def save_settings():
             except (ImportError, AttributeError):
                 logging.warning("Could not clear SAM model cache.")
 
-        if dinov2_model_changed or device_changed:
-            logging.info("DINOv2 model or device setting changed. Clearing DINOv2 cache.")
-            ai_models.clear_dinov2_cache()
+        if mobilenet_model_changed or device_changed:
+            logging.info("Feature extractor model or device setting changed. Clearing MobileNet cache.")
+            ai_models.clear_feature_extractor_cache()
 
         if device_changed:
             settings_manager.update_device()
@@ -488,6 +493,7 @@ def save_settings():
         })
     else:
         return jsonify({'success': False, 'message': 'Failed to save settings to file.'}), 500
+
 
 @app.route('/api/clear_cache', methods=['POST'])
 def clear_cache():
@@ -536,18 +542,18 @@ def sam_predict():
         logging.error(f"SAM prediction failed: {e}", exc_info=True)
         return jsonify({'success': False, 'message': str(e)}), 500
 
+
 @app.route('/interactive_segment/preprocess', methods=['POST'])
 def interactive_segment_preprocess_route():
     data = request.json
     video_uuid = data.get('video_uuid')
     frame_number = int(data.get('frame_number'))
-    hyperparameters = data.get('hyperparameters', {})
 
     if video_uuid is None or frame_number is None:
         return jsonify({'success': False, 'message': 'Missing video_uuid or frame_number.'}), 400
 
     try:
-        ai_models._preprocess_and_get_embeddings(video_uuid, frame_number, hyperparameters)
+        ai_models.get_features_for_all_masks(video_uuid, frame_number)
         cache_key = f"{video_uuid}_{frame_number}"
         return jsonify({'success': True, 'message': 'Preprocessing successful', 'cache_key': cache_key})
     except Exception as e:
@@ -558,42 +564,20 @@ def interactive_segment_preprocess_route():
 @app.route('/interactive_segment/predict', methods=['POST'])
 def interactive_segment_predict_route():
     data = request.json
-    cache_key = data.get('cache_key')
+    video_uuid = data.get('video_uuid')
+    frame_number = int(data.get('frame_number'))
     prompt_boxes = data.get('prompt_boxes', [])
-    negative_boxes = data.get('negative_boxes', [])
 
-    if cache_key not in ai_models.PREPROCESSED_DATA_CACHE:
-        return jsonify({'success': False, 'message': 'Cache key not found. Please preprocess first.'}), 404
+    if not all([video_uuid, frame_number is not None, prompt_boxes]):
+        return jsonify({'success': False, 'message': 'Missing required data.'}), 400
+    if not prompt_boxes:
+        return jsonify({'success': False, 'message': 'Positive prompt boxes are required.'}), 400
 
     try:
-        cached_data = ai_models.PREPROCESSED_DATA_CACHE[cache_key]
-        all_boxes = cached_data["all_boxes"]
-        all_embeddings = cached_data["all_embeddings"]
-
-        if not prompt_boxes:
-            return jsonify({'success': False, 'message': 'Positive prompt boxes are required.'}), 400
-
-        pos_indices = ai_models.find_best_matching_masks_by_iou(np.array(prompt_boxes), all_boxes)
-        if len(pos_indices) == 0: return jsonify({'success': False, 'message': 'Could not match any positive prompts.'})
-        positive_prototypes = all_embeddings[pos_indices]
-
-        negative_prototypes = None
-        if negative_boxes:
-            neg_indices = ai_models.find_best_matching_masks_by_iou(np.array(negative_boxes), all_boxes)
-            if len(neg_indices) > 0:
-                negative_prototypes = all_embeddings[neg_indices]
-
-        final_scores = ai_models._calculate_similarity_scores(all_embeddings, positive_prototypes, negative_prototypes)
-        from torchvision.ops import nms
-        kept_indices = nms(all_boxes, final_scores, 0.5)
-
-        final_results = []
-        final_scores_np = final_scores.cpu().numpy()
-        for i in kept_indices:
-            final_results.append(
-                {"box": all_boxes[i].cpu().numpy().astype(int).tolist(), "score": float(final_scores_np[i])})
-
-        return jsonify({'success': True, 'results': final_results})
+        # For one-shot, we only use the first prompt box.
+        positive_prompt_box = prompt_boxes[0]
+        results = ai_models.predict_from_one_shot(video_uuid, frame_number, positive_prompt_box)
+        return jsonify({'success': True, 'results': results})
 
     except Exception as e:
         logging.error(f"智能选择预测失败: {e}", exc_info=True)
@@ -606,19 +590,17 @@ def predict_from_dataset_route():
     video_uuid = data.get('video_uuid')
     frame_number = int(data.get('frame_number'))
     class_name = data.get('class_name')
-    hyperparameters = data.get('hyperparameters', {})
 
     if not all([video_uuid, frame_number is not None, class_name]):
         return jsonify({'success': False, 'message': 'Missing required data.'}), 400
 
     try:
-        positive_prototypes = ai_models.get_prototypes_for_class(class_name, hyperparameters)
+        positive_prototypes = ai_models.get_prototypes_for_class(class_name)
         if positive_prototypes is None or len(positive_prototypes) == 0:
             return jsonify({'success': False,
                             'message': f"No labeled examples found for class '{class_name}' in the dataset, or failed to extract features."})
 
-        results = ai_models.predict_with_prototypes(video_uuid, frame_number, positive_prototypes,
-                                                    hyperparameters=hyperparameters)
+        results = ai_models.predict_with_prototypes(video_uuid, frame_number, positive_prototypes)
         return jsonify({'success': True, 'results': results})
 
     except Exception as e:
@@ -677,6 +659,7 @@ def apply_prototypes_to_video_route():
 
     return jsonify({'success': True, 'message': 'Task to apply prototypes has started.'})
 
+
 @app.route('/startSam2Tracking', methods=['POST'])
 def start_sam2_tracking():
     try:
@@ -707,6 +690,7 @@ def start_sam2_tracking():
 
     return jsonify({'success': True, 'tracker_uuid': tracker_uuid})
 
+
 @app.route('/startSam2BatchTracking', methods=['POST'])
 def start_sam2_batch_tracking():
     try:
@@ -736,6 +720,7 @@ def start_sam2_batch_tracking():
     ), name=f"SAM-Batch-Tracker-{video_uuid[:6]}").start()
 
     return jsonify({'success': True, 'tracker_uuid': tracker_uuid})
+
 
 @app.route('/streamSam2Tracking/<tracker_uuid>')
 def stream_sam2_tracking(tracker_uuid):
@@ -840,6 +825,7 @@ def stop_tracking():
     if tracker_uuid in background_tasks.tracking_sessions:
         background_tasks.tracking_sessions[tracker_uuid]['stop_requested'] = True
     return jsonify({'success': True})
+
 
 @app.route('/listDatasets', methods=['GET'])
 def list_datasets():
@@ -1117,19 +1103,19 @@ def get_dataset_analysis_data(dataset_uuid):
         for class_name, count in class_counts.items():
             if count < 10 or count < avg_instances * 0.1:
                 warnings.append(
-                    f"<b>Class Imbalance:</b> Class '{class_name}' has very few instances ({count}), which may lead to poor model performance.")
+                    f"<b>类别不平衡:</b> 类别 '{class_name}' 的实例过少 ({count}), 这可能影响模型性能。")
 
     small_object_threshold = 100
     small_object_count = sum(1 for bbox in all_bboxes_for_outliers if bbox['area'] < small_object_threshold)
     if small_object_count > 0:
         warnings.append(
-            f"<b>Small Objects:</b> Found {small_object_count} objects with an area smaller than {small_object_threshold} pixels. Please verify they are not annotation errors.")
+            f"<b>小目标警告:</b> 发现 {small_object_count} 个面积小于 {small_object_threshold} 像素的目标。请检查它们是否为标注错误。")
 
     if suspicious_pairs:
         warnings.append(
-            f"<b>Potential Duplicates:</b> Found {len(suspicious_pairs)} pairs of bounding boxes with very high overlap (IoU > 0.95), suggesting possible duplicate annotations.")
+            f"<b>潜在重复标注:</b> 发现 {len(suspicious_pairs)} 对标注框存在高度重叠 (IoU > 0.95)，可能为重复标注。")
 
-    summary_text = f"This dataset contains <strong>{len(class_counts)}</strong> classes with a total of <strong>{total_instances}</strong> instances across <strong>{len(all_frames)}</strong> annotated images."
+    summary_text = f"此数据集包含 <strong>{len(class_counts)}</strong> 个类别，在 <strong>{len(all_frames)}</strong> 张已标注图片中共有 <strong>{total_instances}</strong> 个实例。"
 
     return jsonify({
         'success': True,
@@ -1147,6 +1133,81 @@ def get_dataset_analysis_data(dataset_uuid):
         'image_class_map': image_class_map,
         'gallery_images': gallery_images
     })
+
+
+# 新增：按需执行标签一致性检查的API端点
+@app.route('/api/datasetAnalysis/<dataset_uuid>/consistency_check', methods=['POST'])
+def run_consistency_check(dataset_uuid):
+    try:
+        dataset = database.get_dataset_entity(dataset_uuid)
+        if not dataset:
+            return jsonify({'success': False, 'message': 'Dataset not found.'}), 404
+
+        video_uuids = json.loads(dataset.get('video_uuids', '[]'))
+        all_frames = [
+            dict(frame) for vu in video_uuids for frame in database.get_video_frames(vu)
+            if frame.get('bboxes_text', '').strip()
+        ]
+
+        all_bboxes_by_class = defaultdict(list)
+        for i, frame in enumerate(all_frames):
+            rects, labels, _ = convert_text_to_rects_and_labels(frame['bboxes_text'])
+            for j, rect in enumerate(rects):
+                all_bboxes_by_class[labels[j]].append({
+                    'image_index': i, 'rect': rect,
+                    'video_uuid': frame['video_uuid'], 'frame_number': frame['frame_number']
+                })
+
+        outlier_image_indices = set()
+        logging.info("Starting on-demand label consistency check...")
+
+        for class_name, bboxes_info in all_bboxes_by_class.items():
+            if len(bboxes_info) < 5:
+                continue
+
+            logging.info(f"Analyzing consistency for class '{class_name}' with {len(bboxes_info)} instances.")
+            frames_to_process = defaultdict(list)
+            for i, info in enumerate(bboxes_info):
+                frame_key = f"{info['video_uuid']};{info['frame_number']}"
+                frames_to_process[frame_key].append({'rect': info['rect'], 'original_index': i})
+
+            class_embeddings = [None] * len(bboxes_info)
+            for frame_key, rect_infos in frames_to_process.items():
+                video_uuid, frame_number_str = frame_key.split(';')
+                frame_number = int(frame_number_str)
+                rects_in_frame = [r['rect'] for r in rect_infos]
+
+                embeddings = ai_models.get_features_for_specific_bboxes(video_uuid, frame_number, rects_in_frame)
+
+                if embeddings is not None and len(embeddings) == len(rect_infos):
+                    for i, r_info in enumerate(rect_infos):
+                        class_embeddings[r_info['original_index']] = embeddings[i]
+
+            valid_embeddings_info = [(emb, bboxes_info[i]) for i, emb in enumerate(class_embeddings) if emb is not None]
+            if not valid_embeddings_info: continue
+
+            all_embeddings_tensor = torch.stack([item[0] for item in valid_embeddings_info])
+            mean_embedding = torch.mean(all_embeddings_tensor, dim=0, keepdim=True)
+            similarities = F.cosine_similarity(all_embeddings_tensor, mean_embedding)
+
+            if len(similarities) > 1:
+                threshold = torch.quantile(similarities.to(torch.float32), 0.05)
+                outlier_indices_in_class = (similarities < threshold).nonzero(as_tuple=True)[0]
+
+                for idx in outlier_indices_in_class:
+                    original_bbox_info = valid_embeddings_info[idx.item()][1]
+                    outlier_image_indices.add(original_bbox_info['image_index'])
+
+        message = f"AI审查完成。发现 {len(outlier_image_indices)} 张图片中可能存在标签不一致的实例。" if outlier_image_indices else "AI审查完成。未发现明显的标签不一致问题。"
+        return jsonify({
+            'success': True,
+            'message': message,
+            'outlier_image_indices': list(outlier_image_indices)
+        })
+
+    except Exception as e:
+        logging.error(f"On-demand consistency check failed: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': f'审查失败: {e}'}), 500
 
 
 @app.route('/api/previewAugmentations', methods=['POST'])
@@ -1227,6 +1288,7 @@ def preview_augmentations():
     except Exception as e:
         logging.error(f"Augmentation preview failed: {e}", exc_info=True)
         return jsonify({'success': False, 'message': str(e)}), 500
+
 
 if __name__ == '__main__':
     from waitress import serve

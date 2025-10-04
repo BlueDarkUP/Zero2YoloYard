@@ -229,47 +229,9 @@
 
                 <div id="interactive-segment-controls">
                     <h5 class="mb-3"><i class="bi bi-stars"></i> Smart Select Tool</h5>
-                    <p><small class="text-muted">Draw or use SAM-point to create samples, then click 'Find Similar'.</small></p>
-                    <div class="btn-group d-flex mb-3" role="group">
-                        <button type="button" class="btn btn-outline-success w-100 active" id="draw-positive-btn">Positive Sample</button>
-                        <button type="button" class="btn btn-outline-danger w-100" id="draw-negative-btn">Negative Sample</button>
-                    </div>
-                    <button id="find-similar-btn" class="btn btn-primary btn-block"><i class="bi bi-search"></i> Find Similar Objects</button>
-                    <button id="clear-samples-btn" class="btn btn-secondary btn-block mt-1"><i class="bi bi-eraser"></i> Clear Samples</button>
-
-                    <div class="accordion mt-3" id="advanced-settings-accordion">
-                        <div class="card">
-                            <div class="card-header p-0" id="headingOne">
-                                <h2 class="mb-0">
-                                    <button class="btn btn-link btn-block text-left" type="button" data-toggle="collapse" data-target="#collapseAdvanced" aria-expanded="true" aria-controls="collapseAdvanced">
-                                        <i class="bi bi-sliders"></i> Advanced Settings
-                                    </button>
-                                </h2>
-                            </div>
-                            <div id="collapseAdvanced" class="collapse" aria-labelledby="headingOne" data-parent="#advanced-settings-accordion">
-                                <div class="card-body">
-                                    <p class="adv-settings-label">Feature Fusion Weights (L-S):</p>
-                                    <div class="d-flex justify-content-between">
-                                        <input type="range" class="custom-range" id="w1" min="0" max="1" step="0.1" value="0.1" title="Weight 1">
-                                        <input type="range" class="custom-range" id="w2" min="0" max="1" step="0.1" value="0.2" title="Weight 2">
-                                        <input type="range" class="custom-range" id="w3" min="0" max="1" step="0.1" value="0.3" title="Weight 3">
-                                        <input type="range" class="custom-range" id="w4" min="0" max="1" step="0.1" value="0.4" title="Weight 4">
-                                    </div>
-                                    <div class="row mt-2">
-                                        <div class="col-6">
-                                            <label class="adv-settings-label" for="batch-size">Batch Size</label>
-                                            <input type="number" id="batch-size" class="form-control form-control-sm" value="16" min="1" max="64">
-                                        </div>
-                                        <div class="col-6">
-                                            <label class="adv-settings-label" for="interp-size">Interp. Size</label>
-                                            <input type="number" id="interp-size" class="form-control form-control-sm" value="100" min="32" max="224" step="8">
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
+                    <p><small class="text-muted">Draw a box around one object. Similar objects will be found automatically.</small></p>
+                    <button id="find-similar-btn" class="btn btn-primary btn-block" style="display: none;"><i class="bi bi-search"></i> Find Similar Objects</button>
+                    <button id="clear-samples-btn" class="btn btn-secondary btn-block mt-1"><i class="bi bi-eraser"></i> Clear Sample & Previews</button>
                     <hr>
                     <div id="interactive-results-controls" style="display: none;" class="mt-2">
                         <h5>Review & Assign</h5>
@@ -279,7 +241,6 @@
                             <input type="range" class="form-control-range" id="result-threshold" min="0.1" max="0.99" step="0.01" value="0.50">
                         </div>
                         <button id="accept-visible-btn" class="btn btn-success btn-block mt-2"><i class="bi bi-check2-all"></i> Accept All Visible</button>
-                        <button id="apply-to-video-btn" class="btn btn-warning btn-block mt-1" disabled><i class="bi bi-fast-forward-fill"></i> Apply to Video</button>
                         <button id="finish-interactive-btn" class="btn btn-secondary btn-block mt-1"><i class="bi bi-x-circle"></i> Finish & Clear Previews</button>
                     </div>
                 </div>
@@ -369,7 +330,7 @@
 
 
 {% from "_macros.html" import render_modal %}
-{% call render_modal('negative-sampling-modal', 'Step 2: Refine with Negative Samples') %}
+{% call render_modal('negative-sampling-modal', 'Step 2: Refine with Negative Samples (Optional)') %}
 <div id="neg-sampling-body">
     <p class="text-info">Draw boxes around areas you want the model to **avoid** (e.g., background, other objects). These are temporary and only used for this task.</p>
     <div class="text-center mb-3">
@@ -383,10 +344,11 @@
         <strong id="neg-frame-counter">Frame 1 / 10</strong>
         <button id="neg-next-btn" class="btn btn-secondary">Next <i class="bi bi-arrow-right"></i></button>
     </div>
+    <p class="text-muted small mt-2">Use Ctrl+Z to undo the last box on the current frame, and Delete to clear all boxes on this frame.</p>
 </div>
 <div class="modal-footer">
-    <button type="button" class="btn btn-danger" data-dismiss="modal">Cancel</button>
-    <button type="button" id="finish-neg-sampling-btn" class="btn btn-primary"><i class="bi bi-check2-circle"></i> Finish & Refine Model</button>
+    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+    <button type="button" id="finish-neg-sampling-btn" class="btn btn-primary"><i class="bi bi-check2-circle"></i> Finish & Apply to Video</button>
 </div>
 {% endcall %}
 
@@ -417,9 +379,7 @@
         let trackedBboxCache = {};
 
         let isInteractiveMode = false;
-        let interactiveDrawMode = 'positive';
         let positiveExampleBboxes = [];
-        let negativeExampleBboxes = [];
         let previewBboxes = [];
         let currentCacheKey = null;
         let lastProcessedFrame = -1;
@@ -573,8 +533,8 @@
             }
 
             if (isInteractiveMode) {
-                const drawExampleBox = (box, color) => {
-                    drawingCtx.strokeStyle = color;
+                positiveExampleBboxes.forEach(box => {
+                    drawingCtx.strokeStyle = 'rgba(40, 167, 69, 0.9)';
                     drawingCtx.lineWidth = 2 / dpr;
                     drawingCtx.setLineDash([5 / dpr, 3 / dpr]);
                     const x = box.x1 * scaleX,
@@ -583,9 +543,7 @@
                         h = (box.y2 - box.y1) * scaleY;
                     drawingCtx.strokeRect(x, y, w, h);
                     drawingCtx.setLineDash([]);
-                };
-                positiveExampleBboxes.forEach(box => drawExampleBox(box, 'rgba(40, 167, 69, 0.9)'));
-                negativeExampleBboxes.forEach(box => drawExampleBox(box, 'rgba(220, 53, 69, 0.9)'));
+                });
             }
         }
 
@@ -871,7 +829,7 @@
         function updateSamButtonText() {
             const button = $("#sam-toggle-btn");
             if (isSamModeActive) {
-                const text = isInteractiveMode ? "SAM ON (for Samples)" : "SAM ON (for Annotation)";
+                const text = isInteractiveMode ? "SAM ON (for Sample)" : "SAM ON (for Annotation)";
                 button.html(`<i class="bi bi-magic"></i> ${text}`);
             } else {
                 button.html('<i class="bi bi-magic"></i> Enable SAM (Point)');
@@ -975,10 +933,8 @@
 
         function clearInteractiveSession(shouldRedraw = true) {
             positiveExampleBboxes = [];
-            negativeExampleBboxes = [];
             previewBboxes = [];
             lastDatasetClassName = null;
-            $('#apply-to-video-btn').prop('disabled', true);
             hoveredPreviewIndex = -1;
             overlappingCycleIndex = 0;
             lastClickPosForCycle = null;
@@ -988,17 +944,69 @@
             }
         }
 
-        function getHyperparameters() {
-            return {
-                weights: [
-                    parseFloat($('#w1').val()),
-                    parseFloat($('#w2').val()),
-                    parseFloat($('#w3').val()),
-                    parseFloat($('#w4').val())
-                ],
-                batch_size: parseInt($('#batch-size').val()),
-                interpolation_size: parseInt($('#interp-size').val()),
+        function triggerFindSimilar() {
+            if (positiveExampleBboxes.length === 0) {
+                 showToast("Please provide one positive sample.", 2000);
+                return;
+            }
+            lastDatasetClassName = null;
+            const frameNumber = parseInt(frameSlider.val());
+            const $button = $('#find-similar-btn'); // Though hidden, we can still use it to manage state
+            $button.prop('disabled', true);
+
+            const runPrediction = () => {
+                showToast('Finding similar objects...', 4000);
+                const payload = {
+                    video_uuid: videoUuid,
+                    frame_number: frameNumber,
+                    prompt_boxes: positiveExampleBboxes
+                };
+                $.ajax({
+                    url: '/interactive_segment/predict',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(payload),
+                    success: res => {
+                        if (res.success) {
+                            previewBboxes = res.results;
+                            $('#interactive-results-controls').slideDown();
+                            $('#result-threshold').trigger('input');
+                            redrawCanvas();
+                        } else {
+                            alert('Prediction failed: ' + res.message);
+                        }
+                    },
+                    error: () => alert('Server error during prediction.'),
+                    complete: () => $button.prop('disabled', false)
+                });
             };
+
+            if (lastProcessedFrame !== frameNumber) {
+                showToast('Preprocessing frame for Smart Select...', 10000);
+                const payload = { video_uuid: videoUuid, frame_number: frameNumber };
+                $.ajax({
+                    url: '/interactive_segment/preprocess',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(payload),
+                    success: res => {
+                        if (res.success) {
+                            currentCacheKey = res.cache_key;
+                            lastProcessedFrame = frameNumber;
+                            runPrediction();
+                        } else {
+                            alert('Preprocessing failed: ' + res.message);
+                            $button.prop('disabled', false);
+                        }
+                    },
+                    error: () => {
+                        alert('Server error during preprocessing.');
+                        $button.prop('disabled', false);
+                    }
+                });
+            } else {
+                runPrediction();
+            }
         }
 
         function startNegativeSampling(count) {
@@ -1006,20 +1014,14 @@
                 url: '/api/get_random_frames_for_neg_sampling',
                 type: 'POST',
                 contentType: 'application/json',
-                data: JSON.stringify({
-                    video_uuid: videoUuid,
-                    count: count
-                }),
+                data: JSON.stringify({ video_uuid: videoUuid, count: count }),
                 success: function(res) {
                     if (res.success && res.frames.length > 0) {
                         negSamplingFrames = res.frames;
                         currentNegSampleIndex = 0;
                         negativeSamplesStore = {};
                         loadNegativeSampleFrame();
-                        $('#negative-sampling-modal').modal({
-                            backdrop: 'static',
-                            keyboard: false
-                        });
+                        $('#negative-sampling-modal').modal({ backdrop: 'static', keyboard: false });
                     } else {
                         alert("Failed to fetch random frames: " + (res.message || "No frames returned."));
                     }
@@ -1034,7 +1036,6 @@
             if (currentNegSampleIndex < 0 || currentNegSampleIndex >= negSamplingFrames.length) return;
             const frameData = negSamplingFrames[currentNegSampleIndex];
             $('#neg-frame-counter').text(`Frame ${currentNegSampleIndex + 1} / ${negSamplingFrames.length}`);
-
             negImage.onload = () => {
                 const dpr = window.devicePixelRatio || 1;
                 const rect = negImage.getBoundingClientRect();
@@ -1052,23 +1053,17 @@
             const dpr = window.devicePixelRatio || 1;
             negCtx.clearRect(0, 0, negCanvas.width / dpr, negCanvas.height / dpr);
             if (negSamplingFrames.length === 0) return;
-
             const frameData = negSamplingFrames[currentNegSampleIndex];
             const frameKey = `${frameData.video_uuid};${frameData.frame_number}`;
             const boxes = negativeSamplesStore[frameKey] || [];
-
             if (!negImage.naturalWidth) return;
             const scaleX = negImage.clientWidth / negImage.naturalWidth;
             const scaleY = negImage.clientHeight / negImage.naturalHeight;
-
             boxes.forEach(box => {
                 negCtx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
                 negCtx.lineWidth = 2 / dpr;
                 negCtx.setLineDash([5 / dpr, 3 / dpr]);
-                const x = box[0] * scaleX,
-                    y = box[1] * scaleY;
-                const w = (box[2] - box[0]) * scaleX,
-                    h = (box[3] - box[1]) * scaleY;
+                const x = box[0] * scaleX, y = box[1] * scaleY, w = (box[2] - box[0]) * scaleX, h = (box[3] - box[1]) * scaleY;
                 negCtx.strokeRect(x, y, w, h);
                 negCtx.setLineDash([]);
             });
@@ -1089,7 +1084,6 @@
                     class_name: lastDatasetClassName,
                     negative_samples: negativeSamples
                 };
-                $('#apply-to-video-btn').prop('disabled', true);
                 $.ajax({
                     url: '/apply_prototypes_to_video',
                     type: 'POST',
@@ -1101,12 +1095,10 @@
                             window.location.href = "/";
                         } else {
                             alert("Failed to start task: " + res.message);
-                            $('#apply-to-video-btn').prop('disabled', false);
                         }
                     },
                     error: function() {
                         alert("Server error when trying to start the task.");
-                        $('#apply-to-video-btn').prop('disabled', false);
                     }
                 });
             }
@@ -1204,15 +1196,10 @@
                         }
 
                         if (isInteractiveMode) {
-                            const newSampleBox = response.bbox;
-                            if (interactiveDrawMode === 'positive') {
-                                positiveExampleBboxes.push(newSampleBox);
-                                showToast('Positive SAM sample added.', 2000);
-                            } else {
-                                negativeExampleBboxes.push(newSampleBox);
-                                showToast('Negative SAM sample added.', 2000);
-                            }
+                            positiveExampleBboxes = [response.bbox]; // New logic: only one positive example
                             redrawCanvas();
+                            showToast('Positive SAM sample added. Auto-finding similar objects...', 2000);
+                            triggerFindSimilar(); // AUTO-TRIGGER
                         } else {
                             if (activeClass) {
                                 const newBox = { ...response.bbox,
@@ -1365,7 +1352,7 @@
                 let currentX = Math.max(0, Math.min(pos.x, frameImage.clientWidth));
                 let currentY = Math.max(0, Math.min(pos.y, frameImage.clientHeight));
                 drawingCtx.lineWidth = 2 / dpr;
-                drawingCtx.strokeStyle = isInteractiveMode ? (interactiveDrawMode === 'positive' ? 'rgba(40,167,69,0.9)' : 'rgba(220,53,69,0.9)') : stringToColor(activeClass || 'blue');
+                drawingCtx.strokeStyle = isInteractiveMode ? 'rgba(40,167,69,0.9)' : stringToColor(activeClass || 'blue');
                 drawingCtx.setLineDash(isInteractiveMode ? [5 / dpr, 3 / dpr] : []);
                 drawingCtx.strokeRect(startX, startY, currentX - startX, currentY - startY);
                 drawingCtx.setLineDash([]);
@@ -1459,8 +1446,9 @@
                 };
 
                 if (isInteractiveMode) {
-                    if (interactiveDrawMode === 'positive') positiveExampleBboxes.push(newBoxRaw);
-                    else negativeExampleBboxes.push(newBoxRaw);
+                    positiveExampleBboxes = [newBoxRaw]; // New logic: only one positive example
+                    redrawCanvas();
+                    triggerFindSimilar(); // AUTO-TRIGGER
                 } else if (activeClass) {
                     const newBox = { ...newBoxRaw,
                         label: activeClass,
@@ -1572,7 +1560,6 @@
             }
         });
 
-        // MODIFIED: This button now opens the tracking options modal
         $('#sam2-track-btn').on('click', function() {
             if (bboxes.length === 0) {
                 alert("Please label at least one object on the current frame to start tracking.");
@@ -1584,12 +1571,10 @@
             $('#tracking-options-modal').modal('show');
         });
 
-        // NEW: Handle radio button change in the modal
         $('input[name="tracking-mode"]').on('change', function() {
             $('#batch-mode-options').toggle($(this).val() === 'batch');
         });
 
-        // NEW: Handle the final "Start Tracking" click from the modal
         $('#confirm-tracking-start').on('click', function() {
             const mode = $('input[name="tracking-mode"]:checked').val();
             const startFrame = parseInt(frameSlider.val());
@@ -1812,92 +1797,9 @@
             updateSamButtonText();
         });
 
-        $('#draw-positive-btn').on('click', function() {
-            interactiveDrawMode = 'positive';
-            $(this).addClass('active');
-            $('#draw-negative-btn').removeClass('active');
-        });
-
-        $('#draw-negative-btn').on('click', function() {
-            interactiveDrawMode = 'negative';
-            $(this).addClass('active');
-            $('#draw-positive-btn').removeClass('active');
-        });
-
         $('#clear-samples-btn').on('click', function() {
             clearInteractiveSession();
-            showToast('Sample boxes cleared.', 2000);
-        });
-
-        $('#find-similar-btn').on('click', function() {
-            if (positiveExampleBboxes.length === 0) {
-                alert('Please create at least one positive sample box first!');
-                return;
-            }
-            lastDatasetClassName = null;
-            $('#apply-to-video-btn').prop('disabled', true);
-            const frameNumber = parseInt(frameSlider.val());
-            const $button = $(this);
-            $button.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> Finding...');
-
-            const runPrediction = () => {
-                showToast('Predicting with current samples...', 4000);
-                const payload = {
-                    cache_key: currentCacheKey,
-                    prompt_boxes: positiveExampleBboxes.map(b => [b.x1, b.y1, b.x2, b.y2]),
-                    negative_boxes: negativeExampleBboxes.map(b => [b.x1, b.y1, b.x2, b.y2]),
-                    hyperparameters: getHyperparameters()
-                };
-                $.ajax({
-                    url: '/interactive_segment/predict',
-                    type: 'POST',
-                    contentType: 'application/json',
-                    data: JSON.stringify(payload),
-                    success: res => {
-                        if (res.success) {
-                            previewBboxes = res.results;
-                            $('#interactive-results-controls').slideDown();
-                            $('#result-threshold').trigger('input');
-                            redrawCanvas();
-                        } else {
-                            alert('Prediction failed: ' + res.message);
-                        }
-                    },
-                    error: () => alert('Server error during prediction.'),
-                    complete: () => $button.prop('disabled', false).html('<i class="bi bi-search"></i> Find Similar Objects')
-                });
-            };
-
-            if (lastProcessedFrame !== frameNumber) {
-                showToast('Preprocessing frame... (this may take a moment)', 10000);
-                const payload = {
-                    video_uuid: videoUuid,
-                    frame_number: frameNumber,
-                    hyperparameters: getHyperparameters()
-                };
-                $.ajax({
-                    url: '/interactive_segment/preprocess',
-                    type: 'POST',
-                    contentType: 'application/json',
-                    data: JSON.stringify(payload),
-                    success: res => {
-                        if (res.success) {
-                            currentCacheKey = res.cache_key;
-                            lastProcessedFrame = frameNumber;
-                            runPrediction();
-                        } else {
-                            alert('Preprocessing failed: ' + res.message);
-                            $button.prop('disabled', false).html('<i class="bi bi-search"></i> Find Similar Objects');
-                        }
-                    },
-                    error: () => {
-                        alert('Server error during preprocessing.');
-                        $button.prop('disabled', false).html('<i class="bi bi-search"></i> Find Similar Objects');
-                    }
-                });
-            } else {
-                runPrediction();
-            }
+            showToast('Sample box and previews cleared.', 2000);
         });
 
         $('#find-from-dataset-btn').on('click', function() {
@@ -1909,12 +1811,7 @@
             const $button = $(this);
             $button.prop('disabled', true);
             showToast(`Learning from all '${activeClass}' examples in the dataset...`, 10000);
-            const payload = {
-                video_uuid: videoUuid,
-                frame_number: frameNumber,
-                class_name: activeClass,
-                hyperparameters: getHyperparameters()
-            };
+            const payload = { video_uuid: videoUuid, frame_number: frameNumber, class_name: activeClass };
             $.ajax({
                 url: '/interactive_segment/predict_from_dataset',
                 type: 'POST',
@@ -1928,31 +1825,25 @@
                         $('#result-threshold').trigger('input');
                         redrawCanvas();
                         showToast(`Found ${res.results.length} potential '${activeClass}' objects.`, 4000);
-
                         setTimeout(() => {
-                            if (confirm(`Find from Dataset for '${activeClass}' successful.\n\nDo you want to refine the model by adding negative samples (e.g., background)? This can improve accuracy.`)) {
+                           if (confirm(`Find from Dataset for '${activeClass}' successful.\n\nDo you want to refine the model by adding negative samples (e.g., background)? This can improve accuracy.`)) {
                                 const frameCountStr = prompt("How many random frames would you like to label for negative samples?", "10");
                                 const frameCount = frameCountStr ? parseInt(frameCountStr) : 0;
                                 if (frameCount && !isNaN(frameCount) && frameCount > 0) {
                                     startNegativeSampling(frameCount);
                                 } else {
-                                    $('#apply-to-video-btn').prop('disabled', false);
+                                     triggerApplyToVideo(null); // Apply without negative samples if user cancels prompt
                                 }
                             } else {
-                                $('#apply-to-video-btn').prop('disabled', false);
+                                triggerApplyToVideo(null); // User chose not to refine
                             }
                         }, 500);
-
                     } else {
                         alert('Dataset-driven prediction failed: ' + res.message);
                     }
                 },
-                error: function() {
-                    alert('Server error during dataset-driven prediction.');
-                },
-                complete: function() {
-                    $button.prop('disabled', false);
-                }
+                error: function() { alert('Server error during dataset-driven prediction.'); },
+                complete: function() { $button.prop('disabled', false); }
             });
         });
 
@@ -1995,19 +1886,8 @@
             redrawNegCanvas();
         });
 
-        $('#neg-prev-btn').on('click', function() {
-            if (currentNegSampleIndex > 0) {
-                currentNegSampleIndex--;
-                loadNegativeSampleFrame();
-            }
-        });
-        $('#neg-next-btn').on('click', function() {
-            if (currentNegSampleIndex < negSamplingFrames.length - 1) {
-                currentNegSampleIndex++;
-                loadNegativeSampleFrame();
-            }
-        });
-
+        $('#neg-prev-btn').on('click', function() { if (currentNegSampleIndex > 0) { currentNegSampleIndex--; loadNegativeSampleFrame(); } });
+        $('#neg-next-btn').on('click', function() { if (currentNegSampleIndex < negSamplingFrames.length - 1) { currentNegSampleIndex++; loadNegativeSampleFrame(); } });
         $('#finish-neg-sampling-btn').on('click', function() {
             $('#negative-sampling-modal').modal('hide');
             const finalNegativeSamples = Object.fromEntries(
@@ -2019,10 +1899,6 @@
                 showToast("No negative samples were added. Applying original model.");
             }
             triggerApplyToVideo(finalNegativeSamples);
-        });
-
-        $('#apply-to-video-btn').on('click', function() {
-            triggerApplyToVideo(null);
         });
 
         $('#result-threshold').on('input', function() {

@@ -1,9 +1,10 @@
 import logging
 import os
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 from PIL import Image
-from torchvision import transforms
+from torchvision.models import mobilenet_v3_large, MobileNet_V3_Large_Weights
 from torchvision.ops import nms, box_iou
 from torch.cuda.amp import autocast
 import numpy as np
@@ -22,32 +23,26 @@ except ImportError:
 models = {}
 PREPROCESSED_DATA_CACHE = {}
 
-_dinov2_model_cache = {"model": None, "name": None}
+_mobilenet_cache = {"model": None, "name": None}
+SCORE_TEMPERATURE = 0.07  # Add this back for softmax scaling
 
 
-def clear_dinov2_cache():
-    global _dinov2_model_cache
-    logging.info("Clearing DINOv2 model cache due to setting change.")
-    if _dinov2_model_cache["model"] is not None and hasattr(_dinov2_model_cache["model"], 'cpu'):
-        _dinov2_model_cache["model"].cpu()
-        del _dinov2_model_cache["model"]
+def clear_feature_extractor_cache():
+    global _mobilenet_cache
+    logging.info("Clearing Feature Extractor (MobileNetV3) model cache due to setting change.")
+    if _mobilenet_cache["model"] is not None and hasattr(_mobilenet_cache["model"], 'cpu'):
+        _mobilenet_cache["model"].cpu()
+        del _mobilenet_cache["model"]
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-    _dinov2_model_cache = {"model": None, "name": None}
-    if 'dinov2' in models:
-        del models['dinov2']
-
-
-DEFAULT_INTERPOLATION_SIZE = (100, 100)
-DEFAULT_BATCH_SIZE = 16
-DEFAULT_FEATURE_FUSION_WEIGHTS = torch.tensor([0.1, 0.2, 0.3, 0.4], device=settings_manager.get_device()).view(4, 1, 1,
-                                                                                                               1)
-SCORE_TEMPERATURE = 0.07
+    _mobilenet_cache = {"model": None, "name": None}
+    if 'feature_extractor' in models:
+        del models['feature_extractor']
 
 
 def startup_ai_models():
-    global _dinov2_model_cache
+    global _mobilenet_cache
     DEVICE = settings_manager.get_device()
     if sam_tasks:
         logging.info("正在检查 SAM 点选/跟踪模型...")
@@ -56,52 +51,40 @@ def startup_ai_models():
 
     try:
         settings = settings_manager.load_settings()
-        target_dinov2_model_name = settings.get("dinov2_model_name", "dinov2_vits14")
+        target_model_name = settings.get("feature_extractor_model_name", "mobilenet_v3_large")
 
-        if _dinov2_model_cache["model"] is not None and _dinov2_model_cache["name"] == target_dinov2_model_name:
-            logging.info(f"DINOv2 model '{target_dinov2_model_name}' is already loaded.")
-            _dinov2_model_cache["model"].to(DEVICE)
-            models['dinov2'] = _dinov2_model_cache["model"]
+        if _mobilenet_cache["model"] is not None and _mobilenet_cache["name"] == target_model_name:
+            logging.info(f"Feature Extractor model '{target_model_name}' is already loaded.")
+            _mobilenet_cache["model"].to(DEVICE)
+            models['feature_extractor'] = _mobilenet_cache["model"]
             return
 
-        if _dinov2_model_cache["model"] is not None:
-            clear_dinov2_cache()
+        if _mobilenet_cache["model"] is not None:
+            clear_feature_extractor_cache()
 
-        logging.info(f"正在加载 DINOv2 模型 '{target_dinov2_model_name}' 至 {DEVICE}...")
-        dinov2_model = torch.hub.load('facebookresearch/dinov2', target_dinov2_model_name, trust_repo=True)
-        dinov2_model.to(DEVICE).eval()
+        logging.info(f"正在加载 Feature Extractor 模型 '{target_model_name}' 至 {DEVICE}...")
+        feature_extractor = mobilenet_v3_large(weights=MobileNet_V3_Large_Weights.IMAGENET1K_V1)
+        feature_extractor.classifier = nn.Identity()
+        feature_extractor.to(DEVICE).eval()
 
-        _dinov2_model_cache["model"] = dinov2_model
-        _dinov2_model_cache["name"] = target_dinov2_model_name
-        models['dinov2'] = dinov2_model
+        _mobilenet_cache["model"] = feature_extractor
+        _mobilenet_cache["name"] = target_model_name
+        models['feature_extractor'] = feature_extractor
+        models['feature_extractor_transforms'] = MobileNet_V3_Large_Weights.IMAGENET1K_V1.transforms()
 
-        models['dinov2_features'] = []
-
-        def hook(module, input, output):
-            models['dinov2_features'].append(output)
-
-        for i in range(-4, 0, 1):
-            models['dinov2'].blocks[i].register_forward_hook(hook)
-
-        models['dinov2_transforms'] = transforms.Compose([
-            transforms.Resize(224, interpolation=transforms.InterpolationMode.BICUBIC),
-            transforms.CenterCrop(224),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
-        ])
-        logging.info(f"DINOv2 模型 '{target_dinov2_model_name}' 及特征钩子加载完成。")
+        logging.info(f"Feature Extractor 模型 '{target_model_name}' 加载完成。")
 
     except Exception as e:
-        logging.error(f"加载 DINOv2 模型失败: {e}", exc_info=True)
-        if 'dinov2' in models:
-            del models['dinov2']
-        _dinov2_model_cache = {"model": None, "name": None}
+        logging.error(f"加载 Feature Extractor 模型失败: {e}", exc_info=True)
+        if 'feature_extractor' in models:
+            del models['feature_extractor']
+        _mobilenet_cache = {"model": None, "name": None}
 
 
 def postprocess_sam_results(results, nms_iou_threshold):
     DEVICE = settings_manager.get_device()
     if not results or not results[0].masks:
-        return torch.empty(0, 4, device=DEVICE), torch.empty(0, 1, 1, device=DEVICE), torch.empty(0, device=DEVICE)
+        return torch.empty(0, 4, device=DEVICE), torch.empty(0, 1, 1, device=DEVICE)
     all_boxes = results[0].boxes.xyxy.to(DEVICE)
     all_scores = results[0].boxes.conf.to(DEVICE)
     all_masks = results[0].masks.data.to(DEVICE)
@@ -109,33 +92,7 @@ def postprocess_sam_results(results, nms_iou_threshold):
     logging.info(f"[智能选择] NMS: 从 {len(all_boxes)} 个初始掩码中保留了 {len(kept_indices)} 个。")
     final_boxes = all_boxes[kept_indices]
     final_masks = all_masks[kept_indices]
-    final_scores = all_scores[kept_indices]
-    return final_boxes, final_masks, final_scores
-
-
-def get_all_embeddings_batched(fused_feature_map, all_masks, batch_size, interpolation_size):
-    DEVICE = settings_manager.get_device()
-    if len(all_masks) == 0:
-        return torch.empty(0, fused_feature_map.shape[1], device=DEVICE)
-
-    with torch.no_grad():
-        upsampled_features = F.interpolate(fused_feature_map, size=interpolation_size, mode='bilinear',
-                                           align_corners=False).squeeze(0)
-        attention_map = torch.norm(upsampled_features, p=2, dim=0)
-        all_embeddings_list = []
-        for i in range(0, len(all_masks), batch_size):
-            masks_batch = all_masks[i:i + batch_size]
-            downsampled_masks = F.interpolate(masks_batch.unsqueeze(1).float(), size=interpolation_size,
-                                              mode='bilinear', align_corners=False).to(DEVICE)
-            final_weights = downsampled_masks * attention_map
-            weight_sums = torch.clamp(final_weights.sum(dim=(-1, -2)), min=1e-6)
-            weighted_features = upsampled_features * final_weights
-            summed_embeddings = weighted_features.sum(dim=(-1, -2))
-            avg_embeddings = summed_embeddings / weight_sums
-            final_embeddings_batch = F.normalize(avg_embeddings, p=2, dim=-1)
-            all_embeddings_list.append(final_embeddings_batch)
-
-        return torch.cat(all_embeddings_list, dim=0)
+    return final_boxes, final_masks
 
 
 def find_best_matching_masks_by_iou(reference_boxes_np, candidate_boxes_tensor):
@@ -148,31 +105,10 @@ def find_best_matching_masks_by_iou(reference_boxes_np, candidate_boxes_tensor):
     return best_match_indices
 
 
-def _get_hyperparams_from_request(data):
-    DEVICE = settings_manager.get_device()
-    hp = data.get('hyperparameters', {})
-
-    if not hp:
-        settings = settings_manager.load_settings()
-        defaults = settings.get('smart_select_defaults', {})
-        weights_list = defaults.get('weights', [0.1, 0.2, 0.3, 0.4])
-        batch_size = defaults.get('batch_size', DEFAULT_BATCH_SIZE)
-        interp_size_val = defaults.get('interp_size', 100)
-    else:
-        weights_list = hp.get('weights', [0.1, 0.2, 0.3, 0.4])
-        batch_size = hp.get('batch_size', DEFAULT_BATCH_SIZE)
-        interp_size_val = hp.get('interpolation_size', 100)
-
-    fusion_weights = torch.tensor(weights_list, device=DEVICE).view(4, 1, 1, 1)
-    interpolation_size = (interp_size_val, interp_size_val)
-    return fusion_weights, batch_size, interpolation_size
-
-
-def _preprocess_and_get_embeddings(video_uuid, frame_number, hyperparameters=None):
-
+def get_features_for_all_masks(video_uuid, frame_number):
     startup_ai_models()
-    if 'dinov2' not in models:
-        raise RuntimeError("DINOv2 model failed to load. Cannot perform feature extraction.")
+    if 'feature_extractor' not in models:
+        raise RuntimeError("Feature extractor model failed to load. Cannot perform feature extraction.")
 
     DEVICE = settings_manager.get_device()
     settings = settings_manager.load_settings()
@@ -181,8 +117,6 @@ def _preprocess_and_get_embeddings(video_uuid, frame_number, hyperparameters=Non
     if cache_key in PREPROCESSED_DATA_CACHE:
         logging.info(f"Reusing cached preprocessed data for: {cache_key}")
         return PREPROCESSED_DATA_CACHE[cache_key]
-
-    fusion_weights, batch_size, interpolation_size = _get_hyperparams_from_request({'hyperparameters': hyperparameters})
 
     with torch.no_grad(), autocast(enabled=(DEVICE.type == 'cuda')):
         logging.info(f"Starting new preprocessing for {cache_key}...")
@@ -196,50 +130,67 @@ def _preprocess_and_get_embeddings(video_uuid, frame_number, hyperparameters=Non
 
         sam_conf = settings.get('sam_mask_confidence', 0.35)
         results = sam_model(frame_path, verbose=False, conf=sam_conf)
-
         nms_iou = settings.get('nms_iou_threshold', 0.7)
-        all_boxes, all_masks, _ = postprocess_sam_results(results, nms_iou_threshold=nms_iou)
+        all_boxes, all_masks = postprocess_sam_results(results, nms_iou_threshold=nms_iou)
 
         if len(all_masks) == 0:
             logging.warning(f"SAM found no objects in {cache_key} with current settings.")
-            PREPROCESSED_DATA_CACHE[cache_key] = {"all_boxes": torch.empty(0, 4, device=DEVICE),
-                                                  "all_masks": torch.empty(0, 1, 1, device=DEVICE),
-                                                  "all_embeddings": torch.empty(0, 1, device=DEVICE)}
-            return PREPROCESSED_DATA_CACHE[cache_key]
+            cached_data = {"all_boxes": torch.empty(0, 4, device=DEVICE),
+                           "all_features": torch.empty(0, 1, device=DEVICE)}
+            PREPROCESSED_DATA_CACHE[cache_key] = cached_data
+            return cached_data
 
-        image = Image.open(frame_path).convert("RGB")
-        processed_image = models['dinov2_transforms'](image).unsqueeze(0).to(DEVICE)
+        pil_image = Image.open(frame_path).convert("RGB")
+        transform = models['feature_extractor_transforms']
+        preprocessed_crops = []
 
-        models['dinov2_features'].clear()
-        _ = models['dinov2'](processed_image)
+        for i in range(all_masks.shape[0]):
+            mask = all_masks[i].cpu()
+            y_indices, x_indices = torch.where(mask > 0)
+            if len(y_indices) == 0: continue
 
-        raw_feature_maps_list = [fmap[:, 1:, :] for fmap in models['dinov2_features']]
-        patch_size = models['dinov2'].patch_embed.patch_size[0]
-        h_patches = w_patches = 224 // patch_size
+            y_min, y_max = y_indices.min().item(), y_indices.max().item()
+            x_min, x_max = x_indices.min().item(), x_indices.max().item()
+            if x_min >= x_max or y_min >= y_max: continue
 
-        reshaped_weights = fusion_weights.view(4, 1, 1)
-        fused_patch_tokens_list = []
-        for i in range(len(raw_feature_maps_list)):
-            feature_map_transposed = raw_feature_maps_list[i].transpose(1, 2)
-            feature_map_reshaped = feature_map_transposed.reshape(1, feature_map_transposed.shape[1], h_patches,
-                                                                  w_patches)
-            interpolated_feature = F.interpolate(feature_map_reshaped, size=(h_patches, w_patches), mode='bilinear',
-                                                 align_corners=False)
-            fused_patch_tokens_list.append(interpolated_feature.flatten(2).transpose(1, 2) * reshaped_weights[i])
+            cropped_pil = pil_image.crop((x_min, y_min, x_max, y_max))
+            image_input = transform(cropped_pil).unsqueeze(0)
+            preprocessed_crops.append(image_input)
 
-        fused_patch_tokens = torch.sum(torch.stack(fused_patch_tokens_list), dim=0)
-        num_channels = fused_patch_tokens.shape[-1]
-        feature_map = fused_patch_tokens.reshape(1, h_patches, w_patches, num_channels).permute(0, 3, 1, 2)
+        if not preprocessed_crops:
+            raise RuntimeError("Could not crop any valid images from SAM masks.")
 
-        all_embeddings = get_all_embeddings_batched(feature_map, all_masks, batch_size, interpolation_size)
+        batch_tensor = torch.cat(preprocessed_crops, dim=0).to(DEVICE)
+        all_features = models['feature_extractor'](batch_tensor)
 
-        PREPROCESSED_DATA_CACHE[cache_key] = {"all_boxes": all_boxes, "all_masks": all_masks,
-                                              "all_embeddings": all_embeddings}
+        cached_data = {"all_boxes": all_boxes, "all_features": all_features}
+        PREPROCESSED_DATA_CACHE[cache_key] = cached_data
         logging.info(f"Preprocessing for {cache_key} complete and cached.")
-        return PREPROCESSED_DATA_CACHE[cache_key]
+        return cached_data
 
 
-def get_prototypes_for_class(class_name, hyperparameters=None):
+def get_features_for_specific_bboxes(video_uuid, frame_number, target_rects):
+    try:
+        processed_data = get_features_for_all_masks(video_uuid, frame_number)
+        all_boxes = processed_data.get("all_boxes")
+        all_features = processed_data.get("all_features")
+
+        if all_boxes is None or all_boxes.numel() == 0 or all_features.numel() == 0:
+            return torch.empty(0, all_features.shape[1], device=all_features.device)
+
+        matching_indices = find_best_matching_masks_by_iou(np.array(target_rects), all_boxes)
+        if matching_indices.numel() > 0:
+            return all_features[matching_indices]
+        else:
+            return torch.empty(0, all_features.shape[1], device=all_features.device)
+
+    except Exception as e:
+        logging.warning(f"Skipping frame {frame_number} for specific feature extraction due to error: {e}",
+                        exc_info=True)
+        return None
+
+
+def get_prototypes_for_class(class_name):
     sample_frames = database.get_all_frames_with_class(class_name)
     if not sample_frames:
         logging.warning(f"Database query returned no frames for class '{class_name}'.")
@@ -255,28 +206,15 @@ def get_prototypes_for_class(class_name, hyperparameters=None):
         try:
             rects, labels, _ = convert_text_to_rects_and_labels(frame_data['bboxes_text'])
             target_rects = [np.array(rects[i]) for i, label in enumerate(labels) if label == class_name]
-
             if not target_rects: continue
 
-            frame_uuid = frame_data['video_uuid']
-            frame_num = frame_data['frame_number']
-
-            processed_data = _preprocess_and_get_embeddings(frame_uuid, frame_num, hyperparameters)
-
-            all_boxes = processed_data.get("all_boxes")
-            all_embeddings = processed_data.get("all_embeddings")
-
-            if all_boxes is None or all_boxes.numel() == 0:
-                continue
-
-            matching_indices = find_best_matching_masks_by_iou(np.array(target_rects), all_boxes)
-            if matching_indices.numel() > 0:
-                embeddings = all_embeddings[matching_indices]
-                all_prototypes.append(embeddings)
+            features = get_features_for_specific_bboxes(frame_data['video_uuid'], frame_data['frame_number'],
+                                                        target_rects)
+            if features is not None and features.numel() > 0:
+                all_prototypes.append(features)
 
         except Exception as e:
-            logging.warning(f"Skipping frame {frame_data['frame_number']} for prototype building due to error: {e}",
-                            exc_info=True)
+            logging.warning(f"Skipping frame {frame_data['frame_number']} for prototype building due to error: {e}")
 
     if not all_prototypes:
         logging.error(f"Could not extract any valid prototypes for class '{class_name}' after processing samples.")
@@ -285,7 +223,7 @@ def get_prototypes_for_class(class_name, hyperparameters=None):
     return torch.cat(all_prototypes, dim=0)
 
 
-def get_prototypes_from_drawn_boxes(drawn_samples_data, hyperparameters=None):
+def get_prototypes_from_drawn_boxes(drawn_samples_data):
     all_prototypes = []
     if not drawn_samples_data:
         return None
@@ -298,21 +236,14 @@ def get_prototypes_from_drawn_boxes(drawn_samples_data, hyperparameters=None):
             frame_num = int(frame_number_str)
             target_rects = [np.array(rect) for rect in rects]
             if not target_rects: continue
-            processed_data = _preprocess_and_get_embeddings(video_uuid, frame_num, hyperparameters)
 
-            all_boxes = processed_data.get("all_boxes")
-            all_embeddings = processed_data.get("all_embeddings")
+            embeddings = get_features_for_specific_bboxes(video_uuid, frame_num, target_rects)
 
-            if all_boxes is None or all_boxes.numel() == 0:
-                continue
-            matching_indices = find_best_matching_masks_by_iou(np.array(target_rects), all_boxes)
-            if matching_indices.numel() > 0:
-                embeddings = all_embeddings[matching_indices]
+            if embeddings is not None and embeddings.numel() > 0:
                 all_prototypes.append(embeddings)
 
         except Exception as e:
-            logging.warning(f"Skipping frame {frame_key} for on-the-fly prototype building due to error: {e}",
-                            exc_info=True)
+            logging.warning(f"Skipping frame {frame_key} for on-the-fly prototype building due to error: {e}")
 
     if not all_prototypes:
         logging.error("Could not extract any valid on-the-fly prototypes after processing drawn samples.")
@@ -321,17 +252,63 @@ def get_prototypes_from_drawn_boxes(drawn_samples_data, hyperparameters=None):
     return torch.cat(all_prototypes, dim=0)
 
 
-def predict_with_prototypes(video_uuid, frame_number, positive_prototypes, has_negative_prototypes=False,
-                            negative_prototypes=None, hyperparameters=None):
-    processed_data = _preprocess_and_get_embeddings(video_uuid, frame_number, hyperparameters)
+def predict_from_one_shot(video_uuid, frame_number, positive_prompt_box):
+    processed_data = get_features_for_all_masks(video_uuid, frame_number)
     all_boxes = processed_data.get("all_boxes")
-    all_embeddings = processed_data.get("all_embeddings")
+    all_features = processed_data.get("all_features")
+
+    if all_boxes is None or all_boxes.numel() == 0: return []
+
+    prompt_rect = [positive_prompt_box['x1'], positive_prompt_box['y1'], positive_prompt_box['x2'],
+                   positive_prompt_box['y2']]
+
+    target_feature_tensor = get_features_for_specific_bboxes(video_uuid, frame_number, [prompt_rect])
+    if target_feature_tensor is None or target_feature_tensor.numel() == 0:
+        raise ValueError("Could not extract features for the provided positive prompt box.")
+
+    target_feature = target_feature_tensor[0].unsqueeze(0)
+
+    sim_scores = F.cosine_similarity(target_feature, all_features, dim=1)
+
+    settings = settings_manager.load_settings()
+    nms_iou = settings.get('nms_iou_threshold', 0.7)
+    kept_indices = nms(all_boxes, sim_scores, nms_iou)
+
+    final_results = []
+    final_scores_np = sim_scores.cpu().numpy()
+    for i in kept_indices:
+        box_coords = all_boxes[i].cpu().numpy().astype(int).tolist()
+        final_results.append({"box": box_coords, "score": float(final_scores_np[i])})
+
+    return final_results
+
+
+def _calculate_similarity_scores(all_embeddings, positive_prototypes, negative_prototypes=None):
+    mean_positive_prototype = torch.mean(positive_prototypes, dim=0, keepdim=True)
+    positive_scores_sim = F.cosine_similarity(all_embeddings, mean_positive_prototype)
+
+    if negative_prototypes is not None and len(negative_prototypes) > 0:
+        mean_negative_prototype = torch.mean(negative_prototypes, dim=0, keepdim=True)
+        negative_scores_sim = F.cosine_similarity(all_embeddings, mean_negative_prototype)
+
+        logits = torch.stack([negative_scores_sim, positive_scores_sim], dim=1)
+        probabilities = F.softmax(logits / SCORE_TEMPERATURE, dim=1)
+        final_scores = probabilities[:, 1]
+    else:
+        final_scores = torch.sigmoid(positive_scores_sim / SCORE_TEMPERATURE)
+
+    return final_scores
+
+
+def predict_with_prototypes(video_uuid, frame_number, positive_prototypes, negative_prototypes=None):
+    processed_data = get_features_for_all_masks(video_uuid, frame_number)
+    all_boxes = processed_data.get("all_boxes")
+    all_features = processed_data.get("all_features")
 
     if all_boxes is None or all_boxes.numel() == 0:
         return []
 
-    final_scores = _calculate_similarity_scores(all_embeddings, positive_prototypes,
-                                                negative_prototypes if has_negative_prototypes else None)
+    final_scores = _calculate_similarity_scores(all_features, positive_prototypes, negative_prototypes)
 
     settings = settings_manager.load_settings()
     nms_iou = settings.get('nms_iou_threshold', 0.7)
@@ -344,23 +321,3 @@ def predict_with_prototypes(video_uuid, frame_number, positive_prototypes, has_n
         final_results.append({"box": box_coords, "score": float(final_scores_np[i])})
 
     return final_results
-
-
-def _calculate_similarity_scores(all_embeddings, positive_prototypes, negative_prototypes=None):
-    K_pos = min(3, len(positive_prototypes))
-    positive_sim_matrix = F.cosine_similarity(all_embeddings.unsqueeze(1), positive_prototypes.unsqueeze(0), dim=-1)
-    top_k_positive_sim, _ = torch.topk(positive_sim_matrix, K_pos, dim=1)
-    positive_scores_sim = torch.mean(top_k_positive_sim, dim=1)
-
-    if negative_prototypes is not None and len(negative_prototypes) > 0:
-        K_neg = min(3, len(negative_prototypes))
-        negative_sim_matrix = F.cosine_similarity(all_embeddings.unsqueeze(1), negative_prototypes.unsqueeze(0), dim=-1)
-        top_k_negative_sim, _ = torch.topk(negative_sim_matrix, K_neg, dim=1)
-        negative_scores_sim = torch.mean(top_k_negative_sim, dim=1)
-        logits = torch.stack([negative_scores_sim, positive_scores_sim], dim=1)
-        probabilities = F.softmax(logits / SCORE_TEMPERATURE, dim=1)
-        final_scores = probabilities[:, 1]
-    else:
-        final_scores = torch.sigmoid(positive_scores_sim / SCORE_TEMPERATURE)
-
-    return final_scores

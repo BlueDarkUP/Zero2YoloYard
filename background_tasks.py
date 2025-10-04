@@ -56,14 +56,11 @@ def apply_prototypes_to_video_task(video_uuid, class_name, negative_samples, app
             logging.info(f"Successfully built {len(positive_prototypes)} positive prototypes for '{class_name}'.")
 
             negative_prototypes = None
-            has_negative_prototypes = False
             if negative_samples:
                 database.update_video_status(video_uuid, 'APPLYING_PROTOTYPES', "Building negative prototypes...")
                 negative_prototypes = ai_models.get_prototypes_from_drawn_boxes(negative_samples)
                 if negative_prototypes is not None and len(negative_prototypes) > 0:
-                    has_negative_prototypes = True
-                    logging.info(
-                        f"Successfully built {len(negative_prototypes)} negative prototypes from user samples.")
+                    logging.info(f"Successfully built {len(negative_prototypes)} negative prototypes from user samples.")
                 else:
                     logging.warning("User provided negative samples, but failed to build prototypes from them.")
 
@@ -86,7 +83,6 @@ def apply_prototypes_to_video_task(video_uuid, class_name, negative_samples, app
                 try:
                     predictions = ai_models.predict_with_prototypes(
                         video_uuid, frame_number, positive_prototypes,
-                        has_negative_prototypes=has_negative_prototypes,
                         negative_prototypes=negative_prototypes
                     )
 

@@ -107,7 +107,14 @@
     <div id="analysis-content" style="display: none;">
         <div class="card mb-4">
             <div class="card-header bg-light"><strong><i class="bi bi-info-circle"></i> Summary & Warnings</strong></div>
-            <div class="card-body" id="summary-container"></div>
+            <div class="card-body">
+                <div id="summary-container"></div>
+                <div id="consistency-check-container" class="mt-3 pt-3 border-top">
+                    <h6><i class="bi bi-robot text-primary"></i> AI Quality Control</h6>
+                    <p class="text-muted small">Run an AI-powered review to find potential labeling errors (e.g., a 'screw' labeled as a 'nut'). This may take several minutes for large datasets.</p>
+                    <button class="btn btn-primary" id="run-consistency-check-btn"><i class="bi bi-search"></i> Run AI Consistency Review</button>
+                </div>
+            </div>
         </div>
         <div class="row">
             <div class="col-lg-6 col-xl-4 mb-4"><div class="card h-100"><div class="card-header">Instance Counts by Class</div><div class="card-body chart-card-body"><div class="chart-container"><canvas id="class-counts-chart"></canvas></div></div></div></div>
@@ -163,7 +170,15 @@
                         <div><strong><i class="bi bi-images"></i> Original Image Gallery</strong> (<span id="gallery-count">0</span> images)</div>
                         <div class="d-flex align-items-center">
                             <label class="mr-2 mb-0"><strong>Filter & Browser:</strong></label>
-                            <select id="outlier-filter" class="form-control form-control-sm mr-2" style="width: auto;"><option value="none">-- Select a Filter Type --</option><option value="area_smallest">Smallest Area (Top 10)</option><option value="area_largest">Largest Area (Top 10)</option><option value="ar_smallest">Most Squarish AR (Top 10)</option><option value="ar_largest">Most Extreme AR (Top 10)</option><option value="iou_high">High Overlap (IoU > 0.95)</option></select>
+                            <select id="outlier-filter" class="form-control form-control-sm mr-2" style="width: auto;">
+                                <option value="none">-- Select a Filter Type --</option>
+                                <option value="area_smallest">Smallest Area (Top 10)</option>
+                                <option value="area_largest">Largest Area (Top 10)</option>
+                                <option value="ar_smallest">Most Squarish AR (Top 10)</option>
+                                <option value="ar_largest">Most Extreme AR (Top 10)</option>
+                                <option value="iou_high">High Overlap (IoU > 0.95)</option>
+                                <option value="consistency_outliers" style="display: none; color: #0056b3; font-weight: bold;">Label Consistency Outliers (AI Review)</option>
+                            </select>
                             <button id="reset-filter-btn" class="btn btn-sm btn-secondary"><i class="bi bi-x-lg"></i> Reset</button>
                         </div>
                     </div>
@@ -188,6 +203,7 @@ $(document).ready(function() {
     let allBboxesData = [];
     let suspiciousPairsData = [];
     let imageClassMap = {};
+    let consistencyOutlierIndices = [];
 
     let charts = {
         classCounts: null,
@@ -337,13 +353,44 @@ $(document).ready(function() {
         error: function() { $('#loading-indicator').html('<div class="alert alert-danger">Failed to fetch analysis data from the server.</div>'); }
     });
 
+    $('#run-consistency-check-btn').on('click', function() {
+        const $btn = $(this);
+        $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status"></span> Running AI Review...');
+
+        $.ajax({
+            url: `/api/datasetAnalysis/${datasetUuid}/consistency_check`,
+            type: 'POST',
+            success: function(response) {
+                if (response.success) {
+                    consistencyOutlierIndices = response.outlier_image_indices;
+                    const resultMessage = $(`<div class="alert alert-success mt-3">${response.message}</div>`);
+                    $('#consistency-check-container').append(resultMessage);
+
+                    if (consistencyOutlierIndices.length > 0) {
+                        $('#outlier-filter option[value="consistency_outliers"]').show();
+                         $('#outlier-filter').val('consistency_outliers').trigger('change');
+                         resultMessage.append(' The filter has been automatically applied to show these images.');
+                    }
+                    $btn.hide();
+                } else {
+                    alert('Error during consistency check: ' + response.message);
+                    $btn.prop('disabled', false).html('<i class="bi bi-search"></i> Run AI Consistency Review');
+                }
+            },
+            error: function() {
+                alert('A server error occurred while running the consistency check.');
+                $btn.prop('disabled', false).html('<i class="bi bi-search"></i> Run AI Consistency Review');
+            }
+        });
+    });
+
     function createHistogramData(data, bins = 10, min, max) { if (data.length === 0) return { labels: [], counts: [] }; min = min ?? Math.min(...data); max = max ?? Math.max(...data); if (min === max) { min -= 0.5; max += 0.5; } const binSize = (max - min) / bins; const counts = Array(bins).fill(0); const labels = []; for (let i = 0; i < bins; i++) { const binStart = min + i * binSize; const binEnd = binStart + binSize; labels.push(`${binStart.toFixed(2)}-${binEnd.toFixed(2)}`); } for (const value of data) { let binIndex = Math.floor((value - min) / binSize); binIndex = Math.max(0, Math.min(bins - 1, binIndex)); if (value === max) binIndex = bins - 1; counts[binIndex]++; } return { labels, counts }; }
     function renderSummaryAndWarnings(summary, warnings) { const container = $('#summary-container'); container.empty(); if (summary) { container.append(`<div class="alert alert-info">${summary}</div>`); } if (warnings && warnings.length > 0) { const warningsList = $('<ul class="list-group"></ul>'); warnings.forEach(warning => { warningsList.append(`<li class="list-group-item list-group-item-warning">${warning}</li>`); }); container.append(warningsList); } }
     function renderCenterScatterPlot(points) { if(charts.centerScatter) charts.centerScatter.destroy(); charts.centerScatter = new Chart(document.getElementById('bbox-center-scatter-plot').getContext('2d'), { type: 'scatter', data: { datasets: [{ label: 'BBox Center', data: points, backgroundColor: 'rgba(54, 162, 235, 0.6)', pointRadius: 3, pointHoverRadius: 5 }] }, options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { type: 'linear', position: 'bottom', min: 0, max: 1, title: { display: true, text: 'Normalized X Position' }}, y: { min: 0, max: 1, reverse: true, title: { display: true, text: 'Normalized Y Position' }} } } }); }
     function renderGallery(images) { const gallery = $('#gallery'); gallery.empty(); $('#gallery-count').text(images.length); images.forEach((image, index) => { const annotatedUrl = `/media/annotated_frame/${image.video_uuid}/${image.frame}.jpg`; const goToLabelUrl = image.task_uuid ? `/labelVideo?task_uuid=${image.task_uuid}&frame=${image.frame}` : '#'; const buttonDisabled = image.task_uuid ? '' : 'disabled'; const item = $(`<div class="gallery-item" data-index="${index}"><img src="${annotatedUrl}" alt="Frame ${image.frame}" loading="lazy"><div class="caption"><span class="caption-text">${image.video} / F ${image.frame}</span><a href="${goToLabelUrl}" class="btn btn-sm btn-primary" ${buttonDisabled}>Go to Label</a></div></div>`); item.find('img').on('click', () => window.open(image.original_url, '_blank')); gallery.append(item); }); }
     function filterGalleryByClass(className) { const classImageIndices = []; for (const [imageIndex, classList] of Object.entries(imageClassMap)) { if (classList.includes(className)) { classImageIndices.push(parseInt(imageIndex)); } } $('#outlier-filter').val('none'); $('#gallery .gallery-item').each(function() { const itemIndex = parseInt($(this).data('index')); $(this).toggleClass('hidden', !classImageIndices.includes(itemIndex)); }); }
     function resetGalleryFilter() { $('#outlier-filter').val('none'); $('#gallery .gallery-item').removeClass('hidden'); }
-    $('#outlier-filter').on('change', function() { const filterType = $(this).val(); if (filterType === 'none') { $('#gallery .gallery-item').removeClass('hidden'); return; } let sortedBboxes, targetImageIndices; switch(filterType) { case 'area_smallest': sortedBboxes = [...allBboxesData].sort((a, b) => a.area - b.area); break; case 'area_largest': sortedBboxes = [...allBboxesData].sort((a, b) => b.area - a.area); break; case 'ar_smallest': sortedBboxes = [...allBboxesData].sort((a, b) => Math.abs(a.aspect_ratio - 1) - Math.abs(b.aspect_ratio - 1)); break; case 'ar_largest': sortedBboxes = [...allBboxesData].sort((a, b) => Math.abs(b.aspect_ratio - 1) - Math.abs(a.aspect_ratio - 1)); break; case 'iou_high': targetImageIndices = [...new Set(suspiciousPairsData.map(p => p.image_index))]; break; } if (sortedBboxes) { targetImageIndices = [...new Set(sortedBboxes.slice(0, 10).map(b => b.image_index))]; } $('#gallery .gallery-item').each(function() { const itemIndex = parseInt($(this).data('index')); $(this).toggleClass('hidden', !targetImageIndices.includes(itemIndex)); }); });
+    $('#outlier-filter').on('change', function() { const filterType = $(this).val(); if (filterType === 'none') { $('#gallery .gallery-item').removeClass('hidden'); return; } let sortedBboxes, targetImageIndices; switch(filterType) { case 'area_smallest': sortedBboxes = [...allBboxesData].sort((a, b) => a.area - b.area); break; case 'area_largest': sortedBboxes = [...allBboxesData].sort((a, b) => b.area - a.area); break; case 'ar_smallest': sortedBboxes = [...allBboxesData].sort((a, b) => Math.abs(a.aspect_ratio - 1) - Math.abs(b.aspect_ratio - 1)); break; case 'ar_largest': sortedBboxes = [...allBboxesData].sort((a, b) => Math.abs(b.aspect_ratio - 1) - Math.abs(a.aspect_ratio - 1)); break; case 'iou_high': targetImageIndices = [...new Set(suspiciousPairsData.map(p => p.image_index))]; break; case 'consistency_outliers': targetImageIndices = consistencyOutlierIndices; break; } if (sortedBboxes) { targetImageIndices = [...new Set(sortedBboxes.slice(0, 10).map(b => b.image_index))]; } $('#gallery .gallery-item').each(function() { const itemIndex = parseInt($(this).data('index')); $(this).toggleClass('hidden', !targetImageIndices.includes(itemIndex)); }); });
     $('#reset-filter-btn').on('click', resetGalleryFilter);
     function renderClassCounts(classCounts) { const chartData = { labels: Object.keys(classCounts), datasets: [{ label: '# of Instances', data: Object.values(classCounts), backgroundColor: 'rgba(54, 162, 235, 0.6)' }]}; if (charts.classCounts) { charts.classCounts.destroy(); } const ctx = document.getElementById('class-counts-chart'); charts.classCounts = new Chart(ctx, { type: 'bar', data: chartData, options: { maintainAspectRatio: false, scales: { y: { beginAtZero: true } }, onHover: (event, chartElement) => { event.native.target.style.cursor = chartElement[0] ? 'pointer' : 'default'; }, onClick: (event, elements) => { if (elements.length > 0) { const clickedIndex = elements[0].index; const className = charts.classCounts.data.labels[clickedIndex]; filterGalleryByClass(className); } else { resetGalleryFilter(); } } } }); }
     function renderObjectsPerImage(data) { const counts = data.reduce((acc, val) => { acc[val] = (acc[val] || 0) + 1; return acc; }, {}); const chartData = { labels: Object.keys(counts), datasets: [{ label: '# of Images', data: Object.values(counts), backgroundColor: 'rgba(75, 192, 192, 0.6)' }] }; if(charts.objectsPerImage) charts.objectsPerImage.destroy(); charts.objectsPerImage = new Chart($('#objects-per-image-chart'), { type: 'bar', data: chartData, options: { maintainAspectRatio: false, scales: { x: { title: { display: true, text: 'Number of Objects in Image' } }, y: { beginAtZero: true } } } }); }

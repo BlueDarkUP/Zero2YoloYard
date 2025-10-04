@@ -106,14 +106,11 @@
                             <small class="form-text text-muted">Larger models are more accurate but significantly slower and use more memory.</small>
                         </div>
                         <div class="form-group">
-                            <label for="setting-dinov2-model"><strong>Feature Extraction Model (DINOv2)</strong></label>
-                            <select id="setting-dinov2-model" class="form-control">
-                                <option value="dinov2_vits14">DINOv2 Small (ViT-S/14)</option>
-                                <option value="dinov2_vitb14">DINOv2 Base (ViT-B/14)</option>
-                                <option value="dinov2_vitl14">DINOv2 Large (ViT-L/14)</option>
-                                <option value="dinov2_vitg14">DINOv2 Giant (ViT-G/14)</option>
+                            <label for="setting-feature-extractor-model"><strong>Feature Extraction Model</strong></label>
+                            <select id="setting-feature-extractor-model" class="form-control">
+                                <option value="mobilenet_v3_large">MobileNetV3-Large (Default)</option>
                             </select>
-                            <small class="form-text text-muted">Used for the 'Smart Select' feature. Larger models are more accurate but require significantly more VRAM and are slower.</small>
+                            <small class="form-text text-muted">Used for the 'Smart Select' feature. This is a lightweight and fast model.</small>
                         </div>
                     </div>
                 </div>
@@ -146,31 +143,6 @@
                                 <small class="form-text text-muted">Minimum tracking confidence.</small>
                             </div>
                         </div>
-                    </div>
-                </div>
-
-                <!-- Smart Select Defaults -->
-                <div class="card mb-4">
-                    <div class="card-header"><i class="bi bi-stars"></i> "Smart Select" Default Hyperparameters</div>
-                    <div class="card-body">
-                        <p class="adv-settings-label">Default Feature Fusion Weights (L-S):</p>
-                        <div class="d-flex justify-content-between">
-                            <input type="range" class="custom-range" id="setting-w1" min="0" max="1" step="0.1" value="0.1" title="Weight 1">
-                            <input type="range" class="custom-range" id="setting-w2" min="0" max="1" step="0.1" value="0.2" title="Weight 2">
-                            <input type="range" class="custom-range" id="setting-w3" min="0" max="1" step="0.1" value="0.3" title="Weight 3">
-                            <input type="range" class="custom-range" id="setting-w4" min="0" max="1" step="0.1" value="0.4" title="Weight 4">
-                        </div>
-                        <div class="row mt-2">
-                            <div class="col-6">
-                                <label class="adv-settings-label" for="setting-batch-size">Default Batch Size</label>
-                                <input type="number" id="setting-batch-size" class="form-control form-control-sm" value="16" min="1" max="64">
-                            </div>
-                            <div class="col-6">
-                                <label class="adv-settings-label" for="setting-interp-size">Default Interp. Size</label>
-                                <input type="number" id="setting-interp-size" class="form-control form-control-sm" value="100" min="32" max="224" step="8">
-                            </div>
-                        </div>
-                         <small class="form-text text-muted mt-2">These values are used by 'Smart Select' unless overridden in the Advanced Settings on the labeling page.</small>
                     </div>
                 </div>
 
@@ -408,21 +380,12 @@ $(document).ready(function() {
                 const settings = data.settings;
                 $('#setting-gpu-device').val(settings.gpu_device);
                 $('#setting-sam-model').val(settings.sam_model_checkpoint);
-                $('#setting-dinov2-model').val(settings.dinov2_model_name);
+                $('#setting-feature-extractor-model').val(settings.feature_extractor_model_name);
 
                 $('#setting-sam-mask-confidence').val(settings.sam_mask_confidence).trigger('input');
                 $('#setting-nms-iou-threshold').val(settings.nms_iou_threshold).trigger('input');
                 $('#setting-batch-tracking-imgsz').val(settings.batch_tracking_imgsz);
                 $('#setting-batch-tracking-conf').val(settings.batch_tracking_conf).trigger('input');
-
-                if(settings.smart_select_defaults) {
-                    $('#setting-w1').val(settings.smart_select_defaults.weights[0] || 0.1);
-                    $('#setting-w2').val(settings.smart_select_defaults.weights[1] || 0.2);
-                    $('#setting-w3').val(settings.smart_select_defaults.weights[2] || 0.3);
-                    $('#setting-w4').val(settings.smart_select_defaults.weights[3] || 0.4);
-                    $('#setting-batch-size').val(settings.smart_select_defaults.batch_size || 16);
-                    $('#setting-interp-size').val(settings.smart_select_defaults.interp_size || 100);
-                }
 
                 $('#setting-preannotation-conf').val(settings.default_preannotation_conf).trigger('input');
                 $('#setting-jpeg-quality').val(settings.frame_extraction_jpeg_quality);
@@ -498,23 +461,12 @@ $(document).ready(function() {
             gpu_device: $('#setting-gpu-device').val(),
             sam_model_checkpoint: selectedSamOption.val(),
             sam_model_name: selectedSamOption.data('name'),
-            dinov2_model_name: $('#setting-dinov2-model').val(),
+            feature_extractor_model_name: $('#setting-feature-extractor-model').val(),
 
             sam_mask_confidence: parseFloat($('#setting-sam-mask-confidence').val()),
             nms_iou_threshold: parseFloat($('#setting-nms-iou-threshold').val()),
             batch_tracking_imgsz: parseInt($('#setting-batch-tracking-imgsz').val()),
             batch_tracking_conf: parseFloat($('#setting-batch-tracking-conf').val()),
-
-            smart_select_defaults: {
-                weights: [
-                    parseFloat($('#setting-w1').val()),
-                    parseFloat($('#setting-w2').val()),
-                    parseFloat($('#setting-w3').val()),
-                    parseFloat($('#setting-w4').val())
-                ],
-                batch_size: parseInt($('#setting-batch-size').val()),
-                interp_size: parseInt($('#setting-interp-size').val())
-            },
 
             default_preannotation_conf: parseFloat($('#setting-preannotation-conf').val()),
             frame_extraction_jpeg_quality: parseInt($('#setting-jpeg-quality').val()),
