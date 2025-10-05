@@ -115,7 +115,6 @@ def apply_prototypes_to_video_task(video_uuid, class_name, negative_samples, app
 
 
 def start_sam2_tracking_task(video_uuid, tracker_uuid, start_frame, end_frame, init_bboxes_text):
-    """ Handles the original INTERACTIVE tracking mode. """
     if active_tasks.get(video_uuid):
         logging.warning(f"A task is already running for video {video_uuid}.")
         tracking_sessions[tracker_uuid] = {'status': 'FAILED', 'message': 'Another task is active.'}
@@ -172,7 +171,6 @@ def start_sam2_tracking_task(video_uuid, tracker_uuid, start_frame, end_frame, i
 
 
 def start_sam2_batch_tracking_task(video_uuid, tracker_uuid, start_frame, end_frame, init_bboxes_text):
-    """ Handles the new BATCH tracking mode using SAM2VideoPredictor. """
     if active_tasks.get(video_uuid):
         logging.warning(f"A task is already running for video {video_uuid}.")
         tracking_sessions[tracker_uuid] = {'status': 'FAILED', 'message': 'Another task is active.'}

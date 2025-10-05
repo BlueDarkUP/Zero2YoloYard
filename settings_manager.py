@@ -13,12 +13,21 @@ DEFAULT_SETTINGS = {
 
     "sam_mask_confidence": 0.35,
     "nms_iou_threshold": 0.7,
+    "prototype_temperature": 0.07,
+    "prototype_sample_limit": 50,
+
     "batch_tracking_imgsz": 1024,
     "batch_tracking_conf": 0.30,
+    "batch_tracking_chunk_size": 10,
 
     "default_preannotation_conf": 0.5,
     "default_opencv_tracker": "CSRT",
     "frame_extraction_jpeg_quality": 75,
+    "default_annotation_mode": "manual",
+    "autosave_enabled": False,
+
+    "cache_save_interval_seconds": 30,
+    "class_colors": {}
 }
 _device = None
 
@@ -72,11 +81,10 @@ def load_settings():
     try:
         with open(SETTINGS_FILE, 'r') as f:
             settings = json.load(f)
-            # Ensure all default keys exist
             for key, value in DEFAULT_SETTINGS.items():
                 if key not in settings:
                     settings[key] = value
-                elif isinstance(value, dict): # For nested dicts like smart_select_defaults
+                elif isinstance(value, dict):
                     for sub_key, sub_value in value.items():
                         if key in settings and isinstance(settings[key], dict) and sub_key not in settings[key]:
                             settings[key][sub_key] = sub_value

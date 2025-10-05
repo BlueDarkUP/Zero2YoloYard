@@ -168,11 +168,13 @@ def label_video():
         return "Associated video not found.", 404
 
     first_frame_url = f"/media/frames/{video_entity['video_uuid']}/frame_{task_entity['start_frame']:05d}.jpg"
+    settings = settings_manager.load_settings()
 
     return render_template('labelVideo.html',
                            task_entity=sanitize_dict(task_entity),
                            video_entity=sanitize_dict(video_entity),
                            first_frame_url=first_frame_url,
+                           settings=settings,
                            limit_data=config.get_limit_data_for_render_template())
 
 
@@ -307,16 +309,12 @@ def store_video_frame_bboxes_text():
     frame_number = int(data.get('frame_number'))
     bboxes_text = validate_bboxes_text(data.get('bboxes_text'))
 
-    # 保存标注到数据库
     database.save_frame_bboxes(video_uuid, frame_number, bboxes_text)
 
-    # 新增：触发原型更新
     try:
-        # 从标注文本中提取所有唯一的类别名称
         unique_labels = set(extract_labels(bboxes_text))
         for label in unique_labels:
-            if label:  # 确保标签不为空
-                # 在后台线程中更新原型，避免阻塞前端请求
+            if label:
                 threading.Thread(
                     target=ai_models.update_prototype_for_class,
                     args=(label,),
@@ -593,7 +591,6 @@ def interactive_segment_predict_route():
         return jsonify({'success': False, 'message': 'Positive prompt boxes are required.'}), 400
 
     try:
-        # For one-shot, we only use the first prompt box.
         positive_prompt_box = prompt_boxes[0]
         results = ai_models.predict_from_one_shot(video_uuid, frame_number, positive_prompt_box)
         return jsonify({'success': True, 'results': results})
@@ -1153,8 +1150,6 @@ def get_dataset_analysis_data(dataset_uuid):
         'gallery_images': gallery_images
     })
 
-
-# 新增：按需执行标签一致性检查的API端点
 @app.route('/api/datasetAnalysis/<dataset_uuid>/consistency_check', methods=['POST'])
 def run_consistency_check(dataset_uuid):
     try:
@@ -1240,10 +1235,7 @@ def lam_predict_route():
         return jsonify({'success': False, 'message': '缺少必要的请求参数。'}), 400
 
     try:
-        # 将前端坐标转换为元组
         point_coords = (int(point['x']), int(point['y']))
-
-        # 调用核心 AI 函数
         result, error_msg = ai_models.lam_predict(video_uuid, int(frame_number), point_coords)
 
         if error_msg:

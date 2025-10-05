@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from PIL import Image
-from torchvision.models import mobilenet_v3_large, MobileNet_V3_Large_Weights
+from torchvision.models import mobilenet_v3_large, MobileNet_V3_Large_Weights, mobilenet_v3_small, MobileNet_V3_Small_Weights
 from torchvision.ops import nms, box_iou
 from torch.cuda.amp import autocast
 import numpy as np
@@ -27,19 +27,15 @@ models = {}
 PREPROCESSED_DATA_CACHE = {}
 PROTOTYPE_CACHE = {}
 
-# --- 关键修复：将 Lock 替换为 RLock (可重入锁) ---
 AI_MODEL_LOCK = threading.RLock()
-# --- 修复结束 ---
 
-# 原型专用锁，用于管理原型字典的并发访问
 PROTOTYPE_LOCKS = {}
 _PROTOTYPE_LOCKS_LOCK = threading.Lock()
 _cache_save_lock = threading.Lock()
 _last_cache_save_time = 0
-CACHE_SAVE_INTERVAL = 30  # 每30秒最多保存一次
+
 
 def _get_class_lock(class_name):
-    """安全地获取或创建一个针对特定类别的锁。"""
     with _PROTOTYPE_LOCKS_LOCK:
         if class_name not in PROTOTYPE_LOCKS:
             PROTOTYPE_LOCKS[class_name] = threading.Lock()
@@ -47,14 +43,11 @@ def _get_class_lock(class_name):
 
 
 _mobilenet_cache = {"model": None, "name": None}
-SCORE_TEMPERATURE = 0.07
 
 
 def save_prototypes_to_disk():
-    """将内存中的原型缓存保存到本地文件。"""
     try:
-        # 访问 PROTOTYPE_CACHE 时也加锁，保证数据一致性
-        with _get_class_lock("__global_save__"):  # 使用一个专用的锁来保存文件
+        with _get_class_lock("__global_save__"):
             cpu_cache = {k: v.cpu() for k, v in PROTOTYPE_CACHE.items()}
         torch.save(cpu_cache, config.PROTOTYPE_FILE)
         logging.info(f"成功将 {len(cpu_cache)} 个原型保存至 {config.PROTOTYPE_FILE}")
@@ -63,18 +56,15 @@ def save_prototypes_to_disk():
 
 
 def save_preprocessed_cache_to_disk():
-    """将帧预处理缓存（PREPROCESSED_DATA_CACHE）保存到本地文件。"""
     global _last_cache_save_time
     with _cache_save_lock:
         logging.info("正在尝试保存预处理缓存...")
-        # 复制字典以避免在迭代时发生更改
         cache_copy = dict(PREPROCESSED_DATA_CACHE)
         if not cache_copy:
             logging.info("预处理缓存为空，无需保存。")
             return
 
         try:
-            # 将所有张量移动到CPU以实现最大兼容性
             cpu_cache = {}
             for key, value in cache_copy.items():
                 cpu_cache[key] = {
@@ -89,7 +79,6 @@ def save_preprocessed_cache_to_disk():
             logging.error(f"保存预处理缓存文件失败: {e}", exc_info=True)
 
 def load_prototypes_from_disk():
-    """从本地文件加载原型至内存缓存。"""
     global PROTOTYPE_CACHE
     DEVICE = settings_manager.get_device()
     if os.path.exists(config.PROTOTYPE_FILE):
@@ -107,7 +96,7 @@ def load_prototypes_from_disk():
 
 def clear_feature_extractor_cache():
     global _mobilenet_cache
-    logging.info("Clearing Feature Extractor (MobileNetV3) model cache due to setting change.")
+    logging.info("Clearing Feature Extractor model cache due to setting change.")
     if _mobilenet_cache["model"] is not None and hasattr(_mobilenet_cache["model"], 'cpu'):
         _mobilenet_cache["model"].cpu()
         del _mobilenet_cache["model"]
@@ -120,15 +109,13 @@ def clear_feature_extractor_cache():
 
 
 def load_preprocessed_cache_from_disk():
-    """从本地文件加载帧预处理缓存。"""
     global PREPROCESSED_DATA_CACHE
     DEVICE = settings_manager.get_device()
     if os.path.exists(config.PREPROCESSED_CACHE_FILE):
         try:
             logging.info("正在从磁盘加载预处理缓存...")
-            loaded_cache = torch.load(config.PREPROCESSED_CACHE_FILE, map_location='cpu')  # 先加载到CPU
+            loaded_cache = torch.load(config.PREPROCESSED_CACHE_FILE, map_location='cpu')
 
-            # 将张量移动到当前活动设备
             for key, value in loaded_cache.items():
                 PREPROCESSED_DATA_CACHE[key] = {
                     'all_boxes': value['all_boxes'].to(DEVICE),
@@ -165,14 +152,26 @@ def startup_ai_models():
             clear_feature_extractor_cache()
 
         logging.info(f"正在加载 Feature Extractor 模型 '{target_model_name}' 至 {DEVICE}...")
-        feature_extractor = mobilenet_v3_large(weights=MobileNet_V3_Large_Weights.IMAGENET1K_V1)
+
+        if target_model_name == "mobilenet_v3_small":
+            weights = MobileNet_V3_Small_Weights.IMAGENET1K_V1
+            feature_extractor = mobilenet_v3_small(weights=weights)
+        elif target_model_name == "mobilenet_v3_large":
+            weights = MobileNet_V3_Large_Weights.IMAGENET1K_V1
+            feature_extractor = mobilenet_v3_large(weights=weights)
+        else:
+            logging.warning(f"未知特征提取器 '{target_model_name}', 将使用默认的 mobilenet_v3_large。")
+            weights = MobileNet_V3_Large_Weights.IMAGENET1K_V1
+            feature_extractor = mobilenet_v3_large(weights=weights)
+            target_model_name = "mobilenet_v3_large"
+
         feature_extractor.classifier = nn.Identity()
         feature_extractor.to(DEVICE).eval()
 
         _mobilenet_cache["model"] = feature_extractor
         _mobilenet_cache["name"] = target_model_name
         models['feature_extractor'] = feature_extractor
-        models['feature_extractor_transforms'] = MobileNet_V3_Large_Weights.IMAGENET1K_V1.transforms()
+        models['feature_extractor_transforms'] = weights.transforms()
 
         logging.info(f"Feature Extractor 模型 '{target_model_name}' 加载完成。")
 
@@ -267,7 +266,9 @@ def get_features_for_all_masks(video_uuid, frame_number):
             cached_data = {"all_boxes": all_boxes, "all_features": all_features}
             PREPROCESSED_DATA_CACHE[cache_key] = cached_data
             logging.info(f"Preprocessing for {cache_key} complete and cached.")
-            if time.time() - _last_cache_save_time > CACHE_SAVE_INTERVAL:
+
+            cache_save_interval = settings.get('cache_save_interval_seconds', 30)
+            if time.time() - _last_cache_save_time > cache_save_interval:
                 threading.Thread(target=save_preprocessed_cache_to_disk).start()
             return cached_data
 
@@ -353,6 +354,9 @@ def predict_from_one_shot(video_uuid, frame_number, positive_prompt_box):
 
 
 def _calculate_similarity_scores(all_embeddings, positive_prototypes, negative_prototypes=None):
+    settings = settings_manager.load_settings()
+    score_temperature = settings.get('prototype_temperature', 0.07)
+
     mean_positive_prototype = torch.mean(positive_prototypes, dim=0, keepdim=True)
     positive_scores_sim = F.cosine_similarity(all_embeddings, mean_positive_prototype)
 
@@ -360,10 +364,10 @@ def _calculate_similarity_scores(all_embeddings, positive_prototypes, negative_p
         mean_negative_prototype = torch.mean(negative_prototypes, dim=0, keepdim=True)
         negative_scores_sim = F.cosine_similarity(all_embeddings, mean_negative_prototype)
         logits = torch.stack([negative_scores_sim, positive_scores_sim], dim=1)
-        probabilities = F.softmax(logits / SCORE_TEMPERATURE, dim=1)
+        probabilities = F.softmax(logits / score_temperature, dim=1)
         final_scores = probabilities[:, 1]
     else:
-        final_scores = torch.sigmoid(positive_scores_sim / SCORE_TEMPERATURE)
+        final_scores = torch.sigmoid(positive_scores_sim / score_temperature)
 
     return final_scores
 
@@ -393,14 +397,16 @@ def predict_with_prototypes(video_uuid, frame_number, positive_prototypes, negat
 
 
 def _calculate_prototype_from_db(class_name):
-    """实际执行原型计算的函数，不直接与缓存交互。"""
     sample_frames = database.get_all_frames_with_class(class_name)
     if not sample_frames:
         logging.warning(f"在数据库中找不到类别 '{class_name}' 的任何样本。")
         return None
 
-    if len(sample_frames) > 50:
-        sample_frames = random.sample(sample_frames, 50)
+    settings = settings_manager.load_settings()
+    sample_limit = settings.get('prototype_sample_limit', 50)
+
+    if len(sample_frames) > sample_limit:
+        sample_frames = random.sample(sample_frames, sample_limit)
 
     logging.info(f"正在从 {len(sample_frames)} 个样本为 '{class_name}' 计算新原型...")
 
@@ -427,7 +433,6 @@ def _calculate_prototype_from_db(class_name):
 
 
 def build_prototypes_for_class(class_name):
-    """线程安全地构建或获取单个类别的原型。"""
     if class_name in PROTOTYPE_CACHE:
         return PROTOTYPE_CACHE[class_name]
 
@@ -447,7 +452,6 @@ def build_prototypes_for_class(class_name):
 
 
 def update_prototype_for_class(class_name):
-    """在后台线程中安全地重新计算并更新一个类的原型。"""
     class_lock = _get_class_lock(class_name)
     with class_lock:
         logging.info(f"后台任务开始更新类别 '{class_name}' 的原型。")
@@ -462,7 +466,6 @@ def update_prototype_for_class(class_name):
 
 
 def get_all_prototypes():
-    """确保所有已知类别的原型都已构建并返回原型库。"""
     all_labels = database.get_all_class_labels()
     prototype_library = {}
     for label in all_labels:
@@ -473,7 +476,6 @@ def get_all_prototypes():
 
 
 def lam_predict(video_uuid, frame_number, point_coords):
-    """执行 LAM 预测流程，现在是线程安全的。"""
     with AI_MODEL_LOCK:
         frame_path = file_storage.get_frame_path(video_uuid, frame_number)
         sam_model = sam_tasks.get_sam_model()

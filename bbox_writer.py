@@ -64,10 +64,6 @@ def validate_bboxes_text(s):
     return s
 
 def convert_text_to_rects_and_labels(bboxes_text):
-    """
-    稳健地将多行边界框文本解析为矩形和标签列表。
-    新增：支持可选的 object_id。
-    """
     rects = []
     labels = []
     object_ids = []

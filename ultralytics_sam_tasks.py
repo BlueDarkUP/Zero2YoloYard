@@ -21,8 +21,6 @@ import file_storage
 from bbox_writer import convert_text_to_rects_and_labels
 import settings_manager
 
-CHUNK_SIZE = 10
-
 _sam_model_cache = {"model": None, "path": None}
 
 
@@ -186,11 +184,12 @@ def run_batch_tracking_with_predictor(video_uuid, start_frame, end_frame, init_b
 
     imgsz = settings.get('batch_tracking_imgsz', 1024)
     conf = settings.get('batch_tracking_conf', 0.30)
+    chunk_size = settings.get('batch_tracking_chunk_size', 10)
     device = str(settings_manager.get_device())
 
-    for i in range(0, total_frames_to_process, CHUNK_SIZE):
+    for i in range(0, total_frames_to_process, chunk_size):
         chunk_start_frame = start_frame + i
-        chunk_end_frame = min(start_frame + i + CHUNK_SIZE - 1, end_frame)
+        chunk_end_frame = min(start_frame + i + chunk_size - 1, end_frame)
 
         if chunk_start_frame > end_frame:
             break

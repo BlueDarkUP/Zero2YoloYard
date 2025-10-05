@@ -288,12 +288,9 @@
 <template id="lam-suggestion-popup-template">
     <div id="lam-suggestion-popup" style="position: absolute; z-index: 1000; width: 180px;">
         <div class="list-group shadow-sm">
-            <!-- Suggestion items will be dynamically inserted here -->
         </div>
     </div>
 </template>
-
-<!-- START: New Tracking Options Modal -->
 <div class="modal fade" id="tracking-options-modal" tabindex="-1" role="dialog">
     <div class="modal-dialog" role="document">
         <div class="modal-content">
@@ -337,8 +334,6 @@
         </div>
     </div>
 </div>
-<!-- END: New Tracking Options Modal -->
-
 
 {% from "_macros.html" import render_modal %}
 {% call render_modal('negative-sampling-modal', 'Step 2: Refine with Negative Samples (Optional)') %}
@@ -367,10 +362,14 @@
 
 {% block scripts %}
 <script>
+    window.appSettings = {{ settings | tojson }};
+</script>
+<script>
     $(document).ready(function() {
         const videoUuid = "{{ video_entity.video_uuid }}";
         const task = {{ task_entity | tojson }};
         const frameCount = task.end_frame + 1;
+        let currentFrameNumber = task.start_frame;
 
         let availableClasses = [];
         let activeClass = null;
@@ -708,6 +707,10 @@
         }
 
         function stringToColor(str) {
+            const customColors = window.appSettings.class_colors || {};
+            if (customColors[str]) {
+                return customColors[str];
+            }
             let hash = 0;
             for (let i = 0; i < str.length; i++) {
                 hash = str.charCodeAt(i) + ((hash << 5) - hash);
@@ -870,7 +873,7 @@
             setTrackingUiState(false);
             trackedBboxCache = {};
             showToast("Exited tracking/review mode.", 2000);
-            frameSlider.trigger("input");
+            changeFrame(parseInt(frameSlider.val()));
         }
 
         function handleSseEvent(eventData) {
@@ -890,7 +893,7 @@
                         }
                     }
                     break;
-                case "batch_update": // For batch mode progress
+                case "batch_update":
                     const batch_percentage = eventData.total > 0 ? Math.round(eventData.progress / eventData.total * 100) : 0;
                      $("#track-progress-bar").css("width", batch_percentage + "%").text(batch_percentage + "%");
                      $("#track-status-header").text(eventData.message || `Batch Tracking...`);
@@ -898,7 +901,7 @@
                 case "completed":
                 case "stopped":
                 case "failed":
-                    if(eventData.results) { // Batch mode returns all results at once
+                    if(eventData.results) {
                         Object.assign(trackedBboxCache, eventData.results);
                     }
                     handleTrackingEnd(eventData.event.toUpperCase(), eventData.message);
@@ -939,7 +942,7 @@
 
             const firstFrame = Math.min(...Object.keys(trackedBboxCache).map(Number));
             if (isFinite(firstFrame)) {
-                frameSlider.val(firstFrame).trigger("input");
+                changeFrame(firstFrame);
             }
         }
 
@@ -963,7 +966,7 @@
             }
             lastDatasetClassName = null;
             const frameNumber = parseInt(frameSlider.val());
-            const $button = $('#find-similar-btn'); // Though hidden, we can still use it to manage state
+            const $button = $('#find-similar-btn');
             $button.prop('disabled', true);
 
             const runPrediction = () => {
@@ -1148,7 +1151,7 @@
             };
             $('#interpolation-banner').slideUp();
             if (reloadFrame) {
-                frameSlider.trigger("input");
+                changeFrame(parseInt(frameSlider.val()));
             } else {
                 renderBboxList();
                 redrawCanvas();
@@ -1214,13 +1217,68 @@
             }, 100);
         }
 
+        function saveCurrentFrame(callback) {
+            const frameToSave = currentFrameNumber;
+            if (isReviewMode) {
+                trackedBboxCache[frameToSave] = formatBboxesToString();
+                showToast(`Frame ${frameToSave} updated in review cache.`, 1500);
+                if(callback) callback();
+            } else {
+                $.ajax({
+                    url: "/storeVideoFrameBboxesText",
+                    type: "POST",
+                    contentType: "application/json",
+                    data: JSON.stringify({
+                        video_uuid: videoUuid,
+                        frame_number: frameToSave,
+                        bboxes_text: formatBboxesToString()
+                    }),
+                    success: function(response) {
+                        if (response.success) {
+                            showToast("Frame " + frameToSave + " saved successfully!");
+                            window.cachedFrames = null;
+                        }
+                    },
+                    error: function() {
+                        showToast("Error: Failed to save bounding boxes.", 3000);
+                    },
+                    complete: function() {
+                        if(callback) callback();
+                    }
+                });
+            }
+        }
+
+        function changeFrame(newFrameNumber) {
+            const oldFrameNumber = currentFrameNumber;
+            newFrameNumber = parseInt(newFrameNumber);
+
+            const performChange = () => {
+                currentFrameNumber = newFrameNumber;
+                $("#frame-number-display").text(newFrameNumber);
+                frameSlider.val(newFrameNumber);
+                const imageUrl = `/media/frames/${videoUuid}/frame_${String(newFrameNumber).padStart(5, "0")}.jpg`;
+
+                if (frameImage.src.endsWith(imageUrl) === false) {
+                    frameImage.src = imageUrl;
+                } else if (frameImage.complete) {
+                    loadBboxesForFrame(newFrameNumber);
+                }
+            };
+
+            if (window.appSettings.autosave_enabled && newFrameNumber !== oldFrameNumber) {
+                saveCurrentFrame(performChange);
+            } else {
+                performChange();
+            }
+        }
+
         frameImage.onload = function() {
             bboxes = [];
             selectedBboxIndex = -1;
             resizeCanvas();
-            loadBboxesForFrame(frameSlider.val());
-            const currentFrame = parseInt(frameSlider.val());
-            if (lastProcessedFrame !== -1 && lastProcessedFrame !== currentFrame) {
+            loadBboxesForFrame(currentFrameNumber);
+            if (lastProcessedFrame !== -1 && lastProcessedFrame !== currentFrameNumber) {
                 clearInteractiveSession();
             }
         };
@@ -1231,12 +1289,8 @@
         frameSlider.on("input", function() {
             const frameNumber = $(this).val();
             $("#frame-number-display").text(frameNumber);
-            const imageUrl = `/media/frames/${videoUuid}/frame_${String(frameNumber).padStart(5, "0")}.jpg`;
-            if (frameImage.src.endsWith(imageUrl) === false) {
-                frameImage.src = imageUrl;
-            } else if (frameImage.complete) {
-                loadBboxesForFrame(frameNumber);
-            }
+        }).on("change", function() {
+            changeFrame($(this).val());
         });
 
         canvasContainer.on('mousedown', function(e) {
@@ -1256,7 +1310,7 @@
                     contentType: "application/json",
                     data: JSON.stringify({
                         video_uuid: videoUuid,
-                        frame_number: frameSlider.val(),
+                        frame_number: currentFrameNumber,
                         point: {
                             x: Math.round(pos.x * scaleX),
                             y: Math.round(pos.y * scaleY)
@@ -1294,7 +1348,7 @@
                     contentType: "application/json",
                     data: JSON.stringify({
                         video_uuid: videoUuid,
-                        frame_number: frameSlider.val(),
+                        frame_number: currentFrameNumber,
                         point: {
                             x: Math.round(pos.x * scaleX),
                             y: Math.round(pos.y * scaleY)
@@ -1307,10 +1361,10 @@
                         }
 
                         if (isInteractiveMode) {
-                            positiveExampleBboxes = [response.bbox]; // New logic: only one positive example
+                            positiveExampleBboxes = [response.bbox];
                             redrawCanvas();
                             showToast('Positive SAM sample added. Auto-finding similar objects...', 2000);
-                            triggerFindSimilar(); // AUTO-TRIGGER
+                            triggerFindSimilar();
                         } else {
                             if (activeClass) {
                                 const newBox = { ...response.bbox,
@@ -1557,9 +1611,9 @@
                 };
 
                 if (isInteractiveMode) {
-                    positiveExampleBboxes = [newBoxRaw]; // New logic: only one positive example
+                    positiveExampleBboxes = [newBoxRaw];
                     redrawCanvas();
-                    triggerFindSimilar(); // AUTO-TRIGGER
+                    triggerFindSimilar();
                 } else if (activeClass) {
                     const newBox = { ...newBoxRaw,
                         label: activeClass,
@@ -1634,31 +1688,7 @@
         });
 
         $("#save-bboxes").on("click", function() {
-            const frameNumber = frameSlider.val();
-            if (isReviewMode) {
-                trackedBboxCache[frameNumber] = formatBboxesToString();
-                showToast(`Frame ${frameNumber} updated in review cache.`, 1500);
-            } else {
-                $.ajax({
-                    url: "/storeVideoFrameBboxesText",
-                    type: "POST",
-                    contentType: "application/json",
-                    data: JSON.stringify({
-                        video_uuid: videoUuid,
-                        frame_number: frameNumber,
-                        bboxes_text: formatBboxesToString()
-                    }),
-                    success: function(response) {
-                        if (response.success) {
-                            showToast("Frame " + frameSlider.val() + " saved successfully!");
-                            window.cachedFrames = null;
-                        }
-                    },
-                    error: function() {
-                        showToast("Error: Failed to save bounding boxes.", 3000);
-                    }
-                });
-            }
+            saveCurrentFrame();
         });
 
         $('#lam-toggle-btn').on('click', function() {
@@ -1717,11 +1747,11 @@
             if (mode === 'interactive') {
                 const endFrame = parseInt(frameSlider.attr("max"));
                 startInteractiveTracking(startFrame, endFrame, initBboxesText);
-            } else { // batch mode
+            } else {
                 const endFrameBatch = parseInt($('#batch-end-frame').val());
                 if (endFrameBatch <= startFrame) {
                     alert("End frame must be after the start frame.");
-                    exitReviewMode(); // Reset UI
+                    exitReviewMode();
                     return;
                 }
                 $("#track-status-header").text("Batch Tracking Initializing...");
@@ -1767,7 +1797,7 @@
 
         function startBatchTracking(startFrame, endFrame, initBboxesText) {
              $.ajax({
-                url: "/startSam2BatchTracking", // NEW API ENDPOINT
+                url: "/startSam2BatchTracking",
                 type: "POST",
                 contentType: "application/json",
                 data: JSON.stringify({
@@ -1900,9 +1930,9 @@
                         const nextFrame = Math.min(parseInt(interpolationState.startFrameData.frame_number), parseInt(endFrameData.frame_number)) + 1;
                         resetInterpolationState(false);
                         if (nextFrame < frameCount && nextFrame > 0) {
-                            frameSlider.val(nextFrame).trigger("input");
+                            changeFrame(nextFrame);
                         } else {
-                            frameSlider.trigger("input");
+                            changeFrame(parseInt(frameSlider.val()));
                         }
                     }
                 });
@@ -1961,10 +1991,10 @@
                                 if (frameCount && !isNaN(frameCount) && frameCount > 0) {
                                     startNegativeSampling(frameCount);
                                 } else {
-                                     triggerApplyToVideo(null); // Apply without negative samples if user cancels prompt
+                                     triggerApplyToVideo(null);
                                 }
                             } else {
-                                triggerApplyToVideo(null); // User chose not to refine
+                                triggerApplyToVideo(null);
                             }
                         }, 500);
                     } else {
@@ -2125,7 +2155,7 @@
                         } else {
                             let prevFrame = parseInt(frameSlider.val()) - 1;
                             if (prevFrame >= task.start_frame) {
-                                frameSlider.val(prevFrame).trigger("input");
+                                changeFrame(prevFrame);
                             }
                         }
                         break;
@@ -2136,7 +2166,7 @@
                         } else {
                             let nextFrame = parseInt(frameSlider.val()) + 1;
                             if (nextFrame < frameCount) {
-                                frameSlider.val(nextFrame).trigger("input");
+                                changeFrame(nextFrame);
                             }
                         }
                         break;
@@ -2160,14 +2190,24 @@
 
                     const urlParams = new URLSearchParams(window.location.search);
                     const frameFromUrl = urlParams.get('frame');
+                    let startFrame = task.start_frame;
                     if (frameFromUrl) {
                         const frameNumber = parseInt(frameFromUrl);
                         if (frameNumber >= parseInt(frameSlider.attr('min')) && frameNumber <= parseInt(frameSlider.attr('max'))) {
-                            frameSlider.val(frameNumber);
+                           startFrame = frameNumber;
                         }
                     }
+                    const defaultMode = window.appSettings.default_annotation_mode || 'manual';
+                    if (defaultMode === 'sam') {
+                        $('#sam-toggle-btn').click();
+                    } else if (defaultMode === 'lam') {
+                        $('#lam-toggle-btn').click();
+                    } else if (defaultMode === 'smart_select') {
+                        $('#interactive-mode-toggle').click();
+                    }
+
                     resizeCanvas();
-                    frameSlider.trigger('input');
+                    changeFrame(startFrame);
                 }
             });
         }

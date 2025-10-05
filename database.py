@@ -508,7 +508,6 @@ def delete_model(model_uuid):
     conn.close()
 
 def get_frame_numbers_for_video(video_uuid):
-    """获取指定视频的所有帧号列表"""
     conn = get_db_connection()
     frames = conn.execute('SELECT frame_number FROM video_frames WHERE video_uuid = ? ORDER BY frame_number ASC',
                           (video_uuid,)).fetchall()
