@@ -488,6 +488,7 @@ def _calculate_prototype_from_db(class_name):
     all_class_features = []
     for frame_data in sample_frames:
         try:
+
             frame_path = file_storage.get_frame_path(frame_data['video_uuid'], frame_data['frame_number'])
             if not os.path.exists(frame_path):
                 continue

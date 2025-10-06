@@ -50,7 +50,7 @@ def apply_prototypes_to_video_task(video_uuid, class_name, negative_samples, app
 
             database.update_video_status(video_uuid, 'APPLYING_PROTOTYPES',
                                          f"Building positive prototypes for '{class_name}'...")
-            positive_prototypes = ai_models.get_prototypes_for_class(class_name)
+            positive_prototypes = ai_models.build_prototypes_for_class(class_name)
             if positive_prototypes is None or len(positive_prototypes) == 0:
                 raise ValueError(f"Could not build positive prototypes for class '{class_name}'.")
             logging.info(f"Successfully built {len(positive_prototypes)} positive prototypes for '{class_name}'.")

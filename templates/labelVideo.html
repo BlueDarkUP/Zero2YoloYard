@@ -401,6 +401,11 @@
         let overlappingCycleIndex = 0;
         let lastClickPosForCycle = null;
         let isCKeyPressed = false;
+        
+        // <!-- FIX [问题二] START -->
+        // 用于存储每一帧的置信度设置
+        let frameConfidence = {}; 
+        // <!-- FIX [问题二] END -->
 
         let interpolationState = {
             isActive: false,
@@ -778,26 +783,28 @@
             }
         }
 
+        // <!-- FIX [问题一] START -->
+        // 重新设计此函数以避免智能选择面板在加载带有AI建议的帧时闪烁
         function processFrameDataAndUpdateUI(frameData) {
             const currentFrameNum = parseInt(frameSlider.val());
             const manualBboxes = parseBboxesFromString(frameData ? frameData.bboxes_text : '');
-            clearInteractiveSession(false);
+            const suggestedBboxesText = frameData ? frameData.suggested_bboxes_text : '';
+            const suggestedBboxes = parseBboxesFromString(suggestedBboxesText);
 
-            if (manualBboxes.length > 0) {
-                bboxes = manualBboxes;
+            if (suggestedBboxes.length > 0) {
+                // 如果有AI建议，我们直接加载它们，而不调用clearInteractiveSession，从而避免UI闪烁。
+                bboxes = []; // 清空手动标注框
+                previewBboxes = suggestedBboxes.map(b => ({
+                    box: [b.x1, b.y1, b.x2, b.y2],
+                    score: 0.99, // 为AI预标注建议设置一个高置信度
+                    label: b.label
+                }));
+                $('#interactive-results-controls').slideDown();
+                showToast(`${suggestedBboxes.length} AI suggestions loaded for review.`, 3000);
             } else {
-                bboxes = [];
-                const suggestedBboxesText = frameData ? frameData.suggested_bboxes_text : '';
-                const suggestedBboxes = parseBboxesFromString(suggestedBboxesText);
-                if (suggestedBboxes.length > 0) {
-                    previewBboxes = suggestedBboxes.map(b => ({
-                        box: [b.x1, b.y1, b.x2, b.y2],
-                        score: 0.99,
-                        label: b.label
-                    }));
-                    $('#interactive-results-controls').slideDown();
-                    showToast(`${suggestedBboxes.length} AI suggestions loaded for review.`, 3000);
-                }
+                // 仅当没有AI建议时才清理会话
+                clearInteractiveSession(false);
+                bboxes = manualBboxes;
             }
 
             if (interpolationState.isActive && currentFrameNum !== interpolationState.startFrameData.frame_number) {
@@ -818,6 +825,7 @@
             redrawCanvas();
             renderBboxList();
         }
+        // <!-- FIX [问题一] END -->
 
         function addClass(className) {
             if (className && !availableClasses.includes(className)) {
@@ -1044,23 +1052,39 @@
                 }
             });
         }
+        
+        // <!-- FIX [问题三] START -->
+        // 新建一个专用于调整负样本Canvas尺寸的函数
+        function resizeNegCanvas() {
+            // 确保图片已加载且模态框可见，这是解决问题的关键
+            if (!negImage.complete || negImage.naturalWidth === 0 || !$('#negative-sampling-modal').is(':visible')) {
+                return;
+            }
+            const dpr = window.devicePixelRatio || 1;
+            const rect = negImage.getBoundingClientRect();
+            negCanvas.style.width = `${rect.width}px`;
+            negCanvas.style.height = `${rect.height}px`;
+            negCanvas.width = Math.round(rect.width * dpr);
+            negCanvas.height = Math.round(rect.height * dpr);
+            // 使用 setTransform 代替 scale 来避免累积缩放，更稳健
+            negCtx.setTransform(dpr, 0, 0, dpr, 0, 0); 
+            redrawNegCanvas();
+        }
 
+        // 修改 loadNegativeSampleFrame 函数，移除尺寸设置逻辑
         function loadNegativeSampleFrame() {
             if (currentNegSampleIndex < 0 || currentNegSampleIndex >= negSamplingFrames.length) return;
             const frameData = negSamplingFrames[currentNegSampleIndex];
             $('#neg-frame-counter').text(`Frame ${currentNegSampleIndex + 1} / ${negSamplingFrames.length}`);
+            
             negImage.onload = () => {
-                const dpr = window.devicePixelRatio || 1;
-                const rect = negImage.getBoundingClientRect();
-                negCanvas.style.width = `${rect.width}px`;
-                negCanvas.style.height = `${rect.height}px`;
-                negCanvas.width = Math.round(rect.width * dpr);
-                negCanvas.height = Math.round(rect.height * dpr);
-                negCtx.scale(dpr, dpr);
-                redrawNegCanvas();
+                // 图片加载后，调用新的resize函数，它会处理好一切
+                resizeNegCanvas();
             };
             negImage.src = frameData.image_url;
         }
+        // <!-- FIX [问题三] END -->
+
 
         function redrawNegCanvas() {
             const dpr = window.devicePixelRatio || 1;
@@ -1215,16 +1239,26 @@
             }, 100);
         }
 
+        // <!-- FIX [问题二] START -->
+        // 修改 frameImage.onload 以恢复每帧的置信度设置
         frameImage.onload = function() {
             bboxes = [];
             selectedBboxIndex = -1;
             resizeCanvas();
-            loadBboxesForFrame(frameSlider.val());
-            const currentFrame = parseInt(frameSlider.val());
-            if (lastProcessedFrame !== -1 && lastProcessedFrame !== currentFrame) {
-                clearInteractiveSession();
-            }
+            const frameNumber = frameSlider.val();
+            loadBboxesForFrame(frameNumber);
+            triggerBackgroundPreprocess(frameNumber);
+
+            // 恢复此帧的置信度滑块值
+            const defaultThreshold = 0.50; // 设置一个合理的默认值
+            // 如果frameConfidence对象中有当前帧的记录，则使用它，否则使用默认值
+            const currentFrameThreshold = frameConfidence[frameNumber] ?? defaultThreshold;
+            $('#result-threshold').val(currentFrameThreshold);
+            // 必须触发 'input' 事件来同步更新UI上的文本值并用新阈值重绘Canvas
+            $('#result-threshold').trigger('input'); 
         };
+        // <!-- FIX [问题二] END -->
+
 
         frameImage.addEventListener('dragstart', (e) => e.preventDefault());
         window.onresize = resizeCanvas;
@@ -1236,7 +1270,9 @@
             if (frameImage.src.endsWith(imageUrl) === false) {
                 frameImage.src = imageUrl;
             } else if (frameImage.complete) {
+                // 如果图片URL未变但需要重新加载数据 (例如，在review模式下)
                 loadBboxesForFrame(frameNumber);
+                triggerBackgroundPreprocess(frameNumber);
             }
         });
 
@@ -1794,7 +1830,17 @@
                 }
             });
         }
-
+        function triggerBackgroundPreprocess(frameNumber) {
+            $.ajax({
+                url: "/api/background_preprocess_frame",
+                type: "POST",
+                contentType: "application/json",
+                data: JSON.stringify({
+                    video_uuid: videoUuid,
+                    frame_number: parseInt(frameNumber)
+                }),
+            });
+        }
         function startBatchTracking(startFrame, endFrame, initBboxesText) {
              $.ajax({
                 url: "/startSam2BatchTracking",
@@ -2060,11 +2106,20 @@
             triggerApplyToVideo(finalNegativeSamples);
         });
 
+        // <!-- FIX [问题二] START -->
+        // 修改置信度滑块的事件，使其能将设置存入 per-frame 对象中
         $('#result-threshold').on('input', function() {
             const value = parseFloat($(this).val());
             $('#threshold-value').text(value.toFixed(2));
+            
+            // 将当前帧的置信度值存起来
+            const currentFrame = frameSlider.val();
+            frameConfidence[currentFrame] = value;
+            
             redrawCanvas();
         });
+        // <!-- FIX [问题二] END -->
+
 
         $('#accept-visible-btn').on('click', function() {
             if (!activeClass) {
@@ -2201,6 +2256,20 @@
                 }
             });
         }
+        
+        // <!-- FIX [问题三] START -->
+        // 为负样本模态框添加 shown.bs.modal 事件监听器，确保在模态框完全显示后再调整Canvas大小
+        $('#negative-sampling-modal').on('shown.bs.modal', function () {
+            resizeNegCanvas();
+        });
+        
+        // 同时监听窗口大小变化，以防用户在模态框打开时调整浏览器窗口
+        $(window).on('resize', function() {
+            if ($('#negative-sampling-modal').is(':visible')) {
+                resizeNegCanvas();
+            }
+        });
+        // <!-- FIX [问题三] END -->
 
         if (window.cachedFrames) {
             delete window.cachedFrames;

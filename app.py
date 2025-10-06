@@ -617,7 +617,7 @@ def predict_from_dataset_route():
         return jsonify({'success': False, 'message': 'Missing required data.'}), 400
 
     try:
-        positive_prototypes = ai_models.get_prototypes_for_class(class_name)
+        positive_prototypes = ai_models.build_prototypes_for_class(class_name)
         if positive_prototypes is None or len(positive_prototypes) == 0:
             return jsonify({'success': False,
                             'message': f"No labeled examples found for class '{class_name}' in the dataset, or failed to extract features."})
@@ -629,6 +629,31 @@ def predict_from_dataset_route():
         logging.error(f"Dataset-driven prediction failed: {e}", exc_info=True)
         return jsonify({'success': False, 'message': f'Internal Server Error: {str(e)}'}), 500
 
+@app.route('/api/background_preprocess_frame', methods=['POST'])
+def background_preprocess_frame():
+    """
+    接收前端发来的帧加载事件，在后台线程中启动SAM和特征提取。
+    """
+    data = request.json
+    video_uuid = data.get('video_uuid')
+    frame_number = data.get('frame_number')
+
+    if not video_uuid or frame_number is None:
+        return jsonify({'success': False, 'message': 'Missing data.'}), 400
+
+    cache_key = f"{video_uuid}_{frame_number}"
+    # 如果已经缓存，则无需重复处理
+    if cache_key in ai_models.PREPROCESSED_DATA_CACHE:
+        return jsonify({'success': True, 'message': 'Already cached.'})
+
+    # 使用线程避免阻塞前端请求，让网页可以立即响应
+    # 注意：这里传递 app.app_context() 是为了确保后台线程能访问数据库等应用上下文
+    threading.Thread(
+        target=lambda: ai_models.get_features_for_all_masks(video_uuid, frame_number),
+        name=f"Preprocess-{video_uuid[:6]}-{frame_number}"
+    ).start()
+
+    return jsonify({'success': True, 'message': 'Preprocessing started in background.'})
 
 @app.route('/api/get_random_frames_for_neg_sampling', methods=['POST'])
 def get_random_frames_for_neg_sampling():
