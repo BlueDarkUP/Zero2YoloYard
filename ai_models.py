@@ -49,9 +49,6 @@ _mobilenet_cache = {"model": None, "name": None}
 
 
 def get_features_for_single_bbox(pil_image, target_rects):
-    """
-    一个高效的函数，只为指定的 bounding boxes 提取特征，完全绕过 SAM。
-    """
     if 'feature_extractor' not in models:
         raise RuntimeError("Feature extractor model failed to load.")
     if not target_rects:
@@ -59,18 +56,12 @@ def get_features_for_single_bbox(pil_image, target_rects):
 
     DEVICE = settings_manager.get_device()
 
-    # 将 Pillow 图像转换为 Tensor
     img_tensor = to_tensor(pil_image).to(DEVICE)
 
-    # 准备用于裁剪的 boxes
-    # torchvision.ops.crop 需要 [y, x, h, w] 格式
-    # target_rects 是 [x1, y1, x2, y2]
-    # 我们需要将它们转换为 roi_align 所需的格式
     boxes_for_crop = torch.tensor(target_rects, dtype=torch.float32, device=DEVICE)
     box_indices = torch.zeros(boxes_for_crop.size(0), 1, device=DEVICE)
     boxes_for_roi = torch.cat([box_indices, boxes_for_crop], dim=1)
 
-    # 使用 roi_align 高效地裁剪和缩放所有框
     OUTPUT_SIZE = (224, 224)
     batch_of_crops = torchvision.ops.roi_align(
         img_tensor.unsqueeze(0),
@@ -80,12 +71,10 @@ def get_features_for_single_bbox(pil_image, target_rects):
         aligned=True
     )
 
-    # 标准化裁剪后的图像
     IMAGENET_MEAN = [0.485, 0.456, 0.406]
     IMAGENET_STD = [0.229, 0.224, 0.225]
     batch_tensor = normalize(batch_of_crops, mean=IMAGENET_MEAN, std=IMAGENET_STD)
 
-    # 运行 ONNX MobileNet 模型进行特征提取
     ort_session = models['feature_extractor']
     input_name = models['feature_extractor_input_name']
     output_name = models['feature_extractor_output_name']
@@ -422,7 +411,6 @@ def predict_from_one_shot(video_uuid, frame_number, positive_prompt_box):
 
         target_feature = target_feature_tensor[0].unsqueeze(0)
         DEVICE = settings_manager.get_device()
-        # --- 修改: 修正 autocast 弃用警告 ---
         with torch.no_grad(), autocast(device_type=DEVICE.type, enabled=(DEVICE.type == 'cuda')):
             sim_scores = F.cosine_similarity(target_feature, all_features, dim=1)
         settings = settings_manager.load_settings()
@@ -443,7 +431,6 @@ def _calculate_similarity_scores(all_embeddings, positive_prototypes, negative_p
     score_temperature = settings.get('prototype_temperature', 0.07)
     DEVICE = settings_manager.get_device()
 
-    # --- 修改: 修正 autocast 弃用警告 ---
     with torch.no_grad(), autocast(device_type=DEVICE.type, enabled=(DEVICE.type == 'cuda')):
         mean_positive_prototype = torch.mean(positive_prototypes, dim=0, keepdim=True)
         positive_scores_sim = F.cosine_similarity(all_embeddings, mean_positive_prototype)
@@ -501,8 +488,6 @@ def _calculate_prototype_from_db(class_name):
     all_class_features = []
     for frame_data in sample_frames:
         try:
-            # --- START: 优化修改 ---
-            # 直接加载图像，不再调用重量级函数
             frame_path = file_storage.get_frame_path(frame_data['video_uuid'], frame_data['frame_number'])
             if not os.path.exists(frame_path):
                 continue
@@ -514,13 +499,7 @@ def _calculate_prototype_from_db(class_name):
             if not target_rects:
                 continue
 
-            # 使用我们新的轻量级函数
             features = get_features_for_single_bbox(pil_image, target_rects)
-
-            # --- 原有代码 ---
-            # features = get_features_for_specific_bboxes(frame_data['video_uuid'], frame_data['frame_number'],
-            #                                             target_rects)
-            # --- END: 优化修改 ---
 
             if features is not None and features.numel() > 0:
                 all_class_features.append(features)
@@ -531,7 +510,6 @@ def _calculate_prototype_from_db(class_name):
         logging.error(f"未能为类别 '{class_name}' 提取任何有效的特征向量。")
         return None
 
-    # 将所有特征向量连接起来并计算平均值，作为最终的原型
     return torch.mean(torch.cat(all_class_features, dim=0), dim=0)
 
 
