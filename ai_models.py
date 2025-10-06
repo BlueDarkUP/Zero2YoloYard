@@ -1,21 +1,24 @@
 import logging
 import os
-import torch
-import torch.nn as nn
 import torch.nn.functional as F
-from PIL import Image
-from torchvision.models import mobilenet_v3_large, MobileNet_V3_Large_Weights, mobilenet_v3_small, MobileNet_V3_Small_Weights
+from torchvision.models import MobileNet_V3_Large_Weights, MobileNet_V3_Small_Weights
 from torchvision.ops import nms, box_iou
-from torch.cuda.amp import autocast
+from torch.amp import autocast
 import numpy as np
 import random
 import time
 import threading
+import torch
+import torchvision
+from PIL import Image
+from torchvision.transforms.functional import to_tensor, normalize
 import config
 import database
 import file_storage
 import settings_manager
 from bbox_writer import convert_text_to_rects_and_labels
+from torchvision.transforms.functional import crop
+import onnxruntime as ort
 
 try:
     import ultralytics_sam_tasks as sam_tasks
@@ -44,6 +47,54 @@ def _get_class_lock(class_name):
 
 _mobilenet_cache = {"model": None, "name": None}
 
+
+def get_features_for_single_bbox(pil_image, target_rects):
+    """
+    一个高效的函数，只为指定的 bounding boxes 提取特征，完全绕过 SAM。
+    """
+    if 'feature_extractor' not in models:
+        raise RuntimeError("Feature extractor model failed to load.")
+    if not target_rects:
+        return None
+
+    DEVICE = settings_manager.get_device()
+
+    # 将 Pillow 图像转换为 Tensor
+    img_tensor = to_tensor(pil_image).to(DEVICE)
+
+    # 准备用于裁剪的 boxes
+    # torchvision.ops.crop 需要 [y, x, h, w] 格式
+    # target_rects 是 [x1, y1, x2, y2]
+    # 我们需要将它们转换为 roi_align 所需的格式
+    boxes_for_crop = torch.tensor(target_rects, dtype=torch.float32, device=DEVICE)
+    box_indices = torch.zeros(boxes_for_crop.size(0), 1, device=DEVICE)
+    boxes_for_roi = torch.cat([box_indices, boxes_for_crop], dim=1)
+
+    # 使用 roi_align 高效地裁剪和缩放所有框
+    OUTPUT_SIZE = (224, 224)
+    batch_of_crops = torchvision.ops.roi_align(
+        img_tensor.unsqueeze(0),
+        boxes_for_roi,
+        output_size=OUTPUT_SIZE,
+        spatial_scale=1.0,
+        aligned=True
+    )
+
+    # 标准化裁剪后的图像
+    IMAGENET_MEAN = [0.485, 0.456, 0.406]
+    IMAGENET_STD = [0.229, 0.224, 0.225]
+    batch_tensor = normalize(batch_of_crops, mean=IMAGENET_MEAN, std=IMAGENET_STD)
+
+    # 运行 ONNX MobileNet 模型进行特征提取
+    ort_session = models['feature_extractor']
+    input_name = models['feature_extractor_input_name']
+    output_name = models['feature_extractor_output_name']
+
+    numpy_input = batch_tensor.cpu().numpy()
+    ort_outputs = ort_session.run([output_name], {input_name: numpy_input})
+    features = torch.from_numpy(ort_outputs[0]).to(DEVICE)
+
+    return features
 
 def save_prototypes_to_disk():
     try:
@@ -78,6 +129,7 @@ def save_preprocessed_cache_to_disk():
         except Exception as e:
             logging.error(f"保存预处理缓存文件失败: {e}", exc_info=True)
 
+
 def load_prototypes_from_disk():
     global PROTOTYPE_CACHE
     DEVICE = settings_manager.get_device()
@@ -97,15 +149,11 @@ def load_prototypes_from_disk():
 def clear_feature_extractor_cache():
     global _mobilenet_cache
     logging.info("Clearing Feature Extractor model cache due to setting change.")
-    if _mobilenet_cache["model"] is not None and hasattr(_mobilenet_cache["model"], 'cpu'):
-        _mobilenet_cache["model"].cpu()
-        del _mobilenet_cache["model"]
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-
     _mobilenet_cache = {"model": None, "name": None}
     if 'feature_extractor' in models:
         del models['feature_extractor']
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
 
 def load_preprocessed_cache_from_disk():
@@ -129,11 +177,13 @@ def load_preprocessed_cache_from_disk():
         logging.info("未找到预处理缓存文件。")
         PREPROCESSED_DATA_CACHE = {}
 
+
 def startup_ai_models():
     load_prototypes_from_disk()
     load_preprocessed_cache_from_disk()
     global _mobilenet_cache
     DEVICE = settings_manager.get_device()
+
     if sam_tasks:
         logging.info("正在检查 SAM 点选/跟踪模型...")
         sam_tasks.get_sam_model()
@@ -144,39 +194,65 @@ def startup_ai_models():
         target_model_name = settings.get("feature_extractor_model_name", "mobilenet_v3_large")
 
         if _mobilenet_cache["model"] is not None and _mobilenet_cache["name"] == target_model_name:
-            _mobilenet_cache["model"].to(DEVICE)
             models['feature_extractor'] = _mobilenet_cache["model"]
             return
 
         if _mobilenet_cache["model"] is not None:
             clear_feature_extractor_cache()
 
-        logging.info(f"正在加载 Feature Extractor 模型 '{target_model_name}' 至 {DEVICE}...")
+        logging.info(f"正在加载 ONNX Feature Extractor 模型 '{target_model_name}'...")
+
+        onnx_paths = {
+            "mobilenet_v3_large": config.MOBILENET_LARGE_ONNX,
+            "mobilenet_v3_small": config.MOBILENET_SMALL_ONNX
+        }
+        target_onnx_path = onnx_paths.get(target_model_name)
+
+        if not target_onnx_path or not os.path.exists(target_onnx_path):
+            logging.warning(
+                f"ONNX 模型 '{target_model_name}' 未找到于 '{target_onnx_path}', 将使用默认的 mobilenet_v3_large。")
+            target_onnx_path = config.MOBILENET_LARGE_ONNX
+            target_model_name = "mobilenet_v3_large"
 
         if target_model_name == "mobilenet_v3_small":
             weights = MobileNet_V3_Small_Weights.IMAGENET1K_V1
-            feature_extractor = mobilenet_v3_small(weights=weights)
-        elif target_model_name == "mobilenet_v3_large":
-            weights = MobileNet_V3_Large_Weights.IMAGENET1K_V1
-            feature_extractor = mobilenet_v3_large(weights=weights)
         else:
-            logging.warning(f"未知特征提取器 '{target_model_name}', 将使用默认的 mobilenet_v3_large。")
             weights = MobileNet_V3_Large_Weights.IMAGENET1K_V1
-            feature_extractor = mobilenet_v3_large(weights=weights)
-            target_model_name = "mobilenet_v3_large"
 
-        feature_extractor.classifier = nn.Identity()
-        feature_extractor.to(DEVICE).eval()
+        sess_options = ort.SessionOptions()
 
-        _mobilenet_cache["model"] = feature_extractor
+        sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+
+        cuda_provider_options = {'cudnn_conv_algo_search': 'DEFAULT'}
+
+        providers = (
+            [('CUDAExecutionProvider', cuda_provider_options), 'CPUExecutionProvider']
+            if DEVICE.type == 'cuda'
+            else ['CPUExecutionProvider']
+        )
+
+        logging.info(f"使用 ONNX Runtime Providers: {providers}")
+
+        ort_session = ort.InferenceSession(target_onnx_path, sess_options, providers=providers)
+
+        input_name = ort_session.get_inputs()[0].name
+        output_name = ort_session.get_outputs()[0].name
+        logging.info(f"ONNX 模型输入名: '{input_name}', 输出名: '{output_name}'")
+
+        _mobilenet_cache["model"] = ort_session
         _mobilenet_cache["name"] = target_model_name
-        models['feature_extractor'] = feature_extractor
-        models['feature_extractor_transforms'] = weights.transforms()
+        _mobilenet_cache["input_name"] = input_name
+        _mobilenet_cache["output_name"] = output_name
 
-        logging.info(f"Feature Extractor 模型 '{target_model_name}' 加载完成。")
+        models['feature_extractor'] = ort_session
+        models['feature_extractor_transforms'] = weights.transforms()
+        models['feature_extractor_input_name'] = input_name
+        models['feature_extractor_output_name'] = output_name
+
+        logging.info(f"ONNX Feature Extractor 模型 '{target_model_name}' 加载完成。")
 
     except Exception as e:
-        logging.error(f"加载 Feature Extractor 模型失败: {e}", exc_info=True)
+        logging.error(f"加载 ONNX Feature Extractor 模型失败: {e}", exc_info=True)
         if 'feature_extractor' in models:
             del models['feature_extractor']
         _mobilenet_cache = {"model": None, "name": None}
@@ -219,7 +295,7 @@ def get_features_for_all_masks(video_uuid, frame_number):
         if cache_key in PREPROCESSED_DATA_CACHE:
             return PREPROCESSED_DATA_CACHE[cache_key]
 
-        with torch.no_grad(), autocast(enabled=(DEVICE.type == 'cuda')):
+        with torch.no_grad(), torch.amp.autocast(device_type=DEVICE.type, enabled=(DEVICE.type == 'cuda')):
             logging.info(f"Starting new preprocessing for {cache_key}...")
             frame_path = file_storage.get_frame_path(video_uuid, frame_number)
             if not os.path.exists(frame_path):
@@ -241,27 +317,33 @@ def get_features_for_all_masks(video_uuid, frame_number):
                 return cached_data
 
             pil_image = Image.open(frame_path).convert("RGB")
-            transform = models['feature_extractor_transforms']
-            preprocessed_crops = []
+            img_tensor = to_tensor(pil_image).to(DEVICE)
 
-            for i in range(all_masks.shape[0]):
-                mask = all_masks[i].cpu()
-                y_indices, x_indices = torch.where(mask > 0)
-                if len(y_indices) == 0: continue
+            box_indices = torch.zeros(all_boxes.size(0), 1, device=DEVICE)
+            boxes_for_crop = torch.cat([box_indices, all_boxes], dim=1)
 
-                y_min, y_max = y_indices.min().item(), y_indices.max().item()
-                x_min, x_max = x_indices.min().item(), x_indices.max().item()
-                if x_min >= x_max or y_min >= y_max: continue
+            OUTPUT_SIZE = (224, 224)
+            batch_of_crops = torchvision.ops.roi_align(
+                img_tensor.unsqueeze(0),
+                boxes_for_crop,
+                output_size=OUTPUT_SIZE,
+                spatial_scale=1.0,
+                aligned=True
+            )
 
-                cropped_pil = pil_image.crop((x_min, y_min, x_max, y_max))
-                image_input = transform(cropped_pil).unsqueeze(0)
-                preprocessed_crops.append(image_input)
 
-            if not preprocessed_crops:
-                raise RuntimeError("Could not crop any valid images from SAM masks.")
+            IMAGENET_MEAN = [0.485, 0.456, 0.406]
+            IMAGENET_STD = [0.229, 0.224, 0.225]
 
-            batch_tensor = torch.cat(preprocessed_crops, dim=0).to(DEVICE)
-            all_features = models['feature_extractor'](batch_tensor)
+            batch_tensor = normalize(batch_of_crops, mean=IMAGENET_MEAN, std=IMAGENET_STD)
+
+            ort_session = models['feature_extractor']
+            input_name = models['feature_extractor_input_name']
+            output_name = models['feature_extractor_output_name']
+
+            numpy_input = batch_tensor.cpu().numpy()
+            ort_outputs = ort_session.run([output_name], {input_name: numpy_input})
+            all_features = torch.from_numpy(ort_outputs[0]).to(DEVICE)
 
             cached_data = {"all_boxes": all_boxes, "all_features": all_features}
             PREPROCESSED_DATA_CACHE[cache_key] = cached_data
@@ -270,6 +352,7 @@ def get_features_for_all_masks(video_uuid, frame_number):
             cache_save_interval = settings.get('cache_save_interval_seconds', 30)
             if time.time() - _last_cache_save_time > cache_save_interval:
                 threading.Thread(target=save_preprocessed_cache_to_disk).start()
+
             return cached_data
 
 
@@ -338,8 +421,10 @@ def predict_from_one_shot(video_uuid, frame_number, positive_prompt_box):
             raise ValueError("Could not extract features for the provided positive prompt box.")
 
         target_feature = target_feature_tensor[0].unsqueeze(0)
-        sim_scores = F.cosine_similarity(target_feature, all_features, dim=1)
-
+        DEVICE = settings_manager.get_device()
+        # --- 修改: 修正 autocast 弃用警告 ---
+        with torch.no_grad(), autocast(device_type=DEVICE.type, enabled=(DEVICE.type == 'cuda')):
+            sim_scores = F.cosine_similarity(target_feature, all_features, dim=1)
         settings = settings_manager.load_settings()
         nms_iou = settings.get('nms_iou_threshold', 0.7)
         kept_indices = nms(all_boxes, sim_scores, nms_iou)
@@ -356,18 +441,21 @@ def predict_from_one_shot(video_uuid, frame_number, positive_prompt_box):
 def _calculate_similarity_scores(all_embeddings, positive_prototypes, negative_prototypes=None):
     settings = settings_manager.load_settings()
     score_temperature = settings.get('prototype_temperature', 0.07)
+    DEVICE = settings_manager.get_device()
 
-    mean_positive_prototype = torch.mean(positive_prototypes, dim=0, keepdim=True)
-    positive_scores_sim = F.cosine_similarity(all_embeddings, mean_positive_prototype)
+    # --- 修改: 修正 autocast 弃用警告 ---
+    with torch.no_grad(), autocast(device_type=DEVICE.type, enabled=(DEVICE.type == 'cuda')):
+        mean_positive_prototype = torch.mean(positive_prototypes, dim=0, keepdim=True)
+        positive_scores_sim = F.cosine_similarity(all_embeddings, mean_positive_prototype)
 
-    if negative_prototypes is not None and len(negative_prototypes) > 0:
-        mean_negative_prototype = torch.mean(negative_prototypes, dim=0, keepdim=True)
-        negative_scores_sim = F.cosine_similarity(all_embeddings, mean_negative_prototype)
-        logits = torch.stack([negative_scores_sim, positive_scores_sim], dim=1)
-        probabilities = F.softmax(logits / score_temperature, dim=1)
-        final_scores = probabilities[:, 1]
-    else:
-        final_scores = torch.sigmoid(positive_scores_sim / score_temperature)
+        if negative_prototypes is not None and len(negative_prototypes) > 0:
+            mean_negative_prototype = torch.mean(negative_prototypes, dim=0, keepdim=True)
+            negative_scores_sim = F.cosine_similarity(all_embeddings, mean_negative_prototype)
+            logits = torch.stack([negative_scores_sim, positive_scores_sim], dim=1)
+            probabilities = F.softmax(logits / score_temperature, dim=1)
+            final_scores = probabilities[:, 1]
+        else:
+            final_scores = torch.sigmoid(positive_scores_sim / score_temperature)
 
     return final_scores
 
@@ -413,12 +501,26 @@ def _calculate_prototype_from_db(class_name):
     all_class_features = []
     for frame_data in sample_frames:
         try:
-            rects, labels, _ = convert_text_to_rects_and_labels(frame_data['bboxes_text'])
-            target_rects = [np.array(rects[i]) for i, label in enumerate(labels) if label == class_name]
-            if not target_rects: continue
+            # --- START: 优化修改 ---
+            # 直接加载图像，不再调用重量级函数
+            frame_path = file_storage.get_frame_path(frame_data['video_uuid'], frame_data['frame_number'])
+            if not os.path.exists(frame_path):
+                continue
 
-            features = get_features_for_specific_bboxes(frame_data['video_uuid'], frame_data['frame_number'],
-                                                        target_rects)
+            pil_image = Image.open(frame_path).convert("RGB")
+
+            rects, labels, _ = convert_text_to_rects_and_labels(frame_data['bboxes_text'])
+            target_rects = [rects[i] for i, label in enumerate(labels) if label == class_name]
+            if not target_rects:
+                continue
+
+            # 使用我们新的轻量级函数
+            features = get_features_for_single_bbox(pil_image, target_rects)
+
+            # --- 原有代码 ---
+            # features = get_features_for_specific_bboxes(frame_data['video_uuid'], frame_data['frame_number'],
+            #                                             target_rects)
+            # --- END: 优化修改 ---
 
             if features is not None and features.numel() > 0:
                 all_class_features.append(features)
@@ -429,6 +531,7 @@ def _calculate_prototype_from_db(class_name):
         logging.error(f"未能为类别 '{class_name}' 提取任何有效的特征向量。")
         return None
 
+    # 将所有特征向量连接起来并计算平均值，作为最终的原型
     return torch.mean(torch.cat(all_class_features, dim=0), dim=0)
 
 
@@ -500,7 +603,9 @@ def lam_predict(video_uuid, frame_number, point_coords):
             return {"bbox": bbox_dict, "suggestions": []}, None
 
         scores = []
-        with torch.no_grad():
+        DEVICE = settings_manager.get_device()
+
+        with torch.no_grad(), autocast(device_type=DEVICE.type, enabled=(DEVICE.type == 'cuda')):
             for class_name, prototype in prototype_library.items():
                 similarity = F.cosine_similarity(feature_vector, prototype.unsqueeze(0))
                 scores.append({"label": class_name, "score": round(similarity.item(), 4)})

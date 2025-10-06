@@ -33,3 +33,7 @@ def get_limit_data_for_render_template():
         'MAX_FRAMES_PER_VIDEO': MAX_FRAMES_PER_VIDEO,
         'MAX_DESCRIPTION_LENGTH': MAX_DESCRIPTION_LENGTH,
     }
+
+ONNX_MODELS_DIR = "onnx_models"
+MOBILENET_LARGE_ONNX = os.path.join(ONNX_MODELS_DIR, 'mobilenet_v3_large.onnx')
+MOBILENET_SMALL_ONNX = os.path.join(ONNX_MODELS_DIR, 'mobilenet_v3_small.onnx')

@@ -311,18 +311,6 @@ def store_video_frame_bboxes_text():
 
     database.save_frame_bboxes(video_uuid, frame_number, bboxes_text)
 
-    try:
-        unique_labels = set(extract_labels(bboxes_text))
-        for label in unique_labels:
-            if label:
-                threading.Thread(
-                    target=ai_models.update_prototype_for_class,
-                    args=(label,),
-                    name=f"PrototypeUpdate-{label}"
-                ).start()
-    except Exception as e:
-        logging.error(f"触发原型更新失败: {e}", exc_info=True)
-
     return jsonify({'success': True})
 
 
@@ -390,6 +378,24 @@ def list_classes():
     labels = database.get_all_class_labels()
     return jsonify({'success': True, 'labels': labels})
 
+
+@app.route('/api/rebuild_prototypes', methods=['POST'])
+def rebuild_prototypes():
+    data = request.json
+    class_name = data.get('class_name')  # 可以更新单个类，或者所有类
+
+    if class_name:
+        logging.info(f"Manual prototype rebuild requested for class: {class_name}")
+        threading.Thread(target=ai_models.update_prototype_for_class, args=(class_name,)).start()
+        message = f"Started rebuilding prototype for '{class_name}'."
+    else:
+        logging.info("Manual prototype rebuild requested for ALL classes.")
+        all_labels = database.get_all_class_labels()
+        for label in all_labels:
+            threading.Thread(target=ai_models.update_prototype_for_class, args=(label,)).start()
+        message = f"Started rebuilding prototypes for all {len(all_labels)} classes."
+
+    return jsonify({'success': True, 'message': message})
 
 @app.route('/api/interpolateBboxes', methods=['POST'])
 def interpolate_bboxes():

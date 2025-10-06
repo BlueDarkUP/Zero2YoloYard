@@ -210,7 +210,12 @@
             <div class="side-panel">
                 <div class="d-flex justify-content-between align-items-center">
                     <h4><i class="bi bi-tags"></i> Classes</h4>
-                    <button id="find-from-dataset-btn" class="btn btn-sm btn-outline-info" title="Find objects of the selected class using all examples from the entire dataset."><i class="bi bi-journal-album"></i> Find from Dataset</button>
+                    <div>
+                        <button id="find-from-dataset-btn" class="btn btn-sm btn-outline-info" title="Find objects of the selected class using all examples from the entire dataset."><i class="bi bi-journal-album"></i> Find from Dataset</button>
+                        <button id="rebuild-prototypes-btn" class="btn btn-sm btn-outline-warning ml-2" title="Re-calculate AI models for all classes from all saved labels. This is a background task.">
+                            <i class="bi bi-arrow-clockwise"></i> Rebuild AI Models
+                        </button>
+                    </div>
                 </div>
                 <div class="input-group my-3">
                     <input type="text" id="new-class-name" class="form-control" placeholder="New class name">
@@ -288,12 +293,10 @@
 <template id="lam-suggestion-popup-template">
     <div id="lam-suggestion-popup" style="position: absolute; z-index: 1000; width: 180px;">
         <div class="list-group shadow-sm">
-            <!-- Suggestion items will be dynamically inserted here -->
         </div>
     </div>
 </template>
 
-<!-- START: New Tracking Options Modal -->
 <div class="modal fade" id="tracking-options-modal" tabindex="-1" role="dialog">
     <div class="modal-dialog" role="document">
         <div class="modal-content">
@@ -337,8 +340,6 @@
         </div>
     </div>
 </div>
-<!-- END: New Tracking Options Modal -->
-
 
 {% from "_macros.html" import render_modal %}
 {% call render_modal('negative-sampling-modal', 'Step 2: Refine with Negative Samples (Optional)') %}
@@ -890,7 +891,7 @@
                         }
                     }
                     break;
-                case "batch_update": // For batch mode progress
+                case "batch_update":
                     const batch_percentage = eventData.total > 0 ? Math.round(eventData.progress / eventData.total * 100) : 0;
                      $("#track-progress-bar").css("width", batch_percentage + "%").text(batch_percentage + "%");
                      $("#track-status-header").text(eventData.message || `Batch Tracking...`);
@@ -898,7 +899,7 @@
                 case "completed":
                 case "stopped":
                 case "failed":
-                    if(eventData.results) { // Batch mode returns all results at once
+                    if(eventData.results) {
                         Object.assign(trackedBboxCache, eventData.results);
                     }
                     handleTrackingEnd(eventData.event.toUpperCase(), eventData.message);
@@ -963,7 +964,7 @@
             }
             lastDatasetClassName = null;
             const frameNumber = parseInt(frameSlider.val());
-            const $button = $('#find-similar-btn'); // Though hidden, we can still use it to manage state
+            const $button = $('#find-similar-btn');
             $button.prop('disabled', true);
 
             const runPrediction = () => {
@@ -1307,10 +1308,10 @@
                         }
 
                         if (isInteractiveMode) {
-                            positiveExampleBboxes = [response.bbox]; // New logic: only one positive example
+                            positiveExampleBboxes = [response.bbox];
                             redrawCanvas();
                             showToast('Positive SAM sample added. Auto-finding similar objects...', 2000);
-                            triggerFindSimilar(); // AUTO-TRIGGER
+                            triggerFindSimilar();
                         } else {
                             if (activeClass) {
                                 const newBox = { ...response.bbox,
@@ -1557,9 +1558,9 @@
                 };
 
                 if (isInteractiveMode) {
-                    positiveExampleBboxes = [newBoxRaw]; // New logic: only one positive example
+                    positiveExampleBboxes = [newBoxRaw];
                     redrawCanvas();
-                    triggerFindSimilar(); // AUTO-TRIGGER
+                    triggerFindSimilar();
                 } else if (activeClass) {
                     const newBox = { ...newBoxRaw,
                         label: activeClass,
@@ -1661,6 +1662,35 @@
             }
         });
 
+        $('#rebuild-prototypes-btn').on('click', function() {
+            if (confirm('This will start a background task to update the AI prototypes for all classes based on the latest labels. This may take a moment. Continue?')) {
+                const $btn = $(this);
+                $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Rebuilding...');
+
+                $.ajax({
+                    url: '/api/rebuild_prototypes',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({}),
+                    success: function(res) {
+                        if(res.success) {
+                            showToast(res.message, 4000);
+                        } else {
+                            showToast('Error: ' + res.message, 5000);
+                        }
+                    },
+                    error: function() {
+                        showToast('Error: Failed to start prototype rebuild task.', 5000);
+                    },
+                    complete: function() {
+                        setTimeout(() => {
+                            $btn.prop('disabled', false).html('<i class="bi bi-arrow-clockwise"></i> Rebuild AI Models');
+                        }, 2000);
+                    }
+                });
+            }
+        });
+
         $('#lam-toggle-btn').on('click', function() {
             isLamModeActive = !isLamModeActive;
             $(this).toggleClass('active', isLamModeActive);
@@ -1717,11 +1747,11 @@
             if (mode === 'interactive') {
                 const endFrame = parseInt(frameSlider.attr("max"));
                 startInteractiveTracking(startFrame, endFrame, initBboxesText);
-            } else { // batch mode
+            } else {
                 const endFrameBatch = parseInt($('#batch-end-frame').val());
                 if (endFrameBatch <= startFrame) {
                     alert("End frame must be after the start frame.");
-                    exitReviewMode(); // Reset UI
+                    exitReviewMode();
                     return;
                 }
                 $("#track-status-header").text("Batch Tracking Initializing...");
@@ -1767,7 +1797,7 @@
 
         function startBatchTracking(startFrame, endFrame, initBboxesText) {
              $.ajax({
-                url: "/startSam2BatchTracking", // NEW API ENDPOINT
+                url: "/startSam2BatchTracking",
                 type: "POST",
                 contentType: "application/json",
                 data: JSON.stringify({
@@ -1961,10 +1991,10 @@
                                 if (frameCount && !isNaN(frameCount) && frameCount > 0) {
                                     startNegativeSampling(frameCount);
                                 } else {
-                                     triggerApplyToVideo(null); // Apply without negative samples if user cancels prompt
+                                     triggerApplyToVideo(null);
                                 }
                             } else {
-                                triggerApplyToVideo(null); // User chose not to refine
+                                triggerApplyToVideo(null);
                             }
                         }, 500);
                     } else {
