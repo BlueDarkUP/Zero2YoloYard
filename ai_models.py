@@ -1,24 +1,26 @@
 import logging
 import os
-import torch.nn.functional as F
-from torchvision.models import MobileNet_V3_Large_Weights, MobileNet_V3_Small_Weights
-from torchvision.ops import nms, box_iou
-from torch.amp import autocast
-import numpy as np
 import random
-import time
 import threading
+import time
+
+import numpy as np
+import onnxruntime as ort
 import torch
+import torch.nn.functional as F
 import torchvision
 from PIL import Image
+from torch.amp import autocast
+from torchvision.models import MobileNet_V3_Large_Weights, MobileNet_V3_Small_Weights
+from torchvision.ops import nms, box_iou
 from torchvision.transforms.functional import to_tensor, normalize
+
 import config
 import database
 import file_storage
 import settings_manager
 from bbox_writer import convert_text_to_rects_and_labels
-from torchvision.transforms.functional import crop
-import onnxruntime as ort
+from collections import defaultdict
 
 try:
     import ultralytics_sam_tasks as sam_tasks
@@ -483,29 +485,35 @@ def _calculate_prototype_from_db(class_name):
     if len(sample_frames) > sample_limit:
         sample_frames = random.sample(sample_frames, sample_limit)
 
-    logging.info(f"正在从 {len(sample_frames)} 个样本为 '{class_name}' 计算新原型...")
+    logging.info(f"正在从 {len(sample_frames)} 个样本帧为 '{class_name}' 计算新原型...")
+    grouped_boxes = defaultdict(list)
+    for frame_data in sample_frames:
+        frame_key = (frame_data['video_uuid'], frame_data['frame_number'])
+        rects, labels, _ = convert_text_to_rects_and_labels(frame_data['bboxes_text'])
+        target_rects_in_frame = [rect for i, rect in enumerate(rects) if labels[i] == class_name]
+        if target_rects_in_frame:
+            grouped_boxes[frame_key].extend(target_rects_in_frame)
 
     all_class_features = []
-    for frame_data in sample_frames:
-        try:
+    BOX_BATCH_SIZE = 64
 
-            frame_path = file_storage.get_frame_path(frame_data['video_uuid'], frame_data['frame_number'])
+    logging.info(f"分组完成，将对 {len(grouped_boxes)} 张唯一图片进行分块批处理。")
+
+    for (video_uuid, frame_number), all_rects_for_frame in grouped_boxes.items():
+        try:
+            frame_path = file_storage.get_frame_path(video_uuid, frame_number)
             if not os.path.exists(frame_path):
                 continue
 
             pil_image = Image.open(frame_path).convert("RGB")
+            for i in range(0, len(all_rects_for_frame), BOX_BATCH_SIZE):
+                rect_chunk = all_rects_for_frame[i:i + BOX_BATCH_SIZE]
+                features = get_features_for_single_bbox(pil_image, rect_chunk)
+                if features is not None and features.numel() > 0:
+                    all_class_features.append(features)
 
-            rects, labels, _ = convert_text_to_rects_and_labels(frame_data['bboxes_text'])
-            target_rects = [rects[i] for i, label in enumerate(labels) if label == class_name]
-            if not target_rects:
-                continue
-
-            features = get_features_for_single_bbox(pil_image, target_rects)
-
-            if features is not None and features.numel() > 0:
-                all_class_features.append(features)
         except Exception as e:
-            logging.warning(f"为原型构建跳过帧 {frame_data['frame_number']} 时出错: {e}")
+            logging.warning(f"为原型构建跳过帧 {video_uuid}/{frame_number} 时出错: {e}")
 
     if not all_class_features:
         logging.error(f"未能为类别 '{class_name}' 提取任何有效的特征向量。")

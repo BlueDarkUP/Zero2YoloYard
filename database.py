@@ -1,10 +1,11 @@
 import json
+import logging
 import sqlite3
 import time
 import uuid
 import config
 import file_storage
-
+from bbox_writer import extract_labels
 
 def get_db_connection():
     conn = sqlite3.connect(config.DATABASE_FILE)
@@ -125,6 +126,15 @@ def init_db():
     )
     ''')
 
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS frame_labels (
+        frame_id INTEGER NOT NULL,
+        label_name TEXT NOT NULL,
+        FOREIGN KEY (frame_id) REFERENCES video_frames (frame_id) ON DELETE CASCADE
+    )
+    ''')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_frame_labels_name ON frame_labels (label_name)')
+
     conn.commit()
     conn.close()
 
@@ -223,10 +233,29 @@ def get_video_frames(video_uuid):
 def save_frame_bboxes(video_uuid, frame_number, bboxes_text):
     conn = get_db_connection()
     cursor = conn.cursor()
+    frame = cursor.execute(
+        'SELECT frame_id FROM video_frames WHERE video_uuid = ? AND frame_number = ?',
+        (video_uuid, frame_number)
+    ).fetchone()
+
+    if not frame:
+        conn.close()
+        logging.error(f"无法为 video {video_uuid}, frame {frame_number} 找到 frame_id。")
+        return
+
+    frame_id = frame['frame_id']
     cursor.execute(
-        'UPDATE video_frames SET bboxes_text = ?, suggested_bboxes_text = ? WHERE video_uuid = ? AND frame_number = ?',
-        (bboxes_text, '', video_uuid, frame_number)
+        'UPDATE video_frames SET bboxes_text = ?, suggested_bboxes_text = ? WHERE frame_id = ?',
+        (bboxes_text, '', frame_id)
     )
+    cursor.execute('DELETE FROM frame_labels WHERE frame_id = ?', (frame_id,))
+    unique_labels_in_frame = set(extract_labels(bboxes_text))
+    if unique_labels_in_frame:
+        labels_to_insert = [(frame_id, label) for label in unique_labels_in_frame]
+        cursor.executemany(
+            'INSERT INTO frame_labels (frame_id, label_name) VALUES (?, ?)',
+            labels_to_insert
+        )
     new_labeled_count = cursor.execute(
         "SELECT COUNT(*) FROM video_frames WHERE video_uuid = ? AND ((bboxes_text IS NOT NULL AND bboxes_text != '') OR (tags IS NOT NULL AND tags != '[]' AND tags != ''))",
         (video_uuid,)
@@ -235,6 +264,7 @@ def save_frame_bboxes(video_uuid, frame_number, bboxes_text):
         'UPDATE videos SET labeled_frame_count = ? WHERE video_uuid = ?',
         (new_labeled_count, video_uuid)
     )
+
     conn.commit()
     conn.close()
 
@@ -379,25 +409,21 @@ def delete_class_label(label_name):
     conn.commit()
     conn.close()
 
-def get_all_frames_with_class(class_name):
-    conn = get_db_connection()
-    query = f"""
-        SELECT T1.*, T2.width, T2.height FROM video_frames AS T1
-        INNER JOIN videos AS T2 ON T1.video_uuid = T2.video_uuid
-        WHERE T1.bboxes_text LIKE '%{class_name}%'
-    """
-    frames = conn.execute(query).fetchall()
 
-    result_frames = []
-    for frame in frames:
-        lines = frame['bboxes_text'].strip().split('\n')
-        for line in lines:
-            parts = line.strip().split(',', 4)
-            if len(parts) >= 5 and parts[4] == class_name:
-                result_frames.append(dict(frame))
-                break
+def get_all_frames_with_class(class_name):
+
+    conn = get_db_connection()
+    query = """
+            SELECT T1.*, T2.width, T2.height
+            FROM video_frames AS T1
+                     INNER JOIN videos AS T2 ON T1.video_uuid = T2.video_uuid
+                     INNER JOIN frame_labels AS T3 ON T1.frame_id = T3.frame_id
+            WHERE T3.label_name = ? \
+            """
+    frames = conn.execute(query, (class_name,)).fetchall()
     conn.close()
-    return result_frames
+
+    return [dict(row) for row in frames]
 
 
 def add_class_tag(tag_name):

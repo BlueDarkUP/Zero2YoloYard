@@ -23,6 +23,7 @@ import file_storage
 import background_tasks
 import ai_models
 from bbox_writer import validate_bboxes_text, convert_text_to_rects_and_labels, extract_labels
+from concurrent.futures import ThreadPoolExecutor
 
 try:
     import yaml
@@ -32,6 +33,7 @@ except ImportError:
 
 app = flask.Flask(__name__)
 app.secret_key = os.urandom(24)
+prototype_executor = ThreadPoolExecutor(max_workers=8)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(threadName)s - %(message)s')
 
 with app.app_context():
@@ -386,14 +388,14 @@ def rebuild_prototypes():
 
     if class_name:
         logging.info(f"Manual prototype rebuild requested for class: {class_name}")
-        threading.Thread(target=ai_models.update_prototype_for_class, args=(class_name,)).start()
+        prototype_executor.submit(ai_models.update_prototype_for_class, class_name)
         message = f"Started rebuilding prototype for '{class_name}'."
     else:
         logging.info("Manual prototype rebuild requested for ALL classes.")
         all_labels = database.get_all_class_labels()
         for label in all_labels:
-            threading.Thread(target=ai_models.update_prototype_for_class, args=(label,)).start()
-        message = f"Started rebuilding prototypes for all {len(all_labels)} classes."
+            prototype_executor.submit(ai_models.update_prototype_for_class, label)
+        message = f"Started rebuilding prototypes for all {len(all_labels)} classes in the background."
 
     return jsonify({'success': True, 'message': message})
 
