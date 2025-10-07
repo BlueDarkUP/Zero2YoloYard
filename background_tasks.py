@@ -36,7 +36,6 @@ except ImportError:
         "albumentations library not found. Data augmentation will be disabled. Run 'pip install albumentations opencv-python-headless'")
     A = None
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(threadName)s - %(message)s')
 
 active_tasks = {}
 tracking_sessions = {}

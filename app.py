@@ -24,6 +24,46 @@ import background_tasks
 import ai_models
 from bbox_writer import validate_bboxes_text, convert_text_to_rects_and_labels, extract_labels
 from concurrent.futures import ThreadPoolExecutor
+from colorama import Fore, Style, init
+
+
+class ColoredFormatter(logging.Formatter):
+    COLORS = {
+        'TIMESTAMP': Fore.WHITE + Style.DIM,
+        'THREAD': Fore.CYAN,
+        'LEVEL_DEFAULT': Fore.WHITE,
+        'MESSAGE_DEFAULT': Fore.WHITE + Style.NORMAL,
+
+        logging.DEBUG: {'level': Fore.MAGENTA, 'message': Fore.MAGENTA},
+        logging.INFO: {'level': Fore.GREEN + Style.BRIGHT, 'message': Fore.WHITE},
+        logging.WARNING: {'level': Fore.YELLOW + Style.BRIGHT, 'message': Fore.YELLOW},
+        logging.ERROR: {'level': Fore.RED + Style.BRIGHT, 'message': Fore.RED},
+        logging.CRITICAL: {'level': Fore.RED + Style.BRIGHT, 'message': Fore.RED + Style.BRIGHT},
+    }
+
+    def __init__(self, fmt=None, datefmt=None, style='%'):
+        super().__init__(fmt, datefmt, style)
+
+    def format(self, record):
+        level_colors = self.COLORS.get(record.levelno, {
+            'level': self.COLORS['LEVEL_DEFAULT'],
+            'message': self.COLORS['MESSAGE_DEFAULT']
+        })
+
+        asctime = self.formatTime(record, self.datefmt)
+        colored_asctime = f"{self.COLORS['TIMESTAMP']}{asctime}{Style.RESET_ALL}"
+
+        colored_levelname = f"{level_colors['level']}{record.levelname:<8}{Style.RESET_ALL}"
+
+        colored_threadname = f"{self.COLORS['THREAD']}[{record.threadName}]{Style.RESET_ALL}"
+
+        message = record.getMessage()
+        colored_message = f"{level_colors['message']}{message}{Style.RESET_ALL}"
+
+        if record.exc_info:
+            exc_text = self.formatException(record.exc_info)
+            colored_message += f"\n{level_colors['message']}{exc_text}{Style.RESET_ALL}"
+        return f"{colored_asctime} - {colored_levelname} - {colored_threadname} - {colored_message}"
 
 try:
     import yaml
@@ -1356,14 +1396,26 @@ def preview_augmentations():
 
 if __name__ == '__main__':
     from waitress import serve
+    init(autoreset=True)
 
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+
+    if root_logger.hasHandlers():
+        root_logger.handlers.clear()
+
+    console_handler = logging.StreamHandler()
+    formatter = ColoredFormatter('%(asctime)s - %(levelname)s - %(threadName)s - %(message)s')
+    console_handler.setFormatter(formatter)
+    root_logger.addHandler(console_handler)
     logging.info("正在初始化AI模型，请稍候...")
     ai_models.startup_ai_models()
     atexit.register(ai_models.save_preprocessed_cache_to_disk)
     atexit.register(ai_models.save_prototypes_to_disk)
     time.sleep(0.01)
-    print("=" * 60)
-    print("Zero2YOLOYard Server is running.")
-    print("Open your web browser and go to http://127.0.0.1:5000")
-    print("=" * 60)
+
+    logging.info("=" * 60)
+    logging.info("Zero2YOLOYard Server is running.")
+    logging.info("Open your web browser and go to http://127.0.0.1:5000")
+    logging.info("=" * 60)
     serve(app, host='0.0.0.0', port=5000)
