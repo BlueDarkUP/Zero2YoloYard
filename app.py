@@ -382,7 +382,7 @@ def list_classes():
 @app.route('/api/rebuild_prototypes', methods=['POST'])
 def rebuild_prototypes():
     data = request.json
-    class_name = data.get('class_name')  # 可以更新单个类，或者所有类
+    class_name = data.get('class_name')
 
     if class_name:
         logging.info(f"Manual prototype rebuild requested for class: {class_name}")
@@ -631,9 +631,6 @@ def predict_from_dataset_route():
 
 @app.route('/api/background_preprocess_frame', methods=['POST'])
 def background_preprocess_frame():
-    """
-    接收前端发来的帧加载事件，在后台线程中启动SAM和特征提取。
-    """
     data = request.json
     video_uuid = data.get('video_uuid')
     frame_number = data.get('frame_number')
@@ -642,12 +639,9 @@ def background_preprocess_frame():
         return jsonify({'success': False, 'message': 'Missing data.'}), 400
 
     cache_key = f"{video_uuid}_{frame_number}"
-    # 如果已经缓存，则无需重复处理
     if cache_key in ai_models.PREPROCESSED_DATA_CACHE:
         return jsonify({'success': True, 'message': 'Already cached.'})
 
-    # 使用线程避免阻塞前端请求，让网页可以立即响应
-    # 注意：这里传递 app.app_context() 是为了确保后台线程能访问数据库等应用上下文
     threading.Thread(
         target=lambda: ai_models.get_features_for_all_masks(video_uuid, frame_number),
         name=f"Preprocess-{video_uuid[:6]}-{frame_number}"

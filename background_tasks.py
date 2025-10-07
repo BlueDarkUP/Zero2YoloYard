@@ -1,16 +1,22 @@
-import cv2
-import time
 import logging
 import os
-import numpy as np
+import random
+import shutil
+import time
 import traceback
-import torch
+
+import cv2
+import numpy as np
 import tensorflow as tf
+import torch
+import yaml
+
+import ai_models
 import config
 import database
 import file_storage
-import ai_models
 from bbox_writer import extract_labels
+from multiprocessing import Pool, cpu_count
 
 try:
     import ultralytics_sam_tasks
@@ -517,6 +523,61 @@ def build_augmentation_pipeline(options):
                      bbox_params=A.BboxParams(format='yolo', label_fields=['class_labels'], min_visibility=0.1))
 
 
+def process_frame_worker(args):
+    frame_info, target_img_dir, target_lbl_dir, class_map, augmentation_options = args
+
+    augment_pipeline = None
+    is_augmented = frame_info.get("type") == "augmented"
+    if is_augmented and augmentation_options and augmentation_options.get("enabled", False):
+        augment_pipeline = build_augmentation_pipeline(augmentation_options)
+
+    try:
+        if is_augmented:
+            base_filename = frame_info["augmented_id"]
+        else:
+            base_filename = f"{frame_info['video_uuid']}_{frame_info['frame_number']:05d}"
+
+        src_img_path = file_storage.get_frame_path(frame_info['video_uuid'], frame_info['frame_number'])
+        if not os.path.exists(src_img_path):
+            logging.warning(f"源文件未找到，跳过: {src_img_path}")
+            return None
+
+        image = cv2.imread(src_img_path)
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        yolo_bboxes, class_indices = file_storage.get_yolo_bboxes(
+            frame_info['bboxes_text'], frame_info['width'], frame_info['height'], class_map
+        )
+
+        if not yolo_bboxes:
+            return None
+
+        if is_augmented and augment_pipeline:
+            transformed = augment_pipeline(image=image, bboxes=yolo_bboxes, class_labels=class_indices)
+            image_aug_rgb = transformed['image']
+            bboxes_aug_yolo_tuples = transformed['bboxes']
+            labels_aug_indices = transformed['class_labels']
+            bboxes_aug_yolo = [(labels_aug_indices[i], *box) for i, box in enumerate(bboxes_aug_yolo_tuples)]
+        else:
+            image_aug_rgb = image
+            bboxes_aug_yolo = [(class_indices[i], *box) for i, box in enumerate(yolo_bboxes)]
+
+        final_image_bgr = cv2.cvtColor(image_aug_rgb, cv2.COLOR_RGB2BGR)
+        output_image_path = os.path.join(target_img_dir, base_filename + '.jpg')
+        cv2.imwrite(output_image_path, final_image_bgr)
+
+        yolo_content_lines = [f"{class_id} {x:.6f} {y:.6f} {w:.6f} {h:.6f}" for class_id, x, y, w, h in bboxes_aug_yolo]
+        output_label_path = os.path.join(target_lbl_dir, base_filename + '.txt')
+        with open(output_label_path, 'w') as f:
+            f.write("\n".join(yolo_content_lines))
+
+        return output_image_path
+
+    except Exception as e:
+        logging.error(f"处理帧 {frame_info.get('augmented_id') or frame_info.get('frame_number')} 时发生错误: {e}")
+        logging.error(traceback.format_exc())
+        return None
+
+
 def create_dataset_task(dataset_uuid, video_uuids, eval_percent, test_percent, augmentation_options=None):
     if augmentation_options is None:
         augmentation_options = {}
@@ -529,7 +590,7 @@ def create_dataset_task(dataset_uuid, video_uuids, eval_percent, test_percent, a
             raise ValueError(
                 f"The sum of validation ({eval_percent}%) and test ({test_percent}%) percentages must be less than 100.")
 
-        database.update_dataset_status(dataset_uuid, status="PROCESSING")
+        database.update_dataset_status(dataset_uuid, status="PROCESSING", message="Gathering labeled frames...")
 
         frames_to_include = []
         all_labels = set()
@@ -550,18 +611,11 @@ def create_dataset_task(dataset_uuid, video_uuids, eval_percent, test_percent, a
             raise ValueError("No labeled frames with valid bounding boxes were found in the selected videos.")
 
         sorted_labels = sorted(list(all_labels))
+        class_map = {name: i for i, name in enumerate(sorted_labels)}
         logging.info(f"Dataset classes (sorted): {sorted_labels}")
 
-        augment_pipeline = None
-        multiplication_factor = 1
         is_aug_enabled = A is not None and augmentation_options.get("enabled", False)
-
-        if is_aug_enabled:
-            augment_pipeline = build_augmentation_pipeline(augmentation_options)
-            multiplication_factor = int(augmentation_options.get("multiply_factor", 1))
-            if augment_pipeline:
-                logging.info(f"Data augmentation enabled. Multiplication factor: {multiplication_factor}")
-
+        multiplication_factor = int(augmentation_options.get("multiply_factor", 1)) if is_aug_enabled else 1
         final_frames_to_process = []
         if is_aug_enabled and multiplication_factor > 1:
             for frame_info in frames_to_include:
@@ -570,17 +624,65 @@ def create_dataset_task(dataset_uuid, video_uuids, eval_percent, test_percent, a
                     aug_id = f"aug_{i}_{frame_info['video_uuid']}_{frame_info['frame_number']:05d}"
                     final_frames_to_process.append({"type": "augmented", "augmented_id": aug_id, **frame_info})
         else:
-            for frame_info in frames_to_include:
-                final_frames_to_process.append({"type": "original", **frame_info})
+            final_frames_to_process = [{"type": "original", **frame_info} for frame_info in frames_to_include]
 
-        logging.info(f"Creating YOLO ZIP archive for dataset {dataset_uuid}...")
-        zip_path = file_storage.create_yolo_dataset_zip(
-            dataset_uuid, final_frames_to_process, sorted_labels, eval_percent, test_percent,
-            augment_pipeline, augmentation_options.get('mosaic', {})
-        )
+        random.shuffle(final_frames_to_process)
+        total_count = len(final_frames_to_process)
+        val_count = int(total_count * eval_percent / 100.0)
+        test_count = int(total_count * test_percent / 100.0)
+
+        val_data = final_frames_to_process[:val_count]
+        test_data = final_frames_to_process[val_count:val_count + test_count]
+        train_data = final_frames_to_process[val_count + test_count:]
+
+        dataset_dir = file_storage.get_dataset_dir(dataset_uuid)
+        if os.path.exists(dataset_dir): shutil.rmtree(dataset_dir)
+        dir_map = {
+            'train': (os.path.join(dataset_dir, 'images', 'train'), os.path.join(dataset_dir, 'labels', 'train')),
+            'val': (os.path.join(dataset_dir, 'images', 'val'), os.path.join(dataset_dir, 'labels', 'val')),
+            'test': (os.path.join(dataset_dir, 'images', 'test'), os.path.join(dataset_dir, 'labels', 'test')),
+        }
+        for img_dir, lbl_dir in dir_map.values():
+            os.makedirs(img_dir, exist_ok=True)
+            os.makedirs(lbl_dir, exist_ok=True)
+        all_tasks = []
+        for split_name, split_data in [('train', train_data), ('val', val_data), ('test', test_data)]:
+            img_dir, lbl_dir = dir_map[split_name]
+            for frame_info in split_data:
+                all_tasks.append((frame_info, img_dir, lbl_dir, class_map, augmentation_options))
+
+        database.update_dataset_status(dataset_uuid, status="PROCESSING",
+                                       message=f"Processing {len(all_tasks)} images across {cpu_count()} CPU cores...")
+        logging.info(f"Starting parallel processing of {len(all_tasks)} images using up to {cpu_count()} cores.")
+
+        processed_count = 0
+        with Pool(processes=cpu_count()) as pool:
+            for result in pool.imap_unordered(process_frame_worker, all_tasks):
+                if result:
+                    processed_count += 1
+                    if processed_count % 50 == 0:
+                        progress_msg = f"Processed {processed_count}/{len(all_tasks)} images..."
+                        database.update_dataset_status(dataset_uuid, status="PROCESSING", message=progress_msg)
+
+        logging.info(f"Parallel processing finished. Processed {processed_count} images successfully.")
+
+        if yaml:
+            yaml_content = {'path': f"../datasets/{dataset_uuid}", 'train': 'images/train', 'val': 'images/val',
+                            'test': 'images/test', 'nc': len(sorted_labels), 'names': sorted_labels}
+            with open(os.path.join(dataset_dir, 'data.yaml'), 'w') as f:
+                yaml.dump(yaml_content, f, sort_keys=False)
+        else:
+            logging.error("PyYAML is not installed! Cannot create data.yaml for the dataset.")
+
+        database.update_dataset_status(dataset_uuid, status="PROCESSING", message="Creating ZIP archive...")
+        zip_path_base = os.path.join(config.STORAGE_DIR, 'datasets', dataset_uuid)
+        zip_path = shutil.make_archive(zip_path_base, 'zip', dataset_dir)
+        shutil.rmtree(dataset_dir)
+
         logging.info(f"ZIP archive created at: {zip_path}")
         database.update_dataset_status(dataset_uuid, status="READY", zip_path=zip_path, sorted_label_list=sorted_labels)
         logging.info(f"Dataset {dataset_uuid} task completed successfully.")
+
     except Exception as e:
         error_message = f"Failed to create dataset {dataset_uuid}"
         logging.error(f"{error_message}: {e}")

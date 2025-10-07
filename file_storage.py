@@ -162,9 +162,9 @@ def create_yolo_dataset_zip(dataset_uuid, frames_data, all_labels, eval_percent,
     lbl_test_dir = os.path.join(dataset_dir, 'labels', 'test')
     os.makedirs(img_train_dir);
     os.makedirs(lbl_train_dir)
-    os.makedirs(img_val_dir);
+    os.makedirs(img_val_dir)
     os.makedirs(lbl_val_dir)
-    os.makedirs(img_test_dir);
+    os.makedirs(img_test_dir)
     os.makedirs(lbl_test_dir)
 
     class_map = {name: i for i, name in enumerate(all_labels)}
