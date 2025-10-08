@@ -652,8 +652,12 @@ def lam_predict(video_uuid, frame_number, point_coords):
 
         with torch.no_grad(), autocast(device_type=DEVICE.type, enabled=(DEVICE.type == 'cuda')):
             for class_name, prototype in prototype_library.items():
-                similarity = F.cosine_similarity(feature_vector, prototype.unsqueeze(0))
-                scores.append({"label": class_name, "score": round(similarity.item(), 4)})
+
+                sim_scores_for_class = F.cosine_similarity(feature_vector, prototype, dim=1)
+
+                max_similarity, _ = torch.max(sim_scores_for_class)
+
+                scores.append({"label": class_name, "score": round(max_similarity.item(), 4)})
 
         sorted_suggestions = sorted(scores, key=lambda x: x['score'], reverse=True)
 

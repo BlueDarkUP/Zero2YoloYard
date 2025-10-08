@@ -1756,6 +1756,7 @@
                     success: function(response) {
                         if (response.success) {
                             showToast("Frame " + frameSlider.val() + " saved successfully!");
+                            window.cachedFrames = null;
                             if (window.cachedFrames) {
                                 const frameData = window.cachedFrames.find(f => f.frame_number == frameNumber);
                                 if (frameData) frameData.suggested_bboxes_text = "";
