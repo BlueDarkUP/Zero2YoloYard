@@ -727,6 +727,7 @@ def apply_prototypes_to_video_route():
     video_uuid = data.get('video_uuid')
     class_name = data.get('class_name')
     negative_samples = data.get('negative_samples', None)
+    confidence_threshold = float(data.get('confidence_threshold', 0.5))
 
     if not video_uuid or not class_name:
         return jsonify({'success': False, 'message': 'Video UUID and Class Name are required.'}), 400
@@ -736,11 +737,11 @@ def apply_prototypes_to_video_route():
 
     threading.Thread(
         target=background_tasks.apply_prototypes_to_video_task,
-        args=(video_uuid, class_name, negative_samples, app.app_context()),
+        args=(video_uuid, class_name, negative_samples, confidence_threshold, app.app_context()),
         name=f"ApplyPrototypes-{video_uuid[:6]}"
     ).start()
 
-    return jsonify({'success': True, 'message': 'Task to apply prototypes has started.'})
+    return jsonify({'success': True, 'message': 'Task to apply suggestions has started.'})
 
 
 @app.route('/startSam2Tracking', methods=['POST'])

@@ -6,6 +6,15 @@ import time
 
 import numpy as np
 import onnxruntime as ort
+
+try:
+    from sklearn.cluster import KMeans
+    from sklearn.metrics import silhouette_score
+except ImportError:
+    logging.warning("scikit-learn not found. Sub-prototype clustering will be disabled. Run 'pip install scikit-learn'")
+    KMeans = None
+    silhouette_score = None
+
 import torch
 import torch.nn.functional as F
 import torchvision
@@ -449,7 +458,8 @@ def _calculate_similarity_scores(all_embeddings, positive_prototypes, negative_p
     return final_scores
 
 
-def predict_with_prototypes(video_uuid, frame_number, positive_prototypes, negative_prototypes=None):
+def predict_with_prototypes(video_uuid, frame_number, positive_prototypes, negative_prototypes=None,
+                            confidence_threshold=0.5):
     with AI_MODEL_LOCK:
         processed_data = get_features_for_all_masks(video_uuid, frame_number)
         all_boxes = processed_data.get("all_boxes")
@@ -462,11 +472,20 @@ def predict_with_prototypes(video_uuid, frame_number, positive_prototypes, negat
 
         settings = settings_manager.load_settings()
         nms_iou = settings.get('nms_iou_threshold', 0.7)
-        kept_indices = nms(all_boxes, final_scores, nms_iou)
+
+        high_conf_indices = torch.where(final_scores > confidence_threshold)[0]
+        if high_conf_indices.numel() == 0:
+            return []
+
+        boxes_to_nms = all_boxes[high_conf_indices]
+        scores_to_nms = final_scores[high_conf_indices]
+
+        kept_indices_after_nms = nms(boxes_to_nms, scores_to_nms, nms_iou)
+        final_kept_indices = high_conf_indices[kept_indices_after_nms]
 
         final_results = []
         final_scores_np = final_scores.cpu().numpy()
-        for i in kept_indices:
+        for i in final_kept_indices:
             box_coords = all_boxes[i].cpu().numpy().astype(int).tolist()
             final_results.append({"box": box_coords, "score": float(final_scores_np[i])})
 

@@ -253,6 +253,16 @@
                     </div>
                 </div>
 
+                <div id="suggestion-review-controls" style="display: none; border: 2px dashed #ffc107; padding: 15px; margin-top: 15px; background-color: #fffaf0; border-radius: 0.3rem;">
+                    <h5 class="mb-3 text-warning"><i class="bi bi-lightbulb"></i> AI Suggestions Review</h5>
+                    <p><small class="text-muted">Blue dashed boxes are AI suggestions. Click one to accept it. Use the slider to filter by confidence.</small></p>
+                    <div class="form-group">
+                        <label for="suggestion-threshold">Confidence Threshold: <strong id="suggestion-threshold-value">0.50</strong></label>
+                        <input type="range" class="form-control-range" id="suggestion-threshold" min="0.1" max="0.99" step="0.01" value="0.50">
+                    </div>
+                    <button id="accept-all-suggestions-btn" class="btn btn-warning btn-block mt-2"><i class="bi bi-check2-all"></i> Accept All Visible Suggestions</button>
+                </div>
+
                 <div id="track-controls">
                     <h5 id="track-status-header">Tracking...</h5>
                     <div class="progress mb-2" style="height: 20px;">
@@ -342,8 +352,16 @@
 </div>
 
 {% from "_macros.html" import render_modal %}
-{% call render_modal('negative-sampling-modal', 'Step 2: Refine with Negative Samples (Optional)') %}
+{% call render_modal('negative-sampling-modal', 'Apply Model to Video') %}
+<div class="mb-3 p-3 border rounded bg-light">
+    <h5>Step 1: Set Confidence Threshold</h5>
+    <p class="text-muted small">Only suggestions with a score above this value will be generated for review.</p>
+    <label for="apply-confidence-threshold">Confidence: <strong id="apply-confidence-value">0.50</strong></label>
+    <input type="range" class="form-control-range" id="apply-confidence-threshold" min="0.1" max="0.99" step="0.01" value="0.50">
+</div>
+
 <div id="neg-sampling-body">
+    <h5 class="mt-4">Step 2: Refine with Negative Samples (Optional)</h5>
     <p class="text-info">Draw boxes around areas you want the model to **avoid** (e.g., background, other objects). These are temporary and only used for this task.</p>
     <div class="text-center mb-3">
         <div id="neg-canvas-container" style="position: relative; display: inline-block; max-width: 100%;">
@@ -393,7 +411,8 @@
 
         let isInteractiveMode = false;
         let positiveExampleBboxes = [];
-        let previewBboxes = [];
+        let interactivePreviewBboxes = [];
+        let suggestionBboxes = [];
         let currentCacheKey = null;
         let lastProcessedFrame = -1;
         let lastDatasetClassName = null;
@@ -401,7 +420,9 @@
         let overlappingCycleIndex = 0;
         let lastClickPosForCycle = null;
         let isCKeyPressed = false;
-        let frameConfidence = {};
+        
+        let frameConfidence = {}; 
+
         let interpolationState = {
             isActive: false,
             objectId: null,
@@ -519,9 +540,31 @@
                 }
             });
 
-            if ((isInteractiveMode || previewBboxes.length > 0) && previewBboxes.length > 0) {
+            if (suggestionBboxes.length > 0) {
+                const threshold = parseFloat($('#suggestion-threshold').val());
+                drawingCtx.strokeStyle = 'rgba(0, 123, 255, 0.8)';
+                drawingCtx.lineWidth = 2 / dpr;
+                drawingCtx.setLineDash([5 / dpr, 3 / dpr]);
+        
+                suggestionBboxes.forEach(sug => {
+                    if (sug.score >= threshold) {
+                        const box = sug.box;
+                        const x = box[0] * scaleX, y = box[1] * scaleY;
+                        const w = (box[2] - box[0]) * scaleX, h = (box[3] - box[1]) * scaleY;
+                        drawingCtx.strokeRect(x, y, w, h);
+        
+                        const scoreText = sug.score.toFixed(2);
+                        drawingCtx.fillStyle = 'rgba(0, 123, 255, 0.8)';
+                        drawingCtx.font = `${10 / dpr}px Arial`;
+                        drawingCtx.fillText(scoreText, x + 2 / dpr, y + 10 / dpr);
+                    }
+                });
+                drawingCtx.setLineDash([]);
+            }
+
+            if ((isInteractiveMode || interactivePreviewBboxes.length > 0) && interactivePreviewBboxes.length > 0) {
                 const threshold = parseFloat($('#result-threshold').val());
-                previewBboxes.forEach((res, index) => {
+                interactivePreviewBboxes.forEach((res, index) => {
                     if (res.score >= threshold) {
                         const box = res.box;
                         if (index === hoveredPreviewIndex) {
@@ -747,6 +790,21 @@
                 }).filter(b => b !== null);
         }
 
+        function parseSuggestionsFromString(text) {
+            if (!text) return [];
+            return text.split("\n")
+                .filter(line => line.trim() !== "")
+                .map(line => {
+                    const parts = line.split(",");
+                    if (parts.length < 6) return null;
+                    return {
+                        box: [parseInt(parts[0]), parseInt(parts[1]), parseInt(parts[2]), parseInt(parts[3])],
+                        label: parts[4],
+                        score: parseFloat(parts[5])
+                    };
+                }).filter(b => b !== null);
+        }
+
         function loadBboxesForFrame(frameNumber) {
             if (isReviewMode) {
                 const bboxesText = trackedBboxCache[frameNumber] || "";
@@ -780,23 +838,16 @@
 
         function processFrameDataAndUpdateUI(frameData) {
             const currentFrameNum = parseInt(frameSlider.val());
-            const manualBboxes = parseBboxesFromString(frameData ? frameData.bboxes_text : '');
-            const suggestedBboxesText = frameData ? frameData.suggested_bboxes_text : '';
-            const suggestedBboxes = parseBboxesFromString(suggestedBboxesText);
+            bboxes = parseBboxesFromString(frameData ? frameData.bboxes_text : '');
+            suggestionBboxes = parseSuggestionsFromString(frameData ? frameData.suggested_bboxes_text : '');
 
-            if (suggestedBboxes.length > 0) {
-                bboxes = [];
-                previewBboxes = suggestedBboxes.map(b => ({
-                    box: [b.x1, b.y1, b.x2, b.y2],
-                    score: 0.99,
-                    label: b.label
-                }));
-                $('#interactive-results-controls').slideDown();
-                showToast(`${suggestedBboxes.length} AI suggestions loaded for review.`, 3000);
+            if (suggestionBboxes.length > 0) {
+                $('#suggestion-review-controls').slideDown();
             } else {
-                clearInteractiveSession(false);
-                bboxes = manualBboxes;
+                $('#suggestion-review-controls').slideUp();
             }
+            
+            clearInteractiveSession(false);
 
             if (interpolationState.isActive && currentFrameNum !== interpolationState.startFrameData.frame_number) {
                 const existingBox = bboxes.find(b => b.id === interpolationState.objectId);
@@ -944,7 +995,7 @@
 
         function clearInteractiveSession(shouldRedraw = true) {
             positiveExampleBboxes = [];
-            previewBboxes = [];
+            interactivePreviewBboxes = [];
             lastDatasetClassName = null;
             hoveredPreviewIndex = -1;
             overlappingCycleIndex = 0;
@@ -979,7 +1030,7 @@
                     data: JSON.stringify(payload),
                     success: res => {
                         if (res.success) {
-                            previewBboxes = res.results;
+                            interactivePreviewBboxes = res.results;
                             $('#interactive-results-controls').slideDown();
                             $('#result-threshold').trigger('input');
                             redrawCanvas();
@@ -1042,7 +1093,7 @@
                 }
             });
         }
-
+        
         function resizeNegCanvas() {
             if (!negImage.complete || negImage.naturalWidth === 0 || !$('#negative-sampling-modal').is(':visible')) {
                 return;
@@ -1093,16 +1144,19 @@
                 alert("An error occurred. The class to apply is unknown.");
                 return;
             }
-            const confirmMessage = negativeSamples && Object.keys(negativeSamples).length > 0 ?
-                `This will start a background task to apply the REFINED model for '${lastDatasetClassName}' to all unlabeled frames. Continue?` :
-                `This will start a background task to apply the learned features for '${lastDatasetClassName}' to all unlabeled frames. Continue?`;
+
+            const confirmMessage = negativeSamples && Object.keys(negativeSamples).length > 0 
+                ? `This will start a background task to apply the REFINED model for '${lastDatasetClassName}' to all unlabeled frames. Continue?`
+                : `This will start a background task to apply the learned features for '${lastDatasetClassName}' to all unlabeled frames. Continue?`;
 
             if (confirm(confirmMessage)) {
                 const payload = {
                     video_uuid: videoUuid,
                     class_name: lastDatasetClassName,
-                    negative_samples: negativeSamples
+                    negative_samples: negativeSamples,
+                    confidence_threshold: parseFloat($('#apply-confidence-threshold').val())
                 };
+                
                 $.ajax({
                     url: '/apply_prototypes_to_video',
                     type: 'POST',
@@ -1122,6 +1176,7 @@
                 });
             }
         }
+
 
         function undoNegativeSample() {
             if (currentNegSampleIndex < 0 || currentNegSampleIndex >= negSamplingFrames.length) return;
@@ -1234,7 +1289,6 @@
             $('#result-threshold').val(currentFrameThreshold);
             $('#result-threshold').trigger('input'); 
         };
-
 
         frameImage.addEventListener('dragstart', (e) => e.preventDefault());
         window.onresize = resizeCanvas;
@@ -1354,7 +1408,46 @@
             if (isReviewMode) return;
             const pos = getMousePos(drawingCanvas, e);
 
-            if ((isInteractiveMode || previewBboxes.length > 0) && previewBboxes.length > 0) {
+            if (suggestionBboxes.length > 0) {
+                const threshold = parseFloat($('#suggestion-threshold').val());
+                const scaleX = frameImage.clientWidth / frameImage.naturalWidth;
+                const scaleY = frameImage.clientHeight / frameImage.naturalHeight;
+                let clickedSuggestionIndex = -1;
+        
+                for (let i = suggestionBboxes.length - 1; i >= 0; i--) {
+                    const sug = suggestionBboxes[i];
+                    if (sug.score >= threshold) {
+                        const b = sug.box;
+                        if (pos.x > b[0] * scaleX && pos.x < b[2] * scaleX && pos.y > b[1] * scaleY && pos.y < b[3] * scaleY) {
+                            clickedSuggestionIndex = i;
+                            break;
+                        }
+                    }
+                }
+        
+                if (clickedSuggestionIndex !== -1) {
+                    e.preventDefault();
+                    const acceptedSuggestion = suggestionBboxes.splice(clickedSuggestionIndex, 1)[0];
+                    
+                    bboxes.push({
+                        x1: acceptedSuggestion.box[0],
+                        y1: acceptedSuggestion.box[1],
+                        x2: acceptedSuggestion.box[2],
+                        y2: acceptedSuggestion.box[3],
+                        label: acceptedSuggestion.label,
+                        id: self.crypto.randomUUID()
+                    });
+                    
+                    saveStateToHistory();
+                    selectedBboxIndex = bboxes.length - 1;
+                    redrawCanvas();
+                    renderBboxList();
+                    showToast(`Suggestion for '${acceptedSuggestion.label}' accepted!`, 2000);
+                    return;
+                }
+            }
+
+            if ((isInteractiveMode || interactivePreviewBboxes.length > 0) && interactivePreviewBboxes.length > 0) {
                 if (!activeClass) {
                     alert("Please select a class from the list to assign it.");
                     return;
@@ -1365,7 +1458,7 @@
                 let targetBoxIndex = -1;
 
                 const overlappingIndices = [];
-                previewBboxes.forEach((res, index) => {
+                interactivePreviewBboxes.forEach((res, index) => {
                     if (res.score >= threshold) {
                         const b = res.box;
                         if (pos.x > b[0] * scaleX && pos.x < b[2] * scaleX && pos.y > b[1] * scaleY && pos.y < b[3] * scaleY) {
@@ -1386,7 +1479,7 @@
                         lastClickPosForCycle = null;
                     }
 
-                    const res = previewBboxes[targetBoxIndex];
+                    const res = interactivePreviewBboxes[targetBoxIndex];
                     const b = res.box;
                     bboxes.push({
                         x1: b[0],
@@ -1395,7 +1488,7 @@
                         y2: b[3],
                         label: res.label || activeClass
                     });
-                    previewBboxes.splice(targetBoxIndex, 1);
+                    interactivePreviewBboxes.splice(targetBoxIndex, 1);
                     saveStateToHistory();
                     renderBboxList();
                     hoveredPreviewIndex = -1;
@@ -1526,13 +1619,13 @@
                     if (onBox) $(drawingCanvas).addClass('cursor-move');
                 }
 
-                if ((isInteractiveMode || previewBboxes.length > 0) && previewBboxes.length > 0) {
+                if ((isInteractiveMode || interactivePreviewBboxes.length > 0) && interactivePreviewBboxes.length > 0) {
                     const scaleX = frameImage.clientWidth / frameImage.naturalWidth;
                     const scaleY = frameImage.clientHeight / frameImage.naturalHeight;
                     const threshold = parseFloat($('#result-threshold').val());
                     let foundIndex = -1;
-                    for (let i = previewBboxes.length - 1; i >= 0; i--) {
-                        const res = previewBboxes[i];
+                    for (let i = interactivePreviewBboxes.length - 1; i >= 0; i--) {
+                        const res = interactivePreviewBboxes[i];
                         if (res.score >= threshold) {
                             const b = res.box;
                             if (pos.x > b[0] * scaleX && pos.x < b[2] * scaleX && pos.y > b[1] * scaleY && pos.y < b[3] * scaleY) {
@@ -1663,7 +1756,14 @@
                     success: function(response) {
                         if (response.success) {
                             showToast("Frame " + frameSlider.val() + " saved successfully!");
-                            window.cachedFrames = null;
+                            // When saving, it implies suggestions are reviewed, so we can clear them for this frame
+                            if (window.cachedFrames) {
+                                const frameData = window.cachedFrames.find(f => f.frame_number == frameNumber);
+                                if (frameData) frameData.suggested_bboxes_text = "";
+                            }
+                            suggestionBboxes = [];
+                            $('#suggestion-review-controls').slideUp();
+                            redrawCanvas();
                         }
                     },
                     error: function() {
@@ -1991,7 +2091,10 @@
             const $button = $(this);
             $button.prop('disabled', true);
             showToast(`Learning from all '${activeClass}' examples in the dataset...`, 10000);
+            lastDatasetClassName = activeClass;
+    
             const payload = { video_uuid: videoUuid, frame_number: frameNumber, class_name: activeClass };
+    
             $.ajax({
                 url: '/interactive_segment/predict_from_dataset',
                 type: 'POST',
@@ -1999,24 +2102,16 @@
                 data: JSON.stringify(payload),
                 success: function(res) {
                     if (res.success) {
-                        previewBboxes = res.results;
-                        lastDatasetClassName = activeClass;
+                        interactivePreviewBboxes = res.results;
                         $('#interactive-results-controls').slideDown();
                         $('#result-threshold').trigger('input');
                         redrawCanvas();
-                        showToast(`Found ${res.results.length} potential '${activeClass}' objects.`, 4000);
+                        showToast(`Found ${res.results.length} potential '${activeClass}' objects on this frame.`, 4000);
+                        
                         setTimeout(() => {
-                           if (confirm(`Find from Dataset for '${activeClass}' successful.\n\nDo you want to refine the model by adding negative samples (e.g., background)? This can improve accuracy.`)) {
-                                const frameCountStr = prompt("How many random frames would you like to label for negative samples?", "10");
-                                const frameCount = frameCountStr ? parseInt(frameCountStr) : 0;
-                                if (frameCount && !isNaN(frameCount) && frameCount > 0) {
-                                    startNegativeSampling(frameCount);
-                                } else {
-                                     triggerApplyToVideo(null);
-                                }
-                            } else {
-                                triggerApplyToVideo(null);
-                            }
+                           if (confirm(`Preview successful.\n\nDo you want to apply the '${activeClass}' model to all unlabeled frames in this video?`)) {
+                               startNegativeSampling(10);
+                           }
                         }, 500);
                     } else {
                         alert('Dataset-driven prediction failed: ' + res.message);
@@ -2068,28 +2163,73 @@
 
         $('#neg-prev-btn').on('click', function() { if (currentNegSampleIndex > 0) { currentNegSampleIndex--; loadNegativeSampleFrame(); } });
         $('#neg-next-btn').on('click', function() { if (currentNegSampleIndex < negSamplingFrames.length - 1) { currentNegSampleIndex++; loadNegativeSampleFrame(); } });
+        
         $('#finish-neg-sampling-btn').on('click', function() {
             $('#negative-sampling-modal').modal('hide');
+            
             const finalNegativeSamples = Object.fromEntries(
                 Object.entries(negativeSamplesStore).filter(([key, value]) => value.length > 0)
             );
-            if (Object.keys(finalNegativeSamples).length > 0) {
-                showToast(`Refining model with ${Object.keys(finalNegativeSamples).length} frames of negative samples.`);
-            } else {
-                showToast("No negative samples were added. Applying original model.");
-            }
+            
+            const message = Object.keys(finalNegativeSamples).length > 0 
+                ? `Refining model with ${Object.keys(finalNegativeSamples).length} frames of negative samples.`
+                : "No negative samples were added. Applying original model.";
+            showToast(message);
+
             triggerApplyToVideo(finalNegativeSamples);
         });
 
         $('#result-threshold').on('input', function() {
             const value = parseFloat($(this).val());
             $('#threshold-value').text(value.toFixed(2));
+            
             const currentFrame = frameSlider.val();
             frameConfidence[currentFrame] = value;
             
             redrawCanvas();
         });
+        
+        $('#suggestion-threshold').on('input', function() {
+            const value = parseFloat($(this).val());
+            $('#suggestion-threshold-value').text(value.toFixed(2));
+            redrawCanvas();
+        });
 
+        $('#accept-all-suggestions-btn').on('click', function() {
+            if (suggestionBboxes.length === 0) return;
+            
+            const threshold = parseFloat($('#suggestion-threshold').val());
+            let acceptedCount = 0;
+            const remainingSuggestions = [];
+    
+            suggestionBboxes.forEach(sug => {
+                if (sug.score >= threshold) {
+                    bboxes.push({
+                        x1: sug.box[0], y1: sug.box[1], x2: sug.box[2], y2: sug.box[3],
+                        label: sug.label,
+                        id: self.crypto.randomUUID()
+                    });
+                    acceptedCount++;
+                } else {
+                    remainingSuggestions.push(sug);
+                }
+            });
+            
+            if (acceptedCount > 0) {
+                suggestionBboxes = remainingSuggestions;
+                saveStateToHistory();
+                selectedBboxIndex = -1;
+                redrawCanvas();
+                renderBboxList();
+                showToast(`Accepted ${acceptedCount} visible suggestions.`, 2000);
+            } else {
+                showToast('No visible suggestions to accept.', 2000);
+            }
+        });
+
+        $('#apply-confidence-threshold').on('input', function() {
+            $('#apply-confidence-value').text(parseFloat($(this).val()).toFixed(2));
+        });
 
         $('#accept-visible-btn').on('click', function() {
             if (!activeClass) {
@@ -2099,7 +2239,7 @@
             const threshold = parseFloat($('#result-threshold').val());
             let addedCount = 0;
             const remainingPreviews = [];
-            previewBboxes.forEach(res => {
+            interactivePreviewBboxes.forEach(res => {
                 if (res.score >= threshold) {
                     const b = res.box;
                     bboxes.push({
@@ -2115,7 +2255,7 @@
                 }
             });
             if (addedCount > 0) {
-                previewBboxes = remainingPreviews;
+                interactivePreviewBboxes = remainingPreviews;
                 saveStateToHistory();
                 renderBboxList();
                 redrawCanvas();
@@ -2226,11 +2366,11 @@
                 }
             });
         }
-
+        
         $('#negative-sampling-modal').on('shown.bs.modal', function () {
             resizeNegCanvas();
         });
-
+        
         $(window).on('resize', function() {
             if ($('#negative-sampling-modal').is(':visible')) {
                 resizeNegCanvas();

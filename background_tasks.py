@@ -41,13 +41,20 @@ active_tasks = {}
 tracking_sessions = {}
 
 
-def apply_prototypes_to_video_task(video_uuid, class_name, negative_samples, app_context):
+def apply_prototypes_to_video_task(video_uuid, class_name, negative_samples, confidence_threshold, app_context):
+    """
+    (最终优化版)
+    在后台为视频应用原型，生成 AI 建议。
+    - 接受用户自定义的置信度阈值。
+    - 将带有分数的预测结果保存到 'suggested_bboxes_text' 数据库字段。
+    """
     if active_tasks.get(video_uuid):
         logging.warning(f"Cannot start applying prototypes for {video_uuid}, another task is active.")
         return
 
     active_tasks[video_uuid] = 'APPLYING_PROTOTYPES'
-    logging.info(f"Starting to apply prototypes for class '{class_name}' to video {video_uuid}")
+    logging.info(
+        f"Starting to apply suggestions for class '{class_name}' to video {video_uuid} with threshold {confidence_threshold}")
 
     try:
         with app_context:
@@ -65,7 +72,8 @@ def apply_prototypes_to_video_task(video_uuid, class_name, negative_samples, app
                 database.update_video_status(video_uuid, 'APPLYING_PROTOTYPES', "Building negative prototypes...")
                 negative_prototypes = ai_models.get_prototypes_from_drawn_boxes(negative_samples)
                 if negative_prototypes is not None and len(negative_prototypes) > 0:
-                    logging.info(f"Successfully built {len(negative_prototypes)} negative prototypes from user samples.")
+                    logging.info(
+                        f"Successfully built {len(negative_prototypes)} negative prototypes from user samples.")
                 else:
                     logging.warning("User provided negative samples, but failed to build prototypes from them.")
 
@@ -86,16 +94,22 @@ def apply_prototypes_to_video_task(video_uuid, class_name, negative_samples, app
                                              f"Processing frame {i + 1}/{total_frames}")
 
                 try:
+                    # <<<<<<<<<<<<<<< 核心修改 1: 传递阈值给 AI 模型 >>>>>>>>>>>>>>>>>
                     predictions = ai_models.predict_with_prototypes(
                         video_uuid, frame_number, positive_prototypes,
-                        negative_prototypes=negative_prototypes
+                        negative_prototypes=negative_prototypes,
+                        confidence_threshold=confidence_threshold
                     )
 
-                    high_conf_preds = [p for p in predictions if p['score'] > 0.5]
-                    if high_conf_preds:
+                    # <<<<<<<<<<<<<<< 核心修改 2: 保存带有分数的结果 >>>>>>>>>>>>>>>>>
+                    # AI 模型返回的结果已经是被阈值过滤过的，直接使用即可
+                    if predictions:
+                        # 新格式: x1,y1,x2,y2,label,score
                         suggested_text = "\n".join(
-                            [f"{int(p['box'][0])},{int(p['box'][1])},{int(p['box'][2])},{int(p['box'][3])},{class_name}"
-                             for p in high_conf_preds])
+                            [
+                                f"{int(p['box'][0])},{int(p['box'][1])},{int(p['box'][2])},{int(p['box'][3])},{class_name},{p['score']:.4f}"
+                                for p in predictions])
+                        # 调用数据库函数将建议保存到 dedicated 字段
                         database.save_frame_suggestions(video_uuid, frame_number, suggested_text)
 
                 except Exception as frame_e:
@@ -105,8 +119,9 @@ def apply_prototypes_to_video_task(video_uuid, class_name, negative_samples, app
                 if cache_key in ai_models.PREPROCESSED_DATA_CACHE:
                     del ai_models.PREPROCESSED_DATA_CACHE[cache_key]
 
+            # <<<<<<<<<<<<<<< 核心修改 3: 更新最终状态信息 >>>>>>>>>>>>>>>>>
             database.update_video_status(video_uuid, 'READY',
-                                         f"Finished applying '{class_name}' prototypes. Review suggestions.")
+                                         f"Finished applying '{class_name}' suggestions. Review suggestions.")
             logging.info(f"Task for {video_uuid} completed successfully.")
 
     except Exception as e:
