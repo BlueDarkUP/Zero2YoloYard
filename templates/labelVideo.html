@@ -1756,7 +1756,6 @@
                     success: function(response) {
                         if (response.success) {
                             showToast("Frame " + frameSlider.val() + " saved successfully!");
-                            // When saving, it implies suggestions are reviewed, so we can clear them for this frame
                             if (window.cachedFrames) {
                                 const frameData = window.cachedFrames.find(f => f.frame_number == frameNumber);
                                 if (frameData) frameData.suggested_bboxes_text = "";
@@ -1906,6 +1905,9 @@
             });
         }
         function triggerBackgroundPreprocess(frameNumber) {
+            if (isReviewMode) {
+                return;
+            }
             $.ajax({
                 url: "/api/background_preprocess_frame",
                 type: "POST",

@@ -443,12 +443,19 @@ def _calculate_similarity_scores(all_embeddings, positive_prototypes, negative_p
     DEVICE = settings_manager.get_device()
 
     with torch.no_grad(), autocast(device_type=DEVICE.type, enabled=(DEVICE.type == 'cuda')):
-        mean_positive_prototype = torch.mean(positive_prototypes, dim=0, keepdim=True)
-        positive_scores_sim = F.cosine_similarity(all_embeddings, mean_positive_prototype)
+
+        sim_matrix = F.cosine_similarity(all_embeddings.unsqueeze(1), positive_prototypes.unsqueeze(0), dim=2)
+
+        positive_scores_sim, _ = torch.max(sim_matrix, dim=1)
 
         if negative_prototypes is not None and len(negative_prototypes) > 0:
-            mean_negative_prototype = torch.mean(negative_prototypes, dim=0, keepdim=True)
-            negative_scores_sim = F.cosine_similarity(all_embeddings, mean_negative_prototype)
+            if negative_prototypes.dim() > 1 and negative_prototypes.shape[0] > 1:
+                 neg_sim_matrix = F.cosine_similarity(all_embeddings.unsqueeze(1), negative_prototypes.unsqueeze(0), dim=2)
+                 negative_scores_sim, _ = torch.max(neg_sim_matrix, dim=1)
+            else:
+                 mean_negative_prototype = torch.mean(negative_prototypes, dim=0, keepdim=True)
+                 negative_scores_sim = F.cosine_similarity(all_embeddings, mean_negative_prototype)
+
             logits = torch.stack([negative_scores_sim, positive_scores_sim], dim=1)
             probabilities = F.softmax(logits / score_temperature, dim=1)
             final_scores = probabilities[:, 1]
@@ -493,6 +500,7 @@ def predict_with_prototypes(video_uuid, frame_number, positive_prototypes, negat
 
 
 def _calculate_prototype_from_db(class_name):
+    all_class_features_tensors = []
     sample_frames = database.get_all_frames_with_class(class_name)
     if not sample_frames:
         logging.warning(f"在数据库中找不到类别 '{class_name}' 的任何样本。")
@@ -504,7 +512,6 @@ def _calculate_prototype_from_db(class_name):
     if len(sample_frames) > sample_limit:
         sample_frames = random.sample(sample_frames, sample_limit)
 
-    logging.info(f"正在从 {len(sample_frames)} 个样本帧为 '{class_name}' 计算新原型...")
     grouped_boxes = defaultdict(list)
     for frame_data in sample_frames:
         frame_key = (frame_data['video_uuid'], frame_data['frame_number'])
@@ -513,32 +520,64 @@ def _calculate_prototype_from_db(class_name):
         if target_rects_in_frame:
             grouped_boxes[frame_key].extend(target_rects_in_frame)
 
-    all_class_features = []
-    BOX_BATCH_SIZE = 64
-
-    logging.info(f"分组完成，将对 {len(grouped_boxes)} 张唯一图片进行分块批处理。")
+    if not grouped_boxes:
+        return None
 
     for (video_uuid, frame_number), all_rects_for_frame in grouped_boxes.items():
         try:
-            frame_path = file_storage.get_frame_path(video_uuid, frame_number)
-            if not os.path.exists(frame_path):
-                continue
-
-            pil_image = Image.open(frame_path).convert("RGB")
-            for i in range(0, len(all_rects_for_frame), BOX_BATCH_SIZE):
-                rect_chunk = all_rects_for_frame[i:i + BOX_BATCH_SIZE]
+            pil_image = Image.open(file_storage.get_frame_path(video_uuid, frame_number)).convert("RGB")
+            for i in range(0, len(all_rects_for_frame), 64):
+                rect_chunk = all_rects_for_frame[i:i + 64]
                 features = get_features_for_single_bbox(pil_image, rect_chunk)
                 if features is not None and features.numel() > 0:
-                    all_class_features.append(features)
-
+                    all_class_features_tensors.append(features)
         except Exception as e:
             logging.warning(f"为原型构建跳过帧 {video_uuid}/{frame_number} 时出错: {e}")
 
-    if not all_class_features:
+    if not all_class_features_tensors:
         logging.error(f"未能为类别 '{class_name}' 提取任何有效的特征向量。")
         return None
 
-    return torch.mean(torch.cat(all_class_features, dim=0), dim=0)
+    all_features = torch.cat(all_class_features_tensors, dim=0)
+    num_samples = all_features.shape[0]
+
+    MIN_SAMPLES_FOR_CLUSTERING = 15
+    if KMeans is None or num_samples < MIN_SAMPLES_FOR_CLUSTERING:
+        logging.info(f"样本过少或 scikit-learn 未安装，为 '{class_name}' 创建单个平均原型。")
+        return torch.mean(all_features, dim=0, keepdim=True)
+
+    logging.info(f"正在为 '{class_name}' ({num_samples} 个样本) 运行聚类分析以发现子原型...")
+    best_k = 1
+    best_score = -1
+    max_clusters = min(5, num_samples - 1)
+
+    features_np = all_features.cpu().numpy()
+
+    for k in range(2, max_clusters + 1):
+        kmeans = KMeans(n_clusters=k, random_state=42, n_init='auto')
+        labels = kmeans.fit_predict(features_np)
+        try:
+            score = silhouette_score(features_np, labels)
+            logging.info(f"  - 测试 k={k}, 轮廓系数(Silhouette Score): {score:.4f}")
+            if score > best_score:
+                best_score = score
+                best_k = k
+        except ValueError:
+            logging.warning(f"  - k={k} 无法计算轮廓系数，跳过。")
+
+    SILHOUETTE_THRESHOLD = 0.55
+    if best_k > 1 and best_score > SILHOUETTE_THRESHOLD:
+        logging.info(
+            f"发现 {best_k} 个清晰的子类别 (得分: {best_score:.4f})。正在为 '{class_name}' 创建 {best_k} 个子原型。")
+        kmeans = KMeans(n_clusters=best_k, random_state=42, n_init='auto')
+        kmeans.fit(features_np)
+        prototypes_np = kmeans.cluster_centers_
+        prototypes = torch.from_numpy(prototypes_np).to(all_features.device)
+    else:
+        logging.info(f"未发现足够清晰的子类别 (最高分: {best_score:.4f})。为 '{class_name}' 创建单个平均原型。")
+        prototypes = torch.mean(all_features, dim=0, keepdim=True)
+
+    return prototypes
 
 
 def build_prototypes_for_class(class_name):

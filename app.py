@@ -679,7 +679,8 @@ def background_preprocess_frame():
 
     if not video_uuid or frame_number is None:
         return jsonify({'success': False, 'message': 'Missing data.'}), 400
-
+    if background_tasks.active_tasks.get(video_uuid):
+        return jsonify({'success': False, 'message': 'Another task is active.'})
     cache_key = f"{video_uuid}_{frame_number}"
     if cache_key in ai_models.PREPROCESSED_DATA_CACHE:
         return jsonify({'success': True, 'message': 'Already cached.'})

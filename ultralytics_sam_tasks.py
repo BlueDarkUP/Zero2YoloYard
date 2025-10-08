@@ -101,56 +101,70 @@ def track_video_ultralytics(video_uuid, start_frame, end_frame, init_bboxes_text
     video_info = database.get_video_entity(video_uuid)
     original_width = video_info['width']
     original_height = video_info['height']
-    init_rects, init_labels, _ = convert_text_to_rects_and_labels(init_bboxes_text)
+    init_rects, init_labels, init_ids = convert_text_to_rects_and_labels(init_bboxes_text)
     if not init_rects:
         raise ValueError("No initial bounding boxes provided for tracking.")
-    tracked_objects = {}
-    first_frame_path = file_storage.get_frame_path(video_uuid, start_frame)
-    if not os.path.exists(first_frame_path):
-        raise FileNotFoundError(f"Initial frame not found at {first_frame_path}")
-    results = model(first_frame_path, bboxes=init_rects)
-    if isinstance(results, Results):
-        results = [results]
-    if results and results[0].masks:
-        initial_masks = results[0].masks.data
-        for i, mask in enumerate(initial_masks):
-            bbox = _get_bbox_from_mask(mask, original_width, original_height)
-            if bbox:
-                tracked_objects[i] = {"label": init_labels[i], "bbox": bbox}
+
+    tracked_objects = {
+        (init_ids[i] or f"obj_{i}"): {"label": init_labels[i], "bbox": init_rects[i]}
+        for i in range(len(init_rects))
+    }
+
     session['results'][start_frame] = init_bboxes_text
     session['progress'] = 1
+
     for current_frame_num in range(start_frame + 1, end_frame + 1):
         if session.get('stop_requested', False):
             logging.info(f"Tracking for {video_uuid} stopped by user request.")
             session['status'] = 'STOPPED'
             break
+
         frame_path = file_storage.get_frame_path(video_uuid, current_frame_num)
         if not os.path.exists(frame_path):
             logging.warning(f"Frame {current_frame_num} not found, skipping.")
             continue
-        current_frame_bboxes_text_lines = []
-        new_tracked_objects = {}
-        prompts_bboxes = [obj_data['bbox'] for obj_id, obj_data in tracked_objects.items()]
+
+        prompts_bboxes_list = [obj_data['bbox'] for obj_id, obj_data in tracked_objects.items()]
         original_ids = list(tracked_objects.keys())
-        if not prompts_bboxes:
+
+        if not prompts_bboxes_list:
             logging.warning(f"Lost all objects at frame {current_frame_num}. Stopping tracking.")
             break
-        results = model(frame_path, bboxes=prompts_bboxes)
+
+        prompts_bboxes_np = np.array(prompts_bboxes_list)
+
+        results = model(frame_path, bboxes=prompts_bboxes_np)
+
         if isinstance(results, Results):
             results = [results]
+
+        new_tracked_objects = {}
+        current_frame_bboxes_text_lines = []
+
         if results and results[0].masks:
             new_masks = results[0].masks.data
-            for i, new_mask in enumerate(new_masks):
-                new_bbox = _get_bbox_from_mask(new_mask, original_width, original_height)
-                if new_bbox:
-                    original_id = original_ids[i]
-                    label = tracked_objects[original_id]['label']
-                    x1, y1, x2, y2 = new_bbox
-                    current_frame_bboxes_text_lines.append(f"{x1},{y1},{x2},{y2},{label}")
-                    new_tracked_objects[original_id] = {"label": label, "bbox": new_bbox}
+
+            if len(new_masks) != len(prompts_bboxes_list):
+                logging.warning(
+                    f"Frame {current_frame_num}: Mismatch between prompted boxes ({len(prompts_bboxes_list)}) and returned masks ({len(new_masks)}). Using previous frame's boxes.")
+                for obj_id, obj_data in tracked_objects.items():
+                    x1, y1, x2, y2 = obj_data['bbox']
+                    current_frame_bboxes_text_lines.append(f"{x1},{y1},{x2},{y2},{obj_data['label']},{obj_id}")
+                new_tracked_objects = tracked_objects
+            else:
+                for i, new_mask in enumerate(new_masks):
+                    new_bbox = _get_bbox_from_mask(new_mask, original_width, original_height)
+                    if new_bbox:
+                        original_id = original_ids[i]
+                        label = tracked_objects[original_id]['label']
+                        x1, y1, x2, y2 = new_bbox
+                        current_frame_bboxes_text_lines.append(f"{x1},{y1},{x2},{y2},{label},{original_id}")
+                        new_tracked_objects[original_id] = {"label": label, "bbox": new_bbox}
+
         tracked_objects = new_tracked_objects
         session['results'][current_frame_num] = "\n".join(current_frame_bboxes_text_lines)
         session['progress'] = (current_frame_num - start_frame) + 1
+
     if 'status' not in session or session['status'] == 'PROCESSING':
         session['status'] = 'COMPLETED'
 
@@ -214,8 +228,8 @@ def run_batch_tracking_with_predictor(video_uuid, start_frame, end_frame, init_b
                         img = cv2.resize(img, (width, height))
                     video_writer.write(img)
             video_writer.release()
-
-            current_prompts = [[int((r[0] + r[2]) / 2), int((r[1] + r[3]) / 2)] for r in last_known_rects]
+            last_known_rects_np = np.array(last_known_rects)
+            current_prompts = [[int((r[0] + r[2]) / 2), int((r[1] + r[3]) / 2)] for r in last_known_rects_np]
             labels_prompt = [1] * len(current_prompts)
 
             overrides = dict(
