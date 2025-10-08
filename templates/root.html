@@ -551,7 +551,7 @@
                         const row = `
                         <div class="form-row align-items-center mb-2">
                             <div class="col-auto">
-                                <input type="color" class="form-control" value="${color}" data-class-name="${label}">
+                                <input type="color" class="color-swatch-input" value="${color}" data-class-name="${label}" title="Click to change color for ${label}">
                             </div>
                             <div class="col">
                                 <label class="mb-0">${label}</label>
@@ -1096,6 +1096,13 @@
             refreshDatasets();
             refreshModels();
         }
+
+        $('#class-color-manager').on('input', 'input[type="color"]', function() {
+            const newColor = $(this).val();
+            const className = $(this).data('class-name');
+            console.log(`实时更新: 类别 '${className}' 的颜色变为 ${newColor}`);
+        });
+
         loadSettings();
         runAllRefreshes();
         setInterval(runAllRefreshes, 5000);

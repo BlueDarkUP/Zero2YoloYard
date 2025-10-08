@@ -112,6 +112,13 @@
                 <div id="consistency-check-container" class="mt-3 pt-3 border-top">
                     <h6><i class="bi bi-robot text-primary"></i> AI Quality Control</h6>
                     <p class="text-muted small">Run an AI-powered review to find potential labeling errors (e.g., a 'screw' labeled as a 'nut'). This may take several minutes for large datasets.</p>
+                    <div class="form-group">
+                        <div class="custom-control custom-switch">
+                            <input type="checkbox" class="custom-control-input" id="enable-color-check" checked>
+                            <label class="custom-control-label" for="enable-color-check"><strong>Enable Strict Color Consistency Check</strong></label>
+                        </div>
+                        <small class="form-text text-muted">Enable this if your dataset requires strict color differentiation (e.g., 'red_screw' vs 'blue_screw'). Disable it if color is not a critical feature.</small>
+                    </div>
                     <button class="btn btn-primary" id="run-consistency-check-btn"><i class="bi bi-search"></i> Run AI Consistency Review</button>
                 </div>
             </div>

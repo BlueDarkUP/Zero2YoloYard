@@ -1245,6 +1245,14 @@ def calculate_color_histogram(image_path, rect):
 @app.route('/api/datasetAnalysis/<dataset_uuid>/consistency_check', methods=['POST'])
 def run_consistency_check(dataset_uuid):
     try:
+        request_data = request.get_json()
+        is_color_check_enabled = request_data.get('enable_color_check', True)
+
+        if is_color_check_enabled:
+            logging.info("Starting AI Quality Control with SEMANTIC and COLOR checks.")
+        else:
+            logging.info("Starting AI Quality Control with SEMANTIC check ONLY.")
+
         dataset = database.get_dataset_entity(dataset_uuid)
         if not dataset:
             return jsonify({'success': False, 'message': 'Dataset not found.'}), 404
@@ -1260,15 +1268,11 @@ def run_consistency_check(dataset_uuid):
         for i, frame in enumerate(all_frames):
             rects, labels, _ = convert_text_to_rects_and_labels(frame['bboxes_text'])
             for j, rect in enumerate(rects):
-                box_info = {
-                    'image_index': i, 'rect': rect, 'label': labels[j],
-                    'video_uuid': frame['video_uuid'], 'frame_number': frame['frame_number'],
-                    'embedding': None, 'color_hist': None
-                }
+                box_info = {'image_index': i, 'rect': rect, 'label': labels[j], 'video_uuid': frame['video_uuid'],
+                            'frame_number': frame['frame_number'], 'embedding': None, 'color_hist': None}
                 frames_to_process[f"{frame['video_uuid']};{frame['frame_number']}"].append((len(all_bboxes_info), rect))
                 all_bboxes_info.append(box_info)
 
-        logging.info(f"AI Quality Control: Processing {len(frames_to_process)} unique images for features...")
         for frame_key, rect_data in frames_to_process.items():
             video_uuid, frame_number_str = frame_key.split(';')
             frame_number = int(frame_number_str)
@@ -1284,20 +1288,21 @@ def run_consistency_check(dataset_uuid):
 
         all_features_by_class = defaultdict(list)
         for info in all_bboxes_info:
-            if info['embedding'] is not None and info['color_hist'] is not None:
+            if info['embedding'] is not None and (not is_color_check_enabled or info['color_hist'] is not None):
                 all_features_by_class[info['label']].append(info)
 
         prototype_library = {}
         for class_name, infos in all_features_by_class.items():
             if len(infos) > 0:
+                prototype_library[class_name] = {}
                 embeddings_tensor = torch.stack([info['embedding'] for info in infos])
-                semantic_prototype = torch.mean(embeddings_tensor, dim=0)
-                color_hists_np = np.array([info['color_hist'] for info in infos])
-                color_prototype = np.mean(color_hists_np, axis=0)
-                prototype_library[class_name] = {'semantic': semantic_prototype, 'color': color_prototype}
+                prototype_library[class_name]['semantic'] = torch.mean(embeddings_tensor, dim=0)
+                if is_color_check_enabled:
+                    color_hists = [info['color_hist'] for info in infos if info['color_hist'] is not None]
+                    if color_hists:
+                        prototype_library[class_name]['color'] = np.mean(np.array(color_hists), axis=0)
 
         outlier_image_indices = set()
-        logging.info("Starting final hybrid (semantic + cross-referential color) outlier verification...")
 
         COLOR_CONFUSION_FACTOR = 2.0
 
@@ -1324,36 +1329,35 @@ def run_consistency_check(dataset_uuid):
                     outlier_image_indices.add(info['image_index'])
                     continue
 
-                if len(prototype_library) < 2: continue
+                if is_color_check_enabled:
+                    if 'color' not in prototype_library[class_name] or info['color_hist'] is None:
+                        continue
 
-                candidate_color_hist = info['color_hist']
+                    if len(prototype_library) < 2: continue
 
-                dist_to_own_color = np.sum(np.abs(candidate_color_hist - prototype_library[class_name]['color']))
+                    candidate_color_hist = info['color_hist']
+                    dist_to_own_color = np.sum(np.abs(candidate_color_hist - prototype_library[class_name]['color']))
 
-                min_dist_to_other_color = float('inf')
-                closest_other_class = None
+                    min_dist_to_other_color = float('inf')
+                    closest_other_class = None
 
-                for other_class, other_prototypes in prototype_library.items():
-                    if other_class == class_name: continue
-                    dist = np.sum(np.abs(candidate_color_hist - other_prototypes['color']))
-                    if dist < min_dist_to_other_color:
-                        min_dist_to_other_color = dist
-                        closest_other_class = other_class
+                    for other_class, other_prototypes in prototype_library.items():
+                        if other_class == class_name or 'color' not in other_prototypes: continue
+                        dist = np.sum(np.abs(candidate_color_hist - other_prototypes['color']))
+                        if dist < min_dist_to_other_color:
+                            min_dist_to_other_color = dist
+                            closest_other_class = other_class
 
-                if min_dist_to_other_color * COLOR_CONFUSION_FACTOR < dist_to_own_color:
-                    logging.info(
-                        f"COLOR outlier: A '{class_name}' (color dist: {dist_to_own_color:.2f}) has a color profile much closer to '{closest_other_class}' (color dist: {min_dist_to_other_color:.2f}). Image index: {info['image_index']}")
-                    is_outlier = True
+                    if closest_other_class and min_dist_to_other_color * COLOR_CONFUSION_FACTOR < dist_to_own_color:
+                        logging.info(
+                            f"COLOR outlier: A '{class_name}' (color dist: {dist_to_own_color:.2f}) has a color profile much closer to '{closest_other_class}' (color dist: {min_dist_to_other_color:.2f}). Image index: {info['image_index']}")
+                        is_outlier = True
 
-                if is_outlier:
-                    outlier_image_indices.add(info['image_index'])
+                    if is_outlier:
+                        outlier_image_indices.add(info['image_index'])
 
-        if outlier_image_indices:
-            image_count = len(outlier_image_indices)
-            plural = "s" if image_count > 1 else ""
-            message = f"AI review complete. Found {image_count} image{plural} with potential **class or color** labeling inconsistencies."
-        else:
-            message = "AI review complete. No significant labeling inconsistencies were found."
+        message_keyword = "**类别或颜色**" if is_color_check_enabled else "**类别**"
+        message = f"AI审查完成。发现 {len(outlier_image_indices)} 张图片中可能存在{message_keyword}标注混淆的实例。" if outlier_image_indices else "AI审查完成。未发现明显的标注混淆问题。"
 
         return jsonify({
             'success': True,
@@ -1489,8 +1493,14 @@ if __name__ == '__main__':
     atexit.register(ai_models.save_prototypes_to_disk)
     time.sleep(0.01)
 
-    logging.info("=" * 60)
-    logging.info("Zero2YOLOYard Server is running.")
+    logging.info("=" * 121)
+    logging.info("███████╗ ███████╗ ██████╗   ██████╗  ██████╗  ██╗   ██╗  ██████╗  ██╗       ██████╗  ██╗   ██╗  █████╗  ██████╗  ██████╗")
+    logging.info("╚══███╔╝ ██╔════╝ ██╔══██╗ ██╔═══██╗ ╚════██╗ ╚██╗ ██╔╝ ██╔═══██╗ ██║      ██╔═══██╗ ╚██╗ ██╔╝ ██╔══██╗ ██╔══██╗ ██╔══██╗")
+    logging.info("███╔╝    █████╗   ██████╔╝ ██║   ██║  █████╔╝  ╚████╔╝  ██║   ██║ ██║      ██║   ██║  ╚████╔╝  ███████║ ██████╔╝ ██║  ██║")
+    logging.info("███╔╝    ██╔══╝   ██╔══██╗ ██║   ██║ ██╔═══╝    ╚██╔╝   ██║   ██║ ██║      ██║   ██║   ╚██╔╝   ██╔══██║ ██╔══██╗ ██║  ██║")
+    logging.info("███████╗ ███████╗ ██║  ██║ ╚██████╔╝ ███████╗    ██║    ╚██████╔╝ ███████╗ ╚██████╔╝    ██║    ██║  ██║ ██║  ██║ ██████╔╝")
+    logging.info("╚══════╝ ╚══════╝ ╚═╝  ╚═╝  ╚═════╝  ╚══════╝    ╚═╝     ╚═════╝  ╚══════╝  ╚═════╝     ╚═╝    ╚═╝  ╚═╝ ╚═╝  ╚═╝ ╚═════╝ ")
+    logging.info("Developed by BlueDarkUP from FIRST Tech Challenge team 27570           Be based on -- FIRST Machine Learning Toolchain --")
     logging.info("Open your web browser and go to http://127.0.0.1:5000")
-    logging.info("=" * 60)
+    logging.info("=" * 121)
     serve(app, host='0.0.0.0', port=5000)

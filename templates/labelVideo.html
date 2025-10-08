@@ -387,6 +387,8 @@
 {% block scripts %}
 <script>
     $(document).ready(function() {
+        const settings = {{ settings | tojson }};
+        const customClassColors = settings.class_colors || {};
         const videoUuid = "{{ video_entity.video_uuid }}";
         const task = {{ task_entity | tojson }};
         const frameCount = task.end_frame + 1;
@@ -752,6 +754,11 @@
         }
 
         function stringToColor(str) {
+            // 优先从自定义颜色配置中查找
+            if (customClassColors && customClassColors[str]) {
+                return customClassColors[str];
+            }
+            // 如果未找到自定义颜色，则回退到原来的哈希算法生成颜色
             let hash = 0;
             for (let i = 0; i < str.length; i++) {
                 hash = str.charCodeAt(i) + ((hash << 5) - hash);
