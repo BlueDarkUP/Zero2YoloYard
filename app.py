@@ -1186,19 +1186,19 @@ def get_dataset_analysis_data(dataset_uuid):
         for class_name, count in class_counts.items():
             if count < 10 or count < avg_instances * 0.1:
                 warnings.append(
-                    f"<b>类别不平衡:</b> 类别 '{class_name}' 的实例过少 ({count}), 这可能影响模型性能。")
+                    f"<b>Class Imbalance:</b> Class '{class_name}' has very few instances ({count}), which may affect model performance.")
 
     small_object_threshold = 100
     small_object_count = sum(1 for bbox in all_bboxes_for_outliers if bbox['area'] < small_object_threshold)
     if small_object_count > 0:
         warnings.append(
-            f"<b>小目标警告:</b> 发现 {small_object_count} 个面积小于 {small_object_threshold} 像素的目标。请检查它们是否为标注错误。")
+            f"<b>Small Object Warning:</b> Found {small_object_count} objects with an area smaller than {small_object_threshold} pixels. Please check if they are labeling errors.")
 
     if suspicious_pairs:
         warnings.append(
-            f"<b>潜在重复标注:</b> 发现 {len(suspicious_pairs)} 对标注框存在高度重叠 (IoU > 0.95)，可能为重复标注。")
+            f"<b>Potential Duplicate Warning:</b> Found {len(suspicious_pairs)} pairs of bounding boxes with high overlap (IoU > 0.95), which might be duplicate labels.")
 
-    summary_text = f"此数据集包含 <strong>{len(class_counts)}</strong> 个类别，在 <strong>{len(all_frames)}</strong> 张已标注图片中共有 <strong>{total_instances}</strong> 个实例。"
+    summary_text = f"This dataset contains <strong>{len(class_counts)}</strong> classes, with a total of <strong>{total_instances}</strong> instances across <strong>{len(all_frames)}</strong> labeled images."
 
     return jsonify({
         'success': True,
@@ -1217,6 +1217,29 @@ def get_dataset_analysis_data(dataset_uuid):
         'gallery_images': gallery_images
     })
 
+
+def calculate_color_histogram(image_path, rect):
+    try:
+        image = cv2.imread(image_path)
+        if image is None:
+            return None
+
+        x1, y1, x2, y2 = map(int, rect)
+        roi = image[y1:y2, x1:x2]
+
+        if roi.size == 0:
+            return None
+
+        hsv_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
+        hist = cv2.calcHist([hsv_roi], [0, 1], None, [16, 16], [0, 180, 0, 256])
+        cv2.normalize(hist, hist, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX)
+
+        return hist.flatten()
+    except Exception as e:
+        logging.warning(f"计算颜色直方图失败: {e} for path {image_path}")
+        return None
+
+
 @app.route('/api/datasetAnalysis/<dataset_uuid>/consistency_check', methods=['POST'])
 def run_consistency_check(dataset_uuid):
     try:
@@ -1230,56 +1253,106 @@ def run_consistency_check(dataset_uuid):
             if frame.get('bboxes_text', '').strip()
         ]
 
-        all_bboxes_by_class = defaultdict(list)
+        all_bboxes_info = []
+        frames_to_process = defaultdict(list)
         for i, frame in enumerate(all_frames):
             rects, labels, _ = convert_text_to_rects_and_labels(frame['bboxes_text'])
             for j, rect in enumerate(rects):
-                all_bboxes_by_class[labels[j]].append({
-                    'image_index': i, 'rect': rect,
-                    'video_uuid': frame['video_uuid'], 'frame_number': frame['frame_number']
-                })
+                box_info = {
+                    'image_index': i, 'rect': rect, 'label': labels[j],
+                    'video_uuid': frame['video_uuid'], 'frame_number': frame['frame_number'],
+                    'embedding': None, 'color_hist': None
+                }
+                frames_to_process[f"{frame['video_uuid']};{frame['frame_number']}"].append((len(all_bboxes_info), rect))
+                all_bboxes_info.append(box_info)
+
+        logging.info(f"AI Quality Control: Processing {len(frames_to_process)} unique images for features...")
+        for frame_key, rect_data in frames_to_process.items():
+            video_uuid, frame_number_str = frame_key.split(';')
+            frame_number = int(frame_number_str)
+            image_path = file_storage.get_frame_path(video_uuid, frame_number)
+            rects_in_frame = [r for _, r in rect_data]
+            embeddings = ai_models.get_features_for_specific_bboxes(video_uuid, frame_number, rects_in_frame)
+            for i, (global_idx, rect) in enumerate(rect_data):
+                if embeddings is not None and i < len(embeddings):
+                    all_bboxes_info[global_idx]['embedding'] = embeddings[i]
+                color_hist = calculate_color_histogram(image_path, rect)
+                if color_hist is not None:
+                    all_bboxes_info[global_idx]['color_hist'] = color_hist
+
+        all_features_by_class = defaultdict(list)
+        for info in all_bboxes_info:
+            if info['embedding'] is not None and info['color_hist'] is not None:
+                all_features_by_class[info['label']].append(info)
+
+        prototype_library = {}
+        for class_name, infos in all_features_by_class.items():
+            if len(infos) > 0:
+                embeddings_tensor = torch.stack([info['embedding'] for info in infos])
+                semantic_prototype = torch.mean(embeddings_tensor, dim=0)
+                color_hists_np = np.array([info['color_hist'] for info in infos])
+                color_prototype = np.mean(color_hists_np, axis=0)
+                prototype_library[class_name] = {'semantic': semantic_prototype, 'color': color_prototype}
 
         outlier_image_indices = set()
-        logging.info("Starting on-demand label consistency check...")
+        logging.info("Starting final hybrid (semantic + cross-referential color) outlier verification...")
 
-        for class_name, bboxes_info in all_bboxes_by_class.items():
-            if len(bboxes_info) < 5:
+        COLOR_CONFUSION_FACTOR = 2.0
+
+        for class_name, infos in all_features_by_class.items():
+            if len(infos) < 5 or class_name not in prototype_library:
                 continue
 
-            logging.info(f"Analyzing consistency for class '{class_name}' with {len(bboxes_info)} instances.")
-            frames_to_process = defaultdict(list)
-            for i, info in enumerate(bboxes_info):
-                frame_key = f"{info['video_uuid']};{info['frame_number']}"
-                frames_to_process[frame_key].append({'rect': info['rect'], 'original_index': i})
+            for info in infos:
+                is_outlier = False
 
-            class_embeddings = [None] * len(bboxes_info)
-            for frame_key, rect_infos in frames_to_process.items():
-                video_uuid, frame_number_str = frame_key.split(';')
-                frame_number = int(frame_number_str)
-                rects_in_frame = [r['rect'] for r in rect_infos]
+                candidate_embedding = info['embedding']
+                own_semantic_sim = F.cosine_similarity(candidate_embedding, prototype_library[class_name]['semantic'],
+                                                       dim=0).item()
+                for other_class, other_prototypes in prototype_library.items():
+                    if other_class == class_name: continue
+                    other_semantic_sim = F.cosine_similarity(candidate_embedding, other_prototypes['semantic'],
+                                                             dim=0).item()
+                    if other_semantic_sim > own_semantic_sim + 0.2:
+                        logging.info(
+                            f"SEMANTIC outlier: A '{class_name}' (sim: {own_semantic_sim:.2f}) looks more like a '{other_class}' (sim: {other_semantic_sim:.2f}). Image index: {info['image_index']}")
+                        is_outlier = True
+                        break
+                if is_outlier:
+                    outlier_image_indices.add(info['image_index'])
+                    continue
 
-                embeddings = ai_models.get_features_for_specific_bboxes(video_uuid, frame_number, rects_in_frame)
+                if len(prototype_library) < 2: continue
 
-                if embeddings is not None and len(embeddings) == len(rect_infos):
-                    for i, r_info in enumerate(rect_infos):
-                        class_embeddings[r_info['original_index']] = embeddings[i]
+                candidate_color_hist = info['color_hist']
 
-            valid_embeddings_info = [(emb, bboxes_info[i]) for i, emb in enumerate(class_embeddings) if emb is not None]
-            if not valid_embeddings_info: continue
+                dist_to_own_color = np.sum(np.abs(candidate_color_hist - prototype_library[class_name]['color']))
 
-            all_embeddings_tensor = torch.stack([item[0] for item in valid_embeddings_info])
-            mean_embedding = torch.mean(all_embeddings_tensor, dim=0, keepdim=True)
-            similarities = F.cosine_similarity(all_embeddings_tensor, mean_embedding)
+                min_dist_to_other_color = float('inf')
+                closest_other_class = None
 
-            if len(similarities) > 1:
-                threshold = torch.quantile(similarities.to(torch.float32), 0.05)
-                outlier_indices_in_class = (similarities < threshold).nonzero(as_tuple=True)[0]
+                for other_class, other_prototypes in prototype_library.items():
+                    if other_class == class_name: continue
+                    dist = np.sum(np.abs(candidate_color_hist - other_prototypes['color']))
+                    if dist < min_dist_to_other_color:
+                        min_dist_to_other_color = dist
+                        closest_other_class = other_class
 
-                for idx in outlier_indices_in_class:
-                    original_bbox_info = valid_embeddings_info[idx.item()][1]
-                    outlier_image_indices.add(original_bbox_info['image_index'])
+                if min_dist_to_other_color * COLOR_CONFUSION_FACTOR < dist_to_own_color:
+                    logging.info(
+                        f"COLOR outlier: A '{class_name}' (color dist: {dist_to_own_color:.2f}) has a color profile much closer to '{closest_other_class}' (color dist: {min_dist_to_other_color:.2f}). Image index: {info['image_index']}")
+                    is_outlier = True
 
-        message = f"AI审查完成。发现 {len(outlier_image_indices)} 张图片中可能存在标签不一致的实例。" if outlier_image_indices else "AI审查完成。未发现明显的标签不一致问题。"
+                if is_outlier:
+                    outlier_image_indices.add(info['image_index'])
+
+        if outlier_image_indices:
+            image_count = len(outlier_image_indices)
+            plural = "s" if image_count > 1 else ""
+            message = f"AI review complete. Found {image_count} image{plural} with potential **class or color** labeling inconsistencies."
+        else:
+            message = "AI review complete. No significant labeling inconsistencies were found."
+
         return jsonify({
             'success': True,
             'message': message,
@@ -1299,7 +1372,7 @@ def lam_predict_route():
     point = data.get('point')
 
     if not all([video_uuid, frame_number is not None, point]):
-        return jsonify({'success': False, 'message': '缺少必要的请求参数。'}), 400
+        return jsonify({'success': False, 'message': 'Missing required request parameters.'}), 400
 
     try:
         point_coords = (int(point['x']), int(point['y']))
@@ -1312,7 +1385,7 @@ def lam_predict_route():
 
     except Exception as e:
         logging.error(f"LAM 预测失败: {e}", exc_info=True)
-        return jsonify({'success': False, 'message': f'服务器内部错误: {str(e)}'}), 500
+        return jsonify({'success': False, 'message': f'Internal Server Error: {str(e)}'}), 500
 
 @app.route('/api/previewAugmentations', methods=['POST'])
 def preview_augmentations():
