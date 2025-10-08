@@ -588,12 +588,14 @@ def build_prototypes_for_class(class_name):
     with class_lock:
         if class_name in PROTOTYPE_CACHE:
             return PROTOTYPE_CACHE[class_name]
-
         prototype_tensor = _calculate_prototype_from_db(class_name)
 
         if prototype_tensor is not None:
+            if prototype_tensor.dim() == 1:
+                prototype_tensor = prototype_tensor.unsqueeze(0)
+
             PROTOTYPE_CACHE[class_name] = prototype_tensor
-            logging.info(f"类别 '{class_name}' 的原型构建完成并已缓存。")
+            logging.info(f"类别 '{class_name}' 的原型构建完成并已缓存。Shape: {prototype_tensor.shape}")
             save_prototypes_to_disk()
 
         return prototype_tensor
@@ -652,11 +654,8 @@ def lam_predict(video_uuid, frame_number, point_coords):
 
         with torch.no_grad(), autocast(device_type=DEVICE.type, enabled=(DEVICE.type == 'cuda')):
             for class_name, prototype in prototype_library.items():
-
-                sim_scores_for_class = F.cosine_similarity(feature_vector, prototype, dim=1)
-
-                max_similarity, _ = torch.max(sim_scores_for_class)
-
+                sim_matrix = F.cosine_similarity(feature_vector.unsqueeze(1), prototype.unsqueeze(0), dim=2)
+                max_similarity = torch.max(sim_matrix)
                 scores.append({"label": class_name, "score": round(max_similarity.item(), 4)})
 
         sorted_suggestions = sorted(scores, key=lambda x: x['score'], reverse=True)
