@@ -5,7 +5,6 @@ import threading
 import time
 
 import numpy as np
-import onnxruntime as ort
 
 try:
     from sklearn.cluster import KMeans
@@ -56,45 +55,60 @@ def _get_class_lock(class_name):
         return PROTOTYPE_LOCKS[class_name]
 
 
-_mobilenet_cache = {"model": None, "name": None}
+_mobilenet_pytorch_cache = {"model": None, "name": None}
 
 
 def get_features_for_single_bbox(pil_image, target_rects):
-    if 'feature_extractor' not in models:
-        raise RuntimeError("Feature extractor model failed to load.")
-    if not target_rects:
+    if 'feature_extractor_pytorch' not in models:
+        raise RuntimeError("PyTorch特征提取模型未加载，请检查启动过程。")
+
+    input_size = 0
+    if target_rects is not None:
+        if isinstance(target_rects, np.ndarray):
+            input_size = target_rects.shape[0]
+        else:
+            try:
+                input_size = len(target_rects)
+            except TypeError:
+                input_size = 0
+
+    if input_size == 0:
         return None
 
     DEVICE = settings_manager.get_device()
+    pytorch_model = models['feature_extractor_pytorch']
 
-    img_tensor = to_tensor(pil_image).to(DEVICE)
+    with torch.no_grad():
+        img_tensor = to_tensor(pil_image).to(DEVICE)
 
-    boxes_for_crop = torch.tensor(target_rects, dtype=torch.float32, device=DEVICE)
-    box_indices = torch.zeros(boxes_for_crop.size(0), 1, device=DEVICE)
-    boxes_for_roi = torch.cat([box_indices, boxes_for_crop], dim=1)
+        if not isinstance(target_rects, np.ndarray):
+            target_rects_np = np.array(target_rects, dtype=np.float32)
+        else:
+            target_rects_np = target_rects.astype(np.float32)
 
-    OUTPUT_SIZE = (224, 224)
-    batch_of_crops = torchvision.ops.roi_align(
-        img_tensor.unsqueeze(0),
-        boxes_for_roi,
-        output_size=OUTPUT_SIZE,
-        spatial_scale=1.0,
-        aligned=True
-    )
+        boxes_for_crop = torch.from_numpy(target_rects_np).to(DEVICE)
 
-    IMAGENET_MEAN = [0.485, 0.456, 0.406]
-    IMAGENET_STD = [0.229, 0.224, 0.225]
-    batch_tensor = normalize(batch_of_crops, mean=IMAGENET_MEAN, std=IMAGENET_STD)
+        box_indices = torch.zeros(boxes_for_crop.size(0), 1, device=DEVICE)
+        boxes_for_roi = torch.cat([box_indices, boxes_for_crop], dim=1)
 
-    ort_session = models['feature_extractor']
-    input_name = models['feature_extractor_input_name']
-    output_name = models['feature_extractor_output_name']
+        batch_of_crops = torchvision.ops.roi_align(
+            img_tensor.unsqueeze(0),
+            boxes_for_roi,
+            output_size=(224, 224),
+            spatial_scale=1.0,
+            aligned=True
+        )
 
-    numpy_input = batch_tensor.cpu().numpy()
-    ort_outputs = ort_session.run([output_name], {input_name: numpy_input})
-    features = torch.from_numpy(ort_outputs[0]).to(DEVICE)
+        IMAGENET_MEAN = torch.tensor([0.485, 0.456, 0.406], device=DEVICE).view(1, 3, 1, 1)
+        IMAGENET_STD = torch.tensor([0.229, 0.224, 0.225], device=DEVICE).view(1, 3, 1, 1)
+        batch_tensor = (batch_of_crops - IMAGENET_MEAN) / IMAGENET_STD
 
-    return features
+        with torch.amp.autocast(device_type=DEVICE.type, enabled=(DEVICE.type == 'cuda')):
+            features_map = pytorch_model.features(batch_tensor)
+            pooled_features = pytorch_model.avgpool(features_map)
+            final_features = torch.flatten(pooled_features, 1)
+
+        return final_features
 
 def save_prototypes_to_disk():
     try:
@@ -181,7 +195,8 @@ def load_preprocessed_cache_from_disk():
 def startup_ai_models():
     load_prototypes_from_disk()
     load_preprocessed_cache_from_disk()
-    global _mobilenet_cache
+
+    global _mobilenet_pytorch_cache
     DEVICE = settings_manager.get_device()
 
     if sam_tasks:
@@ -193,69 +208,37 @@ def startup_ai_models():
         settings = settings_manager.load_settings()
         target_model_name = settings.get("feature_extractor_model_name", "mobilenet_v3_large")
 
-        if _mobilenet_cache["model"] is not None and _mobilenet_cache["name"] == target_model_name:
-            models['feature_extractor'] = _mobilenet_cache["model"]
+        if (_mobilenet_pytorch_cache.get("model") is not None and
+                _mobilenet_pytorch_cache.get("name") == target_model_name and
+                next(_mobilenet_pytorch_cache["model"].parameters()).device == DEVICE):
+            models['feature_extractor_pytorch'] = _mobilenet_pytorch_cache["model"]
+            logging.info(f"已从缓存加载 PyTorch 特征提取器 '{target_model_name}'。")
             return
 
-        if _mobilenet_cache["model"] is not None:
-            clear_feature_extractor_cache()
-
-        logging.info(f"正在加载 ONNX Feature Extractor 模型 '{target_model_name}'...")
-
-        onnx_paths = {
-            "mobilenet_v3_large": config.MOBILENET_LARGE_ONNX,
-            "mobilenet_v3_small": config.MOBILENET_SMALL_ONNX
-        }
-        target_onnx_path = onnx_paths.get(target_model_name)
-
-        if not target_onnx_path or not os.path.exists(target_onnx_path):
-            logging.warning(
-                f"ONNX 模型 '{target_model_name}' 未找到于 '{target_onnx_path}', 将使用默认的 mobilenet_v3_large。")
-            target_onnx_path = config.MOBILENET_LARGE_ONNX
-            target_model_name = "mobilenet_v3_large"
+        logging.info(f"正在加载原生 PyTorch 特征提取器 '{target_model_name}' 到设备 '{DEVICE}'...")
 
         if target_model_name == "mobilenet_v3_small":
-            weights = MobileNet_V3_Small_Weights.IMAGENET1K_V1
+            model = torchvision.models.mobilenet_v3_small(weights=MobileNet_V3_Small_Weights.IMAGENET1K_V1)
         else:
-            weights = MobileNet_V3_Large_Weights.IMAGENET1K_V1
+            model = torchvision.models.mobilenet_v3_large(weights=MobileNet_V3_Large_Weights.IMAGENET1K_V1)
 
-        sess_options = ort.SessionOptions()
+        model.classifier = torch.nn.Identity()
 
-        sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+        model.eval()
+        model.to(DEVICE)
 
-        cuda_provider_options = {'cudnn_conv_algo_search': 'DEFAULT'}
+        _mobilenet_pytorch_cache["model"] = model
+        _mobilenet_pytorch_cache["name"] = target_model_name
 
-        providers = (
-            [('CUDAExecutionProvider', cuda_provider_options), 'CPUExecutionProvider']
-            if DEVICE.type == 'cuda'
-            else ['CPUExecutionProvider']
-        )
+        models['feature_extractor_pytorch'] = model
 
-        logging.info(f"使用 ONNX Runtime Providers: {providers}")
-
-        ort_session = ort.InferenceSession(target_onnx_path, sess_options, providers=providers)
-
-        input_name = ort_session.get_inputs()[0].name
-        output_name = ort_session.get_outputs()[0].name
-        logging.info(f"ONNX 模型输入名: '{input_name}', 输出名: '{output_name}'")
-
-        _mobilenet_cache["model"] = ort_session
-        _mobilenet_cache["name"] = target_model_name
-        _mobilenet_cache["input_name"] = input_name
-        _mobilenet_cache["output_name"] = output_name
-
-        models['feature_extractor'] = ort_session
-        models['feature_extractor_transforms'] = weights.transforms()
-        models['feature_extractor_input_name'] = input_name
-        models['feature_extractor_output_name'] = output_name
-
-        logging.info(f"ONNX Feature Extractor 模型 '{target_model_name}' 加载完成。")
+        logging.info(f"PyTorch 特征提取器 '{target_model_name}' 加载成功。")
 
     except Exception as e:
-        logging.error(f"加载 ONNX Feature Extractor 模型失败: {e}", exc_info=True)
-        if 'feature_extractor' in models:
-            del models['feature_extractor']
-        _mobilenet_cache = {"model": None, "name": None}
+        logging.error(f"加载 PyTorch 特征提取器失败: {e}", exc_info=True)
+        if 'feature_extractor_pytorch' in models:
+            del models['feature_extractor_pytorch']
+        _mobilenet_pytorch_cache = {"model": None, "name": None}
 
 
 def postprocess_sam_results(results, nms_iou_threshold):
@@ -283,11 +266,12 @@ def find_best_matching_masks_by_iou(reference_boxes_np, candidate_boxes_tensor):
 
 
 def get_features_for_all_masks(video_uuid, frame_number):
-    if 'feature_extractor' not in models:
-        raise RuntimeError("Feature extractor model failed to load. Cannot perform feature extraction.")
+    if 'feature_extractor_pytorch' not in models:
+        raise RuntimeError("PyTorch特征提取模型未加载。")
 
     DEVICE = settings_manager.get_device()
     cache_key = f"{video_uuid}_{frame_number}"
+
     if cache_key in PREPROCESSED_DATA_CACHE:
         return PREPROCESSED_DATA_CACHE[cache_key]
 
@@ -296,10 +280,10 @@ def get_features_for_all_masks(video_uuid, frame_number):
             return PREPROCESSED_DATA_CACHE[cache_key]
 
         with torch.no_grad(), torch.amp.autocast(device_type=DEVICE.type, enabled=(DEVICE.type == 'cuda')):
-            logging.info(f"Starting new preprocessing for {cache_key}...")
+            logging.info(f"正在为 {cache_key} 开始新的预处理...")
             frame_path = file_storage.get_frame_path(video_uuid, frame_number)
             if not os.path.exists(frame_path):
-                raise FileNotFoundError(f"Frame image not found at {frame_path}")
+                raise FileNotFoundError(f"帧图像文件未找到于 {frame_path}")
 
             sam_model = sam_tasks.get_sam_model()
             if not sam_model:
@@ -317,37 +301,15 @@ def get_features_for_all_masks(video_uuid, frame_number):
                 return cached_data
 
             pil_image = Image.open(frame_path).convert("RGB")
-            img_tensor = to_tensor(pil_image).to(DEVICE)
 
-            box_indices = torch.zeros(all_boxes.size(0), 1, device=DEVICE)
-            boxes_for_crop = torch.cat([box_indices, all_boxes], dim=1)
+            all_features = get_features_for_single_bbox(pil_image, all_boxes.cpu().numpy())
 
-            OUTPUT_SIZE = (224, 224)
-            batch_of_crops = torchvision.ops.roi_align(
-                img_tensor.unsqueeze(0),
-                boxes_for_crop,
-                output_size=OUTPUT_SIZE,
-                spatial_scale=1.0,
-                aligned=True
-            )
-
-
-            IMAGENET_MEAN = [0.485, 0.456, 0.406]
-            IMAGENET_STD = [0.229, 0.224, 0.225]
-
-            batch_tensor = normalize(batch_of_crops, mean=IMAGENET_MEAN, std=IMAGENET_STD)
-
-            ort_session = models['feature_extractor']
-            input_name = models['feature_extractor_input_name']
-            output_name = models['feature_extractor_output_name']
-
-            numpy_input = batch_tensor.cpu().numpy()
-            ort_outputs = ort_session.run([output_name], {input_name: numpy_input})
-            all_features = torch.from_numpy(ort_outputs[0]).to(DEVICE)
+            if all_features is None:
+                raise RuntimeError(f"为 {cache_key} 提取特征时返回了 None。")
 
             cached_data = {"all_boxes": all_boxes, "all_features": all_features}
             PREPROCESSED_DATA_CACHE[cache_key] = cached_data
-            logging.info(f"Preprocessing for {cache_key} complete and cached.")
+            logging.info(f"为 {cache_key} 的预处理完成并已缓存。")
 
             cache_save_interval = settings.get('cache_save_interval_seconds', 30)
             if time.time() - _last_cache_save_time > cache_save_interval:

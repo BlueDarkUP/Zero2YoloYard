@@ -361,35 +361,45 @@ $(document).ready(function() {
     });
 
     $('#run-consistency-check-btn').on('click', function() {
-        const $btn = $(this);
-        $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status"></span> Running AI Review...');
+    const $btn = $(this);
+    $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status"></span> Running AI Review...');
 
-        $.ajax({
-            url: `/api/datasetAnalysis/${datasetUuid}/consistency_check`,
-            type: 'POST',
-            success: function(response) {
-                if (response.success) {
-                    consistencyOutlierIndices = response.outlier_image_indices;
-                    const resultMessage = $(`<div class="alert alert-success mt-3">${response.message}</div>`);
-                    $('#consistency-check-container').append(resultMessage);
+    const isColorCheckEnabled = $('#enable-color-check').is(':checked');
 
-                    if (consistencyOutlierIndices.length > 0) {
-                        $('#outlier-filter option[value="consistency_outliers"]').show();
-                         $('#outlier-filter').val('consistency_outliers').trigger('change');
-                         resultMessage.append(' The filter has been automatically applied to show these images.');
-                    }
-                    $btn.hide();
-                } else {
-                    alert('Error during consistency check: ' + response.message);
-                    $btn.prop('disabled', false).html('<i class="bi bi-search"></i> Run AI Consistency Review');
+    $.ajax({
+        url: `/api/datasetAnalysis/${datasetUuid}/consistency_check`,
+        type: 'POST',
+
+        contentType: 'application/json',
+
+        data: JSON.stringify({
+            enable_color_check: isColorCheckEnabled
+        }),
+
+        success: function(response) {
+            if (response.success) {
+                consistencyOutlierIndices = response.outlier_image_indices;
+                const resultMessage = $(`<div class="alert alert-info mt-3">${response.message}</div>`);
+                $('#consistency-check-container').append(resultMessage);
+
+                if (consistencyOutlierIndices.length > 0) {
+                    $('#outlier-filter option[value="consistency_outliers"]').show();
+                     $('#outlier-filter').val('consistency_outliers').trigger('change');
+                     resultMessage.append(' 筛选器已自动应用，以显示这些存在疑问的图片。');
                 }
-            },
-            error: function() {
-                alert('A server error occurred while running the consistency check.');
+                $btn.hide();
+            } else {
+                alert('AI审查失败: ' + response.message);
                 $btn.prop('disabled', false).html('<i class="bi bi-search"></i> Run AI Consistency Review');
             }
-        });
+        },
+        error: function(xhr) {
+            const errorMsg = xhr.responseJSON ? xhr.responseJSON.message : "A server error occurred. Please check the console log.";
+            alert(errorMsg);
+            $btn.prop('disabled', false).html('<i class="bi bi-search"></i> Run AI Consistency Review');
+        }
     });
+});
 
     function createHistogramData(data, bins = 10, min, max) { if (data.length === 0) return { labels: [], counts: [] }; min = min ?? Math.min(...data); max = max ?? Math.max(...data); if (min === max) { min -= 0.5; max += 0.5; } const binSize = (max - min) / bins; const counts = Array(bins).fill(0); const labels = []; for (let i = 0; i < bins; i++) { const binStart = min + i * binSize; const binEnd = binStart + binSize; labels.push(`${binStart.toFixed(2)}-${binEnd.toFixed(2)}`); } for (const value of data) { let binIndex = Math.floor((value - min) / binSize); binIndex = Math.max(0, Math.min(bins - 1, binIndex)); if (value === max) binIndex = bins - 1; counts[binIndex]++; } return { labels, counts }; }
     function renderSummaryAndWarnings(summary, warnings) { const container = $('#summary-container'); container.empty(); if (summary) { container.append(`<div class="alert alert-info">${summary}</div>`); } if (warnings && warnings.length > 0) { const warningsList = $('<ul class="list-group"></ul>'); warnings.forEach(warning => { warningsList.append(`<li class="list-group-item list-group-item-warning">${warning}</li>`); }); container.append(warningsList); } }
