@@ -398,6 +398,13 @@
         let bboxes = [];
         let selectedBboxIndex = -1;
 
+        let repeatMode = {
+            isActive: false,
+            width: 0,
+            height: 0,
+            label: null
+        };
+
         let history = [];
         let historyIndex = -1;
 
@@ -754,11 +761,9 @@
         }
 
         function stringToColor(str) {
-            // 优先从自定义颜色配置中查找
             if (customClassColors && customClassColors[str]) {
                 return customClassColors[str];
             }
-            // 如果未找到自定义颜色，则回退到原来的哈希算法生成颜色
             let hash = 0;
             for (let i = 0; i < str.length; i++) {
                 hash = str.charCodeAt(i) + ((hash << 5) - hash);
@@ -1313,6 +1318,32 @@
         });
 
         canvasContainer.on('mousedown', function(e) {
+            if (repeatMode.isActive) {
+                e.preventDefault();
+                const pos = getMousePos(drawingCanvas, e);
+                const scaleX = frameImage.naturalWidth / frameImage.clientWidth;
+                const scaleY = frameImage.naturalHeight / frameImage.clientHeight;
+
+                const halfW = (repeatMode.width / 2);
+                const halfH = (repeatMode.height / 2);
+
+                const newBox = {
+                    x1: Math.round((pos.x * scaleX) - halfW),
+                    y1: Math.round((pos.y * scaleY) - halfH),
+                    x2: Math.round((pos.x * scaleX) + halfW),
+                    y2: Math.round((pos.y * scaleY) + halfH),
+                    label: repeatMode.label,
+                    id: self.crypto.randomUUID()
+                };
+
+                bboxes.push(newBox);
+                saveStateToHistory();
+                selectedBboxIndex = bboxes.length - 1;
+                renderBboxList();
+                redrawCanvas();
+
+                return;
+            }
             if (isLamModeActive) {
                 e.preventDefault();
                 $('#lam-suggestion-popup').remove();
@@ -2311,12 +2342,49 @@
                     redrawCanvas();
                     renderBboxList();
                 }
-            } else if (e.key === "Escape" && interpolationState.isActive) {
+            } else if (e.key === "Escape") {
                 e.preventDefault();
-                resetInterpolationState(true);
-                showToast("Interpolation cancelled.", 2000);
+                if (interpolationState.isActive) {
+                    resetInterpolationState(true);
+                    showToast("插值操作已取消。", 2000);
+                }
+                if (repeatMode.isActive) {
+                    repeatMode.isActive = false;
+                    showToast("重复标注模式已关闭。", 2000);
+                    canvasContainer.css('cursor', 'crosshair');
+                }
             } else {
                 switch (key) {
+                    case "r":
+                        e.preventDefault();
+                        if (repeatMode.isActive) {
+                            repeatMode.isActive = false;
+                            showToast("重复标注模式已关闭。", 2000);
+                            canvasContainer.css('cursor', 'crosshair');
+                        } else if (selectedBboxIndex !== -1) {
+                            const sourceBox = bboxes[selectedBboxIndex];
+                            repeatMode = {
+                                isActive: true,
+                                width: sourceBox.x2 - sourceBox.x1,
+                                height: sourceBox.y2 - sourceBox.y1,
+                                label: sourceBox.label
+                            };
+                            showToast(`重复模式已激活: ${repeatMode.label} (${repeatMode.width}x${repeatMode.height})`, 3000);
+                            canvasContainer.css('cursor', 'copy');
+                        } else if (bboxes.length > 0) {
+                            const sourceBox = bboxes[bboxes.length - 1];
+                            repeatMode = {
+                                isActive: true,
+                                width: sourceBox.x2 - sourceBox.x1,
+                                height: sourceBox.y2 - sourceBox.y1,
+                                label: sourceBox.label
+                            };
+                            showToast(`重复模式已激活 (基于最后一个框): ${repeatMode.label} (${repeatMode.width}x${repeatMode.height})`, 3000);
+                            canvasContainer.css('cursor', 'copy');
+                        } else {
+                            showToast("请先创建或选中一个标注框以激活重复模式。", 3000);
+                        }
+                        break;
                     case "s":
                         if (!isNegModalVisible) {
                             e.preventDefault();
