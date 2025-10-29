@@ -475,6 +475,7 @@
                 data.ready_videos_for_dataset.forEach(video => {
                     datasetVideoSelect.append(`<option value="${video.video_uuid}">${video.description} (${video.labeled_frame_count} labeled frames)</option>`);
                 });
+                if (!videoList.hasClass('data-loaded')) { videoList.addClass('data-loaded'); }
             });
         }
 
@@ -494,6 +495,7 @@
                     const row = `<tr class="slide-in-up"><td><strong>${dataset.description}</strong></td><td>${getStatusBadge(dataset.status)} <small class="text-muted">${dataset.status_message || ''}</small></td><td>${videos} video(s)</td><td class="text-muted">${classes || 'N/A'}</td><td>${actions}</td></tr>`;
                     datasetList.append(row);
                 });
+                if (!datasetList.hasClass('data-loaded')) { datasetList.addClass('data-loaded'); }
             });
         }
 
@@ -507,6 +509,7 @@
                     const row = `<tr class="slide-in-up"><td><strong>${model.description}</strong></td><td>${modelTypeBadge}</td><td class="text-muted">${model.label_filename || 'N/A'}</td><td class="text-muted">${createdDate}</td><td><button class="btn btn-sm btn-danger btn-delete-model" data-uuid="${model.model_uuid}"><i class="bi bi-trash"></i> Delete</button></td></tr>`;
                     modelList.append(row);
                 });
+                if (!modelList.hasClass('data-loaded')) { modelList.addClass('data-loaded'); }
             });
         }
 

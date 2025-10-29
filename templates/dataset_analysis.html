@@ -130,7 +130,7 @@
         </div>
         <div class="row">
              <div class="col-lg-5 col-xl-4 mb-4"><div class="card h-100"><div class="card-header">Aspect Ratio Distribution</div><div class="card-body chart-card-body"><div class="chart-container"><canvas id="aspect-ratio-chart"></canvas></div></div></div></div>
-            <div class="col-lg-7 col-xl-8 mb-4"><div class="card h-100"><div class="card-header">Bounding Box Center Heatmap</div><div class="card-body chart-card-body"><div class="chart-container" style="background-image: linear-gradient(to right, #f8f9fa, #e9ecef);"><canvas id="bbox-center-scatter-plot"></canvas></div></div></div></div>
+            <div class="col-lg-7 col-xl-8 mb-4"><div class="card h-100"><div class="card-header">Bounding Box Center Heatmap</div><div class="card-body chart-card-body"><div id="bbox-heatmap-container" class="chart-container"><canvas id="bbox-center-scatter-plot"></canvas></div></div></div></div>
         </div>
 
         <div class="row">
@@ -220,6 +220,57 @@ $(document).ready(function() {
         centerScatter: null,
         annotator: null
     };
+
+    function getChartThemeOptions() {
+        const isDarkMode = document.body.classList.contains('dark-mode');
+        const gridColor = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+        const textColor = isDarkMode ? '#e0e0e0' : '#343a40';
+        const titleColor = isDarkMode ? '#f8f9fa' : '#343a40';
+
+        return {
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    labels: { color: textColor }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { color: gridColor },
+                    ticks: { color: textColor },
+                    title: { display: true, color: titleColor }
+                },
+                y: {
+                    beginAtZero: true,
+                    grid: { color: gridColor },
+                    ticks: { color: textColor },
+                    title: { display: true, color: titleColor }
+                }
+            }
+        };
+    }
+
+    const themeObserver = new MutationObserver((mutationsList) => {
+        for (const mutation of mutationsList) {
+            if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                const newOptions = getChartThemeOptions();
+                for (const chartKey in charts) {
+                    const chart = charts[chartKey];
+                    if (chart) {
+                        chart.options.plugins.legend.labels.color = newOptions.plugins.legend.labels.color;
+                        chart.options.scales.x.grid.color = newOptions.scales.x.grid.color;
+                        chart.options.scales.x.ticks.color = newOptions.scales.x.ticks.color;
+                        chart.options.scales.x.title.color = newOptions.scales.x.title.color;
+                        chart.options.scales.y.grid.color = newOptions.scales.y.grid.color;
+                        chart.options.scales.y.ticks.color = newOptions.scales.y.ticks.color;
+                        chart.options.scales.y.title.color = newOptions.scales.y.title.color;
+                        chart.update();
+                    }
+                }
+            }
+        }
+    });
+    themeObserver.observe(document.body, { attributes: true });
 
     function setupAugmentationListeners(contextSelector) {
         const context = $(contextSelector);
@@ -385,7 +436,7 @@ $(document).ready(function() {
                 if (consistencyOutlierIndices.length > 0) {
                     $('#outlier-filter option[value="consistency_outliers"]').show();
                      $('#outlier-filter').val('consistency_outliers').trigger('change');
-                     resultMessage.append(' 筛选器已自动应用，以显示这些存在疑问的图片。');
+                     resultMessage.append(' Filters have been automatically applied to display these questionable images.');
                 }
                 $btn.hide();
             } else {
@@ -403,17 +454,17 @@ $(document).ready(function() {
 
     function createHistogramData(data, bins = 10, min, max) { if (data.length === 0) return { labels: [], counts: [] }; min = min ?? Math.min(...data); max = max ?? Math.max(...data); if (min === max) { min -= 0.5; max += 0.5; } const binSize = (max - min) / bins; const counts = Array(bins).fill(0); const labels = []; for (let i = 0; i < bins; i++) { const binStart = min + i * binSize; const binEnd = binStart + binSize; labels.push(`${binStart.toFixed(2)}-${binEnd.toFixed(2)}`); } for (const value of data) { let binIndex = Math.floor((value - min) / binSize); binIndex = Math.max(0, Math.min(bins - 1, binIndex)); if (value === max) binIndex = bins - 1; counts[binIndex]++; } return { labels, counts }; }
     function renderSummaryAndWarnings(summary, warnings) { const container = $('#summary-container'); container.empty(); if (summary) { container.append(`<div class="alert alert-info">${summary}</div>`); } if (warnings && warnings.length > 0) { const warningsList = $('<ul class="list-group"></ul>'); warnings.forEach(warning => { warningsList.append(`<li class="list-group-item list-group-item-warning">${warning}</li>`); }); container.append(warningsList); } }
-    function renderCenterScatterPlot(points) { if(charts.centerScatter) charts.centerScatter.destroy(); charts.centerScatter = new Chart(document.getElementById('bbox-center-scatter-plot').getContext('2d'), { type: 'scatter', data: { datasets: [{ label: 'BBox Center', data: points, backgroundColor: 'rgba(54, 162, 235, 0.6)', pointRadius: 3, pointHoverRadius: 5 }] }, options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { type: 'linear', position: 'bottom', min: 0, max: 1, title: { display: true, text: 'Normalized X Position' }}, y: { min: 0, max: 1, reverse: true, title: { display: true, text: 'Normalized Y Position' }} } } }); }
+    function renderCenterScatterPlot(points) { if(charts.centerScatter) charts.centerScatter.destroy(); const options = getChartThemeOptions(); $.extend(true, options.scales, { x: { type: 'linear', position: 'bottom', min: 0, max: 1, title: { display: true, text: 'Normalized X Position' }}, y: { min: 0, max: 1, reverse: true, title: { display: true, text: 'Normalized Y Position' }} }); options.plugins.legend.display = false; charts.centerScatter = new Chart(document.getElementById('bbox-center-scatter-plot').getContext('2d'), { type: 'scatter', data: { datasets: [{ label: 'BBox Center', data: points, backgroundColor: 'rgba(54, 162, 235, 0.6)', pointRadius: 3, pointHoverRadius: 5 }] }, options: options }); }
     function renderGallery(images) { const gallery = $('#gallery'); gallery.empty(); $('#gallery-count').text(images.length); images.forEach((image, index) => { const annotatedUrl = `/media/annotated_frame/${image.video_uuid}/${image.frame}.jpg`; const goToLabelUrl = image.task_uuid ? `/labelVideo?task_uuid=${image.task_uuid}&frame=${image.frame}` : '#'; const buttonDisabled = image.task_uuid ? '' : 'disabled'; const item = $(`<div class="gallery-item" data-index="${index}"><img src="${annotatedUrl}" alt="Frame ${image.frame}" loading="lazy"><div class="caption"><span class="caption-text">${image.video} / F ${image.frame}</span><a href="${goToLabelUrl}" class="btn btn-sm btn-primary" ${buttonDisabled}>Go to Label</a></div></div>`); item.find('img').on('click', () => window.open(image.original_url, '_blank')); gallery.append(item); }); }
     function filterGalleryByClass(className) { const classImageIndices = []; for (const [imageIndex, classList] of Object.entries(imageClassMap)) { if (classList.includes(className)) { classImageIndices.push(parseInt(imageIndex)); } } $('#outlier-filter').val('none'); $('#gallery .gallery-item').each(function() { const itemIndex = parseInt($(this).data('index')); $(this).toggleClass('hidden', !classImageIndices.includes(itemIndex)); }); }
     function resetGalleryFilter() { $('#outlier-filter').val('none'); $('#gallery .gallery-item').removeClass('hidden'); }
     $('#outlier-filter').on('change', function() { const filterType = $(this).val(); if (filterType === 'none') { $('#gallery .gallery-item').removeClass('hidden'); return; } let sortedBboxes, targetImageIndices; switch(filterType) { case 'area_smallest': sortedBboxes = [...allBboxesData].sort((a, b) => a.area - b.area); break; case 'area_largest': sortedBboxes = [...allBboxesData].sort((a, b) => b.area - a.area); break; case 'ar_smallest': sortedBboxes = [...allBboxesData].sort((a, b) => Math.abs(a.aspect_ratio - 1) - Math.abs(b.aspect_ratio - 1)); break; case 'ar_largest': sortedBboxes = [...allBboxesData].sort((a, b) => Math.abs(b.aspect_ratio - 1) - Math.abs(a.aspect_ratio - 1)); break; case 'iou_high': targetImageIndices = [...new Set(suspiciousPairsData.map(p => p.image_index))]; break; case 'consistency_outliers': targetImageIndices = consistencyOutlierIndices; break; } if (sortedBboxes) { targetImageIndices = [...new Set(sortedBboxes.slice(0, 10).map(b => b.image_index))]; } $('#gallery .gallery-item').each(function() { const itemIndex = parseInt($(this).data('index')); $(this).toggleClass('hidden', !targetImageIndices.includes(itemIndex)); }); });
     $('#reset-filter-btn').on('click', resetGalleryFilter);
-    function renderClassCounts(classCounts) { const chartData = { labels: Object.keys(classCounts), datasets: [{ label: '# of Instances', data: Object.values(classCounts), backgroundColor: 'rgba(54, 162, 235, 0.6)' }]}; if (charts.classCounts) { charts.classCounts.destroy(); } const ctx = document.getElementById('class-counts-chart'); charts.classCounts = new Chart(ctx, { type: 'bar', data: chartData, options: { maintainAspectRatio: false, scales: { y: { beginAtZero: true } }, onHover: (event, chartElement) => { event.native.target.style.cursor = chartElement[0] ? 'pointer' : 'default'; }, onClick: (event, elements) => { if (elements.length > 0) { const clickedIndex = elements[0].index; const className = charts.classCounts.data.labels[clickedIndex]; filterGalleryByClass(className); } else { resetGalleryFilter(); } } } }); }
-    function renderObjectsPerImage(data) { const counts = data.reduce((acc, val) => { acc[val] = (acc[val] || 0) + 1; return acc; }, {}); const chartData = { labels: Object.keys(counts), datasets: [{ label: '# of Images', data: Object.values(counts), backgroundColor: 'rgba(75, 192, 192, 0.6)' }] }; if(charts.objectsPerImage) charts.objectsPerImage.destroy(); charts.objectsPerImage = new Chart($('#objects-per-image-chart'), { type: 'bar', data: chartData, options: { maintainAspectRatio: false, scales: { x: { title: { display: true, text: 'Number of Objects in Image' } }, y: { beginAtZero: true } } } }); }
-    function renderBrightness(data) { const histData = createHistogramData(data, 20, 0, 255); const chartData = { labels: histData.labels, datasets: [{ label: 'Image Count', data: histData.counts, backgroundColor: 'rgba(255, 206, 86, 0.6)' }] }; if(charts.brightness) charts.brightness.destroy(); charts.brightness = new Chart($('#brightness-chart'), { type: 'bar', data: chartData, options: { maintainAspectRatio: false, scales: { y: { beginAtZero: true } } } }); }
-    function renderAspectRatio(data) { const logData = data.map(d => d > 0 ? Math.log10(d) : 0); const minLog = logData.length > 0 ? Math.min(...logData) : 0; const maxLog = logData.length > 0 ? Math.max(...logData) : 1; const histData = createHistogramData(logData, 15, minLog, maxLog); histData.labels = histData.labels.map(l => { const range = l.split('-').map(parseFloat); return `${Math.pow(10, range[0]).toFixed(2)}-${Math.pow(10, range[1]).toFixed(2)}`; }); const chartData = { labels: histData.labels, datasets: [{ label: 'BBox Count', data: histData.counts, backgroundColor: 'rgba(153, 102, 255, 0.6)' }] }; if(charts.aspectRatio) charts.aspectRatio.destroy(); charts.aspectRatio = new Chart($('#aspect-ratio-chart'), { type: 'bar', data: chartData, options: { maintainAspectRatio: false, scales: { x: { title: {display: true, text: 'Width / Height'}}, y: { beginAtZero: true } } } }); }
-    function renderAnnotatorStats(stats) { const users = Object.keys(stats); if (users.length === 0) { $('#annotator-chart').parent().html('<p class="text-muted">No annotator data found. Ensure tasks are assigned.</p>'); return; } const imageCounts = users.map(u => stats[u].image_count); const chartData = { labels: users, datasets: [{ label: '# Labeled Images', data: imageCounts, backgroundColor: 'rgba(255, 159, 64, 0.6)' }] }; if(charts.annotator) charts.annotator.destroy(); charts.annotator = new Chart($('#annotator-chart'), { type: 'bar', data: chartData, options: { maintainAspectRatio: false, scales: { y: { beginAtZero: true } } } }); }
+    function renderClassCounts(classCounts) { const chartData = { labels: Object.keys(classCounts), datasets: [{ label: '# of Instances', data: Object.values(classCounts), backgroundColor: 'rgba(54, 162, 235, 0.6)' }]}; if (charts.classCounts) { charts.classCounts.destroy(); } const options = getChartThemeOptions(); options.onHover = (event, chartElement) => { event.native.target.style.cursor = chartElement[0] ? 'pointer' : 'default'; }; options.onClick = (event, elements) => { if (elements.length > 0) { const clickedIndex = elements[0].index; const className = charts.classCounts.data.labels[clickedIndex]; filterGalleryByClass(className); } else { resetGalleryFilter(); } }; const ctx = document.getElementById('class-counts-chart'); charts.classCounts = new Chart(ctx, { type: 'bar', data: chartData, options: options }); }
+    function renderObjectsPerImage(data) { const counts = data.reduce((acc, val) => { acc[val] = (acc[val] || 0) + 1; return acc; }, {}); const chartData = { labels: Object.keys(counts), datasets: [{ label: '# of Images', data: Object.values(counts), backgroundColor: 'rgba(75, 192, 192, 0.6)' }] }; if(charts.objectsPerImage) charts.objectsPerImage.destroy(); const options = getChartThemeOptions(); options.scales.x.title.text = 'Number of Objects in Image'; charts.objectsPerImage = new Chart($('#objects-per-image-chart'), { type: 'bar', data: chartData, options: options }); }
+    function renderBrightness(data) { const histData = createHistogramData(data, 20, 0, 255); const chartData = { labels: histData.labels, datasets: [{ label: 'Image Count', data: histData.counts, backgroundColor: 'rgba(255, 206, 86, 0.6)' }] }; if(charts.brightness) charts.brightness.destroy(); charts.brightness = new Chart($('#brightness-chart'), { type: 'bar', data: chartData, options: getChartThemeOptions() }); }
+    function renderAspectRatio(data) { const logData = data.map(d => d > 0 ? Math.log10(d) : 0); const minLog = logData.length > 0 ? Math.min(...logData) : 0; const maxLog = logData.length > 0 ? Math.max(...logData) : 1; const histData = createHistogramData(logData, 15, minLog, maxLog); histData.labels = histData.labels.map(l => { const range = l.split('-').map(parseFloat); return `${Math.pow(10, range[0]).toFixed(2)}-${Math.pow(10, range[1]).toFixed(2)}`; }); const chartData = { labels: histData.labels, datasets: [{ label: 'BBox Count', data: histData.counts, backgroundColor: 'rgba(153, 102, 255, 0.6)' }] }; if(charts.aspectRatio) charts.aspectRatio.destroy(); const options = getChartThemeOptions(); options.scales.x.title.text = 'Width / Height'; charts.aspectRatio = new Chart($('#aspect-ratio-chart'), { type: 'bar', data: chartData, options: options }); }
+    function renderAnnotatorStats(stats) { const users = Object.keys(stats); if (users.length === 0) { $('#annotator-chart').parent().html('<p class="text-muted">No annotator data found. Ensure tasks are assigned.</p>'); return; } const imageCounts = users.map(u => stats[u].image_count); const chartData = { labels: users, datasets: [{ label: '# Labeled Images', data: imageCounts, backgroundColor: 'rgba(255, 159, 64, 0.6)' }] }; if(charts.annotator) charts.annotator.destroy(); charts.annotator = new Chart($('#annotator-chart'), { type: 'bar', data: chartData, options: getChartThemeOptions() }); }
 });
 </script>
 {% endblock %}

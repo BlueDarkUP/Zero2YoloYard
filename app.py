@@ -1356,8 +1356,11 @@ def run_consistency_check(dataset_uuid):
                     if is_outlier:
                         outlier_image_indices.add(info['image_index'])
 
-        message_keyword = "**类别或颜色**" if is_color_check_enabled else "**类别**"
-        message = f"AI审查完成。发现 {len(outlier_image_indices)} 张图片中可能存在{message_keyword}标注混淆的实例。" if outlier_image_indices else "AI审查完成。未发现明显的标注混淆问题。"
+        message_keyword = "**Category or color**" if is_color_check_enabled else "**category**"
+        if len(outlier_image_indices) == 1 or len(outlier_image_indices) == 0:
+            message = f"AI review complete. Found {len(outlier_image_indices)} image with potential instances of {message_keyword} confusion." if outlier_image_indices else "AI review completed. No obvious labeling confusion issues were found."
+        else:
+            message = f"AI review complete. Found {len(outlier_image_indices)} images with potential instances of {message_keyword} confusion." if outlier_image_indices else "AI review completed. No obvious labeling confusion issues were found."
 
         return jsonify({
             'success': True,

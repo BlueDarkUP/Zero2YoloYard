@@ -6,7 +6,7 @@
     <title>FTC-ML Local</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/modern.css') }}">
     {% block head %}{% endblock %}
 </head>
 <body>
@@ -20,9 +20,20 @@
         <div class="collapse navbar-collapse">
             <ul class="navbar-nav mr-auto">
             </ul>
-            <span class="navbar-text">
-                Produced By BlueDarkUP -- Be Based On FIRST Machine Learning Toolchain --
-            </span>
+
+            <div class="collapse navbar-collapse">
+                <ul class="navbar-nav mr-auto">
+                </ul>
+
+                <div class="d-flex align-items-center">
+                    <button class="theme-toggle-btn" id="theme-toggle-btn" title="切换亮色/暗色主题">
+                        <i class="bi" id="theme-toggle-icon"></i>
+                    </button>
+                    <span class="navbar-text">
+                        Produced By BlueDarkUP -- Be Based On FIRST Machine Learning Toolchain --
+                    </span>
+                </div>
+            </div>
         </div>
     </nav>
 
@@ -34,6 +45,41 @@
     <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.4/dist/umd/popper.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const themeToggleBtn = document.getElementById('theme-toggle-btn');
+            const themeToggleIcon = document.getElementById('theme-toggle-icon');
+            const body = document.body;
+
+            const updateThemeUI = () => {
+                if (body.classList.contains('dark-mode')) {
+                    themeToggleIcon.className = 'bi bi-sun-fill';
+                } else {
+                    themeToggleIcon.className = 'bi bi-moon-fill';
+                }
+            };
+
+            const savedTheme = localStorage.getItem('theme');
+
+            const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+            if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
+                body.classList.add('dark-mode');
+            }
+
+            updateThemeUI();
+
+            themeToggleBtn.addEventListener('click', () => {
+                body.classList.toggle('dark-mode');
+
+                let newTheme = body.classList.contains('dark-mode') ? 'dark' : 'light';
+                localStorage.setItem('theme', newTheme);
+
+                updateThemeUI();
+            });
+        });
+    </script>
     {% block scripts %}{% endblock %}
 </body>
 </html>

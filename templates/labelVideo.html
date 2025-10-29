@@ -38,31 +38,11 @@
         user-select: none;
         -webkit-user-select: none;
         -moz-user-select: none;
-        border-radius: 0.25rem;
     }
 
     #class-list .list-group-item,
     #bbox-list .list-group-item {
         cursor: pointer;
-    }
-
-    #bbox-list .list-group-item.selected {
-        border-color: #007bff;
-        border-width: 2px;
-        background-color: #e7f3ff;
-    }
-
-    #class-list .list-group-item.active {
-        color: white;
-        border-width: 2px;
-    }
-
-    #sam-toggle-btn.active,
-    #interactive-mode-toggle.active,
-    #lam-toggle-btn.active {
-        background-color: #28a745;
-        border-color: #28a745;
-        color: white;
     }
 
     .color-swatch {
@@ -80,74 +60,11 @@
         overflow-y: auto;
     }
 
-    #toast-notification {
-        position: fixed;
-        bottom: 30px;
-        left: 50%;
-        transform: translateX(-50%);
-        padding: 10px 20px;
-        border-radius: 5px;
-        background-color: #333;
-        color: white;
-        font-weight: bold;
-        z-index: 9999;
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-        opacity: 0;
-        visibility: hidden;
-        transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
-    }
-
-    #toast-notification.show {
-        opacity: 1;
-        visibility: visible;
-    }
-
-    #interpolation-banner {
-        display: none;
-        padding: 0.75rem 1.25rem;
-        margin-bottom: 1rem;
-        border: 1px solid transparent;
-        border-radius: 0.25rem;
-        background-color: #d1ecf1;
-        border-color: #bee5eb;
-        color: #0c5460;
-        font-weight: bold;
-        text-align: center;
-    }
-
-    #track-controls {
-        display: none;
-        border: 2px dashed #007bff;
-        padding: 15px;
-        margin-top: 15px;
-        background-color: #f8f9fa;
-        border-radius: 0.3rem;
-    }
-
-    #interactive-segment-controls {
-        display: none;
-        border: 2px dashed #17a2b8;
-        padding: 15px;
-        margin-top: 15px;
-        background-color: #f8f9fa;
-        border-radius: 0.3rem;
-    }
-
     .shortcut-keys-container {
         display: flex;
         gap: 0.5rem;
         flex-wrap: wrap;
         margin-top: 0.5rem;
-    }
-
-    .shortcut-key {
-        background-color: #e9ecef;
-        border: 1px solid #dee2e6;
-        padding: 0.2rem 0.5rem;
-        border-radius: 0.25rem;
-        font-size: 0.75rem;
-        font-weight: bold;
-        color: #495057;
     }
 
     .adv-settings-label {
@@ -393,6 +310,52 @@
         const task = {{ task_entity | tojson }};
         const frameCount = task.end_frame + 1;
 
+        const themeColors = {
+            light: {
+                selectionShadow: 'black',
+                handleFill: '#007bff',
+                labelText: 'white',
+                crosshair: 'rgba(0,0,255,0.7)',
+                interpolationGhost: 'rgba(255, 193, 7, 0.5)',
+                interpolationConfirm: '#28a745',
+                suggestionStroke: 'rgba(0, 123, 255, 0.8)',
+                suggestionFill: 'rgba(0, 123, 255, 0.8)',
+                suggestionHoverStroke: 'rgba(255, 193, 7, 1.0)',
+                suggestionHoverFill: 'rgba(255, 193, 7, 1.0)',
+                positiveExampleStroke: 'rgba(40, 167, 69, 0.9)',
+                negativeSampleStroke: 'rgba(255, 0, 0, 0.8)'
+            },
+            dark: {
+                selectionShadow: 'rgba(255, 255, 255, 0.7)',
+                handleFill: '#5cadff',
+                labelText: '#1a1a1a',
+                crosshair: 'rgba(130, 180, 255, 0.7)',
+                interpolationGhost: 'rgba(255, 193, 7, 0.6)',
+                interpolationConfirm: '#28a745',
+                suggestionStroke: 'rgba(92, 173, 255, 0.8)',
+                suggestionFill: 'rgba(92, 173, 255, 0.8)',
+                suggestionHoverStroke: 'rgba(255, 193, 7, 1.0)',
+                suggestionHoverFill: 'rgba(255, 193, 7, 1.0)',
+                positiveExampleStroke: 'rgba(40, 167, 69, 0.9)',
+                negativeSampleStroke: 'rgba(255, 80, 80, 0.8)'
+            }
+        };
+
+        function getColor(key) {
+            const isDarkMode = document.body.classList.contains('dark-mode');
+            return isDarkMode ? themeColors.dark[key] : themeColors.light[key];
+        }
+
+        const themeObserver = new MutationObserver((mutationsList) => {
+            for (const mutation of mutationsList) {
+                if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                    redrawCanvas();
+                    redrawNegCanvas();
+                }
+            }
+        });
+        themeObserver.observe(document.body, { attributes: true });
+
         let availableClasses = [];
         let activeClass = null;
         let bboxes = [];
@@ -429,8 +392,8 @@
         let overlappingCycleIndex = 0;
         let lastClickPosForCycle = null;
         let isCKeyPressed = false;
-        
-        let frameConfidence = {}; 
+
+        let frameConfidence = {};
 
         let interpolationState = {
             isActive: false,
@@ -490,7 +453,7 @@
                     y = startBox.y1 * scaleY,
                     w = (startBox.x2 - startBox.x1) * scaleX,
                     h = (startBox.y2 - startBox.y1) * scaleY;
-                drawingCtx.strokeStyle = 'rgba(255, 193, 7, 0.5)';
+                drawingCtx.strokeStyle = getColor('interpolationGhost');
                 drawingCtx.lineWidth = 2 / dpr;
                 drawingCtx.setLineDash([4 / dpr, 4 / dpr]);
                 drawingCtx.strokeRect(x, y, w, h);
@@ -501,12 +464,12 @@
                 const color = stringToColor(box.label);
                 drawingCtx.strokeStyle = color;
                 drawingCtx.lineWidth = (index === selectedBboxIndex) ? 4 / dpr : 2 / dpr;
-                drawingCtx.shadowColor = (index === selectedBboxIndex) ? 'black' : 'transparent';
+                drawingCtx.shadowColor = (index === selectedBboxIndex) ? getColor('selectionShadow') : 'transparent';
                 drawingCtx.shadowBlur = (index === selectedBboxIndex) ? 6 / dpr : 0;
 
                 if (interpolationState.isActive && box.id === interpolationState.objectId) {
-                    drawingCtx.strokeStyle = '#28a745';
-                    drawingCtx.shadowColor = 'black';
+                    drawingCtx.strokeStyle = getColor('interpolationConfirm');
+                    drawingCtx.shadowColor = getColor('selectionShadow');
                     drawingCtx.shadowBlur = 8 / dpr;
                     drawingCtx.setLineDash([5 / dpr, 3 / dpr]);
                 }
@@ -519,13 +482,13 @@
                 drawingCtx.setLineDash([]);
                 drawingCtx.shadowBlur = 0;
 
-                drawingCtx.fillStyle = interpolationState.isActive && box.id === interpolationState.objectId ? '#28a745' : color;
+                drawingCtx.fillStyle = interpolationState.isActive && box.id === interpolationState.objectId ? getColor('interpolationConfirm') : color;
                 drawingCtx.font = `${12/dpr}px Arial`;
                 const textMetrics = drawingCtx.measureText(box.label);
                 const textWidth = textMetrics.width;
                 const textHeight = 14 / dpr;
                 drawingCtx.fillRect(x, y - textHeight, textWidth + (4 / dpr), textHeight);
-                drawingCtx.fillStyle = 'white';
+                drawingCtx.fillStyle = getColor('labelText');
                 drawingCtx.fillText(box.label, x + (2 / dpr), y - (2 / dpr));
 
                 if (index === selectedBboxIndex && !isInteractiveMode) {
@@ -541,7 +504,7 @@
                         'bottom-middle': { x: x + w / 2, y: y + h },
                         'bottom-right': { x: x + w, y: y + h }
                     };
-                    drawingCtx.fillStyle = '#007bff';
+                    drawingCtx.fillStyle = getColor('handleFill');
                     for (const key in handles) {
                         const pos = handles[key];
                         drawingCtx.fillRect(pos.x - halfHandle, pos.y - halfHandle, handleSize, handleSize);
@@ -551,19 +514,19 @@
 
             if (suggestionBboxes.length > 0) {
                 const threshold = parseFloat($('#suggestion-threshold').val());
-                drawingCtx.strokeStyle = 'rgba(0, 123, 255, 0.8)';
+                drawingCtx.strokeStyle = getColor('suggestionStroke');
                 drawingCtx.lineWidth = 2 / dpr;
                 drawingCtx.setLineDash([5 / dpr, 3 / dpr]);
-        
+
                 suggestionBboxes.forEach(sug => {
                     if (sug.score >= threshold) {
                         const box = sug.box;
                         const x = box[0] * scaleX, y = box[1] * scaleY;
                         const w = (box[2] - box[0]) * scaleX, h = (box[3] - box[1]) * scaleY;
                         drawingCtx.strokeRect(x, y, w, h);
-        
+
                         const scoreText = sug.score.toFixed(2);
-                        drawingCtx.fillStyle = 'rgba(0, 123, 255, 0.8)';
+                        drawingCtx.fillStyle = getColor('suggestionFill');
                         drawingCtx.font = `${10 / dpr}px Arial`;
                         drawingCtx.fillText(scoreText, x + 2 / dpr, y + 10 / dpr);
                     }
@@ -577,10 +540,10 @@
                     if (res.score >= threshold) {
                         const box = res.box;
                         if (index === hoveredPreviewIndex) {
-                            drawingCtx.strokeStyle = 'rgba(255, 193, 7, 1.0)';
+                            drawingCtx.strokeStyle = getColor('suggestionHoverStroke');
                             drawingCtx.lineWidth = 3 / dpr;
                         } else {
-                            drawingCtx.strokeStyle = 'rgba(0, 123, 255, 0.8)';
+                            drawingCtx.strokeStyle = getColor('suggestionStroke');
                             drawingCtx.lineWidth = 2 / dpr;
                         }
                         const x = box[0] * scaleX,
@@ -590,7 +553,7 @@
                         drawingCtx.strokeRect(x, y, w, h);
 
                         const scoreText = res.score.toFixed(2);
-                        drawingCtx.fillStyle = (index === hoveredPreviewIndex) ? 'rgba(255, 193, 7, 1.0)' : 'rgba(0, 123, 255, 0.8)';
+                        drawingCtx.fillStyle = (index === hoveredPreviewIndex) ? getColor('suggestionHoverFill') : getColor('suggestionFill');
                         drawingCtx.font = `${10/dpr}px Arial`;
                         drawingCtx.fillText(scoreText, x + 2 / dpr, y + 10 / dpr);
                     }
@@ -599,7 +562,7 @@
 
             if (isInteractiveMode) {
                 positiveExampleBboxes.forEach(box => {
-                    drawingCtx.strokeStyle = 'rgba(40, 167, 69, 0.9)';
+                    drawingCtx.strokeStyle = getColor('positiveExampleStroke');
                     drawingCtx.lineWidth = 2 / dpr;
                     drawingCtx.setLineDash([5 / dpr, 3 / dpr]);
                     const x = box.x1 * scaleX,
@@ -667,7 +630,7 @@
             if (isDrawing || isReviewMode || isDraggingBbox) return;
             const dpr = window.devicePixelRatio || 1;
             crosshairCtx.clearRect(0, 0, crosshairCanvas.width / dpr, crosshairCanvas.height / dpr);
-            crosshairCtx.strokeStyle = "rgba(0,0,255,0.7)";
+            crosshairCtx.strokeStyle = getColor('crosshair');
             crosshairCtx.lineWidth = 1 / dpr;
             crosshairCtx.setLineDash([4 / dpr, 4 / dpr]);
             crosshairCtx.beginPath();
@@ -858,7 +821,7 @@
             } else {
                 $('#suggestion-review-controls').slideUp();
             }
-            
+
             clearInteractiveSession(false);
 
             if (interpolationState.isActive && currentFrameNum !== interpolationState.startFrameData.frame_number) {
@@ -1105,7 +1068,7 @@
                 }
             });
         }
-        
+
         function resizeNegCanvas() {
             if (!negImage.complete || negImage.naturalWidth === 0 || !$('#negative-sampling-modal').is(':visible')) {
                 return;
@@ -1116,7 +1079,7 @@
             negCanvas.style.height = `${rect.height}px`;
             negCanvas.width = Math.round(rect.width * dpr);
             negCanvas.height = Math.round(rect.height * dpr);
-            negCtx.setTransform(dpr, 0, 0, dpr, 0, 0); 
+            negCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
             redrawNegCanvas();
         }
 
@@ -1124,7 +1087,7 @@
             if (currentNegSampleIndex < 0 || currentNegSampleIndex >= negSamplingFrames.length) return;
             const frameData = negSamplingFrames[currentNegSampleIndex];
             $('#neg-frame-counter').text(`Frame ${currentNegSampleIndex + 1} / ${negSamplingFrames.length}`);
-            
+
             negImage.onload = () => {
                 resizeNegCanvas();
             };
@@ -1142,7 +1105,7 @@
             const scaleX = negImage.clientWidth / negImage.naturalWidth;
             const scaleY = negImage.clientHeight / negImage.naturalHeight;
             boxes.forEach(box => {
-                negCtx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
+                negCtx.strokeStyle = getColor('negativeSampleStroke');
                 negCtx.lineWidth = 2 / dpr;
                 negCtx.setLineDash([5 / dpr, 3 / dpr]);
                 const x = box[0] * scaleX, y = box[1] * scaleY, w = (box[2] - box[0]) * scaleX, h = (box[3] - box[1]) * scaleY;
@@ -1157,7 +1120,7 @@
                 return;
             }
 
-            const confirmMessage = negativeSamples && Object.keys(negativeSamples).length > 0 
+            const confirmMessage = negativeSamples && Object.keys(negativeSamples).length > 0
                 ? `This will start a background task to apply the REFINED model for '${lastDatasetClassName}' to all unlabeled frames. Continue?`
                 : `This will start a background task to apply the learned features for '${lastDatasetClassName}' to all unlabeled frames. Continue?`;
 
@@ -1168,7 +1131,7 @@
                     negative_samples: negativeSamples,
                     confidence_threshold: parseFloat($('#apply-confidence-threshold').val())
                 };
-                
+
                 $.ajax({
                     url: '/apply_prototypes_to_video',
                     type: 'POST',
@@ -1299,7 +1262,7 @@
             const defaultThreshold = 0.50;
             const currentFrameThreshold = frameConfidence[frameNumber] ?? defaultThreshold;
             $('#result-threshold').val(currentFrameThreshold);
-            $('#result-threshold').trigger('input'); 
+            $('#result-threshold').trigger('input');
         };
 
         frameImage.addEventListener('dragstart', (e) => e.preventDefault());
@@ -1451,7 +1414,7 @@
                 const scaleX = frameImage.clientWidth / frameImage.naturalWidth;
                 const scaleY = frameImage.clientHeight / frameImage.naturalHeight;
                 let clickedSuggestionIndex = -1;
-        
+
                 for (let i = suggestionBboxes.length - 1; i >= 0; i--) {
                     const sug = suggestionBboxes[i];
                     if (sug.score >= threshold) {
@@ -1462,11 +1425,11 @@
                         }
                     }
                 }
-        
+
                 if (clickedSuggestionIndex !== -1) {
                     e.preventDefault();
                     const acceptedSuggestion = suggestionBboxes.splice(clickedSuggestionIndex, 1)[0];
-                    
+
                     bboxes.push({
                         x1: acceptedSuggestion.box[0],
                         y1: acceptedSuggestion.box[1],
@@ -1475,7 +1438,7 @@
                         label: acceptedSuggestion.label,
                         id: self.crypto.randomUUID()
                     });
-                    
+
                     saveStateToHistory();
                     selectedBboxIndex = bboxes.length - 1;
                     redrawCanvas();
@@ -1606,7 +1569,7 @@
                 let currentX = Math.max(0, Math.min(pos.x, frameImage.clientWidth));
                 let currentY = Math.max(0, Math.min(pos.y, frameImage.clientHeight));
                 drawingCtx.lineWidth = 2 / dpr;
-                drawingCtx.strokeStyle = isInteractiveMode ? 'rgba(40,167,69,0.9)' : stringToColor(activeClass || 'blue');
+                drawingCtx.strokeStyle = isInteractiveMode ? getColor('positiveExampleStroke') : stringToColor(activeClass || 'blue');
                 drawingCtx.setLineDash(isInteractiveMode ? [5 / dpr, 3 / dpr] : []);
                 drawingCtx.strokeRect(startX, startY, currentX - startX, currentY - startY);
                 drawingCtx.setLineDash([]);
@@ -2133,9 +2096,9 @@
             $button.prop('disabled', true);
             showToast(`Learning from all '${activeClass}' examples in the dataset...`, 10000);
             lastDatasetClassName = activeClass;
-    
+
             const payload = { video_uuid: videoUuid, frame_number: frameNumber, class_name: activeClass };
-    
+
             $.ajax({
                 url: '/interactive_segment/predict_from_dataset',
                 type: 'POST',
@@ -2148,7 +2111,7 @@
                         $('#result-threshold').trigger('input');
                         redrawCanvas();
                         showToast(`Found ${res.results.length} potential '${activeClass}' objects on this frame.`, 4000);
-                        
+
                         setTimeout(() => {
                            if (confirm(`Preview successful.\n\nDo you want to apply the '${activeClass}' model to all unlabeled frames in this video?`)) {
                                startNegativeSampling(10);
@@ -2173,7 +2136,7 @@
             redrawNegCanvas();
             const pos = getMousePos(negCanvas, e);
             const dpr = window.devicePixelRatio || 1;
-            negCtx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
+            negCtx.strokeStyle = getColor('negativeSampleStroke');
             negCtx.lineWidth = 2 / dpr;
             negCtx.setLineDash([5 / dpr, 3 / dpr]);
             negCtx.strokeRect(negStartX, negStartY, pos.x - negStartX, pos.y - negStartY);
