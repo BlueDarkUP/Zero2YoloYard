@@ -1,6 +1,7 @@
 # Zero-to-YOLO-Yard: 本地化、AI驱动的下一代计算机视觉标注工具
 ---
-<img width="1403" height="769" alt="image" src="https://github.com/user-attachments/assets/e2fab11b-6c08-4771-a752-5e0f81355dc3" />
+![0949644658292c488a2d4a301543d86c](https://github.com/user-attachments/assets/2df18d52-f146-4cc5-b7f2-40185668d0f0)
+
 
 ---
 
