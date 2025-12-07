@@ -1,85 +1,103 @@
+<!-- START OF FILE layout.html -->
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <title>FTC-ML Local</title>
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+
+    <!-- Bootstrap 4.6 CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    <!-- Custom Modern Theme -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/modern.css') }}">
+
+    <!-- Page Specific Head -->
     {% block head %}{% endblock %}
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-light bg-light border-bottom">
-        <a class="navbar-brand" href="/">
-            <svg width="1.4em" height="1.4em" viewBox="0 0 32 32" fill="currentColor" xmlns="http://www.w3.org/2000/svg" style="vertical-align: text-bottom; margin-right: 0.25rem;">
+    <nav class="navbar navbar-expand-lg navbar-light bg-light sticky-top">
+        <a class="navbar-brand d-flex align-items-center" href="/">
+            <svg width="28" height="28" viewBox="0 0 32 32" fill="currentColor" class="text-primary mr-2" xmlns="http://www.w3.org/2000/svg">
                 <path fill-rule="evenodd" clip-rule="evenodd" d="M28.4473,16.1055,23,13.3818V7a1,1,0,0,0-.5527-.8945l-6-3a1.0008,1.0008,0,0,0-.8946,0l-6,3A1,1,0,0,0,9,7v6.3818L3.5527,16.1055A1,1,0,0,0,3,17v7a1,1,0,0,0,.5527.8945l6,3a1.001,1.001,0,0,0,.8946,0L16,25.1182l5.5527,2.7763a1.001,1.001,0,0,0,.8946,0l6-3A1,1,0,0,0,29,24V17A1,1,0,0,0,28.4473,16.1055ZM21,13.3818l-4,2V10.6182l4-2ZM16,5.1182,19.7637,7,16,8.8818,12.2363,7Zm-5,3.5,4,2v4.7636l-4-2ZM9,25.3818l-4-2V18.6182l4,2Zm1-6.5L6.2363,17,10,15.1182,13.7637,17Zm1,1.7364,4-2v4.7636l-4,2Zm10,4.7636-4-2V18.6182l4,2Zm1-6.5L18.2363,17,22,15.1182,25.7637,17Zm5,4.5-4,2V20.6182l4-2Z"/>
             </svg>
-            Zero 2 YOLO Yard
+            <span class="font-weight-bold">Zero 2 YOLO Yard</span>
         </a>
-        <div class="collapse navbar-collapse">
+
+        <!-- Toggle Button for Mobile -->
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarContent" aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarContent">
             <ul class="navbar-nav mr-auto">
+                <!-- Placeholder for future nav links -->
             </ul>
 
-            <div class="collapse navbar-collapse">
-                <ul class="navbar-nav mr-auto">
-                </ul>
-
-                <div class="d-flex align-items-center">
-                    <button class="theme-toggle-btn" id="theme-toggle-btn" title="切换亮色/暗色主题">
-                        <i class="bi" id="theme-toggle-icon"></i>
-                    </button>
-                    <span class="navbar-text">
-                        Produced By BlueDarkUP -- Be Based On FIRST Machine Learning Toolchain --
-                    </span>
-                </div>
+            <div class="d-flex align-items-center">
+                <span class="navbar-text mr-3 small d-none d-md-block text-muted">
+                    Produced By BlueDarkUP -- Based On FIRST ML Toolchain
+                </span>
+                <button class="theme-toggle-btn" id="theme-toggle-btn" title="Toggle Dark/Light Mode">
+                    <i class="bi bi-moon-fill" id="theme-toggle-icon"></i>
+                </button>
             </div>
         </div>
     </nav>
 
-    <main class="container-fluid mt-4" role="main">
+    <!-- Main Content Area -->
+    <!-- Removed generic container-fluid/mt-4 to allow full-screen layouts in child templates -->
+    <main role="main">
         {% block content %}{% endblock %}
     </main>
 
+    <!-- Core Scripts -->
     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.4/dist/umd/popper.min.js"></script>
-    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
-    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
 
+    <!-- Theme Toggle Logic -->
     <script>
-        document.addEventListener('DOMContentLoaded', function () {
+        (function() {
             const themeToggleBtn = document.getElementById('theme-toggle-btn');
             const themeToggleIcon = document.getElementById('theme-toggle-icon');
             const body = document.body;
 
-            const updateThemeUI = () => {
-                if (body.classList.contains('dark-mode')) {
+            // Function to apply theme UI
+            const applyTheme = (isDark) => {
+                if (isDark) {
+                    body.classList.add('dark-mode');
                     themeToggleIcon.className = 'bi bi-sun-fill';
                 } else {
+                    body.classList.remove('dark-mode');
                     themeToggleIcon.className = 'bi bi-moon-fill';
                 }
             };
 
+            // Check saved preference or system preference
             const savedTheme = localStorage.getItem('theme');
+            const systemPrefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
 
-            const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-
-            if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
-                body.classList.add('dark-mode');
+            // Initial Load
+            if (savedTheme === 'dark' || (!savedTheme && systemPrefersDark)) {
+                applyTheme(true);
+            } else {
+                applyTheme(false);
             }
 
-            updateThemeUI();
-
+            // Toggle Event
             themeToggleBtn.addEventListener('click', () => {
-                body.classList.toggle('dark-mode');
-
-                let newTheme = body.classList.contains('dark-mode') ? 'dark' : 'light';
-                localStorage.setItem('theme', newTheme);
-
-                updateThemeUI();
+                const isCurrentlyDark = body.classList.contains('dark-mode');
+                applyTheme(!isCurrentlyDark);
+                localStorage.setItem('theme', !isCurrentlyDark ? 'dark' : 'light');
             });
-        });
+        })();
     </script>
+
+    <!-- Custom Main Scripts -->
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+
+    <!-- Page Specific Scripts -->
     {% block scripts %}{% endblock %}
 </body>
 </html>

@@ -1,62 +1,358 @@
-<div class="accordion" id="aug-accordion">
-    <div class="card">
-        <div class="card-header"><h2 class="mb-0"><button class="btn btn-link btn-block text-left" type="button" data-toggle="collapse" data-target="#collapse-geometric">Geometric</button></h2></div>
+<!-- START OF FILE _augmentation_controls.html -->
+<div class="accordion shadow-sm" id="aug-accordion">
+
+    <!-- 1. Geometric Transforms -->
+    <div class="card border-0 mb-1">
+        <div class="card-header bg-white p-0" id="headingGeo">
+            <button class="btn btn-block text-left font-weight-bold text-dark py-3 px-4 d-flex align-items-center" type="button" data-toggle="collapse" data-target="#collapse-geometric">
+                <i class="bi bi-arrows-move mr-2 text-primary"></i> Geometric Transforms
+            </button>
+        </div>
         <div id="collapse-geometric" class="collapse show" data-parent="#aug-accordion">
-            <div class="card-body">
-                <div class="row border-bottom pb-2 mb-2 aug-option" data-controls="hflip-controls"><div class="col-6"><input type="checkbox" id="aug-hflip-enabled" checked> HorizontalFlip</div><div class="col-6" id="hflip-controls"><label>p: <span class="val-display">0.5</span></label><input type="range" class="form-control-range" id="aug-hflip-p" min="0" max="1" step="0.1" value="0.5"></div></div>
-                <div class="row border-bottom pb-2 mb-2 aug-option" data-controls="vflip-controls"><div class="col-6"><input type="checkbox" id="aug-vflip-enabled"> VerticalFlip</div><div class="col-6" id="vflip-controls"><label>p: <span class="val-display">0.5</span></label><input type="range" class="form-control-range" id="aug-vflip-p" min="0" max="1" step="0.1" value="0.5"></div></div>
-                <div class="row border-bottom pb-2 mb-2 aug-option" data-controls="rotate90-controls"><div class="col-6"><input type="checkbox" id="aug-rotate90-enabled"> RandomRotate90</div><div class="col-6" id="rotate90-controls"><label>p: <span class="val-display">0.5</span></label><input type="range" class="form-control-range" id="aug-rotate90-p" min="0" max="1" step="0.1" value="0.5"></div></div>
-                <div class="row border-bottom pb-2 mb-2 aug-option" data-controls="rotate-controls"><div class="col-12"><input type="checkbox" id="aug-rotate-enabled" checked> Rotate</div><div class="col-12" id="rotate-controls"><div class="row"><div class="col-6"><label>p: <span class="val-display">0.5</span></label><input type="range" class="form-control-range" id="aug-rotate-p" min="0" max="1" step="0.1" value="0.5"></div><div class="col-6"><label>limit: ±<span class="val-display">30</span>°</label><input type="range" class="form-control-range" id="aug-rotate-limit" min="0" max="90" step="5" value="30"></div></div></div></div>
-                <div class="row border-bottom pb-2 mb-2 aug-option" data-controls="ssr-controls"><div class="col-12"><input type="checkbox" id="aug-ssr-enabled"> ShiftScaleRotate</div><div class="col-12" id="ssr-controls"><div class="row"><div class="col-6"><label>p: <span class="val-display">0.5</span></label><input type="range" class="form-control-range" id="aug-ssr-p" min="0" max="1" step="0.1" value="0.5"></div><div class="col-6"><label>rotate: ±<span class="val-display">25</span>°</label><input type="range" class="form-control-range" id="aug-ssr-rotate" min="0" max="90" step="5" value="25"></div><div class="col-6"><label>shift: <span class="val-display">0.06</span></label><input type="range" class="form-control-range" id="aug-ssr-shift" min="0" max="0.5" step="0.01" value="0.06"></div><div class="col-6"><label>scale: <span class="val-display">0.1</span></label><input type="range" class="form-control-range" id="aug-ssr-scale" min="0" max="0.9" step="0.05" value="0.1"></div></div></div></div>
-                <div class="row border-bottom pb-2 mb-2 aug-option" data-controls="affine-controls"><div class="col-12"><input type="checkbox" id="aug-affine-enabled"> Affine (Shear)</div><div class="col-12" id="affine-controls"><div class="row"><div class="col-6"><label>p: <span class="val-display">0.5</span></label><input type="range" class="form-control-range" id="aug-affine-p" min="0" max="1" step="0.1" value="0.5"></div><div class="col-6"><label>shear: ±<span class="val-display">12</span>°</label><input type="range" class="form-control-range" id="aug-affine-shear" min="0" max="45" step="1" value="12"></div></div></div></div>
+            <div class="card-body bg-light pt-3 pb-3 px-4">
+                <div class="row">
+                    <!-- HorizontalFlip -->
+                    <div class="col-md-6 mb-3 aug-option" data-controls="hflip-controls">
+                        <div class="custom-control custom-switch">
+                            <input type="checkbox" class="custom-control-input" id="aug-hflip-enabled" checked>
+                            <label class="custom-control-label font-weight-bold text-dark" for="aug-hflip-enabled">Horizontal Flip</label>
+                        </div>
+                        <div id="hflip-controls" class="pl-4 mt-2">
+                            <label class="d-flex justify-content-between small text-muted font-weight-bold mb-1">
+                                <span>Probability</span>
+                                <span class="val-display text-primary">0.5</span>
+                            </label>
+                            <input type="range" class="custom-range" id="aug-hflip-p" min="0" max="1" step="0.1" value="0.5">
+                        </div>
+                    </div>
+
+                    <!-- VerticalFlip -->
+                    <div class="col-md-6 mb-3 aug-option" data-controls="vflip-controls">
+                        <div class="custom-control custom-switch">
+                            <input type="checkbox" class="custom-control-input" id="aug-vflip-enabled">
+                            <label class="custom-control-label font-weight-bold text-dark" for="aug-vflip-enabled">Vertical Flip</label>
+                        </div>
+                        <div id="vflip-controls" class="pl-4 mt-2">
+                            <label class="d-flex justify-content-between small text-muted font-weight-bold mb-1">
+                                <span>Probability</span>
+                                <span class="val-display text-primary">0.5</span>
+                            </label>
+                            <input type="range" class="custom-range" id="aug-vflip-p" min="0" max="1" step="0.1" value="0.5">
+                        </div>
+                    </div>
+
+                    <!-- Rotate90 -->
+                    <div class="col-md-6 mb-3 aug-option" data-controls="rotate90-controls">
+                        <div class="custom-control custom-switch">
+                            <input type="checkbox" class="custom-control-input" id="aug-rotate90-enabled">
+                            <label class="custom-control-label font-weight-bold text-dark" for="aug-rotate90-enabled">Random Rotate 90°</label>
+                        </div>
+                        <div id="rotate90-controls" class="pl-4 mt-2">
+                            <label class="d-flex justify-content-between small text-muted font-weight-bold mb-1">
+                                <span>Probability</span>
+                                <span class="val-display text-primary">0.5</span>
+                            </label>
+                            <input type="range" class="custom-range" id="aug-rotate90-p" min="0" max="1" step="0.1" value="0.5">
+                        </div>
+                    </div>
+
+                    <!-- Rotate -->
+                    <div class="col-md-6 mb-3 aug-option" data-controls="rotate-controls">
+                        <div class="custom-control custom-switch">
+                            <input type="checkbox" class="custom-control-input" id="aug-rotate-enabled" checked>
+                            <label class="custom-control-label font-weight-bold text-dark" for="aug-rotate-enabled">Fine Rotation</label>
+                        </div>
+                        <div id="rotate-controls" class="pl-4 mt-2">
+                            <div class="row">
+                                <div class="col-6">
+                                    <label class="small text-muted font-weight-bold mb-1">Prob: <span class="val-display text-primary">0.5</span></label>
+                                    <input type="range" class="custom-range" id="aug-rotate-p" min="0" max="1" step="0.1" value="0.5">
+                                </div>
+                                <div class="col-6">
+                                    <label class="small text-muted font-weight-bold mb-1">Limit: ±<span class="val-display text-primary">30</span>°</label>
+                                    <input type="range" class="custom-range" id="aug-rotate-limit" min="0" max="90" step="5" value="30">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ShiftScaleRotate -->
+                    <div class="col-12 mb-3 aug-option" data-controls="ssr-controls">
+                        <div class="custom-control custom-switch">
+                            <input type="checkbox" class="custom-control-input" id="aug-ssr-enabled">
+                            <label class="custom-control-label font-weight-bold text-dark" for="aug-ssr-enabled">Shift / Scale / Rotate (SSR)</label>
+                        </div>
+                        <div id="ssr-controls" class="pl-4 mt-2">
+                            <div class="row">
+                                <div class="col-md-3 col-6 mb-2">
+                                    <label class="small text-muted font-weight-bold mb-1">Prob: <span class="val-display text-primary">0.5</span></label>
+                                    <input type="range" class="custom-range" id="aug-ssr-p" min="0" max="1" step="0.1" value="0.5">
+                                </div>
+                                <div class="col-md-3 col-6 mb-2">
+                                    <label class="small text-muted font-weight-bold mb-1">Rot: ±<span class="val-display text-primary">25</span>°</label>
+                                    <input type="range" class="custom-range" id="aug-ssr-rotate" min="0" max="90" step="5" value="25">
+                                </div>
+                                <div class="col-md-3 col-6 mb-2">
+                                    <label class="small text-muted font-weight-bold mb-1">Shift: <span class="val-display text-primary">0.06</span></label>
+                                    <input type="range" class="custom-range" id="aug-ssr-shift" min="0" max="0.5" step="0.01" value="0.06">
+                                </div>
+                                <div class="col-md-3 col-6 mb-2">
+                                    <label class="small text-muted font-weight-bold mb-1">Scale: <span class="val-display text-primary">0.1</span></label>
+                                    <input type="range" class="custom-range" id="aug-ssr-scale" min="0" max="0.9" step="0.05" value="0.1">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Affine -->
+                    <div class="col-12 aug-option" data-controls="affine-controls">
+                        <div class="custom-control custom-switch">
+                            <input type="checkbox" class="custom-control-input" id="aug-affine-enabled">
+                            <label class="custom-control-label font-weight-bold text-dark" for="aug-affine-enabled">Affine (Shear)</label>
+                        </div>
+                        <div id="affine-controls" class="pl-4 mt-2">
+                            <div class="row">
+                                <div class="col-6">
+                                    <label class="small text-muted font-weight-bold mb-1">Prob: <span class="val-display text-primary">0.5</span></label>
+                                    <input type="range" class="custom-range" id="aug-affine-p" min="0" max="1" step="0.1" value="0.5">
+                                </div>
+                                <div class="col-6">
+                                    <label class="small text-muted font-weight-bold mb-1">Shear: ±<span class="val-display text-primary">12</span>°</label>
+                                    <input type="range" class="custom-range" id="aug-affine-shear" min="0" max="45" step="1" value="12">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
-    <div class="card">
-        <div class="card-header"><h2 class="mb-0"><button class="btn btn-link btn-block text-left collapsed" type="button" data-toggle="collapse" data-target="#collapse-crop">Crop & Pad</button></h2></div>
+    <!-- 2. Crop & Pad -->
+    <div class="card border-0 mb-1">
+        <div class="card-header bg-white p-0">
+            <button class="btn btn-block text-left font-weight-bold text-dark py-3 px-4 collapsed d-flex align-items-center" type="button" data-toggle="collapse" data-target="#collapse-crop">
+                <i class="bi bi-crop mr-2 text-info"></i> Crop & Pad
+            </button>
+        </div>
         <div id="collapse-crop" class="collapse" data-parent="#aug-accordion">
-            <div class="card-body">
-                 <div class="row border-bottom pb-2 mb-2 aug-option" data-controls="crop-controls"><div class="col-12"><input type="checkbox" id="aug-crop-enabled"> RandomSizedBBoxSafeCrop</div><div class="col-12" id="crop-controls"><div class="row"><div class="col-12"><small>Crops a random part & resizes. Final size is set by training parameters.</small></div><div class="col-6"><label>p: <span class="val-display">0.5</span></label><input type="range" class="form-control-range" id="aug-crop-p" min="0" max="1" step="0.1" value="0.5"></div></div></div></div>
+            <div class="card-body bg-light pt-3 pb-3 px-4">
+                 <div class="row aug-option" data-controls="crop-controls">
+                     <div class="col-12">
+                        <div class="custom-control custom-switch">
+                            <input type="checkbox" class="custom-control-input" id="aug-crop-enabled">
+                            <label class="custom-control-label font-weight-bold text-dark" for="aug-crop-enabled">Random Sized BBox Safe Crop</label>
+                        </div>
+                     </div>
+                     <div class="col-12 pl-4 mt-2" id="crop-controls">
+                         <p class="text-muted small mb-2"><i class="bi bi-info-circle mr-1"></i> Crops a random part of the image ensuring objects are kept, then resizes to training size.</p>
+                         <label class="d-flex justify-content-between small text-muted font-weight-bold mb-1">
+                            <span>Probability</span>
+                            <span class="val-display text-primary">0.5</span>
+                        </label>
+                        <input type="range" class="custom-range" id="aug-crop-p" min="0" max="1" step="0.1" value="0.5">
+                     </div>
+                 </div>
             </div>
         </div>
     </div>
 
-    <div class="card">
-        <div class="card-header"><h2 class="mb-0"><button class="btn btn-link btn-block text-left collapsed" type="button" data-toggle="collapse" data-target="#collapse-color">Color & Lighting</button></h2></div>
+    <!-- 3. Color & Lighting -->
+    <div class="card border-0 mb-1">
+        <div class="card-header bg-white p-0">
+            <button class="btn btn-block text-left font-weight-bold text-dark py-3 px-4 collapsed d-flex align-items-center" type="button" data-toggle="collapse" data-target="#collapse-color">
+                <i class="bi bi-palette mr-2 text-warning"></i> Color & Lighting
+            </button>
+        </div>
         <div id="collapse-color" class="collapse" data-parent="#aug-accordion">
-            <div class="card-body">
-                <div class="row border-bottom pb-2 mb-2 aug-option" data-controls="grayscale-controls"><div class="col-6"><input type="checkbox" id="aug-grayscale-enabled"> ToGray</div><div class="col-6" id="grayscale-controls"><label>p: <span class="val-display">0.1</span></label><input type="range" class="form-control-range" id="aug-grayscale-p" min="0" max="1" step="0.1" value="0.1"></div></div>
-                <div class="row border-bottom pb-2 mb-2 aug-option" data-controls="hsv-controls"><div class="col-12"><input type="checkbox" id="aug-hsv-enabled" checked> HueSaturationValue</div><div class="col-12" id="hsv-controls"><div class="row"><div class="col-6"><label>p: <span class="val-display">0.5</span></label><input type="range" class="form-control-range" id="aug-hsv-p" min="0" max="1" step="0.1" value="0.5"></div><div class="col-6"><label>Hue: ±<span class="val-display">20</span></label><input type="range" class="form-control-range" id="aug-hsv-h" min="0" max="100" step="5" value="20"></div><div class="col-6"><label>Sat: ±<span class="val-display">30</span></label><input type="range" class="form-control-range" id="aug-hsv-s" min="0" max="100" step="5" value="30"></div><div class="col-6"><label>Val: ±<span class="val-display">20</span></label><input type="range" class="form-control-range" id="aug-hsv-v" min="0" max="100" step="5" value="20"></div></div></div></div>
-                <div class="row border-bottom pb-2 mb-2 aug-option" data-controls="bc-controls"><div class="col-12"><input type="checkbox" id="aug-bc-enabled" checked> RandomBrightnessContrast</div><div class="col-12" id="bc-controls"><div class="row"><div class="col-6"><label>p: <span class="val-display">0.5</span></label><input type="range" class="form-control-range" id="aug-bc-p" min="0" max="1" step="0.1" value="0.5"></div><div class="col-6"><label>Bright: ±<span class="val-display">0.2</span></label><input type="range" class="form-control-range" id="aug-bc-b" min="0" max="1" step="0.05" value="0.2"></div><div class="col-6"><label>Contrast: ±<span class="val-display">0.2</span></label><input type="range" class="form-control-range" id="aug-bc-c" min="0" max="1" step="0.05" value="0.2"></div></div></div></div>
+            <div class="card-body bg-light pt-3 pb-3 px-4">
+                <div class="row">
+                    <!-- Grayscale -->
+                    <div class="col-md-6 mb-3 aug-option" data-controls="grayscale-controls">
+                        <div class="custom-control custom-switch">
+                            <input type="checkbox" class="custom-control-input" id="aug-grayscale-enabled">
+                            <label class="custom-control-label font-weight-bold text-dark" for="aug-grayscale-enabled">To Gray</label>
+                        </div>
+                        <div id="grayscale-controls" class="pl-4 mt-2">
+                            <label class="d-flex justify-content-between small text-muted font-weight-bold mb-1">
+                                <span>Probability</span>
+                                <span class="val-display text-primary">0.1</span>
+                            </label>
+                            <input type="range" class="custom-range" id="aug-grayscale-p" min="0" max="1" step="0.1" value="0.1">
+                        </div>
+                    </div>
+
+                    <!-- HSV -->
+                    <div class="col-12 mb-3 aug-option" data-controls="hsv-controls">
+                        <div class="custom-control custom-switch">
+                            <input type="checkbox" class="custom-control-input" id="aug-hsv-enabled" checked>
+                            <label class="custom-control-label font-weight-bold text-dark" for="aug-hsv-enabled">Hue Saturation Value</label>
+                        </div>
+                        <div id="hsv-controls" class="pl-4 mt-2">
+                            <div class="row">
+                                <div class="col-md-3 col-6 mb-2">
+                                    <label class="small text-muted font-weight-bold mb-1">Prob: <span class="val-display text-primary">0.5</span></label>
+                                    <input type="range" class="custom-range" id="aug-hsv-p" min="0" max="1" step="0.1" value="0.5">
+                                </div>
+                                <div class="col-md-3 col-6 mb-2">
+                                    <label class="small text-muted font-weight-bold mb-1">Hue: ±<span class="val-display text-primary">20</span></label>
+                                    <input type="range" class="custom-range" id="aug-hsv-h" min="0" max="100" step="5" value="20">
+                                </div>
+                                <div class="col-md-3 col-6 mb-2">
+                                    <label class="small text-muted font-weight-bold mb-1">Sat: ±<span class="val-display text-primary">30</span></label>
+                                    <input type="range" class="custom-range" id="aug-hsv-s" min="0" max="100" step="5" value="30">
+                                </div>
+                                <div class="col-md-3 col-6 mb-2">
+                                    <label class="small text-muted font-weight-bold mb-1">Val: ±<span class="val-display text-primary">20</span></label>
+                                    <input type="range" class="custom-range" id="aug-hsv-v" min="0" max="100" step="5" value="20">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Brightness Contrast -->
+                    <div class="col-12 aug-option" data-controls="bc-controls">
+                        <div class="custom-control custom-switch">
+                            <input type="checkbox" class="custom-control-input" id="aug-bc-enabled" checked>
+                            <label class="custom-control-label font-weight-bold text-dark" for="aug-bc-enabled">Brightness & Contrast</label>
+                        </div>
+                        <div id="bc-controls" class="pl-4 mt-2">
+                            <div class="row">
+                                <div class="col-md-4 col-12 mb-2">
+                                    <label class="small text-muted font-weight-bold mb-1">Prob: <span class="val-display text-primary">0.5</span></label>
+                                    <input type="range" class="custom-range" id="aug-bc-p" min="0" max="1" step="0.1" value="0.5">
+                                </div>
+                                <div class="col-md-4 col-6 mb-2">
+                                    <label class="small text-muted font-weight-bold mb-1">Bright: ±<span class="val-display text-primary">0.2</span></label>
+                                    <input type="range" class="custom-range" id="aug-bc-b" min="0" max="1" step="0.05" value="0.2">
+                                </div>
+                                <div class="col-md-4 col-6 mb-2">
+                                    <label class="small text-muted font-weight-bold mb-1">Contrast: ±<span class="val-display text-primary">0.2</span></label>
+                                    <input type="range" class="custom-range" id="aug-bc-c" min="0" max="1" step="0.05" value="0.2">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
-    <div class="card">
-        <div class="card-header"><h2 class="mb-0"><button class="btn btn-link btn-block text-left collapsed" type="button" data-toggle="collapse" data-target="#collapse-blur">Blur & Noise</button></h2></div>
+    <!-- 4. Blur & Noise -->
+    <div class="card border-0 mb-1">
+        <div class="card-header bg-white p-0">
+            <button class="btn btn-block text-left font-weight-bold text-dark py-3 px-4 collapsed d-flex align-items-center" type="button" data-toggle="collapse" data-target="#collapse-blur">
+                <i class="bi bi-droplet-half mr-2 text-secondary"></i> Blur & Noise
+            </button>
+        </div>
         <div id="collapse-blur" class="collapse" data-parent="#aug-accordion">
-            <div class="card-body">
-                <div class="row border-bottom pb-2 mb-2 aug-option" data-controls="blur-controls"><div class="col-12"><input type="checkbox" id="aug-blur-enabled"> GaussianBlur</div><div class="col-12" id="blur-controls"><div class="row"><div class="col-6"><label>p: <span class="val-display">0.3</span></label><input type="range" class="form-control-range" id="aug-blur-p" min="0" max="1" step="0.1" value="0.3"></div><div class="col-6"><label>limit: <span class="val-display">7</span>px</label><input type="range" class="form-control-range" id="aug-blur-limit" min="3" max="21" step="2" value="7"></div></div></div></div>
-                <div class="row border-bottom pb-2 mb-2 aug-option" data-controls="noise-controls"><div class="col-12"><input type="checkbox" id="aug-noise-enabled"> GaussNoise</div><div class="col-12" id="noise-controls"><div class="row"><div class="col-6"><label>p: <span class="val-display">0.3</span></label><input type="range" class="form-control-range" id="aug-noise-p" min="0" max="1" step="0.1" value="0.3"></div><div class="col-6"><label>var_limit: <span class="val-display">50</span></label><input type="range" class="form-control-range" id="aug-noise-limit" min="10" max="250" step="10" value="50"></div></div></div></div>
+            <div class="card-body bg-light pt-3 pb-3 px-4">
+                <div class="row">
+                    <!-- Blur -->
+                    <div class="col-12 mb-3 aug-option" data-controls="blur-controls">
+                        <div class="custom-control custom-switch">
+                            <input type="checkbox" class="custom-control-input" id="aug-blur-enabled">
+                            <label class="custom-control-label font-weight-bold text-dark" for="aug-blur-enabled">Gaussian Blur</label>
+                        </div>
+                        <div id="blur-controls" class="pl-4 mt-2">
+                            <div class="row">
+                                <div class="col-6">
+                                    <label class="small text-muted font-weight-bold mb-1">Prob: <span class="val-display text-primary">0.3</span></label>
+                                    <input type="range" class="custom-range" id="aug-blur-p" min="0" max="1" step="0.1" value="0.3">
+                                </div>
+                                <div class="col-6">
+                                    <label class="small text-muted font-weight-bold mb-1">Limit: <span class="val-display text-primary">7</span>px</label>
+                                    <input type="range" class="custom-range" id="aug-blur-limit" min="3" max="21" step="2" value="7">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Noise -->
+                    <div class="col-12 aug-option" data-controls="noise-controls">
+                        <div class="custom-control custom-switch">
+                            <input type="checkbox" class="custom-control-input" id="aug-noise-enabled">
+                            <label class="custom-control-label font-weight-bold text-dark" for="aug-noise-enabled">Gaussian Noise</label>
+                        </div>
+                        <div id="noise-controls" class="pl-4 mt-2">
+                            <div class="row">
+                                <div class="col-6">
+                                    <label class="small text-muted font-weight-bold mb-1">Prob: <span class="val-display text-primary">0.3</span></label>
+                                    <input type="range" class="custom-range" id="aug-noise-p" min="0" max="1" step="0.1" value="0.3">
+                                </div>
+                                <div class="col-6">
+                                    <label class="small text-muted font-weight-bold mb-1">Var Limit: <span class="val-display text-primary">50</span></label>
+                                    <input type="range" class="custom-range" id="aug-noise-limit" min="10" max="250" step="10" value="50">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
-    <div class="card">
-        <div class="card-header"><h2 class="mb-0"><button class="btn btn-link btn-block text-left collapsed" type="button" data-toggle="collapse" data-target="#collapse-dropout">Dropout</button></h2></div>
+    <!-- 5. Dropout & Cutout -->
+    <div class="card border-0 mb-1">
+        <div class="card-header bg-white p-0">
+            <button class="btn btn-block text-left font-weight-bold text-dark py-3 px-4 collapsed d-flex align-items-center" type="button" data-toggle="collapse" data-target="#collapse-dropout">
+                <i class="bi bi-grid-3x3 mr-2 text-danger"></i> Dropout (Cutout)
+            </button>
+        </div>
         <div id="collapse-dropout" class="collapse" data-parent="#aug-accordion">
-            <div class="card-body">
-                <div class="row border-bottom pb-2 mb-2 aug-option" data-controls="cutout-controls"><div class="col-12"><input type="checkbox" id="aug-cutout-enabled"> CoarseDropout (Cutout)</div><div class="col-12" id="cutout-controls"><div class="row"><div class="col-6"><label>p: <span class="val-display">0.5</span></label><input type="range" class="form-control-range" id="aug-cutout-p" min="0" max="1" step="0.1" value="0.5"></div><div class="col-6"><label>max_holes: <span class="val-display">1</span></label><input type="range" class="form-control-range" id="aug-cutout-holes" min="1" max="16" step="1" value="1"></div><div class="col-12"><label>size: <span class="val-display">64</span>px</label><input type="range" class="form-control-range" id="aug-cutout-size" min="8" max="128" step="8" value="64"></div></div></div></div>
+            <div class="card-body bg-light pt-3 pb-3 px-4">
+                <div class="row aug-option" data-controls="cutout-controls">
+                    <div class="col-12">
+                        <div class="custom-control custom-switch">
+                            <input type="checkbox" class="custom-control-input" id="aug-cutout-enabled">
+                            <label class="custom-control-label font-weight-bold text-dark" for="aug-cutout-enabled">CoarseDropout</label>
+                        </div>
+                    </div>
+                    <div class="col-12 pl-4 mt-2" id="cutout-controls">
+                        <div class="row">
+                            <div class="col-6 mb-2">
+                                <label class="small text-muted font-weight-bold mb-1">Prob: <span class="val-display text-primary">0.5</span></label>
+                                <input type="range" class="custom-range" id="aug-cutout-p" min="0" max="1" step="0.1" value="0.5">
+                            </div>
+                            <div class="col-6 mb-2">
+                                <label class="small text-muted font-weight-bold mb-1">Holes: <span class="val-display text-primary">1</span></label>
+                                <input type="range" class="custom-range" id="aug-cutout-holes" min="1" max="16" step="1" value="1">
+                            </div>
+                            <div class="col-12">
+                                <label class="small text-muted font-weight-bold mb-1">Size: <span class="val-display text-primary">64</span>px</label>
+                                <input type="range" class="custom-range" id="aug-cutout-size" min="8" max="128" step="8" value="64">
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
-    <div class="card">
-        <div class="card-header"><h2 class="mb-0"><button class="btn btn-link btn-block text-left collapsed" type="button" data-toggle="collapse" data-target="#collapse-advanced">Advanced</button></h2></div>
+    <!-- 6. Advanced -->
+    <div class="card border-0 mb-1">
+        <div class="card-header bg-white p-0">
+            <button class="btn btn-block text-left font-weight-bold text-dark py-3 px-4 collapsed d-flex align-items-center" type="button" data-toggle="collapse" data-target="#collapse-advanced">
+                <i class="bi bi-puzzle mr-2 text-success"></i> Advanced
+            </button>
+        </div>
         <div id="collapse-advanced" class="collapse" data-parent="#aug-accordion">
-            <div class="card-body">
-                <div class="row border-bottom pb-2 mb-2 aug-option" data-controls="mosaic-controls"><div class="col-6"><input type="checkbox" id="aug-mosaic-enabled"> Mosaic</div><div class="col-6" id="mosaic-controls"><label>p: <span class="val-display">0.5</span></label><input type="range" class="form-control-range" id="aug-mosaic-p" min="0" max="1" step="0.1" value="0.5"></div></div>
+            <div class="card-body bg-light pt-3 pb-3 px-4">
+                <div class="row aug-option" data-controls="mosaic-controls">
+                    <div class="col-12">
+                        <div class="custom-control custom-switch">
+                            <input type="checkbox" class="custom-control-input" id="aug-mosaic-enabled">
+                            <label class="custom-control-label font-weight-bold text-dark" for="aug-mosaic-enabled">Mosaic</label>
+                        </div>
+                        <div id="mosaic-controls" class="pl-4 mt-2">
+                            <label class="d-flex justify-content-between small text-muted font-weight-bold mb-1">
+                                <span>Probability</span>
+                                <span class="val-display text-primary">0.5</span>
+                            </label>
+                            <input type="range" class="custom-range" id="aug-mosaic-p" min="0" max="1" step="0.1" value="0.5">
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

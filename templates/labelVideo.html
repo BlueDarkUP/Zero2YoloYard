@@ -1,21 +1,27 @@
+
+<!-- START OF FILE labelVideo.html -->
 {% extends "layout.html" %}
 
 {% block head %}
 <style>
+    /* 覆盖默认布局 padding，实现全屏 IDE 模式 */
+    main { padding: 0 !important; overflow: hidden; }
+    
+    /* 画布交互样式 */
     #canvas-container {
         position: relative;
         cursor: crosshair;
-        max-width: 100%;
         display: inline-block;
+        box-shadow: 0 0 30px rgba(0,0,0,0.2);
     }
 
     #canvas-container.sam-active,
     #canvas-container.lam-active {
-        cursor: copy;
+        cursor: copy !important;
     }
 
     #canvas-container.sam-loading {
-        cursor: wait;
+        cursor: wait !important;
     }
 
     #canvas-container canvas {
@@ -38,26 +44,26 @@
         user-select: none;
         -webkit-user-select: none;
         -moz-user-select: none;
+        display: block;
     }
 
+    /* 侧边栏列表样式微调 */
     #class-list .list-group-item,
     #bbox-list .list-group-item {
         cursor: pointer;
+        padding: 0.5rem 0.75rem;
+        font-size: 0.9rem;
+        border-left-width: 3px;
     }
 
     .color-swatch {
         display: inline-block;
-        width: 15px;
-        height: 15px;
-        margin-right: 10px;
-        border: 1px solid #ccc;
+        width: 12px;
+        height: 12px;
+        margin-right: 8px;
+        border: 1px solid rgba(0,0,0,0.1);
         vertical-align: middle;
-        border-radius: 3px;
-    }
-
-    .side-panel {
-        max-height: 85vh;
-        overflow-y: auto;
+        border-radius: 50%;
     }
 
     .shortcut-keys-container {
@@ -65,12 +71,7 @@
         gap: 0.5rem;
         flex-wrap: wrap;
         margin-top: 0.5rem;
-    }
-
-    .adv-settings-label {
-        font-size: 0.8rem;
-        font-weight: bold;
-        margin-bottom: 0.2rem;
+        justify-content: center;
     }
 
     #drawing-canvas.cursor-move { cursor: move; }
@@ -78,233 +79,288 @@
     #drawing-canvas.cursor-nesw-resize { cursor: nesw-resize; }
     #drawing-canvas.cursor-ns-resize { cursor: ns-resize; }
     #drawing-canvas.cursor-ew-resize { cursor: ew-resize; }
+
+    .bbox-controls { opacity: 0; transition: opacity 0.2s; }
+    #bbox-list .list-group-item:hover .bbox-controls { opacity: 1; }
+    
+    .tool-section-title {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--text-secondary);
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+        margin-top: 1rem;
+    }
+    .tool-section-title:first-child { margin-top: 0; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid slide-in-up">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <div>
-            <h3 class="mb-0">
-                <span class="text-muted">Task for {{ task_entity.assigned_to }}:</span> {{ video_entity.description }}
-            </h3>
-            <p class="lead mb-0">(Frames {{ task_entity.start_frame }} to {{ task_entity.end_frame }})</p>
+<div class="ide-layout fade-in">
+    <!-- 左侧：主画布区域 -->
+    <div class="ide-canvas-area">
+        <!-- 1. 顶部工具栏 -->
+        <div class="ide-toolbar justify-content-between">
+            <div class="d-flex align-items-center" style="min-width: 0;">
+                <a href="/" class="btn btn-sm btn-link text-secondary mr-2 pl-0"><i class="bi bi-arrow-left"></i> Back</a>
+                <div class="border-left pl-3" style="overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
+                    <h6 class="mb-0 font-weight-bold text-truncate">{{ video_entity.description }}</h6>
+                    <small class="text-muted">Task: {{ task_entity.assigned_to }} (Frames {{ task_entity.start_frame }}-{{ task_entity.end_frame }})</small>
+                </div>
+            </div>
+            
+            <!-- 帧导航控制器 -->
+            <div class="d-flex align-items-center bg-white border rounded px-2 py-1 shadow-sm mx-2">
+                <button class="btn btn-sm btn-link text-dark p-0 mr-2" onclick="document.getElementById('frame-slider').stepDown(); document.getElementById('frame-slider').dispatchEvent(new Event('input'));"><i class="bi bi-chevron-left"></i></button>
+                <span class="font-weight-bold mx-2 text-monospace" style="min-width: 80px; text-align: center;">
+                    <span id="frame-number-display">{{ task_entity.start_frame }}</span> / {{ task_entity.end_frame }}
+                </span>
+                <button class="btn btn-sm btn-link text-dark p-0 ml-2" onclick="document.getElementById('frame-slider').stepUp(); document.getElementById('frame-slider').dispatchEvent(new Event('input'));"><i class="bi bi-chevron-right"></i></button>
+            </div>
+            
+            <div>
+                <button id="save-bboxes" class="btn btn-sm btn-primary shadow-sm"><i class="bi bi-cloud-arrow-up-fill mr-1"></i> Save (S)</button>
+            </div>
         </div>
-        <a href="/" class="btn btn-secondary"><i class="bi bi-arrow-left-circle"></i> Back to Home</a>
+
+        <!-- 2. 画布滚动容器 -->
+        <div class="ide-canvas-wrapper">
+            <div id="interpolation-banner" class="position-absolute shadow-sm" style="top: 15px; z-index: 100; min-width: 300px;">
+                <i class="bi bi-bezier"></i> <strong>INTERPOLATION ACTIVE</strong><br>
+                <small>Move to target frame, adjust box, click 'Confirm' (Esc to cancel)</small>
+            </div>
+            
+            <div id="canvas-container">
+                <img id="frame-image" src="{{ first_frame_url }}" class="img-fluid" alt="Video Frame" draggable="false" />
+                <canvas id="crosshair-canvas"></canvas>
+                <canvas id="drawing-canvas"></canvas>
+            </div>
+        </div>
+
+        <!-- 3. 底部进度条与快捷键 -->
+        <div class="px-4 py-3 bg-surface border-top">
+            <input type="range" class="custom-range" id="frame-slider" min="{{ task_entity.start_frame }}" max="{{ task_entity.end_frame }}" value="{{ task_entity.start_frame }}">
+            <div class="shortcut-keys-container mt-2">
+                <span class="shortcut-key">S: Save</span>
+                <span class="shortcut-key">A/D: Prev/Next</span>
+                <span class="shortcut-key">C: Cycle Overlap</span>
+                <span class="shortcut-key">Esc: Cancel</span>
+                <span class="shortcut-key">Ctrl+Z: Undo</span>
+                <span class="shortcut-key">Del: Delete</span>
+            </div>
+        </div>
     </div>
 
-    <div class="row">
-        <div class="col-lg-8 col-xl-9">
-            <div id="interpolation-banner">
-                <i class="bi bi-bezier"></i> **INTERPOLATION MODE ACTIVE**: Go to target frame, adjust the box, and click 'Confirm'. Press 'Esc' to cancel.
+    <!-- 右侧：侧边工具栏 -->
+    <div class="ide-sidebar custom-scrollbar">
+        
+        <!-- SECTION: Classes -->
+        <div class="tool-section-title">Classes</div>
+        <div class="card mb-3 border-0 bg-transparent">
+            <div class="input-group input-group-sm mb-2">
+                <input type="text" id="new-class-name" class="form-control" placeholder="New class...">
+                <div class="input-group-append">
+                    <button id="add-class-btn" class="btn btn-secondary" type="button"><i class="bi bi-plus"></i></button>
+                </div>
             </div>
-            <div class="canvas-area">
-                <div id="canvas-container">
-                    <img id="frame-image" src="{{ first_frame_url }}" class="img-fluid" alt="Video Frame" draggable="false" />
-                    <canvas id="crosshair-canvas"></canvas>
-                    <canvas id="drawing-canvas"></canvas>
-                </div>
-                <div class="mt-3">
-                    <label for="frame-slider">
-                        Frame: <span id="frame-number-display" class="font-weight-bold">{{ task_entity.start_frame }}</span> / {{ task_entity.end_frame }}
-                    </label>
-                    <input type="range" class="form-control-range" id="frame-slider" min="{{ task_entity.start_frame }}" max="{{ task_entity.end_frame }}" value="{{ task_entity.start_frame }}">
-                    <div class="shortcut-keys-container">
-                        <span class="shortcut-key">S</span> Save/Update
-                        <span class="shortcut-key">A</span> Prev
-                        <span class="shortcut-key">D</span> Next
-                        <span class="shortcut-key">C</span> Cycle Boxes
-                        <span class="shortcut-key">Esc</span> Cancel Interpolation
-                        <span class="shortcut-key">Ctrl+Z</span> Undo
-                        <span class="shortcut-key">Ctrl+Y</span> Redo
-                        <span class="shortcut-key">Del</span> Delete
-                    </div>
-                </div>
+            <ul id="class-list" class="list-group list-group-flush rounded border" style="max-height: 200px; overflow-y: auto;"></ul>
+            <div class="mt-2 d-flex justify-content-between">
+                <button id="find-from-dataset-btn" class="btn btn-xs btn-outline-info" title="Find objects using dataset examples"><i class="bi bi-journal-album"></i> Find Similar</button>
+                <button id="rebuild-prototypes-btn" class="btn btn-xs btn-outline-warning" title="Rebuild AI Models"><i class="bi bi-arrow-clockwise"></i> Rebuild AI</button>
             </div>
         </div>
 
-        <div class="col-lg-4 col-xl-3">
-            <div class="side-panel">
-                <div class="d-flex justify-content-between align-items-center">
-                    <h4><i class="bi bi-tags"></i> Classes</h4>
-                    <div>
-                        <button id="find-from-dataset-btn" class="btn btn-sm btn-outline-info" title="Find objects of the selected class using all examples from the entire dataset."><i class="bi bi-journal-album"></i> Find from Dataset</button>
-                        <button id="rebuild-prototypes-btn" class="btn btn-sm btn-outline-warning ml-2" title="Re-calculate AI models for all classes from all saved labels. This is a background task.">
-                            <i class="bi bi-arrow-clockwise"></i> Rebuild AI Models
-                        </button>
-                    </div>
-                </div>
-                <div class="input-group my-3">
-                    <input type="text" id="new-class-name" class="form-control" placeholder="New class name">
-                    <div class="input-group-append">
-                        <button id="add-class-btn" class="btn btn-outline-secondary" type="button">Add</button>
-                    </div>
-                </div>
-                <ul id="class-list" class="list-group mb-3"></ul>
+        <hr class="border-light my-2">
 
-                <hr>
-
-                <h4><i class="bi bi-bounding-box"></i> Bounding Boxes</h4>
-                <p><small class="text-muted">Select a class to draw, or use an AI tool below.</small></p>
-                <button id="save-bboxes" class="btn btn-primary btn-block mb-2"><i class="bi bi-save"></i> Save BBoxes (S)</button>
-                <button id="lam-toggle-btn" class="btn btn-info btn-block mb-2"><i class="bi bi-bullseye"></i> Enable LAM (Click to Label)</button>
-                <button id="sam-toggle-btn" class="btn btn-info btn-block mb-2"><i class="bi bi-magic"></i> Enable SAM (Point)</button>
-                <button id="interactive-mode-toggle" class="btn btn-info btn-block mb-2"><i class="bi bi-stars"></i> Enable Smart Select</button>
-                <button id="sam2-track-btn" class="btn btn-success btn-block mb-3"><i class="bi bi-play-circle"></i> Track Objects with SAM2</button>
-
-                <div id="interactive-segment-controls">
-                    <h5 class="mb-3"><i class="bi bi-stars"></i> Smart Select Tool</h5>
-                    <p><small class="text-muted">Draw a box around one object. Similar objects will be found automatically.</small></p>
-                    <button id="find-similar-btn" class="btn btn-primary btn-block" style="display: none;"><i class="bi bi-search"></i> Find Similar Objects</button>
-                    <button id="clear-samples-btn" class="btn btn-secondary btn-block mt-1"><i class="bi bi-eraser"></i> Clear Sample & Previews</button>
-                    <hr>
-                    <div id="interactive-results-controls" style="display: none;" class="mt-2">
-                        <h5>Review & Assign</h5>
-                        <p><small class="text-muted">Select a class, then click on a blue box to assign it. Hold <strong>C</strong> to cycle through overlapping boxes.</small></p>
-                        <div class="form-group">
-                            <label for="result-threshold">Confidence Threshold: <strong id="threshold-value">0.50</strong></label>
-                            <input type="range" class="form-control-range" id="result-threshold" min="0.1" max="0.99" step="0.01" value="0.50">
-                        </div>
-                        <button id="accept-visible-btn" class="btn btn-success btn-block mt-2"><i class="bi bi-check2-all"></i> Accept All Visible</button>
-                        <button id="finish-interactive-btn" class="btn btn-secondary btn-block mt-1"><i class="bi bi-x-circle"></i> Finish & Clear Previews</button>
-                    </div>
-                </div>
-
-                <div id="suggestion-review-controls" style="display: none; border: 2px dashed #ffc107; padding: 15px; margin-top: 15px; background-color: #fffaf0; border-radius: 0.3rem;">
-                    <h5 class="mb-3 text-warning"><i class="bi bi-lightbulb"></i> AI Suggestions Review</h5>
-                    <p><small class="text-muted">Blue dashed boxes are AI suggestions. Click one to accept it. Use the slider to filter by confidence.</small></p>
-                    <div class="form-group">
-                        <label for="suggestion-threshold">Confidence Threshold: <strong id="suggestion-threshold-value">0.50</strong></label>
-                        <input type="range" class="form-control-range" id="suggestion-threshold" min="0.1" max="0.99" step="0.01" value="0.50">
-                    </div>
-                    <button id="accept-all-suggestions-btn" class="btn btn-warning btn-block mt-2"><i class="bi bi-check2-all"></i> Accept All Visible Suggestions</button>
-                </div>
-
-                <div id="track-controls">
-                    <h5 id="track-status-header">Tracking...</h5>
-                    <div class="progress mb-2" style="height: 20px;">
-                        <div id="track-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%;">0%</div>
-                    </div>
-                    <button id="stop-sam2-track-btn" class="btn btn-danger btn-block"><i class="bi bi-stop-circle"></i> Stop Tracking</button>
-                    <hr>
-                    <h5>Review Mode</h5>
-                    <p><small class="text-muted">Use A/D to review. Correct boxes. Press (S) to update a frame in cache.</small></p>
-                    <button id="save-all-tracked-btn" class="btn btn-warning btn-block" disabled><i class="bi bi-check2-all"></i> Save All Reviewed Frames</button>
-                    <button id="exit-track-mode-btn" class="btn btn-secondary btn-block mt-2"><i class="bi bi-x-circle"></i> Exit & Discard</button>
-                </div>
-
-                <ul id="bbox-list" class="list-group mt-3"></ul>
+        <!-- SECTION: Tools -->
+        <div class="tool-section-title">AI Tools</div>
+        <div class="row no-gutters mb-3">
+            <div class="col-6 pr-1 mb-2">
+                <button id="sam-toggle-btn" class="btn btn-sm btn-outline-primary w-100 text-truncate" title="Segment Anything"><i class="bi bi-magic"></i> SAM Point</button>
+            </div>
+            <div class="col-6 pl-1 mb-2">
+                <button id="lam-toggle-btn" class="btn btn-sm btn-outline-primary w-100 text-truncate" title="Label Anything"><i class="bi bi-bullseye"></i> LAM Click</button>
+            </div>
+            <div class="col-12 mb-2">
+                <button id="interactive-mode-toggle" class="btn btn-sm btn-outline-info w-100"><i class="bi bi-stars"></i> Smart Select (One-Shot)</button>
+            </div>
+            <div class="col-12">
+                <button id="sam2-track-btn" class="btn btn-sm btn-outline-success w-100"><i class="bi bi-play-circle"></i> Video Tracking</button>
             </div>
         </div>
+
+        <!-- 默认隐藏的控制面板 (添加 style=display:none 确保初始状态) -->
+        <div id="interactive-segment-controls" style="display: none;">
+            <h6 class="small font-weight-bold mb-2 text-info"><i class="bi bi-stars"></i> Smart Select Active</h6>
+            <p class="text-muted small mb-2" style="font-size: 0.75rem;">Draw a box around one object to find others.</p>
+            <button id="find-similar-btn" class="btn btn-sm btn-primary w-100 mb-2" style="display: none;"><i class="bi bi-search"></i> Find Similar</button>
+            <button id="clear-samples-btn" class="btn btn-sm btn-secondary w-100 mb-2"><i class="bi bi-eraser"></i> Clear</button>
+            
+            <div id="interactive-results-controls" style="display: none;" class="mt-2 border-top pt-2">
+                <div class="form-group mb-2">
+                    <label class="small mb-1 d-flex justify-content-between"><span>Confidence</span> <span id="threshold-value" class="font-weight-bold">0.50</span></label>
+                    <input type="range" class="custom-range" id="result-threshold" min="0.1" max="0.99" step="0.01" value="0.50">
+                </div>
+                <button id="accept-visible-btn" class="btn btn-sm btn-success w-100 mb-1"><i class="bi bi-check2-all"></i> Accept All</button>
+                <button id="finish-interactive-btn" class="btn btn-sm btn-light border w-100">Finish</button>
+            </div>
+        </div>
+
+        <div id="suggestion-review-controls" style="display: none;">
+            <h6 class="small font-weight-bold mb-2 text-warning"><i class="bi bi-lightbulb"></i> Review Suggestions</h6>
+            <div class="form-group mb-2">
+                <label class="small mb-1 d-flex justify-content-between"><span>Confidence</span> <span id="suggestion-threshold-value" class="font-weight-bold">0.50</span></label>
+                <input type="range" class="custom-range" id="suggestion-threshold" min="0.1" max="0.99" step="0.01" value="0.50">
+            </div>
+            <button id="accept-all-suggestions-btn" class="btn btn-sm btn-warning w-100 text-white"><i class="bi bi-check2-all"></i> Accept All Visible</button>
+        </div>
+
+        <div id="track-controls" style="display: none;">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="small font-weight-bold mb-0 text-primary" id="track-status-header">Tracking...</h6>
+            </div>
+            <div class="progress mb-2" style="height: 10px;">
+                <div id="track-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%;"></div>
+            </div>
+            <button id="stop-sam2-track-btn" class="btn btn-sm btn-danger w-100 mb-2"><i class="bi bi-stop-fill"></i> Stop</button>
+            
+            <div class="border-top pt-2 mt-2">
+                <small class="text-muted d-block mb-2">Review Mode (A/D to nav)</small>
+                <button id="save-all-tracked-btn" class="btn btn-sm btn-success w-100 mb-1" disabled><i class="bi bi-save"></i> Save All Results</button>
+                <button id="exit-track-mode-btn" class="btn btn-sm btn-secondary w-100">Exit</button>
+            </div>
+        </div>
+
+        <hr class="border-light my-2">
+
+        <!-- SECTION: Objects List (使用 flex-grow 自动填充剩余空间) -->
+        <div class="tool-section-title d-flex justify-content-between">
+            <span>Objects</span>
+        </div>
+        <div class="flex-grow-1 position-relative" style="min-height: 100px;">
+            <ul id="bbox-list" class="list-group list-group-flush h-100 custom-scrollbar" style="position: absolute; width: 100%; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 4px;">
+                <!-- Populated by JS -->
+            </ul>
+        </div>
+
     </div>
 </div>
+
+<!-- ==================== TEMPLATES & MODALS ==================== -->
 
 <div id="toast-notification"></div>
 
 <template id="bbox-item-template">
-    <li class="list-group-item d-flex justify-content-between align-items-center">
-        <div>
-            <span class="color-swatch"></span>
-            <span class="bbox-label font-weight-bold"></span>
-            <small class="bbox-id text-muted ml-2"></small>
+    <li class="list-group-item d-flex justify-content-between align-items-center action-item">
+        <div class="d-flex align-items-center text-truncate" style="max-width: 75%;">
+            <span class="color-swatch flex-shrink-0"></span>
+            <span class="bbox-label font-weight-bold text-truncate ml-1"></span>
+            <small class="bbox-id text-muted ml-2 text-monospace" style="font-size: 0.75em;"></small>
         </div>
-        <div>
-            <button class="btn btn-info btn-sm interpolate-btn" title="Start keyframe interpolation for this object">
-                <i class="bi bi-bezier"></i>
-            </button>
-            <button class="btn btn-danger btn-sm delete-bbox-btn">&times;</button>
+        <div class="bbox-controls flex-shrink-0">
+            <button class="btn btn-xs btn-link text-info p-0 interpolate-btn mr-2" title="Interpolate"><i class="bi bi-bezier"></i></button>
+            <button class="btn btn-xs btn-link text-danger p-0 delete-bbox-btn" title="Delete"><i class="bi bi-x"></i></button>
         </div>
     </li>
 </template>
 
 <template id="lam-suggestion-popup-template">
-    <div id="lam-suggestion-popup" style="position: absolute; z-index: 1000; width: 180px;">
-        <div class="list-group shadow-sm">
-        </div>
+    <div id="lam-suggestion-popup" class="card shadow border-0" style="position: absolute; z-index: 1000; width: 200px;">
+        <div class="list-group list-group-flush"></div>
     </div>
 </template>
 
+<!-- Tracking Options Modal -->
 <div class="modal fade" id="tracking-options-modal" tabindex="-1" role="dialog">
     <div class="modal-dialog" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Select Tracking Mode</h5>
+                <h5 class="modal-title font-weight-bold">Select Tracking Mode</h5>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close">
                     <span aria-hidden="true">&times;</span>
                 </button>
             </div>
             <div class="modal-body">
-                <p>Choose the best tracking method for your task.</p>
+                <p class="text-muted">Choose how you want to track this object.</p>
                 <div class="list-group">
-                    <label class="list-group-item list-group-item-action">
-                        <div class="d-flex w-100 justify-content-between">
-                            <h6 class="mb-1"><input type="radio" name="tracking-mode" value="interactive" checked> Interactive Tracking</h6>
-                            <small><span class="badge badge-primary">Recommended</span></small>
+                    <label class="list-group-item list-group-item-action cursor-pointer">
+                        <div class="d-flex w-100 justify-content-between align-items-center">
+                            <h6 class="mb-0"><input type="radio" name="tracking-mode" value="interactive" checked class="mr-2"> Interactive Mode</h6>
+                            <span class="badge badge-primary">Recommended</span>
                         </div>
-                        <p class="mb-1 small text-muted">Real-time feedback, can be stopped and corrected at any time. Ideal for complex scenes or when accuracy needs supervision.</p>
+                        <p class="mb-0 mt-1 small text-muted ml-4">Real-time feedback. You can stop and correct errors anytime. Best for complex scenes.</p>
                     </label>
-                    <label class="list-group-item list-group-item-action">
-                        <div class="d-flex w-100 justify-content-between">
-                            <h6 class="mb-1"><input type="radio" name="tracking-mode" value="batch"> High-Accuracy Batch Mode</h6>
-                             <small><span class="badge badge-success">High Quality</span></small>
+                    <label class="list-group-item list-group-item-action cursor-pointer">
+                        <div class="d-flex w-100 justify-content-between align-items-center">
+                            <h6 class="mb-0"><input type="radio" name="tracking-mode" value="batch" class="mr-2"> Batch Mode</h6>
+                             <span class="badge badge-success">High Quality</span>
                         </div>
-                        <p class="mb-1 small text-muted">Uses the official `SAM2VideoPredictor` for potentially better results but cannot be stopped. Best for clear, stable video clips.</p>
+                        <p class="mb-0 mt-1 small text-muted ml-4">Uses the official `SAM2VideoPredictor`. Higher accuracy but cannot be interrupted. Good for clear clips.</p>
                     </label>
                 </div>
 
-                <div id="batch-mode-options" class="mt-3" style="display: none;">
-                    <div class="form-group">
-                        <label for="batch-end-frame"><strong>Process until frame:</strong></label>
+                <div id="batch-mode-options" class="mt-3 p-3 bg-light rounded border" style="display: none;">
+                    <div class="form-group mb-0">
+                        <label for="batch-end-frame" class="font-weight-bold small">Process until frame:</label>
                         <input type="number" class="form-control" id="batch-end-frame" min="0">
-                        <small class="form-text text-muted">The tracking will run from the current frame up to this frame.</small>
+                        <small class="form-text text-muted">Tracking runs from current frame to this frame.</small>
                     </div>
                 </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                <button type="button" id="confirm-tracking-start" class="btn btn-primary"><i class="bi bi-play-circle-fill"></i> Start Tracking</button>
+                <button type="button" id="confirm-tracking-start" class="btn btn-primary"><i class="bi bi-play-fill"></i> Start Tracking</button>
             </div>
         </div>
     </div>
 </div>
 
+<!-- Negative Sampling Modal -->
 {% from "_macros.html" import render_modal %}
 {% call render_modal('negative-sampling-modal', 'Apply Model to Video') %}
 <div class="mb-3 p-3 border rounded bg-light">
-    <h5>Step 1: Set Confidence Threshold</h5>
-    <p class="text-muted small">Only suggestions with a score above this value will be generated for review.</p>
-    <label for="apply-confidence-threshold">Confidence: <strong id="apply-confidence-value">0.50</strong></label>
-    <input type="range" class="form-control-range" id="apply-confidence-threshold" min="0.1" max="0.99" step="0.01" value="0.50">
+    <h6 class="font-weight-bold">Step 1: Set Confidence Threshold</h6>
+    <p class="text-muted small mb-2">Only suggestions with a score above this value will be generated.</p>
+    <label class="d-flex justify-content-between small font-weight-bold">
+        <span>Threshold</span>
+        <span id="apply-confidence-value" class="text-primary">0.50</span>
+    </label>
+    <input type="range" class="custom-range" id="apply-confidence-threshold" min="0.1" max="0.99" step="0.01" value="0.50">
 </div>
 
 <div id="neg-sampling-body">
-    <h5 class="mt-4">Step 2: Refine with Negative Samples (Optional)</h5>
-    <p class="text-info">Draw boxes around areas you want the model to **avoid** (e.g., background, other objects). These are temporary and only used for this task.</p>
-    <div class="text-center mb-3">
+    <h6 class="mt-4 font-weight-bold">Step 2: Refine with Negative Samples (Optional)</h6>
+    <p class="text-info small"><i class="bi bi-info-circle"></i> Draw boxes around areas to <strong>avoid</strong> (background, wrong objects).</p>
+    
+    <div class="text-center mb-3 bg-dark rounded p-1">
         <div id="neg-canvas-container" style="position: relative; display: inline-block; max-width: 100%;">
-            <img id="neg-frame-image" src="" class="img-fluid" alt="Negative Sample Frame" draggable="false" />
+            <img id="neg-frame-image" src="" class="img-fluid rounded" alt="Negative Sample Frame" draggable="false" />
             <canvas id="neg-drawing-canvas" style="position: absolute; top: 0; left: 0; cursor: crosshair;"></canvas>
         </div>
     </div>
-    <div class="d-flex justify-content-between align-items-center mt-3">
-        <button id="neg-prev-btn" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Previous</button>
-        <strong id="neg-frame-counter">Frame 1 / 10</strong>
-        <button id="neg-next-btn" class="btn btn-secondary">Next <i class="bi bi-arrow-right"></i></button>
+    
+    <div class="d-flex justify-content-between align-items-center mt-3 bg-white p-2 border rounded">
+        <button id="neg-prev-btn" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left"></i></button>
+        <strong id="neg-frame-counter" class="small">Frame 1 / 10</strong>
+        <button id="neg-next-btn" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-right"></i></button>
     </div>
-    <p class="text-muted small mt-2">Use Ctrl+Z to undo the last box on the current frame, and Delete to clear all boxes on this frame.</p>
+    <p class="text-muted small mt-2 text-center">Ctrl+Z: Undo last box | Delete: Clear frame</p>
 </div>
 <div class="modal-footer">
     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-    <button type="button" id="finish-neg-sampling-btn" class="btn btn-primary"><i class="bi bi-check2-circle"></i> Finish & Apply to Video</button>
+    <button type="button" id="finish-neg-sampling-btn" class="btn btn-primary"><i class="bi bi-check2-circle"></i> Apply to Video</button>
 </div>
 {% endcall %}
 
 {% endblock %}
 
 {% block scripts %}
+<!-- 引用 JS，原逻辑保持不变 -->
 <script>
     $(document).ready(function() {
         const settings = {{ settings | tojson }};
+        // ... (Keep the rest of the JavaScript logic from your original file) ...
         const customClassColors = settings.class_colors || {};
         const videoUuid = "{{ video_entity.video_uuid }}";
         const task = {{ task_entity | tojson }};
