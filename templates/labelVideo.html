@@ -310,6 +310,9 @@
         const task = {{ task_entity | tojson }};
         const frameCount = task.end_frame + 1;
 
+        // --- 性能优化：防抖计时器变量 ---
+        let preprocessTimeout = null;
+
         const themeColors = {
             light: {
                 selectionShadow: 'black',
@@ -424,6 +427,26 @@
         const negCanvas = document.getElementById('neg-drawing-canvas');
         const negCtx = negCanvas.getContext('2d');
         const negImage = document.getElementById('neg-frame-image');
+
+        // --- 性能优化：智能触发预处理函数 ---
+        // 只有在启用 Smart Select (Interactive Mode) 或 LAM 模式时才触发后台预处理
+        // 并且带有防抖功能，避免快速拖动进度条时堵塞后台
+        function smartTriggerPreprocess(frameNumber) {
+            // 1. 状态感知：如果没开这些高级功能，完全不请求后台，节省 GPU
+            if (!isInteractiveMode && !isLamModeActive) {
+                return;
+            }
+
+            // 2. 防抖：如果之前的请求还没发出，取消它
+            if (preprocessTimeout) {
+                clearTimeout(preprocessTimeout);
+            }
+
+            // 3. 延迟执行：用户停止操作 500ms 后才发送请求
+            preprocessTimeout = setTimeout(() => {
+                triggerBackgroundPreprocess(frameNumber);
+            }, 500);
+        }
 
         function resizeCanvas() {
             const dpr = window.devicePixelRatio || 1;
@@ -1257,7 +1280,8 @@
             resizeCanvas();
             const frameNumber = frameSlider.val();
             loadBboxesForFrame(frameNumber);
-            triggerBackgroundPreprocess(frameNumber);
+            // --- 修改：使用智能触发器替代直接调用 ---
+            smartTriggerPreprocess(frameNumber);
 
             const defaultThreshold = 0.50;
             const currentFrameThreshold = frameConfidence[frameNumber] ?? defaultThreshold;
@@ -1276,7 +1300,8 @@
                 frameImage.src = imageUrl;
             } else if (frameImage.complete) {
                 loadBboxesForFrame(frameNumber);
-                triggerBackgroundPreprocess(frameNumber);
+                // --- 修改：使用智能触发器替代直接调用 ---
+                smartTriggerPreprocess(frameNumber);
             }
         });
 
@@ -1813,6 +1838,8 @@
                 if (isSamModeActive) $('#sam-toggle-btn').click();
                 if (isInteractiveMode) $('#interactive-mode-toggle').click();
                 showToast('LAM Mode Activated: Click an object to get class suggestions.', 3000);
+                // --- 修改：手动开启时立即触发预处理 ---
+                triggerBackgroundPreprocess(frameSlider.val());
             } else {
                 $(this).html('<i class="bi bi-bullseye"></i> Enable LAM (Click to Label)');
                 $('#lam-suggestion-popup').remove();
@@ -2074,6 +2101,8 @@
                 $(this).html('<i class="bi bi-stars"></i> Smart Select ON');
                 if(isLamModeActive) $('#lam-toggle-btn').click();
                 clearCrosshairs();
+                // --- 修改：手动开启时立即触发预处理 ---
+                triggerBackgroundPreprocess(frameSlider.val());
             } else {
                 $(this).html('<i class="bi bi-stars"></i> Enable Smart Select');
                 clearInteractiveSession();

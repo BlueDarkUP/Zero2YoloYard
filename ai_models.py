@@ -21,7 +21,7 @@ from PIL import Image
 from torch.amp import autocast
 from torchvision.models import MobileNet_V3_Large_Weights, MobileNet_V3_Small_Weights
 from torchvision.ops import nms, box_iou
-from torchvision.transforms.functional import to_tensor, normalize
+from torchvision.transforms.functional import to_tensor
 
 import config
 import database
