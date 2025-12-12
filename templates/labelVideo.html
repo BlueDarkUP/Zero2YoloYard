@@ -6,7 +6,7 @@
 <style>
     /* 覆盖默认布局 padding，实现全屏 IDE 模式 */
     main { padding: 0 !important; overflow: hidden; }
-    
+
     /* 画布交互样式 */
     #canvas-container {
         position: relative;
@@ -82,7 +82,7 @@
 
     .bbox-controls { opacity: 0; transition: opacity 0.2s; }
     #bbox-list .list-group-item:hover .bbox-controls { opacity: 1; }
-    
+
     .tool-section-title {
         font-size: 0.75rem;
         text-transform: uppercase;
@@ -109,7 +109,7 @@
                     <small class="text-muted">Task: {{ task_entity.assigned_to }} (Frames {{ task_entity.start_frame }}-{{ task_entity.end_frame }})</small>
                 </div>
             </div>
-            
+
             <!-- 帧导航控制器 -->
             <div class="d-flex align-items-center bg-white border rounded px-2 py-1 shadow-sm mx-2">
                 <button class="btn btn-sm btn-link text-dark p-0 mr-2" onclick="document.getElementById('frame-slider').stepDown(); document.getElementById('frame-slider').dispatchEvent(new Event('input'));"><i class="bi bi-chevron-left"></i></button>
@@ -118,7 +118,7 @@
                 </span>
                 <button class="btn btn-sm btn-link text-dark p-0 ml-2" onclick="document.getElementById('frame-slider').stepUp(); document.getElementById('frame-slider').dispatchEvent(new Event('input'));"><i class="bi bi-chevron-right"></i></button>
             </div>
-            
+
             <div>
                 <button id="save-bboxes" class="btn btn-sm btn-primary shadow-sm"><i class="bi bi-cloud-arrow-up-fill mr-1"></i> Save (S)</button>
             </div>
@@ -130,7 +130,7 @@
                 <i class="bi bi-bezier"></i> <strong>INTERPOLATION ACTIVE</strong><br>
                 <small>Move to target frame, adjust box, click 'Confirm' (Esc to cancel)</small>
             </div>
-            
+
             <div id="canvas-container">
                 <img id="frame-image" src="{{ first_frame_url }}" class="img-fluid" alt="Video Frame" draggable="false" />
                 <canvas id="crosshair-canvas"></canvas>
@@ -154,7 +154,7 @@
 
     <!-- 右侧：侧边工具栏 -->
     <div class="ide-sidebar custom-scrollbar">
-        
+
         <!-- SECTION: Classes -->
         <div class="tool-section-title">Classes</div>
         <div class="card mb-3 border-0 bg-transparent">
@@ -196,7 +196,7 @@
             <p class="text-muted small mb-2" style="font-size: 0.75rem;">Draw a box around one object to find others.</p>
             <button id="find-similar-btn" class="btn btn-sm btn-primary w-100 mb-2" style="display: none;"><i class="bi bi-search"></i> Find Similar</button>
             <button id="clear-samples-btn" class="btn btn-sm btn-secondary w-100 mb-2"><i class="bi bi-eraser"></i> Clear</button>
-            
+
             <div id="interactive-results-controls" style="display: none;" class="mt-2 border-top pt-2">
                 <div class="form-group mb-2">
                     <label class="small mb-1 d-flex justify-content-between"><span>Confidence</span> <span id="threshold-value" class="font-weight-bold">0.50</span></label>
@@ -224,7 +224,7 @@
                 <div id="track-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%;"></div>
             </div>
             <button id="stop-sam2-track-btn" class="btn btn-sm btn-danger w-100 mb-2"><i class="bi bi-stop-fill"></i> Stop</button>
-            
+
             <div class="border-top pt-2 mt-2">
                 <small class="text-muted d-block mb-2">Review Mode (A/D to nav)</small>
                 <button id="save-all-tracked-btn" class="btn btn-sm btn-success w-100 mb-1" disabled><i class="bi bi-save"></i> Save All Results</button>
@@ -332,14 +332,14 @@
 <div id="neg-sampling-body">
     <h6 class="mt-4 font-weight-bold">Step 2: Refine with Negative Samples (Optional)</h6>
     <p class="text-info small"><i class="bi bi-info-circle"></i> Draw boxes around areas to <strong>avoid</strong> (background, wrong objects).</p>
-    
+
     <div class="text-center mb-3 bg-dark rounded p-1">
         <div id="neg-canvas-container" style="position: relative; display: inline-block; max-width: 100%;">
             <img id="neg-frame-image" src="" class="img-fluid rounded" alt="Negative Sample Frame" draggable="false" />
             <canvas id="neg-drawing-canvas" style="position: absolute; top: 0; left: 0; cursor: crosshair;"></canvas>
         </div>
     </div>
-    
+
     <div class="d-flex justify-content-between align-items-center mt-3 bg-white p-2 border rounded">
         <button id="neg-prev-btn" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left"></i></button>
         <strong id="neg-frame-counter" class="small">Frame 1 / 10</strong>
@@ -372,17 +372,17 @@
         const themeColors = {
             light: {
                 selectionShadow: 'black',
-                handleFill: '#007bff',
+                handleFill: '#29537c',
                 labelText: 'white',
-                crosshair: 'rgba(0,0,255,0.7)',
-                interpolationGhost: 'rgba(255, 193, 7, 0.5)',
-                interpolationConfirm: '#28a745',
-                suggestionStroke: 'rgba(0, 123, 255, 0.8)',
-                suggestionFill: 'rgba(0, 123, 255, 0.8)',
-                suggestionHoverStroke: 'rgba(255, 193, 7, 1.0)',
-                suggestionHoverFill: 'rgba(255, 193, 7, 1.0)',
-                positiveExampleStroke: 'rgba(40, 167, 69, 0.9)',
-                negativeSampleStroke: 'rgba(255, 0, 0, 0.8)'
+                crosshair: 'rgba(10,80,161,0.7)',
+                interpolationGhost: 'rgba(216,163,36,0.62)',
+                interpolationConfirm: '#068526',
+                suggestionStroke: 'rgba(29,78,117,0.8)',
+                suggestionFill: 'rgba(19,68,122,0.8)',
+                suggestionHoverStroke: 'rgb(158,127,31)',
+                suggestionHoverFill: 'rgb(158,123,19)',
+                positiveExampleStroke: 'rgba(68,167,40,0.9)',
+                negativeSampleStroke: 'rgba(191,30,30,0.8)'
             },
             dark: {
                 selectionShadow: 'rgba(255, 255, 255, 0.7)',
@@ -390,13 +390,13 @@
                 labelText: '#1a1a1a',
                 crosshair: 'rgba(130, 180, 255, 0.7)',
                 interpolationGhost: 'rgba(255, 193, 7, 0.6)',
-                interpolationConfirm: '#28a745',
-                suggestionStroke: 'rgba(92, 173, 255, 0.8)',
-                suggestionFill: 'rgba(92, 173, 255, 0.8)',
+                interpolationConfirm: '#35a728',
+                suggestionStroke: 'rgba(68,128,189,0.8)',
+                suggestionFill: 'rgba(58,115,172,0.8)',
                 suggestionHoverStroke: 'rgba(255, 193, 7, 1.0)',
                 suggestionHoverFill: 'rgba(255, 193, 7, 1.0)',
-                positiveExampleStroke: 'rgba(40, 167, 69, 0.9)',
-                negativeSampleStroke: 'rgba(255, 80, 80, 0.8)'
+                positiveExampleStroke: 'rgba(82,209,62,0.9)',
+                negativeSampleStroke: 'rgba(216,67,67,0.8)'
             }
         };
 
@@ -2252,15 +2252,15 @@
 
         $('#neg-prev-btn').on('click', function() { if (currentNegSampleIndex > 0) { currentNegSampleIndex--; loadNegativeSampleFrame(); } });
         $('#neg-next-btn').on('click', function() { if (currentNegSampleIndex < negSamplingFrames.length - 1) { currentNegSampleIndex++; loadNegativeSampleFrame(); } });
-        
+
         $('#finish-neg-sampling-btn').on('click', function() {
             $('#negative-sampling-modal').modal('hide');
-            
+
             const finalNegativeSamples = Object.fromEntries(
                 Object.entries(negativeSamplesStore).filter(([key, value]) => value.length > 0)
             );
-            
-            const message = Object.keys(finalNegativeSamples).length > 0 
+
+            const message = Object.keys(finalNegativeSamples).length > 0
                 ? `Refining model with ${Object.keys(finalNegativeSamples).length} frames of negative samples.`
                 : "No negative samples were added. Applying original model.";
             showToast(message);
@@ -2271,13 +2271,13 @@
         $('#result-threshold').on('input', function() {
             const value = parseFloat($(this).val());
             $('#threshold-value').text(value.toFixed(2));
-            
+
             const currentFrame = frameSlider.val();
             frameConfidence[currentFrame] = value;
-            
+
             redrawCanvas();
         });
-        
+
         $('#suggestion-threshold').on('input', function() {
             const value = parseFloat($(this).val());
             $('#suggestion-threshold-value').text(value.toFixed(2));
@@ -2286,11 +2286,11 @@
 
         $('#accept-all-suggestions-btn').on('click', function() {
             if (suggestionBboxes.length === 0) return;
-            
+
             const threshold = parseFloat($('#suggestion-threshold').val());
             let acceptedCount = 0;
             const remainingSuggestions = [];
-    
+
             suggestionBboxes.forEach(sug => {
                 if (sug.score >= threshold) {
                     bboxes.push({
@@ -2303,7 +2303,7 @@
                     remainingSuggestions.push(sug);
                 }
             });
-            
+
             if (acceptedCount > 0) {
                 suggestionBboxes = remainingSuggestions;
                 saveStateToHistory();

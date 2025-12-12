@@ -1,107 +1,145 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
 
 :root {
-    --color-primary: #3b82f6;
-    --color-primary-hover: #2563eb;
-    --color-primary-soft: rgba(59, 130, 246, 0.1);
-    --color-success: #10b981;
-    --color-warning: #f59e0b;
-    --color-danger: #ef4444;
-    --color-info: #06b6d4;
-    --bg-body: #f3f4f6;
+    /* --- 亮色模式：粉彩/透亮风格 (Pastel & Light) --- */
+
+    /* 核心色：变得非常浅，像水彩画 */
+    --color-primary: #a5bbf1;       /* 极淡的矢车菊蓝 */
+    --color-primary-hover: #bac8ff; /* 悬停时更亮 */
+    --color-primary-soft: rgba(165, 187, 241, 0.12); /* 几乎透明 */
+
+    /* 功能色：全部调整为粉彩色系 */
+    --color-success: #69dbb1; /* 淡薄荷 */
+    --color-warning: #ffe066; /* 淡奶油黄 */
+    --color-danger: #ffc9c9;  /* 淡樱花粉 */
+    --color-info: #99e9f2;    /* 淡冰蓝 */
+
+    /* 背景：保持极高的亮度 */
+    --bg-body: #f8f9fa;
     --bg-surface: #ffffff;
-    --bg-surface-secondary: #f9fafb;
-    --bg-input: #ffffff;
-    --bg-hover: #f3f4f6;
-    --border-color: #e5e7eb;
-    --border-color-light: #f3f4f6;
-    --text-main: #111827;
-    --text-secondary: #4b5563;
-    --text-muted: #9ca3af;
-    --text-on-primary: #ffffff;
-    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-    --radius-sm: 0.375rem;
-    --radius-md: 0.5rem;
-    --radius-lg: 12px;
-    --radius-xl: 16px;
-    --canvas-bg: #e5e7eb;
-    --crosshair-color: rgba(59, 130, 246, 0.8);
+    --bg-surface-secondary: #f3f4f6;
+    --bg-input: #fdfdfd;      /* 几乎纯白 */
+    --bg-hover: #f1f3f5;
+
+    /* 边框：极淡 */
+    --border-color: #eff2f5;
+    --border-color-light: #f8f9fa;
+
+    /* 文字：保持深灰以确保阅读，但按钮文字需要变深 */
+    --text-main: #495057;     /* 稍微浅一点的深灰 */
+    --text-secondary: #868e96;
+    --text-muted: #ced4da;
+
+    /* 关键变化：因为主色很浅，按钮上的文字必须是深色 */
+    --text-on-primary: #343a40;
+
+    /* 阴影：极度扩散，几乎看不见 */
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.02);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.03);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.03);
+
+    --radius-sm: 0.5rem;
+    --radius-md: 0.75rem;
+    --radius-lg: 1rem;
+    --radius-xl: 1.5rem;
+
+    --canvas-bg: #e9ecef;
+    --crosshair-color: rgba(165, 187, 241, 0.8);
     --navbar-height: 60px;
-    --badge-neutral-bg: #e5e7eb;
-    --badge-neutral-text: #374151;
+    --badge-neutral-bg: #f1f3f5;
+    --badge-neutral-text: #868e96;
 }
 
 body.dark-mode {
-    --color-primary: #4fc1ff;
-    --color-primary-hover: #18a0fb;
-    --color-primary-soft: rgba(79, 193, 255, 0.15);
-    --bg-body: #121212;
-    --bg-surface: #1e1e1e;
-    --bg-surface-secondary: #252526;
-    --bg-input: #3c3c3c;
-    --bg-hover: #2a2d2e;
-    --border-color: #3e3e42;
-    --border-color-light: #2d2d30;
-    --text-main: #d4d4d4;
-    --text-secondary: #969696;
-    --text-muted: #606060;
-    --text-on-primary: #1e1e1e;
-    --color-success: #4ec9b0;
-    --color-warning: #dcdcaa;
-    --color-danger: #f48771;
-    --color-info: #9cdcfe;
-    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.5);
-    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.6);
-    --canvas-bg: #000000;
-    --badge-neutral-bg: transparent;
-    --badge-neutral-text: #cccccc;
+    /* --- 深色模式：幽暗/沉稳风格 (Muted & Dim) --- */
+
+    /* 核心色：变得暗沉，不发光，融入背景 */
+    --color-primary: #3b526b;       /* 深蓝灰 */
+    --color-primary-hover: #46607a;
+    --color-primary-soft: rgba(59, 82, 107, 0.2);
+
+    /* 功能色：大地色系/低明度 */
+    --color-success: #2f6f4e; /* 苔藓绿 */
+    --color-warning: #8a6a26; /* 暗金色 */
+    --color-danger: #8c3b3b;  /* 暗砖红 */
+    --color-info: #2a5d78;    /* 深湖蓝 */
+
+    /* 背景：深邃 */
+    --bg-body: #18191c;       /* 接近黑的深炭色 */
+    --bg-surface: #202226;    /* 稍微提亮 */
+    --bg-surface-secondary: #272a30;
+    --bg-input: #1c1e21;
+    --bg-hover: #2c2f36;
+
+    /* 边框：非常暗 */
+    --border-color: #2c2f36;
+    --border-color-light: #25282e;
+
+    /* 文字：降低亮度，避免刺眼 */
+    --text-main: #c1c2c5;     /* 灰白而非亮白 */
+    --text-secondary: #909296;
+    --text-muted: #5c5f66;
+
+    /* 深色模式下的按钮文字保持浅色 */
+    --text-on-primary: #dce4f5;
+
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+
+    --canvas-bg: #141517;
+
+    --badge-neutral-bg: rgba(255, 255, 255, 0.03);
+    --badge-neutral-text: #909296;
 }
 
 body {
     background-color: var(--bg-body);
     color: var(--text-main);
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
-    transition: background-color 0.3s ease, color 0.3s ease;
+    letter-spacing: 0.015em;
+    font-weight: 400;
+    transition: background-color 0.4s cubic-bezier(0.25, 0.8, 0.25, 1), color 0.4s ease;
     overflow-x: hidden;
 }
 
 a {
-    color: var(--color-primary);
-    transition: color 0.2s;
+    color: var(--text-main); /* 链接平时不突出颜色，像普通文字 */
+    text-decoration: underline;
+    text-decoration-color: var(--color-primary); /* 下划线用淡色 */
+    text-underline-offset: 3px;
+    transition: all 0.2s;
 }
 
 a:hover {
-    color: var(--color-primary-hover);
-    text-decoration: none;
+    color: var(--text-main);
+    text-decoration-color: var(--color-primary-hover);
+    background-color: var(--color-primary-soft);
+    border-radius: 2px;
 }
 
+/* 滚动条极简 */
 ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 6px;
+    height: 6px;
 }
-
 ::-webkit-scrollbar-track {
     background: transparent;
 }
-
 ::-webkit-scrollbar-thumb {
     background: var(--border-color);
-    border-radius: 4px;
+    border-radius: 3px;
 }
-
 ::-webkit-scrollbar-thumb:hover {
     background: var(--text-secondary);
 }
 
 @keyframes slideInUp {
-    from { opacity: 0; transform: translateY(20px); }
+    from { opacity: 0; transform: translateY(10px); }
     to { opacity: 1; transform: translateY(0); }
 }
 
 .slide-in-up {
-    animation: slideInUp 0.5s ease-out forwards;
+    animation: slideInUp 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
 }
 
 @keyframes fadeIn {
@@ -110,12 +148,12 @@ a:hover {
 }
 
 .fade-in {
-    animation: fadeIn 0.4s ease-out forwards;
+    animation: fadeIn 0.5s ease-out forwards;
 }
 
 .navbar {
     background-color: var(--bg-surface) !important;
-    border-bottom: 1px solid var(--border-color);
+    border-bottom: 1px solid transparent;
     box-shadow: var(--shadow-sm);
     height: var(--navbar-height);
     padding: 0.5rem 1.5rem;
@@ -123,9 +161,8 @@ a:hover {
 
 .navbar-brand {
     color: var(--text-main) !important;
-    font-weight: 700;
+    font-weight: 600;
     font-size: 1.1rem;
-    letter-spacing: -0.02em;
 }
 
 .navbar-text {
@@ -137,15 +174,14 @@ a:hover {
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
     box-shadow: var(--shadow-sm);
-    transition: box-shadow 0.2s ease;
 }
 
 .card-header {
-    background-color: var(--bg-surface-secondary);
+    background-color: var(--bg-surface);
     border-bottom: 1px solid var(--border-color);
     color: var(--text-main);
     font-weight: 600;
-    padding: 1rem 1.5rem;
+    padding: 1.25rem 1.5rem;
     border-top-left-radius: var(--radius-md) !important;
     border-top-right-radius: var(--radius-md) !important;
 }
@@ -156,65 +192,65 @@ a:hover {
 }
 
 .card-footer {
-    background-color: var(--bg-surface-secondary);
+    background-color: var(--bg-surface);
     border-top: 1px solid var(--border-color);
 }
 
+/* 按钮样式：特别注意文字颜色 */
 .btn {
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-md);
     font-weight: 500;
-    padding: 0.5rem 1rem;
-    transition: all 0.2s ease;
+    padding: 0.5rem 1.25rem;
+    transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
     border: 1px solid transparent;
-    box-shadow: none;
+    box-shadow: none !important;
 }
 
 .btn:focus {
-    box-shadow: 0 0 0 3px var(--color-primary-soft);
+    box-shadow: 0 0 0 3px var(--color-primary-soft) !important;
 }
 
 .btn-primary {
     background-color: var(--color-primary);
     border-color: var(--color-primary);
-    color: var(--text-on-primary);
+    color: var(--text-on-primary); /* 使用动态文字颜色 */
 }
 
 .btn-primary:hover, .btn-primary:active {
     background-color: var(--color-primary-hover);
     border-color: var(--color-primary-hover);
+    color: var(--text-on-primary);
     transform: translateY(-1px);
-    box-shadow: var(--shadow-md);
 }
 
 .btn-secondary {
-    background-color: var(--bg-surface);
-    border-color: var(--border-color);
+    background-color: var(--bg-surface-secondary);
+    border-color: transparent;
     color: var(--text-main);
 }
 
 .btn-secondary:hover {
-    background-color: var(--bg-surface-secondary);
-    border-color: var(--text-secondary);
+    background-color: var(--bg-hover);
     color: var(--text-main);
 }
 
 .btn-info {
-    color: var(--color-info);
-    background: transparent;
-    border-color: var(--color-info);
-}
-
-.btn-info:hover, .btn-info.active {
+    color: var(--text-on-primary); /* 亮色模式下可能需要深色文字 */
     background: var(--color-info);
-    color: #fff;
+    border: none;
 }
+/* 修正 Info 按钮在亮色模式下的文字颜色 */
+:root .btn-info { color: #224a5e; }
+body.dark-mode .btn-info { color: #d0ebff; }
 
 .btn-link {
-    color: var(--color-primary);
+    color: var(--text-secondary);
+    text-decoration: none;
 }
 
 .btn-link:hover {
-    color: var(--color-primary-hover);
+    color: var(--text-main);
+    background-color: var(--bg-hover);
     text-decoration: none;
 }
 
@@ -223,10 +259,11 @@ a:hover {
     border: 1px solid var(--border-color);
     color: var(--text-main);
     border-radius: var(--radius-sm);
+    box-shadow: none;
 }
 
 .form-control:focus, .custom-select:focus {
-    background-color: var(--bg-input);
+    background-color: var(--bg-surface);
     color: var(--text-main);
     border-color: var(--color-primary);
     box-shadow: 0 0 0 3px var(--color-primary-soft);
@@ -239,7 +276,7 @@ a:hover {
 .custom-file-label::after {
     background-color: var(--bg-surface-secondary);
     color: var(--text-main);
-    border-left: 1px solid var(--border-color);
+    border-left: none;
 }
 
 .table {
@@ -258,7 +295,7 @@ a:hover {
     border-bottom: 1px solid var(--border-color);
     background-color: var(--bg-surface-secondary);
     color: var(--text-secondary);
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -278,24 +315,17 @@ a:hover {
     color: var(--text-main);
 }
 
-.modal-header {
-    border-bottom: 1px solid var(--border-color);
+.modal-header, .modal-footer {
+    border-color: var(--border-color);
     background-color: var(--bg-surface);
 }
 
-.modal-footer {
-    border-top: 1px solid var(--border-color);
-    background-color: var(--bg-surface-secondary);
-}
-
-.modal-title {
-    color: var(--text-main);
-}
+.modal-title { color: var(--text-main); }
 
 .close {
     color: var(--text-secondary);
     text-shadow: none;
-    opacity: 0.7;
+    opacity: 0.5;
 }
 
 .close:hover {
@@ -308,23 +338,23 @@ a:hover {
 }
 
 .nav-tabs .nav-link {
-    border: 1px solid transparent;
+    border: none;
     color: var(--text-secondary);
     padding: 0.75rem 1.5rem;
     font-weight: 500;
-    border-radius: var(--radius-md) var(--radius-md) 0 0;
+    background: transparent;
+    border-bottom: 2px solid transparent;
 }
 
 .nav-tabs .nav-link:hover {
-    border-color: transparent;
-    color: var(--color-primary);
+    color: var(--text-main);
 }
 
 .nav-tabs .nav-link.active {
-    background-color: var(--bg-surface);
-    border-color: var(--border-color) var(--border-color) var(--bg-surface);
-    color: var(--color-primary);
-    margin-bottom: -1px;
+    background-color: transparent;
+    border-color: transparent;
+    border-bottom-color: var(--color-primary);
+    color: var(--text-main); /* Tab激活文字不用主色，用深色更稳重 */
 }
 
 .list-group-item {
@@ -338,6 +368,7 @@ a:hover {
     color: var(--text-main);
 }
 
+/* IDE 布局 */
 .ide-layout {
     display: flex;
     flex-direction: row;
@@ -382,7 +413,8 @@ a:hover {
     position: relative;
     box-shadow: var(--shadow-lg);
     display: inline-block;
-    background-color: #000;
+    background-color: var(--canvas-bg);
+    border-radius: 4px;
 }
 
 #canvas-container canvas {
@@ -390,6 +422,7 @@ a:hover {
     top: 0;
     left: 0;
     pointer-events: none;
+    border-radius: 4px;
 }
 
 #drawing-canvas {
@@ -416,6 +449,7 @@ a:hover {
 #frame-slider {
     width: 100%;
     cursor: pointer;
+    accent-color: var(--text-secondary); /* 滑块颜色也不要太鲜艳 */
 }
 
 .content-wrapper {
@@ -449,7 +483,7 @@ a:hover {
 .gallery-item {
     background-color: var(--bg-surface);
     border: 1px solid var(--border-color);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-md);
     overflow: hidden;
     transition: transform 0.2s;
     display: flex;
@@ -459,7 +493,7 @@ a:hover {
 .gallery-item:hover {
     transform: translateY(-2px);
     box-shadow: var(--shadow-md);
-    border-color: var(--color-primary);
+    border-color: var(--border-color);
 }
 
 .gallery-item .caption {
@@ -468,7 +502,7 @@ a:hover {
     text-align: center;
     background-color: var(--bg-surface);
     border-top: 1px solid var(--border-color);
-    color: var(--text-main);
+    color: var(--text-secondary);
 }
 
 #aug-preview-gallery {
@@ -479,7 +513,7 @@ a:hover {
 
 #aug-preview-gallery img {
     width: 100%;
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-md);
     border: 1px solid var(--border-color);
 }
 
@@ -490,11 +524,14 @@ a:hover {
     border: 2px solid transparent;
     border-radius: var(--radius-sm);
     cursor: pointer;
-    opacity: 0.7;
+    opacity: 0.6;
+    transition: opacity 0.2s;
 }
 
+.aug-preview-source-img:hover { opacity: 0.8; }
+
 .aug-preview-source-img.active {
-    border-color: var(--color-primary);
+    border-color: var(--text-secondary); /* 选中状态用灰色框 */
     opacity: 1;
 }
 
@@ -504,22 +541,37 @@ a:hover {
     height: 12px;
     border-radius: 50%;
     margin-right: 8px;
-    border: 1px solid rgba(0,0,0,0.1);
+    border: 1px solid var(--border-color);
+}
+
+#bbox-list .list-group-item {
+    border: none;
+    border-radius: var(--radius-sm);
+    margin-bottom: 4px;
+    background-color: transparent;
+    padding: 0.5rem 1rem;
 }
 
 #bbox-list .list-group-item:hover {
-    background-color: var(--bg-hover);
+    background-color: var(--bg-surface-secondary);
 }
 
 #bbox-list .list-group-item.selected {
     background-color: var(--color-primary-soft);
-    border-left: 3px solid var(--color-primary);
+    color: var(--text-main); /* 选中时不改变文字颜色，保持柔和 */
+}
+
+#class-list .list-group-item {
+    border-radius: var(--radius-sm);
+    margin-bottom: 2px;
+    border: 1px solid transparent;
 }
 
 #class-list .list-group-item.active {
-    background-color: var(--color-primary);
-    color: #fff;
-    border-color: var(--color-primary);
+    background-color: var(--color-primary-soft);
+    color: var(--text-main);
+    border-color: var(--color-primary-soft);
+    font-weight: 600;
 }
 
 .shortcut-key {
@@ -532,18 +584,19 @@ a:hover {
     font-family: 'JetBrains Mono', monospace;
     font-size: 0.75rem;
     font-weight: 600;
+    color: var(--text-secondary);
 }
 
 #interpolation-banner {
-    background-color: rgba(16, 185, 129, 0.15);
-    border: 1px solid var(--color-success);
+    background-color: rgba(52, 211, 153, 0.05); /* 极淡 */
+    border: 1px solid transparent;
     color: var(--color-success);
     padding: 0.5rem;
     text-align: center;
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-md);
     margin-bottom: 1rem;
     display: none;
-    font-weight: 600;
+    font-weight: 500;
 }
 
 #track-controls, #interactive-segment-controls, #suggestion-review-controls {
@@ -555,8 +608,8 @@ a:hover {
 }
 
 #suggestion-review-controls {
-    border-color: var(--color-warning);
-    background-color: rgba(245, 158, 11, 0.05);
+    border-color: transparent;
+    background-color: rgba(251, 191, 36, 0.05);
 }
 
 #toast-notification {
@@ -564,16 +617,18 @@ a:hover {
     bottom: 2rem;
     left: 50%;
     transform: translateX(-50%) translateY(20px);
-    background-color: #333;
-    color: #fff;
+    background-color: var(--bg-surface);
+    color: var(--text-main);
+    border: 1px solid var(--border-color);
     padding: 0.75rem 1.5rem;
     border-radius: 50px;
     box-shadow: var(--shadow-lg);
     z-index: 9999;
     opacity: 0;
     visibility: hidden;
-    transition: all 0.3s ease;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
     font-size: 0.9rem;
+    font-weight: 500;
 }
 
 #toast-notification.show {
@@ -595,51 +650,39 @@ a:hover {
 
 .theme-toggle-btn:hover {
     background-color: var(--bg-hover);
-    color: var(--color-warning);
+    color: var(--text-main);
 }
 
-.badge-success {
-    background-color: rgba(16, 185, 129, 0.15);
-    color: #059669;
-    border: none;
+/* Badge 样式优化：透明度大幅提升 */
+.badge {
+    padding: 0.35em 0.65em;
+    font-weight: 500;
+    border-radius: 6px;
+    border: none !important;
 }
 
-.badge-warning {
-    background-color: rgba(245, 158, 11, 0.15);
-    color: #d97706;
-    border: none;
-}
-
-.badge-danger {
-    background-color: rgba(239, 68, 68, 0.15);
-    color: #dc2626;
-    border: none;
-}
-
-.badge-info {
-    background-color: rgba(6, 182, 212, 0.15);
-    color: #0891b2;
-    border: none;
-}
+/* 亮色模式 Badge：使用极淡背景 + 深色文字 */
+.badge-success { background-color: rgba(105, 219, 177, 0.15); color: #2b6e56; }
+.badge-warning { background-color: rgba(255, 224, 102, 0.15); color: #947600; }
+.badge-danger { background-color: rgba(255, 201, 201, 0.25); color: #a33e3e; }
+.badge-info { background-color: rgba(153, 233, 242, 0.2); color: #106e7a; }
 
 .badge-secondary {
     background-color: var(--bg-surface-secondary);
     color: var(--text-secondary);
-    border: 1px solid var(--border-color);
 }
 
 .badge-neutral {
     background-color: var(--badge-neutral-bg);
     color: var(--badge-neutral-text);
-    border: 1px solid var(--border-color);
-    font-weight: 500;
 }
 
 .bg-warning-soft {
-    background-color: rgba(245, 158, 11, 0.1);
-    color: #b45309;
+    background-color: rgba(255, 224, 102, 0.1);
+    color: #947600;
 }
 
+/* Dark Mode 覆盖：修正颜色以适应暗背景 */
 body.dark-mode .bg-light {
     background-color: var(--bg-surface-secondary) !important;
     color: var(--text-main) !important;
@@ -667,12 +710,12 @@ body.dark-mode .text-muted {
 }
 
 body.dark-mode .text-primary {
-    color: var(--color-primary) !important;
+    color: #668bb0 !important; /* 暗淡的蓝字 */
 }
 
 body.dark-mode .bg-warning-soft {
-    background-color: rgba(245, 158, 11, 0.15);
-    color: #fbbf24;
+    background-color: rgba(138, 106, 38, 0.15);
+    color: #e0c888;
 }
 
 body.dark-mode .input-group-text {
@@ -681,104 +724,36 @@ body.dark-mode .input-group-text {
     color: var(--text-main);
 }
 
-body.dark-mode .badge {
-    background-color: transparent !important;
-    border: 1px solid currentColor;
-    font-weight: 500;
-    padding: 0.25em 0.6em;
-    font-family: 'JetBrains Mono', monospace;
-}
-
-body.dark-mode .badge-success {
-    color: var(--color-success);
-    border-color: rgba(78, 201, 176, 0.3);
-}
-
-body.dark-mode .badge-warning {
-    color: var(--color-warning);
-    border-color: rgba(220, 220, 170, 0.3);
-}
-
-body.dark-mode .badge-danger {
-    color: var(--color-danger);
-    border-color: rgba(244, 135, 113, 0.3);
-}
-
-body.dark-mode .badge-info {
-    color: var(--color-info);
-    border-color: rgba(156, 220, 254, 0.3);
-}
-
-body.dark-mode .badge-secondary,
-body.dark-mode .badge-neutral {
-    color: var(--text-secondary);
-    border-color: var(--border-color);
-    background-color: transparent;
-}
+/* 深色模式 Badge：使用极低透明度背景 + 浅色文字 */
+body.dark-mode .badge-success { color: #8ce99a; background-color: rgba(47, 111, 78, 0.2); }
+body.dark-mode .badge-warning { color: #ffe066; background-color: rgba(138, 106, 38, 0.2); }
+body.dark-mode .badge-danger { color: #ffa8a8; background-color: rgba(140, 59, 59, 0.2); }
+body.dark-mode .badge-info { color: #99e9f2; background-color: rgba(42, 93, 120, 0.2); }
 
 body.dark-mode .btn-secondary {
     background-color: var(--bg-surface-secondary);
-    border-color: transparent;
     color: var(--text-main);
 }
 
 body.dark-mode .btn-secondary:hover {
-    background-color: #3e3e42;
-}
-
-body.dark-mode .table td,
-body.dark-mode .table th {
-    border-color: var(--border-color);
-}
-
-body.dark-mode .table thead th {
-    background-color: var(--bg-surface);
-    color: var(--text-secondary);
-    border-bottom: 2px solid var(--border-color);
-}
-
-body.dark-mode .list-group-item {
-    background-color: var(--bg-surface);
-    border-color: var(--border-color);
+    background-color: var(--bg-hover);
 }
 
 body.dark-mode .form-control,
 body.dark-mode .custom-select {
-    background-color: #3c3c3c;
-    border: 1px solid transparent;
-    color: #cccccc;
+    background-color: var(--bg-input);
+    border-color: transparent;
+    color: var(--text-main);
 }
 
 body.dark-mode .form-control:focus,
 body.dark-mode .custom-select:focus {
-    background-color: #3c3c3c;
+    background-color: var(--bg-surface);
     border-color: var(--color-primary);
-    box-shadow: 0 0 0 1px var(--color-primary);
-}
-
-body.dark-mode .modal-content {
-    background-color: var(--bg-surface);
-    border: 1px solid var(--border-color);
-    box-shadow: 0 0 30px rgba(0, 0, 0, 0.7);
-}
-
-body.dark-mode .modal-header,
-body.dark-mode .modal-footer {
-    background-color: var(--bg-surface);
-    border-color: var(--border-color);
-}
-
-body.dark-mode ::-webkit-scrollbar-thumb {
-    background-color: #424242;
-    border-radius: 0;
-}
-
-body.dark-mode ::-webkit-scrollbar-thumb:hover {
-    background-color: #4f4f4f;
 }
 
 .nav-pills-fluent .nav-link {
-    border-radius: 6px;
+    border-radius: var(--radius-md);
     color: var(--text-secondary);
     font-weight: 500;
     padding: 0.5rem 1rem;
@@ -793,27 +768,21 @@ body.dark-mode ::-webkit-scrollbar-thumb:hover {
 
 .nav-pills-fluent .nav-link.active {
     background-color: var(--bg-surface-secondary);
-    color: var(--color-primary);
+    color: var(--text-main); /* 激活也不要变色，只变背景 */
     font-weight: 600;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
 }
 
 body.dark-mode .nav-pills-fluent .nav-link.active {
-    background-color: rgba(255, 255, 255, 0.08);
-    box-shadow: none;
+    background-color: rgba(255, 255, 255, 0.05);
 }
 
 .fluent-card {
     background-color: var(--bg-surface);
-    border-radius: var(--radius-lg); /* 保持大圆角 */
+    border-radius: var(--radius-lg);
     border: 1px solid var(--border-color);
     box-shadow: var(--shadow-sm);
     margin-bottom: 1.5rem;
-    transition: transform 0.2s, box-shadow 0.2s;
-
-    /* --- 核心修复 --- */
-    overflow: hidden; /* 关键：防止表格尖角刺破卡片圆角 */
-    /* ---------------- */
+    overflow: hidden;
 }
 
 .settings-section {
@@ -830,24 +799,24 @@ body.dark-mode .nav-pills-fluent .nav-link.active {
 }
 
 .table-fluent {
-    margin-bottom: 0; /* 移除表格底部的默认间距 */
+    margin-bottom: 0;
 }
 
 .table-fluent thead th {
-    background-color: var(--bg-surface-secondary); /* 给表头一个极淡的背景 */
+    background-color: var(--bg-surface-secondary);
     color: var(--text-secondary);
     font-size: 0.75rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    padding: 1rem 1.5rem; /* 增加表头高度，增加呼吸感 */
+    padding: 1rem 1.5rem;
     border-bottom: 1px solid var(--border-color);
-    border-top: none; /* 确保顶部没有多余边框 */
-    white-space: nowrap; /* 防止表头换行 */
+    border-top: none;
+    white-space: nowrap;
 }
 
 .table-fluent td {
-    padding: 1rem 1.5rem; /* 让内容行也有舒适的间距 */
+    padding: 1rem 1.5rem;
     vertical-align: middle;
     border-top: 1px solid var(--border-color-light);
     color: var(--text-main);
@@ -865,7 +834,8 @@ body.dark-mode .nav-pills-fluent .nav-link.active {
 .page-title {
     font-weight: 600;
     font-size: 1.75rem;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.01em;
+    color: var(--text-main);
 }
 
 .page-subtitle {
