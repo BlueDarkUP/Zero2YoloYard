@@ -1,509 +1,408 @@
-<!-- START OF FILE root.html -->
 {% extends "layout.html" %}
 {% from "_macros.html" import render_modal %}
 
 {% block content %}
-<div class="container-fluid content-wrapper fade-in">
-    <!-- 主卡片容器 -->
-    <div class="card shadow-sm" style="min-height: 85vh; border: none;">
-        <!-- FIX: Replaced 'border-bottom' with 'border-0' to remove the double line -->
-        <div class="card-header bg-transparent border-0 pt-4 pb-0 px-4">
-            <ul class="nav nav-tabs card-header-tabs" id="mainTabs" role="tablist">
-                <li class="nav-item">
-                    <a class="nav-link active" id="videos-tab" data-toggle="tab" href="#videos" role="tab">
-                        <i class="bi bi-camera-video mr-2"></i>Videos
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" id="datasets-tab" data-toggle="tab" href="#datasets" role="tab">
-                        <i class="bi bi-database mr-2"></i>Datasets
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" id="models-tab" data-toggle="tab" href="#models" role="tab">
-                        <i class="bi bi-box mr-2"></i>Models
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" id="settings-tab" data-toggle="tab" href="#settings" role="tab">
-                        <i class="bi bi-gear mr-2"></i>Settings
-                    </a>
-                </li>
-            </ul>
+<div class="container-fluid px-4 px-lg-5 content-wrapper fade-in">
+
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-end page-header">
+        <div>
+            <h1 class="page-title mb-0">Dashboard</h1>
+            <p class="page-subtitle">Manage your computer vision pipeline.</p>
         </div>
 
-        <div class="card-body p-4">
-            <div class="tab-content">
+        <ul class="nav nav-pills-fluent mt-3 mt-md-0" id="mainTabs" role="tablist">
+            <li class="nav-item">
+                <a class="nav-link active" id="videos-tab" data-toggle="tab" href="#videos" role="tab">
+                    Videos
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" id="datasets-tab" data-toggle="tab" href="#datasets" role="tab">
+                    Datasets
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" id="models-tab" data-toggle="tab" href="#models" role="tab">
+                    Models
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" id="settings-tab" data-toggle="tab" href="#settings" role="tab">
+                    Settings
+                </a>
+            </li>
+        </ul>
+    </div>
 
-                <!-- ==================== VIDEOS TAB ==================== -->
-                <div class="tab-pane fade show active" id="videos" role="tabpanel">
-                    <div class="d-flex justify-content-between align-items-center mb-4">
-                        <div>
-                            <h4 class="mb-1 font-weight-bold">Video Management</h4>
-                            <p class="text-muted small mb-0">Upload raw footage, extract frames, and assign labeling tasks.</p>
-                        </div>
-                        <button class="btn btn-primary shadow-sm" data-toggle="modal" data-target="#uploadVideoModal">
-                            <i class="bi bi-cloud-upload"></i> Upload Video
-                        </button>
-                    </div>
+    <div class="tab-content" id="mainTabContent">
 
-                    <!-- 隐藏的文件输入框，用于导入帧 -->
-                    <input type="file" id="frame-import-input" webkitdirectory directory multiple style="display: none;" />
+        <div class="tab-pane fade show active" id="videos" role="tabpanel">
+            <div class="d-flex justify-content-end mb-3">
+                <button class="btn btn-primary shadow-sm" data-toggle="modal" data-target="#uploadVideoModal">
+                    <i class="bi bi-plus-lg mr-2"></i>New Video
+                </button>
+            </div>
 
-                    <div class="table-responsive rounded border">
-                        <table class="table table-hover mb-0">
-                            <thead class="bg-light">
-                                <tr>
-                                    <th style="width: 25%">Description</th>
-                                    <th>Filename</th>
-                                    <th>Status</th>
-                                    <th>Progress (Extracted / Total)</th>
-                                    <th>Labeled Frames</th>
-                                    <th class="text-right">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="video-list">
-                                <!-- JS Populated -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+            <input type="file" id="frame-import-input" webkitdirectory directory multiple style="display: none;" />
 
-                <!-- ==================== DATASETS TAB ==================== -->
-                <div class="tab-pane fade" id="datasets" role="tabpanel">
-                    <div class="d-flex justify-content-between align-items-center mb-4">
-                        <div>
-                            <h4 class="mb-1 font-weight-bold">Dataset Hub</h4>
-                            <p class="text-muted small mb-0">Compile labeled data into training sets (YOLO format) with augmentation.</p>
-                        </div>
-                        <button class="btn btn-primary shadow-sm" data-toggle="modal" data-target="#createDatasetModal">
-                            <i class="bi bi-plus-lg"></i> Create Dataset
-                        </button>
-                    </div>
-                    <div class="table-responsive rounded border">
-                        <table class="table table-hover mb-0">
-                            <thead class="bg-light">
-                                <tr>
-                                    <th style="width: 25%">Description</th>
-                                    <th>Status</th>
-                                    <th>Composition</th>
-                                    <th>Classes</th>
-                                    <th class="text-right">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="dataset-list">
-                                <!-- JS Populated -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <!-- ==================== MODELS TAB ==================== -->
-                <div class="tab-pane fade" id="models" role="tabpanel">
-                    <div class="d-flex justify-content-between align-items-center mb-4">
-                        <div>
-                            <h4 class="mb-1 font-weight-bold">Model Repository</h4>
-                            <p class="text-muted small mb-0">Manage TFLite models used for auto-annotation assistance.</p>
-                        </div>
-                        <button class="btn btn-primary shadow-sm" data-toggle="modal" data-target="#importModelModal">
-                            <i class="bi bi-box-arrow-in-down"></i> Import Model
-                        </button>
-                    </div>
-                    <div class="table-responsive rounded border">
-                        <table class="table table-hover mb-0">
-                            <thead class="bg-light">
-                                <tr>
-                                    <th>Description</th>
-                                    <th>Type</th>
-                                    <th>Label Map</th>
-                                    <th>Imported Date</th>
-                                    <th class="text-right">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="model-list">
-                                <!-- JS Populated -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <!-- ==================== SETTINGS TAB ==================== -->
-                <div class="tab-pane fade" id="settings" role="tabpanel">
-                    <div class="row justify-content-center">
-                        <div class="col-lg-11 col-xl-10">
-                            <div class="d-flex align-items-center mb-4 pb-2 border-bottom">
-                                <h4 class="mb-0 font-weight-bold">System Configuration</h4>
-                            </div>
-                            <p class="text-muted mb-4"><i class="bi bi-info-circle"></i> Changes to AI models will apply to the next task started.</p>
-
-                            <form id="settings-form">
-                                <div class="row">
-                                    <!-- Left Column: Hardware & Models -->
-                                    <div class="col-lg-6">
-                                        <div class="card mb-4 border shadow-sm">
-                                            <div class="card-header">
-                                                <h6 class="mb-0 text-primary font-weight-bold"><i class="bi bi-cpu mr-2"></i>AI Engine & Hardware</h6>
-                                            </div>
-                                            <div class="card-body">
-                                                <div class="form-group">
-                                                    <label for="setting-gpu-device" class="small text-uppercase text-muted font-weight-bold">Computation Device</label>
-                                                    <select id="setting-gpu-device" class="form-control custom-select">
-                                                        <option value="auto">Auto-detect (Recommended)</option>
-                                                        <option value="cpu">CPU Only</option>
-                                                        <option value="cuda:0">NVIDIA GPU #0 (cuda:0)</option>
-                                                        <option value="cuda:1">NVIDIA GPU #1 (cuda:1)</option>
-                                                    </select>
-                                                </div>
-                                                <div class="form-group">
-                                                    <label for="setting-sam-model" class="small text-uppercase text-muted font-weight-bold">SAM Model (Assistance)</label>
-                                                    <select id="setting-sam-model" class="form-control custom-select">
-                                                        <option value="sam2.1_t.pt" data-name="SAM 2.1 Tiny">SAM 2.1 Tiny (Fastest)</option>
-                                                        <option value="sam2.1_s.pt" data-name="SAM 2.1 Small">SAM 2.1 Small (Balanced)</option>
-                                                        <option value="sam2.1_b.pt" data-name="SAM 2.1 Base">SAM 2.1 Base</option>
-                                                        <option value="sam2.1_l.pt" data-name="SAM 2.1 Large">SAM 2.1 Large (Best Quality)</option>
-                                                    </select>
-                                                </div>
-                                                <div class="form-group mb-0">
-                                                    <label for="setting-feature-extractor-model" class="small text-uppercase text-muted font-weight-bold">Feature Extractor</label>
-                                                    <select id="setting-feature-extractor-model" class="form-control custom-select">
-                                                        <option value="mobilenet_v3_large">MobileNetV3-Large (Accurate)</option>
-                                                        <option value="mobilenet_v3_small">MobileNetV3-Small (Fast)</option>
-                                                    </select>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div class="card mb-4 border shadow-sm">
-                                            <div class="card-header">
-                                                <h6 class="mb-0 text-primary font-weight-bold"><i class="bi bi-sliders mr-2"></i>Algorithm Tuning</h6>
-                                            </div>
-                                            <div class="card-body">
-                                                <div class="form-group">
-                                                    <label class="d-flex justify-content-between small text-muted font-weight-bold">
-                                                        <span>SAM Mask Confidence</span>
-                                                        <span id="sam-mask-conf-val" class="text-primary">0.35</span>
-                                                    </label>
-                                                    <input type="range" class="custom-range" id="setting-sam-mask-confidence" min="0.1" max="0.9" step="0.05" value="0.35">
-                                                </div>
-                                                <div class="form-group">
-                                                    <label class="d-flex justify-content-between small text-muted font-weight-bold">
-                                                        <span>NMS IoU Threshold</span>
-                                                        <span id="nms-iou-val" class="text-primary">0.70</span>
-                                                    </label>
-                                                    <input type="range" class="custom-range" id="setting-nms-iou-threshold" min="0.1" max="1.0" step="0.05" value="0.70">
-                                                </div>
-                                                <div class="form-group">
-                                                    <label class="d-flex justify-content-between small text-muted font-weight-bold">
-                                                        <span>Prototype Temperature</span>
-                                                        <span id="prototype-temp-val" class="text-primary">0.07</span>
-                                                    </label>
-                                                    <input type="range" class="custom-range" id="setting-prototype-temperature" min="0.01" max="0.5" step="0.01" value="0.07">
-                                                </div>
-                                                <div class="form-group mb-0">
-                                                    <label class="small text-muted font-weight-bold">Prototype Sample Limit</label>
-                                                    <input type="number" class="form-control" id="setting-prototype-sample-limit" value="50" min="10" max="500">
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <!-- Right Column: Workflow & Colors -->
-                                    <div class="col-lg-6">
-                                        <div class="card mb-4 border shadow-sm">
-                                            <div class="card-header">
-                                                <h6 class="mb-0 text-primary font-weight-bold"><i class="bi bi-gear mr-2"></i>Workflow Preferences</h6>
-                                            </div>
-                                            <div class="card-body">
-                                                <div class="form-group">
-                                                    <label for="setting-default-annotation-mode" class="small text-uppercase text-muted font-weight-bold">Default Tool</label>
-                                                    <select id="setting-default-annotation-mode" class="form-control custom-select">
-                                                        <option value="manual">Manual Draw</option>
-                                                        <option value="sam">SAM (Point)</option>
-                                                        <option value="lam">LAM (Click to Label)</option>
-                                                        <option value="smart_select">Smart Select</option>
-                                                    </select>
-                                                </div>
-                                                <div class="form-group">
-                                                    <div class="custom-control custom-switch">
-                                                        <input type="checkbox" class="custom-control-input" id="setting-autosave-enabled">
-                                                        <label class="custom-control-label font-weight-bold" for="setting-autosave-enabled">Enable Autosave on Navigation</label>
-                                                    </div>
-                                                </div>
-                                                <hr>
-                                                <div class="form-row">
-                                                    <div class="form-group col-md-6">
-                                                        <label class="small text-muted font-weight-bold">Default Pre-annotation Conf</label>
-                                                        <input type="number" class="form-control" id="setting-preannotation-conf" min="0.1" max="0.95" step="0.05" value="0.5">
-                                                    </div>
-                                                    <div class="form-group col-md-6">
-                                                        <label class="small text-muted font-weight-bold">Frame JPEG Quality</label>
-                                                        <input type="number" id="setting-jpeg-quality" class="form-control" min="10" max="100" step="5">
-                                                    </div>
-                                                </div>
-                                                 <div class="form-group mb-0">
-                                                    <label for="setting-opencv-tracker" class="small text-muted font-weight-bold">Legacy Tracker</label>
-                                                    <select id="setting-opencv-tracker" class="form-control custom-select">
-                                                        {% for tracker in tracker_fns %}<option value="{{ tracker }}">{{ tracker }}</option>{% endfor %}
-                                                    </select>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div class="card mb-4 border shadow-sm">
-                                            <div class="card-header">
-                                                <h6 class="mb-0 text-primary font-weight-bold"><i class="bi bi-palette mr-2"></i>Class Colors</h6>
-                                            </div>
-                                            <div class="card-body">
-                                                <p class="text-muted small mb-2">Customize colors for labels. Unset classes use auto-generated colors.</p>
-                                                <div id="class-color-manager" style="max-height: 250px; overflow-y: auto; padding-right: 5px;" class="custom-scrollbar">
-                                                    <!-- JS Populated -->
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div class="card mb-4 border shadow-sm border-warning">
-                                            <div class="card-header bg-warning-soft">
-                                                <h6 class="mb-0 text-warning font-weight-bold"><i class="bi bi-trash mr-2"></i>Cache & Maintenance</h6>
-                                            </div>
-                                            <div class="card-body">
-                                                 <div class="form-group">
-                                                    <label class="small text-muted font-weight-bold">Cache Save Interval (s)</label>
-                                                    <input type="number" class="form-control" id="setting-cache-save-interval" value="30" min="10" max="300">
-                                                </div>
-                                                <button type="button" class="btn btn-outline-warning btn-block" id="clear-cache-btn">
-                                                    <i class="bi bi-eraser-fill"></i> Clear Feature Cache
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <!-- Batch Tracking Settings (Full Width) -->
-                                    <div class="col-12">
-                                        <div class="card mb-4 border shadow-sm">
-                                             <div class="card-header">
-                                                <h6 class="mb-0 text-primary font-weight-bold"><i class="bi bi-film mr-2"></i>Batch Tracking Defaults</h6>
-                                            </div>
-                                            <div class="card-body">
-                                                <div class="form-row">
-                                                    <div class="form-group col-md-4">
-                                                        <label class="small text-muted font-weight-bold">Image Size</label>
-                                                        <input type="number" class="form-control" id="setting-batch-tracking-imgsz" value="1024" min="256" step="128">
-                                                    </div>
-                                                    <div class="form-group col-md-4">
-                                                        <label class="d-flex justify-content-between small text-muted font-weight-bold">
-                                                            <span>Confidence</span>
-                                                            <span id="batch-track-conf-val" class="text-primary">0.30</span>
-                                                        </label>
-                                                        <input type="range" class="custom-range" id="setting-batch-tracking-conf" min="0.1" max="0.9" step="0.05" value="0.30">
-                                                    </div>
-                                                    <div class="form-group col-md-4">
-                                                        <label class="small text-muted font-weight-bold">Chunk Size</label>
-                                                        <input type="number" class="form-control" id="setting-batch-tracking-chunk-size" value="10" min="5" max="50">
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="fixed-bottom p-3 bg-white border-top shadow-lg d-flex justify-content-end" style="z-index: 1000; left: 0;">
-                                    <button type="submit" class="btn btn-primary px-4 shadow">
-                                        <i class="bi bi-check2-circle"></i> Apply & Save All Settings
-                                    </button>
-                                </div>
-                                <!-- Add padding to prevent button from overlapping content -->
-                                <div style="height: 60px;"></div>
-                            </form>
-                        </div>
-                    </div>
+            <div class="fluent-card">
+                <div class="table-responsive">
+                    <table class="table table-fluent table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th style="width: 25%">Description</th>
+                                <th>Filename</th>
+                                <th>Status</th>
+                                <th>Progress</th>
+                                <th>Labels</th>
+                                <th class="text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="video-list"></tbody>
+                    </table>
                 </div>
             </div>
+        </div>
+
+        <div class="tab-pane fade" id="datasets" role="tabpanel">
+            <div class="d-flex justify-content-end mb-3">
+                <button class="btn btn-primary shadow-sm" data-toggle="modal" data-target="#createDatasetModal">
+                    <i class="bi bi-plus-lg mr-2"></i>Create Dataset
+                </button>
+            </div>
+
+            <div class="fluent-card">
+                <div class="table-responsive">
+                    <table class="table table-fluent table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th style="width: 25%">Name</th>
+                                <th>Status</th>
+                                <th>Composition</th>
+                                <th>Classes</th>
+                                <th class="text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dataset-list"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="models" role="tabpanel">
+            <div class="d-flex justify-content-end mb-3">
+                <button class="btn btn-primary shadow-sm" data-toggle="modal" data-target="#importModelModal">
+                    <i class="bi bi-upload mr-2"></i>Import Model
+                </button>
+            </div>
+
+            <div class="fluent-card">
+                <div class="table-responsive">
+                    <table class="table table-fluent table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Description</th>
+                                <th>Type</th>
+                                <th>Label Map</th>
+                                <th>Date</th>
+                                <th class="text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="model-list"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="settings" role="tabpanel">
+            <form id="settings-form">
+                <div class="row justify-content-center">
+                    <div class="col-lg-10 col-xl-9">
+
+                        <div class="fluent-card settings-section">
+                            <div class="settings-section-title">
+                                <i class="bi bi-cpu mr-2 text-primary"></i> AI Engine & Hardware
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group col-md-6">
+                                    <label class="small text-muted font-weight-bold">Computation Device</label>
+                                    <select id="setting-gpu-device" class="form-control custom-select">
+                                        <option value="auto">Auto-detect</option>
+                                        <option value="cpu">CPU Only</option>
+                                        <option value="cuda:0">NVIDIA GPU #0</option>
+                                        <option value="cuda:1">NVIDIA GPU #1</option>
+                                    </select>
+                                </div>
+                                <div class="form-group col-md-6">
+                                    <label class="small text-muted font-weight-bold">Assistance Model (SAM)</label>
+                                    <select id="setting-sam-model" class="form-control custom-select">
+                                        <option value="sam2.1_t.pt" data-name="SAM 2.1 Tiny">SAM 2.1 Tiny (Fast)</option>
+                                        <option value="sam2.1_s.pt" data-name="SAM 2.1 Small">SAM 2.1 Small (Balanced)</option>
+                                        <option value="sam2.1_b.pt" data-name="SAM 2.1 Base">SAM 2.1 Base</option>
+                                        <option value="sam2.1_l.pt" data-name="SAM 2.1 Large">SAM 2.1 Large (Precise)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group col-md-6">
+                                    <label class="small text-muted font-weight-bold">Feature Extractor</label>
+                                    <select id="setting-feature-extractor-model" class="form-control custom-select">
+                                        <option value="mobilenet_v3_large">MobileNetV3-Large</option>
+                                        <option value="mobilenet_v3_small">MobileNetV3-Small</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="fluent-card settings-section">
+                            <div class="settings-section-title">
+                                <i class="bi bi-sliders mr-2 text-primary"></i> Algorithm Parameters
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group col-md-4">
+                                    <label class="d-flex justify-content-between small text-muted font-weight-bold">
+                                        SAM Mask Conf. <span id="sam-mask-conf-val" class="text-primary">0.35</span>
+                                    </label>
+                                    <input type="range" class="custom-range" id="setting-sam-mask-confidence" min="0.1" max="0.9" step="0.05">
+                                </div>
+                                <div class="form-group col-md-4">
+                                    <label class="d-flex justify-content-between small text-muted font-weight-bold">
+                                        NMS IoU <span id="nms-iou-val" class="text-primary">0.70</span>
+                                    </label>
+                                    <input type="range" class="custom-range" id="setting-nms-iou-threshold" min="0.1" max="1.0" step="0.05">
+                                </div>
+                                <div class="form-group col-md-4">
+                                    <label class="d-flex justify-content-between small text-muted font-weight-bold">
+                                        Proto. Temp <span id="prototype-temp-val" class="text-primary">0.07</span>
+                                    </label>
+                                    <input type="range" class="custom-range" id="setting-prototype-temperature" min="0.01" max="0.5" step="0.01">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="fluent-card settings-section">
+                            <div class="settings-section-title">
+                                <i class="bi bi-ui-checks mr-2 text-primary"></i> Workflow
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group col-md-6">
+                                    <label class="small text-muted font-weight-bold">Default Tool</label>
+                                    <select id="setting-default-annotation-mode" class="form-control custom-select">
+                                        <option value="manual">Manual Draw</option>
+                                        <option value="sam">SAM (Point)</option>
+                                        <option value="lam">LAM (Click to Label)</option>
+                                        <option value="smart_select">Smart Select</option>
+                                    </select>
+                                </div>
+                                <div class="form-group col-md-6">
+                                    <label class="small text-muted font-weight-bold">Auto-Save</label>
+                                    <div class="custom-control custom-switch mt-2">
+                                        <input type="checkbox" class="custom-control-input" id="setting-autosave-enabled">
+                                        <label class="custom-control-label" for="setting-autosave-enabled">Save on navigation</label>
+                                    </div>
+                                </div>
+                                <div class="form-group col-md-6">
+                                    <label class="small text-muted font-weight-bold">JPEG Quality</label>
+                                    <input type="number" id="setting-jpeg-quality" class="form-control" min="10" max="100" step="5">
+                                </div>
+                                <div class="form-group col-md-6">
+                                    <label class="small text-muted font-weight-bold">Legacy Tracker</label>
+                                    <select id="setting-opencv-tracker" class="form-control custom-select">
+                                        {% for tracker in tracker_fns %}<option value="{{ tracker }}">{{ tracker }}</option>{% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="fluent-card settings-section">
+                             <div class="settings-section-title">
+                                <i class="bi bi-palette mr-2 text-primary"></i> Class Colors
+                            </div>
+                             <div id="class-color-manager" class="d-flex flex-wrap custom-scrollbar" style="max-height: 200px; overflow-y: auto; gap: 10px;"></div>
+                        </div>
+
+                        <div class="fluent-card settings-section" style="border-left: 4px solid var(--color-warning);">
+                            <div class="settings-section-title text-warning">
+                                <i class="bi bi-tools mr-2"></i> Maintenance
+                            </div>
+                            <div class="d-flex align-items-center justify-content-between">
+                                <div class="form-group mb-0 mr-3 flex-grow-1">
+                                    <label class="small text-muted font-weight-bold">Cache Save Interval (s)</label>
+                                    <input type="number" class="form-control" id="setting-cache-save-interval" min="10" max="300">
+                                </div>
+                                <button type="button" class="btn btn-outline-warning" id="clear-cache-btn">
+                                    <i class="bi bi-eraser-fill mr-1"></i> Clear Cache
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="text-right pb-5">
+                            <button type="submit" class="btn btn-primary px-4 shadow">
+                                Apply Settings
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </form>
         </div>
     </div>
 </div>
 
-<!-- ==================== MODALS ==================== -->
 {% call render_modal('uploadVideoModal', 'Upload New Video') %}
 <form id="upload-video-form">
     <div class="form-group">
-        <label for="video-description" class="font-weight-bold">Description</label>
+        <label class="font-weight-600">Description</label>
         <input type="text" class="form-control" id="video-description" name="description" placeholder="E.g., Field Test Match 1" required maxlength="{{ limit_data.MAX_DESCRIPTION_LENGTH }}">
     </div>
     <div class="form-group">
-        <label for="video-file" class="font-weight-bold">Video File (.mp4)</label>
+        <label class="font-weight-600">Video File (.mp4)</label>
         <div class="custom-file">
             <input type="file" class="custom-file-input" id="video-file" name="video_file" accept="video/mp4" required>
             <label class="custom-file-label" for="video-file">Choose file...</label>
         </div>
-        <small class="form-text text-muted">Max size: {{ limit_data.MAX_VIDEO_SIZE_MB }}MB.</small>
     </div>
-    <button type="submit" class="btn btn-primary btn-block shadow-sm"><i class="bi bi-upload"></i> Upload & Process</button>
+    <button type="submit" class="btn btn-primary btn-block">Upload & Process</button>
 </form>
 {% endcall %}
 
 {% call render_modal('createDatasetModal', 'Create Dataset') %}
 <form id="create-dataset-form">
     <div class="form-group">
-        <label for="dataset-description" class="font-weight-bold">Name / Description</label>
+        <label class="font-weight-600">Name</label>
         <input type="text" class="form-control" id="dataset-description" placeholder="E.g., Season 2024 V1" required maxlength="{{ limit_data.MAX_DESCRIPTION_LENGTH }}">
     </div>
     <div class="form-group">
-        <label for="dataset-videos" class="font-weight-bold">Select Source Videos</label>
-        <select multiple class="form-control custom-select" id="dataset-videos" required size="6"></select>
-        <small class="form-text text-muted"><i class="bi bi-info-circle"></i> Hold Ctrl/Cmd to select multiple videos.</small>
+        <label class="font-weight-600">Videos</label>
+        <select multiple class="form-control custom-select" id="dataset-videos" required size="5"></select>
+        <small class="text-muted">Ctrl/Cmd + Click to select multiple.</small>
     </div>
     <div class="form-row">
-        <div class="form-group col-md-6">
-            <label for="eval-percent" class="font-weight-bold">Validation %</label>
-            <input type="number" class="form-control" id="eval-percent" value="20" min="5" max="50" step="1">
+        <div class="form-group col-6">
+            <label class="font-weight-600">Valid %</label>
+            <input type="number" class="form-control" id="eval-percent" value="20">
         </div>
-        <div class="form-group col-md-6">
-            <label for="test-percent" class="font-weight-bold">Test %</label>
-            <input type="number" class="form-control" id="test-percent" value="10" min="0" max="50" step="1">
+        <div class="form-group col-6">
+            <label class="font-weight-600">Test %</label>
+            <input type="number" class="form-control" id="test-percent" value="10">
         </div>
     </div>
 
-    <div class="card bg-light border-0 mb-3">
-        <div class="card-body p-3">
-            <div class="d-flex justify-content-between align-items-center">
-                <h6 class="mb-0 font-weight-bold"><i class="bi bi-magic mr-1"></i> Data Augmentation</h6>
-                <div class="custom-control custom-switch">
-                    <input type="checkbox" class="custom-control-input" id="aug-enabled">
-                    <label class="custom-control-label font-weight-bold" for="aug-enabled">Enable</label>
-                </div>
-            </div>
-            <div id="augmentation-options-panel" class="mt-3" style="display: none;">
-                <div class="form-group">
-                    <label for="aug-multiply-factor" class="small text-muted font-weight-bold">Multiplication Factor</label>
-                    <input type="number" class="form-control" id="aug-multiply-factor" value="3" min="2" max="20">
-                    <small class="form-text text-muted">Generate N-1 augmented copies per image.</small>
-                </div>
-                <!-- Include the shared augmentation controls partial -->
-                {% include '_augmentation_controls.html' %}
+    <div class="bg-light p-3 rounded mb-3">
+        <div class="d-flex justify-content-between align-items-center">
+            <h6 class="mb-0 font-weight-bold">Augmentation</h6>
+            <div class="custom-control custom-switch">
+                <input type="checkbox" class="custom-control-input" id="aug-enabled">
+                <label class="custom-control-label" for="aug-enabled"></label>
             </div>
         </div>
+        <div id="augmentation-options-panel" class="mt-3" style="display: none;">
+            <div class="form-group">
+                <label class="small text-muted font-weight-bold">Copies per Image</label>
+                <input type="number" class="form-control" id="aug-multiply-factor" value="3">
+            </div>
+            {% include '_augmentation_controls.html' %}
+        </div>
     </div>
-    <button type="submit" class="btn btn-primary btn-block shadow-sm"><i class="bi bi-check-lg"></i> Create Dataset</button>
+    <button type="submit" class="btn btn-primary btn-block">Create Dataset</button>
 </form>
 {% endcall %}
 
-{% call render_modal('importModelModal', 'Import TFLite Model') %}
+{% call render_modal('importModelModal', 'Import Model') %}
 <form id="import-model-form">
     <div class="form-group">
-        <label for="model-description" class="font-weight-bold">Description</label>
-        <input type="text" class="form-control" id="model-description" name="description" placeholder="E.g., CenterStage v1" required maxlength="{{ limit_data.MAX_DESCRIPTION_LENGTH }}">
+        <label class="font-weight-600">Description</label>
+        <input type="text" class="form-control" id="model-description" name="description" required maxlength="{{ limit_data.MAX_DESCRIPTION_LENGTH }}">
     </div>
     <div class="form-group">
-        <label for="model-file" class="font-weight-bold">Model File (.tflite)</label>
+        <label class="font-weight-600">Model (.tflite)</label>
         <div class="custom-file">
             <input type="file" class="custom-file-input" id="model-file" name="model_file" accept=".tflite" required>
-            <label class="custom-file-label" for="model-file">Choose file...</label>
+            <label class="custom-file-label" for="model-file">Select file...</label>
         </div>
     </div>
     <div class="form-group">
-        <label for="label-file" class="font-weight-bold">Label Map (.txt)</label>
+        <label class="font-weight-600">Label Map (.txt)</label>
         <div class="custom-file">
             <input type="file" class="custom-file-input" id="label-file" name="label_file" accept=".txt,.labels" required>
-            <label class="custom-file-label" for="label-file">Choose file...</label>
+            <label class="custom-file-label" for="label-file">Select file...</label>
         </div>
     </div>
     <div class="form-group">
-        <label for="model-type" class="font-weight-bold">Quantization Type</label>
+        <label class="font-weight-600">Type</label>
         <select class="form-control custom-select" id="model-type" name="model_type" required>
-            <option value="" disabled selected>-- Select Type --</option>
-            <option value="float32">Float32 (FP32) - Standard</option>
-            <option value="uint8">Integer (UINT8) - Edge TPU Compatible</option>
+            <option value="float32">Float32 (Standard)</option>
+            <option value="uint8">UINT8 (Edge TPU)</option>
         </select>
     </div>
-    <button type="submit" class="btn btn-primary btn-block shadow-sm"><i class="bi bi-box-arrow-in-down"></i> Import Model</button>
+    <button type="submit" class="btn btn-primary btn-block">Import</button>
 </form>
 {% endcall %}
 
-{% call render_modal('preAnnotateModal', 'Auto-Label Video') %}
+{% call render_modal('preAnnotateModal', 'Auto-Label') %}
 <form id="pre-annotate-form">
     <input type="hidden" id="pre-annotate-video-uuid" data-frame-count="0" data-labeled-count="0">
     <div class="form-group">
-        <label for="pre-annotate-model-select" class="font-weight-bold">Select AI Model</label>
+        <label class="font-weight-600">Model</label>
         <select id="pre-annotate-model-select" class="form-control custom-select" required></select>
     </div>
     <div class="form-row">
-        <div class="form-group col-md-6">
-            <label for="pre-annotate-start-frame" class="font-weight-bold">Start Frame</label>
-            <input type="number" id="pre-annotate-start-frame" class="form-control" min="0" value="0">
+        <div class="form-group col-6">
+            <label class="font-weight-600">Start</label>
+            <input type="number" id="pre-annotate-start-frame" class="form-control">
         </div>
-        <div class="form-group col-md-6">
-            <label for="pre-annotate-end-frame" class="font-weight-bold">End Frame</label>
-            <input type="number" id="pre-annotate-end-frame" class="form-control" min="0">
+        <div class="form-group col-6">
+            <label class="font-weight-600">End</label>
+            <input type="number" id="pre-annotate-end-frame" class="form-control">
         </div>
     </div>
     <div class="form-group">
-        <label class="d-flex justify-content-between font-weight-bold">
-            <span>Confidence Threshold</span>
-            <span id="confidence-value" class="text-primary">0.5</span>
+        <label class="d-flex justify-content-between font-weight-600">
+            Conf. <span id="confidence-value" class="text-primary">0.5</span>
         </label>
         <input type="range" class="custom-range" id="pre-annotate-confidence" min="0.1" max="0.95" step="0.05" value="0.5">
     </div>
-    <div class="form-group bg-light p-3 rounded border">
-        <label class="font-weight-bold mb-2">Merge Strategy</label>
-        <div class="custom-control custom-radio mb-1">
+    <div class="form-group">
+         <label class="font-weight-600 d-block mb-2">Strategy</label>
+         <div class="custom-control custom-radio custom-control-inline">
             <input type="radio" id="strategy-overwrite" name="merge_strategy" value="overwrite" class="custom-control-input" checked>
-            <label class="custom-control-label" for="strategy-overwrite">Overwrite existing labels</label>
+            <label class="custom-control-label" for="strategy-overwrite">Overwrite</label>
         </div>
-        <div class="custom-control custom-radio">
+        <div class="custom-control custom-radio custom-control-inline">
             <input type="radio" id="strategy-skip" name="merge_strategy" value="skip_labeled" class="custom-control-input">
-            <label class="custom-control-label" for="strategy-skip">Skip labeled frames (Fill gaps)</label>
+            <label class="custom-control-label" for="strategy-skip">Fill Gaps</label>
         </div>
     </div>
-    <button type="submit" class="btn btn-primary btn-block shadow-sm"><i class="bi bi-robot"></i> Start Auto-Labeling</button>
+    <button type="submit" class="btn btn-primary btn-block">Start</button>
 </form>
 {% endcall %}
 
 <div class="modal fade" id="manageTasksModal" tabindex="-1" role="dialog">
     <div class="modal-dialog modal-lg" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title font-weight-bold" id="manageTasksModalTitle">Manage Tasks</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        <div class="modal-content border-0 shadow-lg" style="border-radius: var(--radius-lg);">
+            <div class="modal-header border-bottom-0 pb-0">
+                <h5 class="modal-title font-weight-bold" id="manageTasksModalTitle">Tasks</h5>
+                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
             </div>
-            <div class="modal-body">
-                <h6 class="font-weight-bold text-primary mb-3"><i class="bi bi-list-task mr-1"></i> Current Tasks</h6>
-                <div class="table-responsive mb-4 rounded border">
-                    <table class="table table-sm table-hover mb-0">
-                        <thead class="bg-light">
-                            <tr>
-                                <th>Assignee</th>
-                                <th>Range</th>
-                                <th>Note</th>
-                                <th class="text-right">Actions</th>
-                            </tr>
-                        </thead>
+            <div class="modal-body pt-3">
+                <div class="table-responsive rounded bg-light mb-4 border-0">
+                    <table class="table table-sm table-hover mb-0 bg-transparent">
                         <tbody id="task-list-in-modal"></tbody>
                     </table>
                 </div>
-
-                <h6 class="font-weight-bold text-success mb-3"><i class="bi bi-plus-circle-dotted mr-1"></i> Assign New Task</h6>
-                <form id="create-task-form" class="bg-light p-3 rounded border">
+                <h6 class="font-weight-bold mb-3">New Task</h6>
+                <form id="create-task-form">
                     <input type="hidden" id="task-video-uuid">
                     <div class="form-row">
                         <div class="form-group col-md-4">
-                            <label for="task-assigned-to" class="small font-weight-bold">User</label>
-                            <input type="text" class="form-control form-control-sm" id="task-assigned-to" placeholder="Name" required>
+                            <input type="text" class="form-control form-control-sm" id="task-assigned-to" placeholder="User" required>
                         </div>
                         <div class="form-group col-md-3">
-                            <label for="task-start-frame" class="small font-weight-bold">Start</label>
-                            <input type="number" class="form-control form-control-sm" id="task-start-frame" min="0" required>
+                            <input type="number" class="form-control form-control-sm" id="task-start-frame" placeholder="Start" required>
                         </div>
                         <div class="form-group col-md-3">
-                            <label for="task-end-frame" class="small font-weight-bold">End</label>
-                            <input type="number" class="form-control form-control-sm" id="task-end-frame" min="0" required>
+                            <input type="number" class="form-control form-control-sm" id="task-end-frame" placeholder="End" required>
                         </div>
-                        <div class="form-group col-md-2 d-flex align-items-end">
-                            <button type="submit" class="btn btn-sm btn-success btn-block">Assign</button>
+                        <div class="form-group col-md-2">
+                            <button type="submit" class="btn btn-sm btn-success btn-block">Add</button>
                         </div>
-                    </div>
-                    <div class="form-group mb-0">
-                        <label for="task-description" class="small font-weight-bold">Instructions (Optional)</label>
-                        <input type="text" class="form-control form-control-sm" id="task-description" placeholder="E.g., Label Red Ducks only">
                     </div>
                 </form>
             </div>
@@ -517,19 +416,18 @@
     $(document).ready(function() {
         let currentSettings = {};
 
-        // File input label update
         $('.custom-file-input').on('change', function() {
             let fileName = $(this).val().split('\\').pop();
             $(this).next('.custom-file-label').addClass("selected").html(fileName);
         });
 
-        // Helper to create nice badges (CSS Class Updated for Dark Mode)
         function getStatusBadge(status, message) {
             let badgeClass = 'secondary';
             let icon = '';
 
             if (status === 'READY') {
-                badgeClass = message ? 'warning' : 'success';
+                badgeClass = 'warning';
+                if(!message) badgeClass = 'success';
                 icon = '<i class="bi bi-check-circle-fill mr-1"></i>';
             } else if (['PROCESSING', 'EXTRACTING', 'PENDING', 'PRE_ANNOTATING', 'APPLYING_PROTOTYPES'].includes(status)) {
                 badgeClass = 'info';
@@ -548,7 +446,6 @@
         function showSuccess(message) { alert(message); }
         function showError(message) { alert('Error: ' + message); }
 
-        // --- Video Management ---
         function refreshVideos() {
             $.get('/listVideos', function(data) {
                 const videoList = $('#video-list');
@@ -587,7 +484,6 @@
                     videoList.append(row);
                 });
 
-                // Update select for Dataset creation
                 const datasetVideoSelect = $('#dataset-videos');
                 datasetVideoSelect.empty();
                 data.ready_videos_for_dataset.forEach(video => {
@@ -596,7 +492,6 @@
             });
         }
 
-        // --- Dataset Management ---
         function refreshDatasets() {
             $.get('/listDatasets', function(data) {
                 const datasetList = $('#dataset-list');
@@ -630,7 +525,6 @@
             });
         }
 
-        // --- Model Management ---
         function refreshModels() {
             $.get('/listModels', function(data) {
                 const modelList = $('#model-list');
@@ -656,14 +550,12 @@
             });
         }
 
-        // --- Settings ---
         function loadSettings() {
             $.get('/api/settings', function(data) {
                 if (data.success) {
                     currentSettings = data.settings;
                     const s = data.settings;
 
-                    // Fill form values
                     $('#setting-gpu-device').val(s.gpu_device);
                     $('#setting-sam-model').val(s.sam_model_checkpoint);
                     $('#setting-feature-extractor-model').val(s.feature_extractor_model_name);
@@ -710,7 +602,6 @@
             });
         }
 
-        // --- Augmentation Controls Logic ---
         function setupAugmentationListeners(contextSelector) {
             const context = $(contextSelector);
             context.on('input', 'input[type="range"]', function() {
@@ -720,7 +611,6 @@
                 const controlsId = $(this).closest('.aug-option').data('controls');
                 context.find('#' + controlsId).toggle($(this).is(':checked'));
             });
-            // Init state
             context.find('.aug-option input[type="checkbox"]').each(function() {
                 const controlsId = $(this).closest('.aug-option').data('controls');
                 context.find('#' + controlsId).toggle($(this).is(':checked'));
@@ -729,9 +619,8 @@
         $('#aug-enabled').on('change', function() {
             $('#augmentation-options-panel').slideToggle($(this).is(':checked'));
         });
-        setupAugmentationListeners('#createDatasetModal'); // Initialize inside modal
+        setupAugmentationListeners('#createDatasetModal');
 
-        // --- Helper to extract augmentation data ---
         function getAugmentationOptions(contextSelector) {
             const context = $(contextSelector);
             const getVal = (selector, type = 'float') => type === 'int' ? parseInt(context.find(selector).val()) : parseFloat(context.find(selector).val());
@@ -755,8 +644,6 @@
                 mosaic: { enabled: isEnabled('#aug-mosaic-enabled'), p: getVal('#aug-mosaic-p') }
             };
         }
-
-        // --- Form Submissions ---
 
         $('#create-dataset-form').on('submit', function(e) {
             e.preventDefault();
@@ -818,7 +705,6 @@
             });
         });
 
-        // Settings Save
         $('#settings-form').on('submit', function(e) {
             e.preventDefault();
             const selectedSamOption = $('#setting-sam-model').find('option:selected');
@@ -837,11 +723,11 @@
                 prototype_temperature: parseFloat($('#setting-prototype-temperature').val()),
                 prototype_sample_limit: parseInt($('#setting-prototype-sample-limit').val()),
                 batch_tracking_imgsz: parseInt($('#setting-batch-tracking-imgsz').val()),
-                batch_tracking_conf: parseFloat($('#setting-batch-tracking-conf').val()),
-                batch_tracking_chunk_size: parseInt($('#setting-batch-tracking-chunk-size').val()),
+                batch_tracking_conf: parseFloat($('#setting-batch-tracking-conf') ? $('#setting-batch-tracking-conf').val() : 0.3),
+                batch_tracking_chunk_size: parseInt($('#setting-batch-tracking-chunk-size') ? $('#setting-batch-tracking-chunk-size').val() : 10),
                 default_annotation_mode: $('#setting-default-annotation-mode').val(),
                 autosave_enabled: $('#setting-autosave-enabled').is(':checked'),
-                default_preannotation_conf: parseFloat($('#setting-preannotation-conf').val()),
+                default_preannotation_conf: parseFloat($('#setting-preannotation-conf').val() || 0.5),
                 frame_extraction_jpeg_quality: parseInt($('#setting-jpeg-quality').val()),
                 default_opencv_tracker: $('#setting-opencv-tracker').val(),
                 cache_save_interval_seconds: parseInt($('#setting-cache-save-interval').val()),
@@ -860,15 +746,12 @@
             });
         });
 
-        // Range input value display listeners
         ['sam-mask-confidence', 'nms-iou-threshold', 'prototype-temperature', 'batch-tracking-conf', 'preannotation-conf'].forEach(id => {
             $(`#setting-${id}`).on('input', function() {
-                // Find associated display span (assumes consistent naming or relative position)
-                $(this).prev('label').find('span').text(parseFloat($(this).val()).toFixed(2));
+                $(this).closest('.form-group').find('.text-primary').text(parseFloat($(this).val()).toFixed(2));
             });
         });
 
-        // Clear Cache
         $('#clear-cache-btn').on('click', function() {
             if (confirm("Clear 'Smart Select' temporary cache?")) {
                 const $btn = $(this);
@@ -881,7 +764,6 @@
             }
         });
 
-        // --- Task Management Modal Logic ---
         $(document).on("click", ".btn-manage-tasks", function() {
             const videoUuid = $(this).data("uuid");
             const videoDesc = $(this).data("description");
@@ -944,7 +826,6 @@
             });
         });
 
-        // --- Pre-Annotation Logic ---
         $(document).on("click", ".btn-pre-annotate", function() {
             const videoUuid = $(this).data('uuid');
             const frameCount = parseInt($(this).data('frame-count'));
@@ -1007,7 +888,6 @@
             });
         });
 
-        // --- Other Actions ---
         let videoUuidForImport = null;
         $(document).on("click", ".btn-import-frames", function() {
             videoUuidForImport = $(this).data('uuid');
@@ -1032,7 +912,6 @@
             });
         });
 
-        // Delete handlers
         $(document).on("click", ".btn-delete-video", function() {
             if (confirm('Delete this video and ALL labels?')) {
                 $.ajax({ url: '/deleteVideo', type: 'POST', contentType: 'application/json', data: JSON.stringify({ video_uuid: $(this).data('uuid') }), success: refreshVideos });
@@ -1055,21 +934,18 @@
             }
         });
 
-        // Dataset Actions
         $(document).on("click", ".btn-regenerate-dataset", function() {
             if (confirm('Update dataset? Old files will be replaced.')) {
                 $.ajax({ url: '/regenerateDataset', type: 'POST', contentType: 'application/json', data: JSON.stringify({ dataset_uuid: $(this).data('uuid') }), success: function(res) { if(res.success){ alert('Update started.'); refreshDatasets(); } else alert(res.message); } });
             }
         });
 
-        // Cancel Task
         $(document).on("click", ".btn-cancel-task", function() {
             if (confirm('Cancel running task?')) {
                 $.ajax({ url: '/cancelTask', type: 'POST', contentType: 'application/json', data: JSON.stringify({ video_uuid: $(this).data('uuid') }), success: function(res) { if(res.success){ alert('Cancellation requested.'); refreshVideos(); } else alert(res.message); } });
             }
         });
 
-        // Initial Load
         loadSettings();
         function runAllRefreshes() { refreshVideos(); refreshDatasets(); refreshModels(); }
         runAllRefreshes();
