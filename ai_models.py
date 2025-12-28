@@ -3,6 +3,7 @@ import os
 import random
 import threading
 import time
+import cv2
 
 import numpy as np
 
@@ -38,6 +39,7 @@ except ImportError:
 
 models = {}
 PREPROCESSED_DATA_CACHE = {}
+# New structure: {'class_name': {'semantic': Tensor, 'color': np.array}}
 PROTOTYPE_CACHE = {}
 
 AI_MODEL_LOCK = threading.RLock()
@@ -110,10 +112,26 @@ def get_features_for_single_bbox(pil_image, target_rects):
 
         return final_features
 
+
 def save_prototypes_to_disk():
     try:
         with _get_class_lock("__global_save__"):
-            cpu_cache = {k: v.cpu() for k, v in PROTOTYPE_CACHE.items()}
+            # Deep copy and move tensors to CPU for saving
+            cpu_cache = {}
+            # Use list(...) to snapshot to avoid RuntimeError during iteration
+            current_items = list(PROTOTYPE_CACHE.items())
+
+            for k, v in current_items:
+                if isinstance(v, dict):
+                    cpu_cache[k] = {
+                        'semantic': v['semantic'].cpu() if isinstance(v.get('semantic'), torch.Tensor) else v.get(
+                            'semantic'),
+                        'color': v.get('color')  # numpy array, already cpu
+                    }
+                elif isinstance(v, torch.Tensor):
+                    # Legacy support during transition
+                    cpu_cache[k] = {'semantic': v.cpu(), 'color': None}
+
         torch.save(cpu_cache, config.PROTOTYPE_FILE)
         logging.info(f"成功将 {len(cpu_cache)} 个原型保存至 {config.PROTOTYPE_FILE}")
     except Exception as e:
@@ -149,9 +167,19 @@ def load_prototypes_from_disk():
     DEVICE = settings_manager.get_device()
     if os.path.exists(config.PROTOTYPE_FILE):
         try:
-            loaded_cache = torch.load(config.PROTOTYPE_FILE, map_location=DEVICE)
-            PROTOTYPE_CACHE = loaded_cache
-            logging.info(f"成功从文件加载了 {len(PROTOTYPE_CACHE)} 个类别原型。")
+            # FIX: weights_only=False required for PyTorch 2.6+ with numpy/dicts
+            try:
+                loaded_cache = torch.load(config.PROTOTYPE_FILE, map_location=DEVICE, weights_only=False)
+            except TypeError:
+                loaded_cache = torch.load(config.PROTOTYPE_FILE, map_location=DEVICE)
+
+            # Check for legacy format (Direct Tensor vs Dict)
+            if loaded_cache and isinstance(next(iter(loaded_cache.values())), torch.Tensor):
+                logging.warning("检测到旧版原型缓存格式 (无颜色信息)。正在清除缓存以强制重建...")
+                PROTOTYPE_CACHE = {}
+            else:
+                PROTOTYPE_CACHE = loaded_cache
+                logging.info(f"成功从文件加载了 {len(PROTOTYPE_CACHE)} 个类别原型。")
         except Exception as e:
             logging.error(f"加载原型文件失败，将在需要时重新构建: {e}")
             PROTOTYPE_CACHE = {}
@@ -176,7 +204,10 @@ def load_preprocessed_cache_from_disk():
     if os.path.exists(config.PREPROCESSED_CACHE_FILE):
         try:
             logging.info("正在从磁盘加载预处理缓存...")
-            loaded_cache = torch.load(config.PREPROCESSED_CACHE_FILE, map_location='cpu')
+            try:
+                loaded_cache = torch.load(config.PREPROCESSED_CACHE_FILE, map_location='cpu', weights_only=False)
+            except TypeError:
+                loaded_cache = torch.load(config.PREPROCESSED_CACHE_FILE, map_location='cpu')
 
             for key, value in loaded_cache.items():
                 PREPROCESSED_DATA_CACHE[key] = {
@@ -367,7 +398,54 @@ def get_prototypes_from_drawn_boxes(drawn_samples_data):
     return torch.cat(all_prototypes, dim=0)
 
 
-def predict_from_one_shot(video_uuid, frame_number, positive_prompt_box):
+def _calculate_region_color_hist(image_bgr, rect):
+    """
+    计算指定区域的HSV颜色直方图.
+    IMPROVEMENT: 使用 Center Crop (中心采样)，仅计算 BBox 中心 50% 区域的颜色。
+    这能有效剔除 bounding box 边缘的背景颜色 (如草地、地面)，大幅提高对物体本色的敏感度。
+    """
+    x1, y1, x2, y2 = map(int, rect)
+    h, w = image_bgr.shape[:2]
+
+    # 基础越界检查
+    x1, y1 = max(0, x1), max(0, y1)
+    x2, y2 = min(w, x2), min(h, y2)
+
+    if x2 <= x1 or y2 <= y1:
+        return None
+
+    # 计算中心区域 (Center Crop)
+    bw = x2 - x1
+    bh = y2 - y1
+
+    # 取中心 50% 的区域 (margin = 25% on each side)
+    crop_margin_x = int(bw * 0.25)
+    crop_margin_y = int(bh * 0.25)
+
+    cx1 = x1 + crop_margin_x
+    cy1 = y1 + crop_margin_y
+    cx2 = x2 - crop_margin_x
+    cy2 = y2 - crop_margin_y
+
+    # 如果裁剪后区域太小 (例如物体本身很小)，则退回到使用整个框
+    if (cx2 - cx1) < 2 or (cy2 - cy1) < 2:
+        cx1, cy1, cx2, cy2 = x1, y1, x2, y2
+
+    roi = image_bgr[cy1:cy2, cx1:cx2]
+
+    if roi.size == 0:
+        return None
+
+    hsv_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
+
+    # 使用 HSV 直方图: Hue (色调) 分 16 级, Saturation (饱和度) 分 16 级
+    # 忽略 Value (亮度) 以增强对光照的鲁棒性
+    hist = cv2.calcHist([hsv_roi], [0, 1], None, [16, 16], [0, 180, 0, 256])
+    cv2.normalize(hist, hist, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX)
+    return hist.flatten()
+
+
+def predict_from_one_shot(video_uuid, frame_number, positive_prompt_box, use_color=False):
     with AI_MODEL_LOCK:
         processed_data = get_features_for_all_masks(video_uuid, frame_number)
         all_boxes = processed_data.get("all_boxes")
@@ -378,45 +456,108 @@ def predict_from_one_shot(video_uuid, frame_number, positive_prompt_box):
         prompt_rect = [positive_prompt_box['x1'], positive_prompt_box['y1'], positive_prompt_box['x2'],
                        positive_prompt_box['y2']]
 
+        # 1. Semantic Similarity
         target_feature_tensor = get_features_for_specific_bboxes(video_uuid, frame_number, [prompt_rect])
         if target_feature_tensor is None or target_feature_tensor.numel() == 0:
             raise ValueError("Could not extract features for the provided positive prompt box.")
 
         target_feature = target_feature_tensor[0].unsqueeze(0)
         DEVICE = settings_manager.get_device()
+
         with torch.no_grad(), autocast(device_type=DEVICE.type, enabled=(DEVICE.type == 'cuda')):
             sim_scores = F.cosine_similarity(target_feature, all_features, dim=1)
+
+        # 2. Color Similarity (Optional) with VETO Logic
+        if use_color:
+            try:
+                frame_path = file_storage.get_frame_path(video_uuid, frame_number)
+                image_bgr = cv2.imread(frame_path)
+
+                if image_bgr is not None:
+                    target_hist = _calculate_region_color_hist(image_bgr, prompt_rect)
+
+                    if target_hist is not None:
+                        color_scores = []
+                        all_boxes_cpu = all_boxes.cpu().numpy()
+
+                        for box in all_boxes_cpu:
+                            cand_hist = _calculate_region_color_hist(image_bgr, box)
+                            if cand_hist is not None:
+                                # Use Bhattacharyya distance: 0 is match, 1 is mismatch.
+                                # Convert to similarity: 1 - dist
+                                dist = cv2.compareHist(target_hist, cand_hist, cv2.HISTCMP_BHATTACHARYYA)
+                                score = max(0.0, 1.0 - dist)
+                                color_scores.append(score)
+                            else:
+                                color_scores.append(0.0)
+
+                        color_scores_tensor = torch.tensor(color_scores, device=DEVICE, dtype=torch.float32)
+
+                        # --- FUSION LOGIC WITH VETO ---
+                        # If color score is low, severely penalize the result.
+                        # This effectively filters out correct shapes with wrong colors.
+
+                        # Create a "Gate": 1.0 if color > 0.65, else drastically drops towards 0
+                        # Using a smooth sigmoid-like transition or just multiplication
+
+                        # Logic:
+                        # If color matches (>0.7), score relies mostly on shape.
+                        # If color mismatches (<0.6), score gets decimated.
+
+                        veto_mask = (color_scores_tensor < 0.65).float()
+                        # Penalty factor: 0.1 if vetoed, 1.0 if passed
+                        penalty_factor = (1.0 - veto_mask) + (veto_mask * 0.1)
+
+                        # Base combination
+                        combined = (sim_scores * 0.5) + (color_scores_tensor * 0.5)
+
+                        # Apply Veto
+                        sim_scores = combined * penalty_factor
+
+                        logging.info(f"Applied Smart Select color scoring with Bhattacharyya distance + Veto.")
+            except Exception as e:
+                logging.error(f"Error calculating color similarity: {e}")
+
         settings = settings_manager.load_settings()
         nms_iou = settings.get('nms_iou_threshold', 0.7)
+
         kept_indices = nms(all_boxes, sim_scores, nms_iou)
 
         final_results = []
         final_scores_np = sim_scores.cpu().numpy()
+
         for i in kept_indices:
             box_coords = all_boxes[i].cpu().numpy().astype(int).tolist()
-            final_results.append({"box": box_coords, "score": float(final_scores_np[i])})
+            score = float(final_scores_np[i])
+            if score > 0.05:
+                final_results.append({"box": box_coords, "score": score})
 
         return final_results
 
 
-def _calculate_similarity_scores(all_embeddings, positive_prototypes, negative_prototypes=None):
+def _calculate_similarity_scores(all_embeddings, positive_prototypes_dict, negative_prototypes=None):
+    """
+    Calculates similarity scores.
+    positive_prototypes_dict: {'semantic': Tensor, 'color': np.array (optional)}
+    """
     settings = settings_manager.load_settings()
     score_temperature = settings.get('prototype_temperature', 0.07)
     DEVICE = settings_manager.get_device()
 
+    positive_semantic = positive_prototypes_dict['semantic']
+
     with torch.no_grad(), autocast(device_type=DEVICE.type, enabled=(DEVICE.type == 'cuda')):
-
-        sim_matrix = F.cosine_similarity(all_embeddings.unsqueeze(1), positive_prototypes.unsqueeze(0), dim=2)
-
+        sim_matrix = F.cosine_similarity(all_embeddings.unsqueeze(1), positive_semantic.unsqueeze(0), dim=2)
         positive_scores_sim, _ = torch.max(sim_matrix, dim=1)
 
         if negative_prototypes is not None and len(negative_prototypes) > 0:
             if negative_prototypes.dim() > 1 and negative_prototypes.shape[0] > 1:
-                 neg_sim_matrix = F.cosine_similarity(all_embeddings.unsqueeze(1), negative_prototypes.unsqueeze(0), dim=2)
-                 negative_scores_sim, _ = torch.max(neg_sim_matrix, dim=1)
+                neg_sim_matrix = F.cosine_similarity(all_embeddings.unsqueeze(1), negative_prototypes.unsqueeze(0),
+                                                     dim=2)
+                negative_scores_sim, _ = torch.max(neg_sim_matrix, dim=1)
             else:
-                 mean_negative_prototype = torch.mean(negative_prototypes, dim=0, keepdim=True)
-                 negative_scores_sim = F.cosine_similarity(all_embeddings, mean_negative_prototype)
+                mean_negative_prototype = torch.mean(negative_prototypes, dim=0, keepdim=True)
+                negative_scores_sim = F.cosine_similarity(all_embeddings, mean_negative_prototype)
 
             logits = torch.stack([negative_scores_sim, positive_scores_sim], dim=1)
             probabilities = F.softmax(logits / score_temperature, dim=1)
@@ -427,8 +568,12 @@ def _calculate_similarity_scores(all_embeddings, positive_prototypes, negative_p
     return final_scores
 
 
-def predict_with_prototypes(video_uuid, frame_number, positive_prototypes, negative_prototypes=None,
-                            confidence_threshold=0.5):
+def predict_with_prototypes(video_uuid, frame_number, positive_prototypes_dict, negative_prototypes=None,
+                            confidence_threshold=0.5, use_color=False):
+    """
+    Find objects matching the prototype.
+    positive_prototypes_dict: {'semantic': Tensor, 'color': np.array}
+    """
     with AI_MODEL_LOCK:
         processed_data = get_features_for_all_masks(video_uuid, frame_number)
         all_boxes = processed_data.get("all_boxes")
@@ -437,7 +582,46 @@ def predict_with_prototypes(video_uuid, frame_number, positive_prototypes, negat
         if all_boxes is None or all_boxes.numel() == 0:
             return []
 
-        final_scores = _calculate_similarity_scores(all_features, positive_prototypes, negative_prototypes)
+        # 1. Semantic Similarity
+        final_scores = _calculate_similarity_scores(all_features, positive_prototypes_dict, negative_prototypes)
+
+        # 2. Color Similarity with VETO (Find Similar)
+        if use_color and 'color' in positive_prototypes_dict and positive_prototypes_dict['color'] is not None:
+            try:
+                frame_path = file_storage.get_frame_path(video_uuid, frame_number)
+                image_bgr = cv2.imread(frame_path)
+
+                if image_bgr is not None:
+                    target_hist = positive_prototypes_dict['color']
+                    color_scores = []
+                    all_boxes_cpu = all_boxes.cpu().numpy()
+
+                    for box in all_boxes_cpu:
+                        cand_hist = _calculate_region_color_hist(image_bgr, box)
+                        if cand_hist is not None:
+                            # Bhattacharyya
+                            dist = cv2.compareHist(target_hist, cand_hist, cv2.HISTCMP_BHATTACHARYYA)
+                            score = max(0.0, 1.0 - dist)
+                            color_scores.append(score)
+                        else:
+                            color_scores.append(0.0)
+
+                    DEVICE = settings_manager.get_device()
+                    color_scores_tensor = torch.tensor(color_scores, device=DEVICE, dtype=torch.float32)
+
+                    # --- VETO LOGIC for Find Similar ---
+                    # Strict filtering: If color score < 0.65, reduce total score by 90%
+                    veto_mask = (color_scores_tensor < 0.65).float()
+                    penalty_factor = (1.0 - veto_mask) + (veto_mask * 0.1)
+
+                    # If color is good, help the score a bit (0.7 sem + 0.3 col)
+                    # If color is bad, veto it.
+                    combined = (final_scores * 0.7) + (color_scores_tensor * 0.3)
+                    final_scores = combined * penalty_factor
+
+                    logging.info(f"Applied Find Similar color scoring with Bhattacharyya Veto.")
+            except Exception as e:
+                logging.error(f"Error calculating color similarity with prototype: {e}")
 
         settings = settings_manager.load_settings()
         nms_iou = settings.get('nms_iou_threshold', 0.7)
@@ -462,14 +646,23 @@ def predict_with_prototypes(video_uuid, frame_number, positive_prototypes, negat
 
 
 def _calculate_prototype_from_db(class_name):
+    """
+    Returns a dict: {'semantic': Tensor, 'color': np.array or None}
+    """
     all_class_features_tensors = []
+    all_color_hists = []
+
     sample_frames = database.get_all_frames_with_class(class_name)
     if not sample_frames:
         logging.warning(f"在数据库中找不到类别 '{class_name}' 的任何样本。")
         return None
 
     settings = settings_manager.load_settings()
-    sample_limit = settings.get('prototype_sample_limit', 50)
+    sample_limit = settings.get('prototype_sample_limit')
+    if sample_limit is None:
+        sample_limit = 50
+    else:
+        sample_limit = int(sample_limit)
 
     if len(sample_frames) > sample_limit:
         sample_frames = random.sample(sample_frames, sample_limit)
@@ -488,11 +681,22 @@ def _calculate_prototype_from_db(class_name):
     for (video_uuid, frame_number), all_rects_for_frame in grouped_boxes.items():
         try:
             pil_image = Image.open(file_storage.get_frame_path(video_uuid, frame_number)).convert("RGB")
+            image_bgr = cv2.imread(file_storage.get_frame_path(video_uuid, frame_number))
+
+            # 1. Semantic Features
             for i in range(0, len(all_rects_for_frame), 64):
                 rect_chunk = all_rects_for_frame[i:i + 64]
                 features = get_features_for_single_bbox(pil_image, rect_chunk)
                 if features is not None and features.numel() > 0:
                     all_class_features_tensors.append(features)
+
+            # 2. Color Histograms
+            if image_bgr is not None:
+                for rect in all_rects_for_frame:
+                    hist = _calculate_region_color_hist(image_bgr, rect)
+                    if hist is not None:
+                        all_color_hists.append(hist)
+
         except Exception as e:
             logging.warning(f"为原型构建跳过帧 {video_uuid}/{frame_number} 时出错: {e}")
 
@@ -500,46 +704,49 @@ def _calculate_prototype_from_db(class_name):
         logging.error(f"未能为类别 '{class_name}' 提取任何有效的特征向量。")
         return None
 
+    # --- Process Semantic Features ---
     all_features = torch.cat(all_class_features_tensors, dim=0)
     num_samples = all_features.shape[0]
 
     MIN_SAMPLES_FOR_CLUSTERING = 15
     if KMeans is None or num_samples < MIN_SAMPLES_FOR_CLUSTERING:
-        logging.info(f"样本过少或 scikit-learn 未安装，为 '{class_name}' 创建单个平均原型。")
-        return torch.mean(all_features, dim=0, keepdim=True)
-
-    logging.info(f"正在为 '{class_name}' ({num_samples} 个样本) 运行聚类分析以发现子原型...")
-    best_k = 1
-    best_score = -1
-    max_clusters = min(5, num_samples - 1)
-
-    features_np = all_features.cpu().numpy()
-
-    for k in range(2, max_clusters + 1):
-        kmeans = KMeans(n_clusters=k, random_state=42, n_init='auto')
-        labels = kmeans.fit_predict(features_np)
-        try:
-            score = silhouette_score(features_np, labels)
-            logging.info(f"  - 测试 k={k}, 轮廓系数(Silhouette Score): {score:.4f}")
-            if score > best_score:
-                best_score = score
-                best_k = k
-        except ValueError:
-            logging.warning(f"  - k={k} 无法计算轮廓系数，跳过。")
-
-    SILHOUETTE_THRESHOLD = 0.55
-    if best_k > 1 and best_score > SILHOUETTE_THRESHOLD:
-        logging.info(
-            f"发现 {best_k} 个清晰的子类别 (得分: {best_score:.4f})。正在为 '{class_name}' 创建 {best_k} 个子原型。")
-        kmeans = KMeans(n_clusters=best_k, random_state=42, n_init='auto')
-        kmeans.fit(features_np)
-        prototypes_np = kmeans.cluster_centers_
-        prototypes = torch.from_numpy(prototypes_np).to(all_features.device)
+        logging.info(f"样本过少或 scikit-learn 未安装，为 '{class_name}' 创建单个平均语义原型。")
+        semantic_prototype = torch.mean(all_features, dim=0, keepdim=True)
     else:
-        logging.info(f"未发现足够清晰的子类别 (最高分: {best_score:.4f})。为 '{class_name}' 创建单个平均原型。")
-        prototypes = torch.mean(all_features, dim=0, keepdim=True)
+        logging.info(f"正在为 '{class_name}' ({num_samples} 个样本) 运行聚类分析以发现子原型...")
+        best_k = 1
+        best_score = -1
+        max_clusters = min(5, num_samples - 1)
+        features_np = all_features.cpu().numpy()
 
-    return prototypes
+        for k in range(2, max_clusters + 1):
+            kmeans = KMeans(n_clusters=k, random_state=42, n_init='auto')
+            labels = kmeans.fit_predict(features_np)
+            try:
+                score = silhouette_score(features_np, labels)
+                if score > best_score:
+                    best_score = score
+                    best_k = k
+            except ValueError:
+                pass
+
+        SILHOUETTE_THRESHOLD = 0.55
+        if best_k > 1 and best_score > SILHOUETTE_THRESHOLD:
+            logging.info(f"发现 {best_k} 个清晰的子类别 (得分: {best_score:.4f})。")
+            kmeans = KMeans(n_clusters=best_k, random_state=42, n_init='auto')
+            kmeans.fit(features_np)
+            prototypes_np = kmeans.cluster_centers_
+            semantic_prototype = torch.from_numpy(prototypes_np).to(all_features.device)
+        else:
+            semantic_prototype = torch.mean(all_features, dim=0, keepdim=True)
+
+    # --- Process Color Features ---
+    color_prototype = None
+    if all_color_hists:
+        # Simple average of all valid histograms
+        color_prototype = np.mean(np.array(all_color_hists), axis=0)
+
+    return {'semantic': semantic_prototype, 'color': color_prototype}
 
 
 def build_prototypes_for_class(class_name):
@@ -550,17 +757,19 @@ def build_prototypes_for_class(class_name):
     with class_lock:
         if class_name in PROTOTYPE_CACHE:
             return PROTOTYPE_CACHE[class_name]
-        prototype_tensor = _calculate_prototype_from_db(class_name)
 
-        if prototype_tensor is not None:
-            if prototype_tensor.dim() == 1:
-                prototype_tensor = prototype_tensor.unsqueeze(0)
+        prototype_dict = _calculate_prototype_from_db(class_name)
 
-            PROTOTYPE_CACHE[class_name] = prototype_tensor
-            logging.info(f"类别 '{class_name}' 的原型构建完成并已缓存。Shape: {prototype_tensor.shape}")
+        if prototype_dict is not None:
+            # Check shape of semantic tensor
+            if prototype_dict['semantic'].dim() == 1:
+                prototype_dict['semantic'] = prototype_dict['semantic'].unsqueeze(0)
+
+            PROTOTYPE_CACHE[class_name] = prototype_dict
+            logging.info(f"类别 '{class_name}' 的原型构建完成并已缓存。")
             save_prototypes_to_disk()
 
-        return prototype_tensor
+        return prototype_dict
 
 
 def update_prototype_for_class(class_name):
@@ -615,8 +824,10 @@ def lam_predict(video_uuid, frame_number, point_coords):
         DEVICE = settings_manager.get_device()
 
         with torch.no_grad(), autocast(device_type=DEVICE.type, enabled=(DEVICE.type == 'cuda')):
-            for class_name, prototype in prototype_library.items():
-                sim_matrix = F.cosine_similarity(feature_vector.unsqueeze(1), prototype.unsqueeze(0), dim=2)
+            for class_name, prototype_dict in prototype_library.items():
+                # Use semantic component for LAM matching
+                semantic_proto = prototype_dict['semantic']
+                sim_matrix = F.cosine_similarity(feature_vector.unsqueeze(1), semantic_proto.unsqueeze(0), dim=2)
                 max_similarity = torch.max(sim_matrix)
                 scores.append({"label": class_name, "score": round(max_similarity.item(), 4)})
 

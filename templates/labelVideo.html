@@ -1,4 +1,3 @@
-
 <!-- START OF FILE labelVideo.html -->
 {% extends "layout.html" %}
 
@@ -165,9 +164,16 @@
                 </div>
             </div>
             <ul id="class-list" class="list-group list-group-flush rounded border" style="max-height: 200px; overflow-y: auto;"></ul>
-            <div class="mt-2 d-flex justify-content-between">
-                <button id="find-from-dataset-btn" class="btn btn-xs btn-outline-info" title="Find objects using dataset examples"><i class="bi bi-journal-album"></i> Find Similar</button>
-                <button id="rebuild-prototypes-btn" class="btn btn-xs btn-outline-warning" title="Rebuild AI Models"><i class="bi bi-arrow-clockwise"></i> Rebuild AI</button>
+            
+            <div class="mt-2">
+                <div class="custom-control custom-switch mb-1">
+                    <input type="checkbox" class="custom-control-input" id="dataset-find-use-color">
+                    <label class="custom-control-label small text-muted" for="dataset-find-use-color">Strict Color Match</label>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <button id="find-from-dataset-btn" class="btn btn-xs btn-outline-info" title="Find objects using dataset examples"><i class="bi bi-journal-album"></i> Find Similar</button>
+                    <button id="rebuild-prototypes-btn" class="btn btn-xs btn-outline-warning" title="Rebuild AI Models"><i class="bi bi-arrow-clockwise"></i> Rebuild AI</button>
+                </div>
             </div>
         </div>
 
@@ -194,6 +200,12 @@
         <div id="interactive-segment-controls" style="display: none;">
             <h6 class="small font-weight-bold mb-2 text-info"><i class="bi bi-stars"></i> Smart Select Active</h6>
             <p class="text-muted small mb-2" style="font-size: 0.75rem;">Draw a box around one object to find others.</p>
+            
+            <div class="custom-control custom-switch mb-2">
+                <input type="checkbox" class="custom-control-input" id="smart-select-use-color">
+                <label class="custom-control-label small text-muted" for="smart-select-use-color">Strict Color Match</label>
+            </div>
+
             <button id="find-similar-btn" class="btn btn-sm btn-primary w-100 mb-2" style="display: none;"><i class="bi bi-search"></i> Find Similar</button>
             <button id="clear-samples-btn" class="btn btn-sm btn-secondary w-100 mb-2"><i class="bi bi-eraser"></i> Clear</button>
 
@@ -1068,14 +1080,18 @@
             lastDatasetClassName = null;
             const frameNumber = parseInt(frameSlider.val());
             const $button = $('#find-similar-btn');
+            // NEW: Get checkbox state
+            const useColor = $('#smart-select-use-color').is(':checked'); 
+
             $button.prop('disabled', true);
 
             const runPrediction = () => {
-                showToast('Finding similar objects...', 4000);
+                showToast(useColor ? 'Finding similar objects (Color + Shape)...' : 'Finding similar objects...', 4000);
                 const payload = {
                     video_uuid: videoUuid,
                     frame_number: frameNumber,
-                    prompt_boxes: positiveExampleBboxes
+                    prompt_boxes: positiveExampleBboxes,
+                    use_color: useColor // NEW: Send to backend
                 };
                 $.ajax({
                     url: '/interactive_segment/predict',
@@ -2178,11 +2194,19 @@
             }
             const frameNumber = parseInt(frameSlider.val());
             const $button = $(this);
+            // NEW: Get color checkbox state
+            const useColor = $('#dataset-find-use-color').is(':checked');
+
             $button.prop('disabled', true);
-            showToast(`Learning from all '${activeClass}' examples in the dataset...`, 10000);
+            showToast(useColor ? `Learning '${activeClass}' (Shape + Color)...` : `Learning '${activeClass}'...`, 10000);
             lastDatasetClassName = activeClass;
 
-            const payload = { video_uuid: videoUuid, frame_number: frameNumber, class_name: activeClass };
+            const payload = { 
+                video_uuid: videoUuid, 
+                frame_number: frameNumber, 
+                class_name: activeClass,
+                use_color: useColor // NEW: Send to backend
+            };
 
             $.ajax({
                 url: '/interactive_segment/predict_from_dataset',
@@ -2195,7 +2219,7 @@
                         $('#interactive-results-controls').slideDown();
                         $('#result-threshold').trigger('input');
                         redrawCanvas();
-                        showToast(`Found ${res.results.length} potential '${activeClass}' objects on this frame.`, 4000);
+                        showToast(`Found ${res.results.length} potential '${activeClass}' objects.`, 4000);
 
                         setTimeout(() => {
                            if (confirm(`Preview successful.\n\nDo you want to apply the '${activeClass}' model to all unlabeled frames in this video?`)) {

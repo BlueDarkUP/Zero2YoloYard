@@ -455,9 +455,9 @@
 
                     let actions = '';
                     if (isReady) {
-                        actions += `<button class="btn btn-sm btn-info btn-import-frames mr-1" data-uuid="${video.video_uuid}" title="Import frames"><i class="bi bi-images"></i></button>`;
-                        actions += `<button class="btn btn-sm btn-warning btn-pre-annotate mr-1" data-uuid="${video.video_uuid}" data-frame-count="${video.frame_count}" data-labeled-count="${video.labeled_frame_count}" title="Auto-Label"><i class="bi bi-robot"></i></button>`;
-                        actions += `<button class="btn btn-sm btn-success btn-manage-tasks mr-1" data-uuid="${video.video_uuid}" data-description="${video.description}" data-framecount="${video.frame_count}" title="Tasks"><i class="bi bi-card-checklist"></i></button>`;
+                        actions += `<button class="btn btn-sm btn-info btn-import-frames mr-1" style="background-color: rgba(44,183,225,0.49);" data-uuid="${video.video_uuid}" title="Import frames"><i class="bi bi-images"></i></button>`;
+                        actions += `<button class="btn btn-sm btn-warning btn-pre-annotate mr-1" style="background-color: rgba(255,222,0,0.6);" data-uuid="${video.video_uuid}" data-frame-count="${video.frame_count}" data-labeled-count="${video.labeled_frame_count}" title="Auto-Label"><i class="bi bi-robot"></i></button>`;
+                        actions += `<button class="btn btn-sm btn-success btn-manage-tasks mr-1" style="background-color: rgba(73,168,62,0.51);" data-uuid="${video.video_uuid}" data-description="${video.description}" data-framecount="${video.frame_count}" title="Tasks"><i class="bi bi-card-checklist"></i></button>`;
                     } else {
                          actions += `<button class="btn btn-sm btn-secondary mr-1" disabled><i class="bi bi-images"></i></button>`;
                     }

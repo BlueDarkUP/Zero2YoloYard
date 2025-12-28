@@ -632,6 +632,7 @@ def interactive_segment_predict_route():
     video_uuid = data.get('video_uuid')
     frame_number = int(data.get('frame_number'))
     prompt_boxes = data.get('prompt_boxes', [])
+    use_color = data.get('use_color', False)
 
     if not all([video_uuid, frame_number is not None, prompt_boxes]):
         return jsonify({'success': False, 'message': 'Missing required data.'}), 400
@@ -640,7 +641,7 @@ def interactive_segment_predict_route():
 
     try:
         positive_prompt_box = prompt_boxes[0]
-        results = ai_models.predict_from_one_shot(video_uuid, frame_number, positive_prompt_box)
+        results = ai_models.predict_from_one_shot(video_uuid, frame_number, positive_prompt_box, use_color=use_color)
         return jsonify({'success': True, 'results': results})
 
     except Exception as e:
@@ -654,22 +655,27 @@ def predict_from_dataset_route():
     video_uuid = data.get('video_uuid')
     frame_number = int(data.get('frame_number'))
     class_name = data.get('class_name')
+    # NEW: Get parameter
+    use_color = data.get('use_color', False)
 
     if not all([video_uuid, frame_number is not None, class_name]):
         return jsonify({'success': False, 'message': 'Missing required data.'}), 400
 
     try:
+        # Pass use_color to build_prototypes (to ensure color data exists) and predict
         positive_prototypes = ai_models.build_prototypes_for_class(class_name)
-        if positive_prototypes is None or len(positive_prototypes) == 0:
-            return jsonify({'success': False,
-                            'message': f"No labeled examples found for class '{class_name}' in the dataset, or failed to extract features."})
 
-        results = ai_models.predict_with_prototypes(video_uuid, frame_number, positive_prototypes)
+        if positive_prototypes is None:
+            return jsonify({'success': False, 'message': f"No examples found for class '{class_name}'."})
+
+        # NEW: Pass use_color
+        results = ai_models.predict_with_prototypes(video_uuid, frame_number, positive_prototypes, use_color=use_color)
         return jsonify({'success': True, 'results': results})
 
     except Exception as e:
         logging.error(f"Dataset-driven prediction failed: {e}", exc_info=True)
         return jsonify({'success': False, 'message': f'Internal Server Error: {str(e)}'}), 500
+
 
 @app.route('/api/background_preprocess_frame', methods=['POST'])
 def background_preprocess_frame():
