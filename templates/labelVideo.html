@@ -3,76 +3,264 @@
 
 {% block head %}
 <style>
-    /* 覆盖默认布局 padding，实现全屏 IDE 模式 */
-    main { padding: 0 !important; overflow: hidden; }
+    /* ==================== ABYSSAL TELEMETRY IDE STYLES ==================== */
 
-    /* 画布交互样式 */
+    /* 覆盖默认布局，进入全屏沉浸模式 */
+    main {
+        padding: 0 !important;
+        overflow: hidden;
+        height: calc(100vh - 65px); /* 减去导航栏高度 */
+        background-color: var(--bg-body);
+    }
+
+    /* 整体布局容器 */
+    .ide-layout {
+        display: flex;
+        width: 100%;
+        height: 100%;
+        color: var(--text-main);
+    }
+
+    /* 左侧：画布主控区 */
+    .ide-canvas-area {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        position: relative;
+        overflow: hidden;
+        border-right: 1px solid var(--border-color);
+    }
+
+    /* 顶部工具栏 (HUD Header) */
+    .ide-toolbar {
+        height: 54px;
+        background-color: var(--bg-surface-secondary);
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        align-items: center;
+        padding: 0 1.5rem;
+        justify-content: space-between;
+        font-family: 'JetBrains Mono', monospace;
+        z-index: 50;
+    }
+
+    /* 画布滚动包裹层 */
+    .ide-canvas-wrapper {
+        flex: 1;
+        position: relative;
+        overflow: auto;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        /* 背景网格 */
+        background-image:
+            linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+        background-size: 40px 40px;
+        background-position: center center;
+    }
+
+    /* 画布容器 (取景器) */
     #canvas-container {
         position: relative;
         cursor: crosshair;
         display: inline-block;
-        box-shadow: 0 0 30px rgba(0,0,0,0.2);
+        box-shadow: 0 0 0 1px var(--border-color);
+        background: #000;
+        margin: 20px;
     }
 
+    /* HUD Corner Decos (CSS 模拟四角战术装饰) */
+    #canvas-container::before, #canvas-container::after {
+        content: "";
+        position: absolute;
+        width: 20px;
+        height: 20px;
+        border: 2px solid var(--color-primary);
+        transition: all 0.3s ease;
+        pointer-events: none;
+        z-index: 20;
+        box-shadow: 0 0 5px var(--color-primary-glow);
+    }
+    #canvas-container::before {
+        top: -1px; left: -1px;
+        border-right: none; border-bottom: none;
+    }
+    #canvas-container::after {
+        bottom: -1px; right: -1px;
+        border-left: none; border-top: none;
+    }
+
+    /* 状态光标 */
     #canvas-container.sam-active,
     #canvas-container.lam-active {
         cursor: copy !important;
+        box-shadow: 0 0 0 1px var(--color-primary);
     }
-
     #canvas-container.sam-loading {
         cursor: wait !important;
+        opacity: 0.7;
     }
 
     #canvas-container canvas {
         position: absolute;
-        top: 0;
-        left: 0;
+        top: 0; left: 0;
         pointer-events: none;
     }
 
-    #drawing-canvas {
-        pointer-events: auto;
-        z-index: 10;
+    #drawing-canvas { pointer-events: auto; z-index: 10; }
+    #crosshair-canvas { z-index: 5; }
+    #frame-image { display: block; user-select: none; }
+
+    /* 底部时间轴区域 */
+    .ide-timeline {
+        padding: 15px 20px;
+        background-color: var(--bg-surface);
+        border-top: 1px solid var(--border-color);
+        z-index: 30;
     }
 
-    #crosshair-canvas {
-        z-index: 5;
+    /* 自定义 Range Slider (机械风格) */
+    input[type=range].custom-range {
+        -webkit-appearance: none;
+        width: 100%;
+        background: transparent;
     }
-
-    #frame-image {
-        user-select: none;
-        -webkit-user-select: none;
-        -moz-user-select: none;
-        display: block;
+    input[type=range].custom-range:focus {
+        outline: none;
     }
-
-    /* 侧边栏列表样式微调 */
-    #class-list .list-group-item,
-    #bbox-list .list-group-item {
+    input[type=range].custom-range::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        height: 18px;
+        width: 10px;
+        background: var(--color-primary);
         cursor: pointer;
-        padding: 0.5rem 0.75rem;
-        font-size: 0.9rem;
-        border-left-width: 3px;
+        margin-top: -7px;
+        border: 1px solid #000;
+        box-shadow: 0 0 8px var(--color-primary-glow);
+        border-radius: 0; /* 直角 */
+    }
+    input[type=range].custom-range::-webkit-slider-runnable-track {
+        width: 100%;
+        height: 4px;
+        background: var(--border-color);
+        border: none;
+        border-radius: 0;
     }
 
-    .color-swatch {
-        display: inline-block;
-        width: 12px;
-        height: 12px;
-        margin-right: 8px;
-        border: 1px solid rgba(0,0,0,0.1);
-        vertical-align: middle;
-        border-radius: 50%;
-    }
-
+    /* 快捷键提示 */
     .shortcut-keys-container {
         display: flex;
-        gap: 0.5rem;
+        gap: 0.8rem;
         flex-wrap: wrap;
-        margin-top: 0.5rem;
+        margin-top: 0.8rem;
         justify-content: center;
     }
+    .shortcut-key {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.7rem;
+        color: var(--text-secondary);
+        background: rgba(255,255,255,0.03);
+        padding: 3px 8px;
+        border: 1px solid var(--border-color);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
 
+    /* 右侧：侧边栏 */
+    .ide-sidebar {
+        width: 340px;
+        min-width: 340px;
+        background-color: var(--bg-surface);
+        display: flex;
+        flex-direction: column;
+        overflow-y: auto;
+        padding: 1.2rem;
+        border-left: 1px solid var(--border-color);
+        gap: 1.2rem;
+    }
+
+    /* 侧边栏标题 */
+    .tool-section-title {
+        font-family: 'Orbitron', sans-serif;
+        font-size: 0.85rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--color-primary);
+        border-bottom: 1px solid var(--border-color);
+        padding-bottom: 8px;
+        margin-bottom: 5px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    /* 列表项样式 (Class List & Object List) */
+    #class-list .list-group-item,
+    #bbox-list .list-group-item {
+        background: transparent;
+        color: var(--text-main);
+        border: 1px solid transparent;
+        border-radius: 0;
+        margin-bottom: 2px;
+        cursor: pointer;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.8rem;
+        transition: all 0.1s;
+        padding: 0.5rem 0.75rem;
+        border-left: 3px solid transparent;
+    }
+    #class-list .list-group-item:hover,
+    #bbox-list .list-group-item:hover {
+        background: rgba(255,255,255,0.05);
+        border-left-color: var(--text-secondary);
+    }
+    #class-list .list-group-item.active,
+    #bbox-list .list-group-item.selected {
+        background: rgba(0, 240, 255, 0.08);
+        border: 1px solid var(--color-primary-dim);
+        border-left: 3px solid var(--color-primary);
+        color: var(--text-main);
+    }
+
+    /* 颜色块 */
+    .color-swatch {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        margin-right: 10px;
+        border: 1px solid rgba(255,255,255,0.5);
+        border-radius: 0; /* 直角 */
+    }
+
+    /* 按钮微调 (覆盖 Bootstrap) */
+    .btn { border-radius: 0 !important; }
+
+    .btn-xs {
+        padding: 0.15rem 0.5rem;
+        font-size: 0.7rem;
+        font-family: 'JetBrains Mono', monospace;
+        text-transform: uppercase;
+    }
+
+    /* 工具栏输入框 */
+    .tool-input {
+        background: rgba(0,0,0,0.3);
+        border: 1px solid var(--border-color);
+        color: var(--text-main);
+        border-radius: 0;
+        font-family: 'JetBrains Mono';
+        font-size: 0.85rem;
+    }
+    .tool-input:focus {
+        background: rgba(0,0,0,0.5);
+        border-color: var(--color-primary);
+        color: #fff;
+        box-shadow: none;
+    }
+
+    /* 鼠标样式 */
     #drawing-canvas.cursor-move { cursor: move; }
     #drawing-canvas.cursor-nwse-resize { cursor: nwse-resize; }
     #drawing-canvas.cursor-nesw-resize { cursor: nesw-resize; }
@@ -82,16 +270,33 @@
     .bbox-controls { opacity: 0; transition: opacity 0.2s; }
     #bbox-list .list-group-item:hover .bbox-controls { opacity: 1; }
 
-    .tool-section-title {
-        font-size: 0.75rem;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        color: var(--text-secondary);
-        font-weight: 700;
-        margin-bottom: 0.5rem;
-        margin-top: 1rem;
+    /* Interpolation Banner HUD */
+    #interpolation-banner {
+        background: rgba(10, 10, 10, 0.95);
+        border: 1px solid var(--color-warning);
+        color: var(--color-warning);
+        font-family: 'JetBrains Mono';
+        padding: 12px;
+        box-shadow: 0 0 20px rgba(255, 208, 0, 0.1);
+        backdrop-filter: blur(5px);
     }
-    .tool-section-title:first-child { margin-top: 0; }
+
+    /* Hidden Control Panels (Smart Select / Tracking) */
+    #interactive-segment-controls,
+    #suggestion-review-controls,
+    #track-controls {
+        background: rgba(255,255,255,0.03);
+        border: 1px dashed var(--border-color);
+        padding: 12px;
+        margin-top: 10px;
+    }
+
+    /* 滚动条 */
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #0a0a0a; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #333; border: 1px solid #000; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--color-primary); }
+
 </style>
 {% endblock %}
 
@@ -99,35 +304,45 @@
 <div class="ide-layout fade-in">
     <!-- 左侧：主画布区域 -->
     <div class="ide-canvas-area">
-        <!-- 1. 顶部工具栏 -->
-        <div class="ide-toolbar justify-content-between">
+
+        <!-- 1. 顶部工具栏 (HUD Header) -->
+        <div class="ide-toolbar">
             <div class="d-flex align-items-center" style="min-width: 0;">
-                <a href="/" class="btn btn-sm btn-link text-secondary mr-2 pl-0"><i class="bi bi-arrow-left"></i> Back</a>
-                <div class="border-left pl-3" style="overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
-                    <h6 class="mb-0 font-weight-bold text-truncate">{{ video_entity.description }}</h6>
-                    <small class="text-muted">Task: {{ task_entity.assigned_to }} (Frames {{ task_entity.start_frame }}-{{ task_entity.end_frame }})</small>
+                <a href="/" class="btn btn-sm btn-outline-secondary mr-3 text-uppercase font-weight-bold" style="letter-spacing: 0.05em; border-color: transparent;">
+                    <i class="bi bi-chevron-left"></i> Return
+                </a>
+                <div class="pl-3 border-left border-secondary" style="overflow: hidden; white-space: nowrap;">
+                    <h6 class="mb-0 font-weight-bold text-uppercase text-white" style="font-family: 'Orbitron'; letter-spacing: 0.05em;">{{ video_entity.description }}</h6>
+                    <small class="text-muted text-monospace">TASK: {{ task_entity.assigned_to }} // FRAMES: {{ task_entity.start_frame }}-{{ task_entity.end_frame }}</small>
                 </div>
             </div>
 
-            <!-- 帧导航控制器 -->
-            <div class="d-flex align-items-center bg-white border rounded px-2 py-1 shadow-sm mx-2">
-                <button class="btn btn-sm btn-link text-dark p-0 mr-2" onclick="document.getElementById('frame-slider').stepDown(); document.getElementById('frame-slider').dispatchEvent(new Event('input'));"><i class="bi bi-chevron-left"></i></button>
-                <span class="font-weight-bold mx-2 text-monospace" style="min-width: 80px; text-align: center;">
-                    <span id="frame-number-display">{{ task_entity.start_frame }}</span> / {{ task_entity.end_frame }}
+            <!-- 帧导航控制器 (HUD Center) -->
+            <div class="d-flex align-items-center border border-secondary px-3 py-1 mx-2" style="background: rgba(0,0,0,0.5);">
+                <button class="btn btn-sm btn-link text-secondary p-0 mr-2" onclick="document.getElementById('frame-slider').stepDown(); document.getElementById('frame-slider').dispatchEvent(new Event('input'));"><i class="bi bi-caret-left-fill"></i></button>
+                <span class="font-weight-bold mx-2 text-monospace text-primary" style="min-width: 100px; text-align: center; font-size: 1.1em;">
+                    <span id="frame-number-display" class="text-white">{{ task_entity.start_frame }}</span> <span class="text-muted">/</span> {{ task_entity.end_frame }}
                 </span>
-                <button class="btn btn-sm btn-link text-dark p-0 ml-2" onclick="document.getElementById('frame-slider').stepUp(); document.getElementById('frame-slider').dispatchEvent(new Event('input'));"><i class="bi bi-chevron-right"></i></button>
+                <button class="btn btn-sm btn-link text-secondary p-0 ml-2" onclick="document.getElementById('frame-slider').stepUp(); document.getElementById('frame-slider').dispatchEvent(new Event('input'));"><i class="bi bi-caret-right-fill"></i></button>
             </div>
 
             <div>
-                <button id="save-bboxes" class="btn btn-sm btn-primary shadow-sm"><i class="bi bi-cloud-arrow-up-fill mr-1"></i> Save (S)</button>
+                <button id="save-bboxes" class="btn btn-sm btn-primary border-primary text-uppercase font-weight-bold px-3">
+                    <i class="bi bi-sd-card-fill mr-2"></i> Save Data
+                </button>
             </div>
         </div>
 
         <!-- 2. 画布滚动容器 -->
-        <div class="ide-canvas-wrapper">
-            <div id="interpolation-banner" class="position-absolute shadow-sm" style="top: 15px; z-index: 100; min-width: 300px;">
-                <i class="bi bi-bezier"></i> <strong>INTERPOLATION ACTIVE</strong><br>
-                <small>Move to target frame, adjust box, click 'Confirm' (Esc to cancel)</small>
+        <div class="ide-canvas-wrapper custom-scrollbar">
+            <div id="interpolation-banner" class="position-absolute" style="top: 20px; z-index: 100; min-width: 320px; display: none;">
+                <div class="d-flex align-items-center">
+                    <i class="bi bi-bezier2 mr-3" style="font-size: 1.5rem;"></i>
+                    <div>
+                        <strong class="text-uppercase" style="letter-spacing: 0.1em;">Interpolation Active</strong><br>
+                        <small class="text-monospace">Adjust Target -> Click 'Confirm' to execute.</small>
+                    </div>
+                </div>
             </div>
 
             <div id="canvas-container">
@@ -138,15 +353,15 @@
         </div>
 
         <!-- 3. 底部进度条与快捷键 -->
-        <div class="px-4 py-3 bg-surface border-top">
+        <div class="ide-timeline">
             <input type="range" class="custom-range" id="frame-slider" min="{{ task_entity.start_frame }}" max="{{ task_entity.end_frame }}" value="{{ task_entity.start_frame }}">
-            <div class="shortcut-keys-container mt-2">
-                <span class="shortcut-key">S: Save</span>
-                <span class="shortcut-key">A/D: Prev/Next</span>
-                <span class="shortcut-key">C: Cycle Overlap</span>
-                <span class="shortcut-key">Esc: Cancel</span>
-                <span class="shortcut-key">Ctrl+Z: Undo</span>
-                <span class="shortcut-key">Del: Delete</span>
+            <div class="shortcut-keys-container">
+                <span class="shortcut-key">[S] SAVE</span>
+                <span class="shortcut-key">[A/D] PREV/NEXT</span>
+                <span class="shortcut-key">[C] CYCLE OVERLAP</span>
+                <span class="shortcut-key">[ESC] CANCEL</span>
+                <span class="shortcut-key">[CTRL+Z] UNDO</span>
+                <span class="shortcut-key">[DEL] DELETE</span>
             </div>
         </div>
     </div>
@@ -155,103 +370,106 @@
     <div class="ide-sidebar custom-scrollbar">
 
         <!-- SECTION: Classes -->
-        <div class="tool-section-title">Classes</div>
-        <div class="card mb-3 border-0 bg-transparent">
+        <div class="tool-section-title">
+            <span>Class Registry</span>
+            <i class="bi bi-tag-fill"></i>
+        </div>
+        <div class="mb-3">
             <div class="input-group input-group-sm mb-2">
-                <input type="text" id="new-class-name" class="form-control" placeholder="New class...">
+                <input type="text" id="new-class-name" class="form-control tool-input" placeholder="NEW_CLASS_ID...">
                 <div class="input-group-append">
-                    <button id="add-class-btn" class="btn btn-secondary" type="button"><i class="bi bi-plus"></i></button>
+                    <button id="add-class-btn" class="btn btn-outline-secondary" type="button"><i class="bi bi-plus-lg"></i></button>
                 </div>
             </div>
-            <ul id="class-list" class="list-group list-group-flush rounded border" style="max-height: 200px; overflow-y: auto;"></ul>
-            
+            <ul id="class-list" class="list-group list-group-flush border border-secondary" style="max-height: 200px; overflow-y: auto;"></ul>
+
             <div class="mt-2">
-                <div class="custom-control custom-switch mb-1">
+                <div class="custom-control custom-switch mb-2">
                     <input type="checkbox" class="custom-control-input" id="dataset-find-use-color">
-                    <label class="custom-control-label small text-muted" for="dataset-find-use-color">Strict Color Match</label>
+                    <label class="custom-control-label small text-muted text-uppercase font-weight-bold" for="dataset-find-use-color">Strict Color Match</label>
                 </div>
                 <div class="d-flex justify-content-between">
-                    <button id="find-from-dataset-btn" class="btn btn-xs btn-outline-info" title="Find objects using dataset examples"><i class="bi bi-journal-album"></i> Find Similar</button>
-                    <button id="rebuild-prototypes-btn" class="btn btn-xs btn-outline-warning" title="Rebuild AI Models"><i class="bi bi-arrow-clockwise"></i> Rebuild AI</button>
+                    <button id="find-from-dataset-btn" class="btn btn-xs btn-outline-info w-50 mr-1 text-truncate" title="Query Dataset"><i class="bi bi-search"></i> Find Sim</button>
+                    <button id="rebuild-prototypes-btn" class="btn btn-xs btn-outline-warning w-50 ml-1 text-truncate" title="Rebuild Models"><i class="bi bi-cpu"></i> Rebuild AI</button>
                 </div>
             </div>
         </div>
-
-        <hr class="border-light my-2">
 
         <!-- SECTION: Tools -->
-        <div class="tool-section-title">AI Tools</div>
+        <div class="tool-section-title">
+            <span>Inference Tools</span>
+            <i class="bi bi-lightning-charge-fill"></i>
+        </div>
         <div class="row no-gutters mb-3">
             <div class="col-6 pr-1 mb-2">
-                <button id="sam-toggle-btn" class="btn btn-sm btn-outline-primary w-100 text-truncate" title="Segment Anything"><i class="bi bi-magic"></i> SAM Point</button>
+                <button id="sam-toggle-btn" class="btn btn-sm btn-outline-primary w-100 text-truncate font-weight-bold" title="Segment Anything"><i class="bi bi-magic"></i> SAM Point</button>
             </div>
             <div class="col-6 pl-1 mb-2">
-                <button id="lam-toggle-btn" class="btn btn-sm btn-outline-primary w-100 text-truncate" title="Label Anything"><i class="bi bi-bullseye"></i> LAM Click</button>
+                <button id="lam-toggle-btn" class="btn btn-sm btn-outline-primary w-100 text-truncate font-weight-bold" title="Label Anything"><i class="bi bi-fonts"></i> LAM Text</button>
             </div>
             <div class="col-12 mb-2">
-                <button id="interactive-mode-toggle" class="btn btn-sm btn-outline-info w-100"><i class="bi bi-stars"></i> Smart Select (One-Shot)</button>
+                <button id="interactive-mode-toggle" class="btn btn-sm btn-outline-info w-100 font-weight-bold"><i class="bi bi-crosshair"></i> Smart Select</button>
             </div>
             <div class="col-12">
-                <button id="sam2-track-btn" class="btn btn-sm btn-outline-success w-100"><i class="bi bi-play-circle"></i> Video Tracking</button>
+                <button id="sam2-track-btn" class="btn btn-sm btn-outline-success w-100 font-weight-bold"><i class="bi bi-activity"></i> Video Tracking</button>
             </div>
         </div>
 
-        <!-- 默认隐藏的控制面板 (添加 style=display:none 确保初始状态) -->
+        <!-- Hidden Control Panels -->
         <div id="interactive-segment-controls" style="display: none;">
-            <h6 class="small font-weight-bold mb-2 text-info"><i class="bi bi-stars"></i> Smart Select Active</h6>
-            <p class="text-muted small mb-2" style="font-size: 0.75rem;">Draw a box around one object to find others.</p>
-            
+            <h6 class="small font-weight-bold mb-2 text-info text-uppercase"><i class="bi bi-crosshair"></i> Smart Select Active</h6>
+            <p class="text-muted small mb-2 font-monospace" style="font-size: 0.7rem;">> DESIGNATE TARGET BOX <br>> SYSTEM WILL LOCATE SIMILAR</p>
+
             <div class="custom-control custom-switch mb-2">
                 <input type="checkbox" class="custom-control-input" id="smart-select-use-color">
-                <label class="custom-control-label small text-muted" for="smart-select-use-color">Strict Color Match</label>
+                <label class="custom-control-label small text-muted text-uppercase" for="smart-select-use-color">Strict Color Match</label>
             </div>
 
-            <button id="find-similar-btn" class="btn btn-sm btn-primary w-100 mb-2" style="display: none;"><i class="bi bi-search"></i> Find Similar</button>
-            <button id="clear-samples-btn" class="btn btn-sm btn-secondary w-100 mb-2"><i class="bi bi-eraser"></i> Clear</button>
+            <button id="find-similar-btn" class="btn btn-sm btn-primary w-100 mb-2 text-uppercase" style="display: none;"><i class="bi bi-radar"></i> Scan Frame</button>
+            <button id="clear-samples-btn" class="btn btn-sm btn-secondary w-100 mb-2 text-uppercase"><i class="bi bi-eraser"></i> Clear Signal</button>
 
-            <div id="interactive-results-controls" style="display: none;" class="mt-2 border-top pt-2">
+            <div id="interactive-results-controls" style="display: none;" class="mt-2 border-top border-secondary pt-2">
                 <div class="form-group mb-2">
-                    <label class="small mb-1 d-flex justify-content-between"><span>Confidence</span> <span id="threshold-value" class="font-weight-bold">0.50</span></label>
+                    <label class="small mb-1 d-flex justify-content-between text-muted text-uppercase"><span>Confidence</span> <span id="threshold-value" class="font-weight-bold text-white">0.50</span></label>
                     <input type="range" class="custom-range" id="result-threshold" min="0.1" max="0.99" step="0.01" value="0.50">
                 </div>
-                <button id="accept-visible-btn" class="btn btn-sm btn-success w-100 mb-1"><i class="bi bi-check2-all"></i> Accept All</button>
-                <button id="finish-interactive-btn" class="btn btn-sm btn-light border w-100">Finish</button>
+                <button id="accept-visible-btn" class="btn btn-sm btn-success w-100 mb-1 text-uppercase"><i class="bi bi-check2-square"></i> Confirm All</button>
+                <button id="finish-interactive-btn" class="btn btn-sm btn-outline-light w-100 text-uppercase">Terminate</button>
             </div>
         </div>
 
         <div id="suggestion-review-controls" style="display: none;">
-            <h6 class="small font-weight-bold mb-2 text-warning"><i class="bi bi-lightbulb"></i> Review Suggestions</h6>
+            <h6 class="small font-weight-bold mb-2 text-warning text-uppercase"><i class="bi bi-lightbulb"></i> AI Suggestions</h6>
             <div class="form-group mb-2">
-                <label class="small mb-1 d-flex justify-content-between"><span>Confidence</span> <span id="suggestion-threshold-value" class="font-weight-bold">0.50</span></label>
+                <label class="small mb-1 d-flex justify-content-between text-muted text-uppercase"><span>Confidence</span> <span id="suggestion-threshold-value" class="font-weight-bold text-white">0.50</span></label>
                 <input type="range" class="custom-range" id="suggestion-threshold" min="0.1" max="0.99" step="0.01" value="0.50">
             </div>
-            <button id="accept-all-suggestions-btn" class="btn btn-sm btn-warning w-100 text-white"><i class="bi bi-check2-all"></i> Accept All Visible</button>
+            <button id="accept-all-suggestions-btn" class="btn btn-sm btn-warning w-100 text-uppercase font-weight-bold"><i class="bi bi-check-all"></i> Accept Visible</button>
         </div>
 
         <div id="track-controls" style="display: none;">
             <div class="d-flex justify-content-between align-items-center mb-2">
-                <h6 class="small font-weight-bold mb-0 text-primary" id="track-status-header">Tracking...</h6>
+                <h6 class="small font-weight-bold mb-0 text-primary text-uppercase" id="track-status-header">TRACKING_SEQUENCE...</h6>
             </div>
-            <div class="progress mb-2" style="height: 10px;">
-                <div id="track-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%;"></div>
+            <div class="progress mb-2 rounded-0 bg-dark" style="height: 6px;">
+                <div id="track-progress-bar" class="progress-bar bg-primary" role="progressbar" style="width: 0%;"></div>
             </div>
-            <button id="stop-sam2-track-btn" class="btn btn-sm btn-danger w-100 mb-2"><i class="bi bi-stop-fill"></i> Stop</button>
+            <button id="stop-sam2-track-btn" class="btn btn-sm btn-danger w-100 mb-2 text-uppercase"><i class="bi bi-stop-fill"></i> Abort</button>
 
-            <div class="border-top pt-2 mt-2">
-                <small class="text-muted d-block mb-2">Review Mode (A/D to nav)</small>
-                <button id="save-all-tracked-btn" class="btn btn-sm btn-success w-100 mb-1" disabled><i class="bi bi-save"></i> Save All Results</button>
-                <button id="exit-track-mode-btn" class="btn btn-sm btn-secondary w-100">Exit</button>
+            <div class="border-top border-secondary pt-2 mt-2">
+                <small class="text-muted d-block mb-2 text-uppercase font-monospace">> Review Mode Active</small>
+                <button id="save-all-tracked-btn" class="btn btn-sm btn-success w-100 mb-1 text-uppercase" disabled><i class="bi bi-hdd-fill"></i> Commit Results</button>
+                <button id="exit-track-mode-btn" class="btn btn-sm btn-secondary w-100 text-uppercase">Exit</button>
             </div>
         </div>
 
-        <hr class="border-light my-2">
-
-        <!-- SECTION: Objects List (使用 flex-grow 自动填充剩余空间) -->
-        <div class="tool-section-title d-flex justify-content-between">
-            <span>Objects</span>
+        <!-- SECTION: Objects List -->
+        <div class="tool-section-title mt-3">
+            <span>Detected Entities</span>
+            <i class="bi bi-layers-fill"></i>
         </div>
         <div class="flex-grow-1 position-relative" style="min-height: 100px;">
-            <ul id="bbox-list" class="list-group list-group-flush h-100 custom-scrollbar" style="position: absolute; width: 100%; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 4px;">
+            <ul id="bbox-list" class="list-group list-group-flush h-100 custom-scrollbar border border-secondary" style="position: absolute; width: 100%; overflow-y: auto;">
                 <!-- Populated by JS -->
             </ul>
         </div>
@@ -268,180 +486,110 @@
         <div class="d-flex align-items-center text-truncate" style="max-width: 75%;">
             <span class="color-swatch flex-shrink-0"></span>
             <span class="bbox-label font-weight-bold text-truncate ml-1"></span>
-            <small class="bbox-id text-muted ml-2 text-monospace" style="font-size: 0.75em;"></small>
+            <small class="bbox-id text-muted ml-2 text-monospace" style="font-size: 0.65em; opacity: 0.7;"></small>
         </div>
         <div class="bbox-controls flex-shrink-0">
-            <button class="btn btn-xs btn-link text-info p-0 interpolate-btn mr-2" title="Interpolate"><i class="bi bi-bezier"></i></button>
-            <button class="btn btn-xs btn-link text-danger p-0 delete-bbox-btn" title="Delete"><i class="bi bi-x"></i></button>
+            <button class="btn btn-xs btn-link text-info p-0 interpolate-btn mr-2" title="Interpolate"><i class="bi bi-bezier2"></i></button>
+            <button class="btn btn-xs btn-link text-danger p-0 delete-bbox-btn" title="Delete"><i class="bi bi-x-lg"></i></button>
         </div>
     </li>
 </template>
 
 <template id="lam-suggestion-popup-template">
-    <div id="lam-suggestion-popup" class="card shadow border-0" style="position: absolute; z-index: 1000; width: 200px;">
+    <div id="lam-suggestion-popup" class="card shadow-lg border-primary" style="position: absolute; z-index: 1000; width: 220px; background: rgba(0,0,0,0.95);">
         <div class="list-group list-group-flush"></div>
     </div>
 </template>
 
-<!-- Tracking Options Modal -->
-<div class="modal fade" id="tracking-options-modal" tabindex="-1" role="dialog">
-    <div class="modal-dialog" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title font-weight-bold">Select Tracking Mode</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                </button>
-            </div>
-            <div class="modal-body">
-                <p class="text-muted">Choose how you want to track this object.</p>
-                <div class="list-group">
-                    <label class="list-group-item list-group-item-action cursor-pointer">
-                        <div class="d-flex w-100 justify-content-between align-items-center">
-                            <h6 class="mb-0"><input type="radio" name="tracking-mode" value="interactive" checked class="mr-2"> Interactive Mode</h6>
-                            <span class="badge badge-primary">Recommended</span>
-                        </div>
-                        <p class="mb-0 mt-1 small text-muted ml-4">Real-time feedback. You can stop and correct errors anytime. Best for complex scenes.</p>
-                    </label>
-                    <label class="list-group-item list-group-item-action cursor-pointer">
-                        <div class="d-flex w-100 justify-content-between align-items-center">
-                            <h6 class="mb-0"><input type="radio" name="tracking-mode" value="batch" class="mr-2"> Batch Mode</h6>
-                             <span class="badge badge-success">High Quality</span>
-                        </div>
-                        <p class="mb-0 mt-1 small text-muted ml-4">Uses the official `SAM2VideoPredictor`. Higher accuracy but cannot be interrupted. Good for clear clips.</p>
-                    </label>
-                </div>
-
-                <div id="batch-mode-options" class="mt-3 p-3 bg-light rounded border" style="display: none;">
-                    <div class="form-group mb-0">
-                        <label for="batch-end-frame" class="font-weight-bold small">Process until frame:</label>
-                        <input type="number" class="form-control" id="batch-end-frame" min="0">
-                        <small class="form-text text-muted">Tracking runs from current frame to this frame.</small>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                <button type="button" id="confirm-tracking-start" class="btn btn-primary"><i class="bi bi-play-fill"></i> Start Tracking</button>
-            </div>
-        </div>
-    </div>
-</div>
-
 <!-- Negative Sampling Modal -->
 {% from "_macros.html" import render_modal %}
-{% call render_modal('negative-sampling-modal', 'Apply Model to Video') %}
-<div class="mb-3 p-3 border rounded bg-light">
-    <h6 class="font-weight-bold">Step 1: Set Confidence Threshold</h6>
-    <p class="text-muted small mb-2">Only suggestions with a score above this value will be generated.</p>
-    <label class="d-flex justify-content-between small font-weight-bold">
-        <span>Threshold</span>
-        <span id="apply-confidence-value" class="text-primary">0.50</span>
+{% call render_modal('negative-sampling-modal', 'MODEL_REFINEMENT_PROTOCOL') %}
+<div class="mb-3 p-3 border border-secondary" style="background: rgba(255,255,255,0.02);">
+    <h6 class="font-weight-bold text-primary text-uppercase">Step 1: Confidence Threshold</h6>
+    <p class="text-muted small mb-2 font-monospace">Set minimum score for label generation.</p>
+    <label class="d-flex justify-content-between small font-weight-bold text-white">
+        <span>VALUE</span>
+        <span id="apply-confidence-value" class="text-primary font-monospace">0.50</span>
     </label>
     <input type="range" class="custom-range" id="apply-confidence-threshold" min="0.1" max="0.99" step="0.01" value="0.50">
 </div>
 
 <div id="neg-sampling-body">
-    <h6 class="mt-4 font-weight-bold">Step 2: Refine with Negative Samples (Optional)</h6>
-    <p class="text-info small"><i class="bi bi-info-circle"></i> Draw boxes around areas to <strong>avoid</strong> (background, wrong objects).</p>
+    <h6 class="mt-4 font-weight-bold text-danger text-uppercase">Step 2: Negative Sampling</h6>
+    <p class="text-muted small font-monospace"><i class="bi bi-exclamation-triangle mr-1"></i> Draw boxes on areas to IGNORE.</p>
 
-    <div class="text-center mb-3 bg-dark rounded p-1">
+    <div class="text-center mb-3 bg-black border border-secondary p-1">
         <div id="neg-canvas-container" style="position: relative; display: inline-block; max-width: 100%;">
-            <img id="neg-frame-image" src="" class="img-fluid rounded" alt="Negative Sample Frame" draggable="false" />
+            <img id="neg-frame-image" src="" class="img-fluid" alt="Negative Sample Frame" draggable="false" />
             <canvas id="neg-drawing-canvas" style="position: absolute; top: 0; left: 0; cursor: crosshair;"></canvas>
         </div>
     </div>
 
-    <div class="d-flex justify-content-between align-items-center mt-3 bg-white p-2 border rounded">
-        <button id="neg-prev-btn" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left"></i></button>
-        <strong id="neg-frame-counter" class="small">Frame 1 / 10</strong>
-        <button id="neg-next-btn" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-right"></i></button>
+    <div class="d-flex justify-content-between align-items-center mt-3 bg-transparent p-2 border border-secondary">
+        <button id="neg-prev-btn" class="btn btn-sm btn-outline-secondary rounded-0"><i class="bi bi-arrow-left"></i></button>
+        <strong id="neg-frame-counter" class="small text-monospace text-white">FRAME 1 / 10</strong>
+        <button id="neg-next-btn" class="btn btn-sm btn-outline-secondary rounded-0"><i class="bi bi-arrow-right"></i></button>
     </div>
-    <p class="text-muted small mt-2 text-center">Ctrl+Z: Undo last box | Delete: Clear frame</p>
+    <p class="text-muted small mt-2 text-center font-monospace">CTRL+Z: UNDO | DEL: CLEAR</p>
 </div>
-<div class="modal-footer">
-    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-    <button type="button" id="finish-neg-sampling-btn" class="btn btn-primary"><i class="bi bi-check2-circle"></i> Apply to Video</button>
+<div class="modal-footer border-secondary bg-transparent">
+    <button type="button" class="btn btn-secondary rounded-0 text-uppercase" data-dismiss="modal">Cancel</button>
+    <button type="button" id="finish-neg-sampling-btn" class="btn btn-primary rounded-0 text-uppercase"><i class="bi bi-check2-circle"></i> Execute</button>
 </div>
 {% endcall %}
 
 {% endblock %}
 
 {% block scripts %}
-<!-- 引用 JS，原逻辑保持不变 -->
 <script>
     $(document).ready(function() {
         const settings = {{ settings | tojson }};
-        // ... (Keep the rest of the JavaScript logic from your original file) ...
         const customClassColors = settings.class_colors || {};
         const videoUuid = "{{ video_entity.video_uuid }}";
         const task = {{ task_entity | tojson }};
         const frameCount = task.end_frame + 1;
 
-        // --- 性能优化：防抖计时器变量 ---
         let preprocessTimeout = null;
 
+        // 记录当前正在编辑的帧号，用于在切换前保存
+        let currentEditingFrame = parseInt($('#frame-slider').val());
+
+        // --- ABYSSAL TELEMETRY COLOR PALETTE ---
+        // 强制使用高对比度霓虹配色，无视亮/暗模式
         const themeColors = {
-            light: {
-                selectionShadow: 'black',
-                handleFill: '#29537c',
-                labelText: 'white',
-                crosshair: 'rgba(10,80,161,0.7)',
-                interpolationGhost: 'rgba(216,163,36,0.62)',
-                interpolationConfirm: '#068526',
-                suggestionStroke: 'rgba(29,78,117,0.8)',
-                suggestionFill: 'rgba(19,68,122,0.8)',
-                suggestionHoverStroke: 'rgb(158,127,31)',
-                suggestionHoverFill: 'rgb(158,123,19)',
-                positiveExampleStroke: 'rgba(68,167,40,0.9)',
-                negativeSampleStroke: 'rgba(191,30,30,0.8)'
-            },
-            dark: {
-                selectionShadow: 'rgba(255, 255, 255, 0.7)',
-                handleFill: '#5cadff',
-                labelText: '#1a1a1a',
-                crosshair: 'rgba(130, 180, 255, 0.7)',
-                interpolationGhost: 'rgba(255, 193, 7, 0.6)',
-                interpolationConfirm: '#35a728',
-                suggestionStroke: 'rgba(68,128,189,0.8)',
-                suggestionFill: 'rgba(58,115,172,0.8)',
-                suggestionHoverStroke: 'rgba(255, 193, 7, 1.0)',
-                suggestionHoverFill: 'rgba(255, 193, 7, 1.0)',
-                positiveExampleStroke: 'rgba(82,209,62,0.9)',
-                negativeSampleStroke: 'rgba(216,67,67,0.8)'
-            }
+            selectionShadow: 'rgba(0, 240, 255, 0.6)',
+            handleFill: '#00F0FF',
+            labelText: '#000000',
+            labelBg: '#00F0FF',
+            crosshair: 'rgba(0, 240, 255, 0.8)',
+
+            // Interpolation
+            interpolationGhost: 'rgba(255, 208, 0, 0.5)',
+            interpolationConfirm: '#00FF94',
+
+            // Suggestions
+            suggestionStroke: 'rgba(46, 154, 255, 0.7)',
+            suggestionFill: 'rgba(46, 154, 255, 0.15)',
+            suggestionHoverStroke: '#FFD000',
+            suggestionHoverFill: 'rgba(255, 208, 0, 0.2)',
+
+            // Interactive
+            positiveExampleStroke: '#00FF94',
+            negativeSampleStroke: '#FF2A2A'
         };
 
         function getColor(key) {
-            const isDarkMode = document.body.classList.contains('dark-mode');
-            return isDarkMode ? themeColors.dark[key] : themeColors.light[key];
+            return themeColors[key];
         }
-
-        const themeObserver = new MutationObserver((mutationsList) => {
-            for (const mutation of mutationsList) {
-                if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
-                    redrawCanvas();
-                    redrawNegCanvas();
-                }
-            }
-        });
-        themeObserver.observe(document.body, { attributes: true });
 
         let availableClasses = [];
         let activeClass = null;
         let bboxes = [];
         let selectedBboxIndex = -1;
 
-        let repeatMode = {
-            isActive: false,
-            width: 0,
-            height: 0,
-            label: null
-        };
-
+        let repeatMode = { isActive: false, width: 0, height: 0, label: null };
         let history = [];
         let historyIndex = -1;
-
         let isDrawing = false;
         let startX, startY;
 
@@ -465,13 +613,7 @@
         let isCKeyPressed = false;
 
         let frameConfidence = {};
-
-        let interpolationState = {
-            isActive: false,
-            objectId: null,
-            startFrameData: null
-        };
-
+        let interpolationState = { isActive: false, objectId: null, startFrameData: null };
         let editMode = null;
         let draggedHandle = null;
         let draggedBboxInitialState = null;
@@ -496,21 +638,43 @@
         const negCtx = negCanvas.getContext('2d');
         const negImage = document.getElementById('neg-frame-image');
 
-        // --- 性能优化：智能触发预处理函数 ---
-        // 只有在启用 Smart Select (Interactive Mode) 或 LAM 模式时才触发后台预处理
-        // 并且带有防抖功能，避免快速拖动进度条时堵塞后台
+        // --- 封装通用的保存函数 ---
+        function performSave(frameNum, bboxesString, isSilent = false) {
+            if (isReviewMode) {
+                trackedBboxCache[frameNum] = bboxesString;
+                if (!isSilent) showToast(`FRAME ${frameNum} CACHED.`, 1000);
+            } else {
+                $.ajax({
+                    url: "/storeVideoFrameBboxesText",
+                    type: "POST",
+                    contentType: "application/json",
+                    data: JSON.stringify({
+                        video_uuid: videoUuid,
+                        frame_number: parseInt(frameNum),
+                        bboxes_text: bboxesString
+                    }),
+                    success: function(response) {
+                        if (response.success) {
+                            if (!isSilent) showToast(`FRAME ${frameNum} SAVED.`);
+
+                            // 如果是在操作当前帧，且有建议框，则清理建议框
+                            if (parseInt(frameSlider.val()) === frameNum) {
+                                suggestionBboxes = [];
+                                $('#suggestion-review-controls').slideUp();
+                                if(!isSilent) redrawCanvas();
+                            }
+                        }
+                    },
+                    error: function() {
+                        if (!isSilent) showToast("ERROR: SAVE FAILED.", 3000);
+                    }
+                });
+            }
+        }
+
         function smartTriggerPreprocess(frameNumber) {
-            // 1. 状态感知：如果没开这些高级功能，完全不请求后台，节省 GPU
-            if (!isInteractiveMode && !isLamModeActive) {
-                return;
-            }
-
-            // 2. 防抖：如果之前的请求还没发出，取消它
-            if (preprocessTimeout) {
-                clearTimeout(preprocessTimeout);
-            }
-
-            // 3. 延迟执行：用户停止操作 500ms 后才发送请求
+            if (!isInteractiveMode && !isLamModeActive) return;
+            if (preprocessTimeout) clearTimeout(preprocessTimeout);
             preprocessTimeout = setTimeout(() => {
                 triggerBackgroundPreprocess(frameNumber);
             }, 500);
@@ -540,10 +704,7 @@
 
             if (interpolationState.isActive) {
                 const startBox = interpolationState.startFrameData.bbox;
-                const x = startBox.x1 * scaleX,
-                    y = startBox.y1 * scaleY,
-                    w = (startBox.x2 - startBox.x1) * scaleX,
-                    h = (startBox.y2 - startBox.y1) * scaleY;
+                const x = startBox.x1 * scaleX, y = startBox.y1 * scaleY, w = (startBox.x2 - startBox.x1) * scaleX, h = (startBox.y2 - startBox.y1) * scaleY;
                 drawingCtx.strokeStyle = getColor('interpolationGhost');
                 drawingCtx.lineWidth = 2 / dpr;
                 drawingCtx.setLineDash([4 / dpr, 4 / dpr]);
@@ -553,116 +714,100 @@
 
             bboxes.forEach((box, index) => {
                 const color = stringToColor(box.label);
-                drawingCtx.strokeStyle = color;
-                drawingCtx.lineWidth = (index === selectedBboxIndex) ? 4 / dpr : 2 / dpr;
-                drawingCtx.shadowColor = (index === selectedBboxIndex) ? getColor('selectionShadow') : 'transparent';
-                drawingCtx.shadowBlur = (index === selectedBboxIndex) ? 6 / dpr : 0;
+
+                if (index === selectedBboxIndex) {
+                    drawingCtx.strokeStyle = '#fff';
+                    drawingCtx.lineWidth = 3 / dpr;
+                    drawingCtx.shadowColor = getColor('selectionShadow');
+                    drawingCtx.shadowBlur = 10 / dpr;
+                } else {
+                    drawingCtx.strokeStyle = color;
+                    drawingCtx.lineWidth = 2 / dpr;
+                    drawingCtx.shadowBlur = 0;
+                }
 
                 if (interpolationState.isActive && box.id === interpolationState.objectId) {
                     drawingCtx.strokeStyle = getColor('interpolationConfirm');
-                    drawingCtx.shadowColor = getColor('selectionShadow');
-                    drawingCtx.shadowBlur = 8 / dpr;
                     drawingCtx.setLineDash([5 / dpr, 3 / dpr]);
                 }
 
-                const x = box.x1 * scaleX,
-                    y = box.y1 * scaleY,
-                    w = (box.x2 - box.x1) * scaleX,
-                    h = (box.y2 - box.y1) * scaleY;
+                const x = box.x1 * scaleX, y = box.y1 * scaleY, w = (box.x2 - box.x1) * scaleX, h = (box.y2 - box.y1) * scaleY;
                 drawingCtx.strokeRect(x, y, w, h);
                 drawingCtx.setLineDash([]);
                 drawingCtx.shadowBlur = 0;
 
+                // Label Tag
                 drawingCtx.fillStyle = interpolationState.isActive && box.id === interpolationState.objectId ? getColor('interpolationConfirm') : color;
-                drawingCtx.font = `${12/dpr}px Arial`;
+                drawingCtx.font = `bold ${11/dpr}px 'JetBrains Mono', monospace`;
                 const textMetrics = drawingCtx.measureText(box.label);
                 const textWidth = textMetrics.width;
-                const textHeight = 14 / dpr;
-                drawingCtx.fillRect(x, y - textHeight, textWidth + (4 / dpr), textHeight);
-                drawingCtx.fillStyle = getColor('labelText');
-                drawingCtx.fillText(box.label, x + (2 / dpr), y - (2 / dpr));
+                const textHeight = 16 / dpr;
 
+                drawingCtx.fillRect(x, y - textHeight, textWidth + (6 / dpr), textHeight);
+                drawingCtx.fillStyle = '#000000';
+                drawingCtx.fillText(box.label.toUpperCase(), x + (3 / dpr), y - (3 / dpr));
+
+                // Handles (Hollow style for industrial look)
                 if (index === selectedBboxIndex && !isInteractiveMode) {
-                    const handleSize = 8 / dpr;
+                    const handleSize = 6 / dpr;
                     const halfHandle = handleSize / 2;
                     const handles = {
-                        'top-left': { x: x, y: y },
-                        'top-middle': { x: x + w / 2, y: y },
-                        'top-right': { x: x + w, y: y },
-                        'middle-left': { x: x, y: y + h / 2 },
-                        'middle-right': { x: x + w, y: y + h / 2 },
-                        'bottom-left': { x: x, y: y + h },
-                        'bottom-middle': { x: x + w / 2, y: y + h },
-                        'bottom-right': { x: x + w, y: y + h }
+                        'top-left': { x: x, y: y }, 'top-middle': { x: x + w / 2, y: y }, 'top-right': { x: x + w, y: y },
+                        'middle-left': { x: x, y: y + h / 2 }, 'middle-right': { x: x + w, y: y + h / 2 },
+                        'bottom-left': { x: x, y: y + h }, 'bottom-middle': { x: x + w / 2, y: y + h }, 'bottom-right': { x: x + w, y: y + h }
                     };
-                    drawingCtx.fillStyle = getColor('handleFill');
+                    drawingCtx.fillStyle = '#000000';
+                    drawingCtx.strokeStyle = '#ffffff';
+                    drawingCtx.lineWidth = 1 / dpr;
+
                     for (const key in handles) {
                         const pos = handles[key];
                         drawingCtx.fillRect(pos.x - halfHandle, pos.y - halfHandle, handleSize, handleSize);
+                        drawingCtx.strokeRect(pos.x - halfHandle, pos.y - halfHandle, handleSize, handleSize);
                     }
                 }
             });
 
             if (suggestionBboxes.length > 0) {
-                const threshold = parseFloat($('#suggestion-threshold').val());
-                drawingCtx.strokeStyle = getColor('suggestionStroke');
-                drawingCtx.lineWidth = 2 / dpr;
-                drawingCtx.setLineDash([5 / dpr, 3 / dpr]);
-
-                suggestionBboxes.forEach(sug => {
+                 const threshold = parseFloat($('#suggestion-threshold').val());
+                 drawingCtx.strokeStyle = getColor('suggestionStroke');
+                 drawingCtx.fillStyle = getColor('suggestionFill');
+                 drawingCtx.lineWidth = 1 / dpr;
+                 suggestionBboxes.forEach(sug => {
                     if (sug.score >= threshold) {
                         const box = sug.box;
-                        const x = box[0] * scaleX, y = box[1] * scaleY;
-                        const w = (box[2] - box[0]) * scaleX, h = (box[3] - box[1]) * scaleY;
-                        drawingCtx.strokeRect(x, y, w, h);
-
-                        const scoreText = sug.score.toFixed(2);
-                        drawingCtx.fillStyle = getColor('suggestionFill');
-                        drawingCtx.font = `${10 / dpr}px Arial`;
-                        drawingCtx.fillText(scoreText, x + 2 / dpr, y + 10 / dpr);
+                        const x = box[0] * scaleX, y = box[1] * scaleY, w = (box[2] - box[0]) * scaleX, h = (box[3] - box[1]) * scaleY;
+                        drawingCtx.strokeRect(x,y,w,h);
+                        drawingCtx.fillRect(x,y,w,h);
                     }
-                });
-                drawingCtx.setLineDash([]);
+                 });
             }
-
-            if ((isInteractiveMode || interactivePreviewBboxes.length > 0) && interactivePreviewBboxes.length > 0) {
+             if (interactivePreviewBboxes.length > 0) {
                 const threshold = parseFloat($('#result-threshold').val());
                 interactivePreviewBboxes.forEach((res, index) => {
                     if (res.score >= threshold) {
-                        const box = res.box;
-                        if (index === hoveredPreviewIndex) {
+                         const box = res.box;
+                         if (index === hoveredPreviewIndex) {
                             drawingCtx.strokeStyle = getColor('suggestionHoverStroke');
-                            drawingCtx.lineWidth = 3 / dpr;
+                            drawingCtx.lineWidth = 2 / dpr;
                         } else {
                             drawingCtx.strokeStyle = getColor('suggestionStroke');
-                            drawingCtx.lineWidth = 2 / dpr;
+                            drawingCtx.lineWidth = 1 / dpr;
                         }
-                        const x = box[0] * scaleX,
-                            y = box[1] * scaleY,
-                            w = (box[2] - box[0]) * scaleX,
-                            h = (box[3] - box[1]) * scaleY;
-                        drawingCtx.strokeRect(x, y, w, h);
-
-                        const scoreText = res.score.toFixed(2);
-                        drawingCtx.fillStyle = (index === hoveredPreviewIndex) ? getColor('suggestionHoverFill') : getColor('suggestionFill');
-                        drawingCtx.font = `${10/dpr}px Arial`;
-                        drawingCtx.fillText(scoreText, x + 2 / dpr, y + 10 / dpr);
+                        const x = box[0] * scaleX, y = box[1] * scaleY, w = (box[2] - box[0]) * scaleX, h = (box[3] - box[1]) * scaleY;
+                        drawingCtx.strokeRect(x,y,w,h);
                     }
                 });
             }
-
             if (isInteractiveMode) {
-                positiveExampleBboxes.forEach(box => {
-                    drawingCtx.strokeStyle = getColor('positiveExampleStroke');
-                    drawingCtx.lineWidth = 2 / dpr;
-                    drawingCtx.setLineDash([5 / dpr, 3 / dpr]);
-                    const x = box.x1 * scaleX,
-                        y = box.y1 * scaleY,
-                        w = (box.x2 - box.x1) * scaleX,
-                        h = (box.y2 - box.y1) * scaleY;
-                    drawingCtx.strokeRect(x, y, w, h);
-                    drawingCtx.setLineDash([]);
-                });
+                 drawingCtx.strokeStyle = getColor('positiveExampleStroke');
+                 drawingCtx.lineWidth = 2 / dpr;
+                 drawingCtx.setLineDash([4/dpr, 2/dpr]);
+                 positiveExampleBboxes.forEach(box => {
+                      const x = box.x1 * scaleX, y = box.y1 * scaleY, w = (box.x2 - box.x1) * scaleX, h = (box.y2 - box.y1) * scaleY;
+                      drawingCtx.strokeRect(x,y,w,h);
+                 });
+                 drawingCtx.setLineDash([]);
             }
         }
 
@@ -679,20 +824,19 @@
                     listItem.addClass("selected");
                 }
 
-                $(template).find(".color-swatch").css("background-color", color);
+                $(template).find(".color-swatch").css("background-color", color).css("border-color", color);
                 $(template).find(".bbox-label").text(box.label);
-                $(template).find(".bbox-id").text(box.id ? `ID: ${box.id.substring(0, 4)}` : 'No ID');
+                $(template).find(".bbox-id").text(box.id ? `ID:${box.id.substring(0, 4)}` : 'NULL');
                 $(template).find(".delete-bbox-btn").attr("data-index", index);
 
                 const interpolateBtn = $(template).find(".interpolate-btn");
                 if (interpolationState.isActive) {
                     if (interpolationState.objectId === box.id) {
-                        interpolateBtn.removeClass('btn-info').addClass('btn-success')
-                            .html('<i class="bi bi-check-circle"></i> Confirm')
-                            .attr('title', `Confirm interpolation from frame ${interpolationState.startFrameData.frame_number}`)
+                        interpolateBtn.removeClass('text-info').addClass('text-success')
+                            .html('<i class="bi bi-check-lg"></i>')
                             .prop('disabled', false);
                     } else {
-                        interpolateBtn.prop('disabled', true);
+                        interpolateBtn.prop('disabled', true).css('opacity', 0.2);
                     }
                 }
                 list.append(template);
@@ -704,17 +848,21 @@
             list.empty();
             availableClasses.forEach(className => {
                 const color = stringToColor(className);
-                const colorSwatch = `<span class="color-swatch" style="background-color: ${color};"></span>`;
-                const listItem = $(`<li class="list-group-item">${colorSwatch}${className}</li>`);
+                const colorSwatch = `<span class="color-swatch" style="background-color: ${color}; border-color: ${color};"></span>`;
+                const listItem = $(`<li class="list-group-item d-flex align-items-center">${colorSwatch}<span>${className}</span></li>`);
                 listItem.attr("data-class-name", className);
                 if (className === activeClass) {
-                    listItem.addClass("active").css({
-                        "background-color": color,
-                        "border-color": color
-                    });
+                    listItem.addClass("active");
                 }
                 list.append(listItem);
             });
+        }
+
+        function stringToColor(str) {
+            if (customClassColors && customClassColors[str]) return customClassColors[str];
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+            return `hsl(${(hash % 360 + 360) % 360}, 80%, 50%)`;
         }
 
         function drawCrosshairs(x, y) {
@@ -723,14 +871,9 @@
             crosshairCtx.clearRect(0, 0, crosshairCanvas.width / dpr, crosshairCanvas.height / dpr);
             crosshairCtx.strokeStyle = getColor('crosshair');
             crosshairCtx.lineWidth = 1 / dpr;
-            crosshairCtx.setLineDash([4 / dpr, 4 / dpr]);
             crosshairCtx.beginPath();
-            crosshairCtx.moveTo(0, y);
-            crosshairCtx.lineTo(crosshairCanvas.width / dpr, y);
-            crosshairCtx.stroke();
-            crosshairCtx.beginPath();
-            crosshairCtx.moveTo(x, 0);
-            crosshairCtx.lineTo(x, crosshairCanvas.height / dpr);
+            crosshairCtx.moveTo(0, y); crosshairCtx.lineTo(crosshairCanvas.width / dpr, y);
+            crosshairCtx.moveTo(x, 0); crosshairCtx.lineTo(x, crosshairCanvas.height / dpr);
             crosshairCtx.stroke();
         }
 
@@ -741,13 +884,9 @@
 
         function showToast(message, duration = 3000) {
             const notification = $("#toast-notification");
-            notification.text(message).addClass("show");
-            if (toastTimeout) {
-                clearTimeout(toastTimeout);
-            }
-            toastTimeout = setTimeout(() => {
-                notification.removeClass("show");
-            }, duration);
+            notification.html(`<i class="bi bi-terminal mr-2"></i> ${message}`).addClass("show");
+            if (toastTimeout) clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => { notification.removeClass("show"); }, duration);
         }
 
         function saveStateToHistory() {
@@ -789,40 +928,18 @@
             const scaleX = frameImage.clientWidth / frameImage.naturalWidth;
             const scaleY = frameImage.clientHeight / frameImage.naturalHeight;
             const box = bboxes[selectedBboxIndex];
-            const bx = box.x1 * scaleX,
-                by = box.y1 * scaleY,
-                bw = (box.x2 - box.x1) * scaleX,
-                bh = (box.y2 - box.y1) * scaleY;
+            const bx = box.x1 * scaleX, by = box.y1 * scaleY, bw = (box.x2 - box.x1) * scaleX, bh = (box.y2 - box.y1) * scaleY;
             const handleSize = 8;
             const handles = {
-                'top-left': { x: bx, y: by },
-                'top-middle': { x: bx + bw / 2, y: by },
-                'top-right': { x: bx + bw, y: by },
-                'middle-left': { x: bx, y: by + bh / 2 },
-                'middle-right': { x: bx + bw, y: by + bh / 2 },
-                'bottom-left': { x: bx, y: by + bh },
-                'bottom-middle': { x: bx + bw / 2, y: by + bh },
-                'bottom-right': { x: bx + bw, y: by + bh }
+                'top-left': { x: bx, y: by }, 'top-middle': { x: bx + bw / 2, y: by }, 'top-right': { x: bx + bw, y: by },
+                'middle-left': { x: bx, y: by + bh / 2 }, 'middle-right': { x: bx + bw, y: by + bh / 2 },
+                'bottom-left': { x: bx, y: by + bh }, 'bottom-middle': { x: bx + bw / 2, y: by + bh }, 'bottom-right': { x: bx + bw, y: by + bh }
             };
-
             for (const key in handles) {
                 const pos = handles[key];
-                if (x >= pos.x - handleSize && x <= pos.x + handleSize && y >= pos.y - handleSize && y <= pos.y + handleSize) {
-                    return key;
-                }
+                if (x >= pos.x - handleSize && x <= pos.x + handleSize && y >= pos.y - handleSize && y <= pos.y + handleSize) return key;
             }
             return null;
-        }
-
-        function stringToColor(str) {
-            if (customClassColors && customClassColors[str]) {
-                return customClassColors[str];
-            }
-            let hash = 0;
-            for (let i = 0; i < str.length; i++) {
-                hash = str.charCodeAt(i) + ((hash << 5) - hash);
-            }
-            return `hsl(${(hash % 360 + 360) % 360}, 80%, 50%)`;
         }
 
         function formatBboxesToString() {
@@ -845,14 +962,7 @@
                     const hasId = parts.length > 5 && (parts[parts.length - 1].length === 36 || parts[parts.length - 1].length === 32);
                     const label = parts.slice(4, parts.length - (hasId ? 1 : 0)).join(',');
                     const id = hasId ? parts[parts.length - 1] : null;
-                    return {
-                        x1: parseInt(parts[0]),
-                        y1: parseInt(parts[1]),
-                        x2: parseInt(parts[2]),
-                        y2: parseInt(parts[3]),
-                        label: label,
-                        id: id
-                    };
+                    return { x1: parseInt(parts[0]), y1: parseInt(parts[1]), x2: parseInt(parts[2]), y2: parseInt(parts[3]), label: label, id: id };
                 }).filter(b => b !== null);
         }
 
@@ -863,20 +973,14 @@
                 .map(line => {
                     const parts = line.split(",");
                     if (parts.length < 6) return null;
-                    return {
-                        box: [parseInt(parts[0]), parseInt(parts[1]), parseInt(parts[2]), parseInt(parts[3])],
-                        label: parts[4],
-                        score: parseFloat(parts[5])
-                    };
+                    return { box: [parseInt(parts[0]), parseInt(parts[1]), parseInt(parts[2]), parseInt(parts[3])], label: parts[4], score: parseFloat(parts[5]) };
                 }).filter(b => b !== null);
         }
 
         function loadBboxesForFrame(frameNumber) {
             if (isReviewMode) {
                 const bboxesText = trackedBboxCache[frameNumber] || "";
-                processFrameDataAndUpdateUI({
-                    bboxes_text: bboxesText
-                });
+                processFrameDataAndUpdateUI({ bboxes_text: bboxesText });
                 return;
             }
 
@@ -888,9 +992,7 @@
                     url: "/retrieveVideoFrames",
                     type: "POST",
                     contentType: "application/json",
-                    data: JSON.stringify({
-                        video_uuid: videoUuid
-                    }),
+                    data: JSON.stringify({ video_uuid: videoUuid }),
                     success: function(response) {
                         if (response.success) {
                             window.cachedFrames = response.frames;
@@ -940,16 +1042,12 @@
                     url: "/addClass",
                     type: "POST",
                     contentType: "application/json",
-                    data: JSON.stringify({
-                        label_name: className
-                    }),
+                    data: JSON.stringify({ label_name: className }),
                     success: function() {
                         availableClasses.push(className);
                         renderClassList();
                     },
-                    error: function() {
-                        showToast("Error: Failed to add new class.", 3000);
-                    }
+                    error: function() { showToast("Error: Failed to add new class.", 3000); }
                 });
             }
         }
@@ -957,10 +1055,10 @@
         function updateSamButtonText() {
             const button = $("#sam-toggle-btn");
             if (isSamModeActive) {
-                const text = isInteractiveMode ? "SAM ON (for Sample)" : "SAM ON (for Annotation)";
-                button.html(`<i class="bi bi-magic"></i> ${text}`);
+                const text = isInteractiveMode ? "SAM ON (SAMPLE)" : "SAM ON (DRAW)";
+                button.html(`<i class="bi bi-magic"></i> ${text}`).addClass('btn-primary').removeClass('btn-outline-primary');
             } else {
-                button.html('<i class="bi bi-magic"></i> Enable SAM (Point)');
+                button.html('<i class="bi bi-magic"></i> SAM Point').removeClass('btn-primary').addClass('btn-outline-primary');
             }
         }
 
@@ -971,21 +1069,18 @@
 
             if (!isReview) {
                 $("#track-progress-bar").css("width", "0%").text("0%").removeClass("bg-success bg-danger").addClass("progress-bar-animated");
-                $("#track-status-header").text("Tracking...");
-                $("#stop-sam2-track-btn").prop("disabled", false).text("Stop Tracking");
+                $("#track-status-header").text("TRACKING_SEQUENCE...");
+                $("#stop-sam2-track-btn").prop("disabled", false).text("Abort");
                 $("#save-all-tracked-btn").prop("disabled", true);
                 sam2TrackerUuid = null;
-                if (sam2EventSource) {
-                    sam2EventSource.close();
-                    sam2EventSource = null;
-                }
+                if (sam2EventSource) { sam2EventSource.close(); sam2EventSource = null; }
             }
         }
 
         function exitReviewMode() {
             setTrackingUiState(false);
             trackedBboxCache = {};
-            showToast("Exited tracking/review mode.", 2000);
+            showToast("Review mode terminated.", 2000);
             frameSlider.trigger("input");
         }
 
@@ -995,31 +1090,22 @@
                     trackedBboxCache[eventData.frame_number] = eventData.bboxes_text;
                     const percentage = eventData.total > 0 ? Math.round(eventData.progress / eventData.total * 100) : 0;
                     $("#track-progress-bar").css("width", percentage + "%").text(percentage + "%");
-
                     const frameNumber = eventData.frame_number;
                     if (frameNumber <= parseInt(frameSlider.attr("max"))) {
                         frameSlider.val(frameNumber);
+                        currentEditingFrame = frameNumber; // Sync internal tracker
                         $("#frame-number-display").text(frameNumber);
                         const imageUrl = `/media/frames/${videoUuid}/frame_${String(frameNumber).padStart(5, "0")}.jpg`;
-                        if (!frameImage.src.endsWith(imageUrl)) {
-                            frameImage.src = imageUrl;
-                        }
+                        if (!frameImage.src.endsWith(imageUrl)) frameImage.src = imageUrl;
+                        loadBboxesForFrame(frameNumber); // Update UI
                     }
-                    break;
-                case "batch_update":
-                    const batch_percentage = eventData.total > 0 ? Math.round(eventData.progress / eventData.total * 100) : 0;
-                     $("#track-progress-bar").css("width", batch_percentage + "%").text(batch_percentage + "%");
-                     $("#track-status-header").text(eventData.message || `Batch Tracking...`);
                     break;
                 case "completed":
                 case "stopped":
                 case "failed":
-                    if(eventData.results) {
-                        Object.assign(trackedBboxCache, eventData.results);
-                    }
+                    if(eventData.results) Object.assign(trackedBboxCache, eventData.results);
                     handleTrackingEnd(eventData.event.toUpperCase(), eventData.message);
                     break;
-
                 case "error":
                     alert("Tracking Stream Error: " + eventData.message);
                     handleTrackingEnd("FAILED", eventData.message);
@@ -1028,24 +1114,21 @@
         }
 
         function handleTrackingEnd(status, message) {
-            if (sam2EventSource) {
-                sam2EventSource.close();
-                sam2EventSource = null;
-            }
+            if (sam2EventSource) { sam2EventSource.close(); sam2EventSource = null; }
 
             $("#sam2-track-btn").prop("disabled", false);
             $("#stop-sam2-track-btn").prop("disabled", true);
             const progressBar = $("#track-progress-bar");
             progressBar.removeClass("progress-bar-animated");
 
-            let statusText = "Review Results";
+            let statusText = "REVIEW RESULTS";
             if (status === "COMPLETED") {
-                statusText = "Tracking Completed. Review Results.";
+                statusText = "SEQUENCE COMPLETE. REVIEW RESULTS.";
                 progressBar.css("width", "100%").text("100%").addClass("bg-success");
             } else if (status === "STOPPED") {
-                statusText = "Tracking Stopped. Review Results.";
+                statusText = "SEQUENCE ABORTED. REVIEW RESULTS.";
             } else if (status === "FAILED") {
-                statusText = "Tracking Failed. Review Partial Results.";
+                statusText = "SEQUENCE FAILED.";
                 progressBar.addClass("bg-danger");
             }
 
@@ -1067,31 +1150,24 @@
             overlappingCycleIndex = 0;
             lastClickPosForCycle = null;
             $('#interactive-results-controls').slideUp();
-            if (shouldRedraw) {
-                redrawCanvas();
-            }
+            if (shouldRedraw) redrawCanvas();
         }
 
         function triggerFindSimilar() {
-            if (positiveExampleBboxes.length === 0) {
-                 showToast("Please provide one positive sample.", 2000);
-                return;
-            }
+            if (positiveExampleBboxes.length === 0) { showToast("Positive sample required.", 2000); return; }
             lastDatasetClassName = null;
             const frameNumber = parseInt(frameSlider.val());
             const $button = $('#find-similar-btn');
-            // NEW: Get checkbox state
-            const useColor = $('#smart-select-use-color').is(':checked'); 
+            const useColor = $('#smart-select-use-color').is(':checked');
 
             $button.prop('disabled', true);
-
             const runPrediction = () => {
-                showToast(useColor ? 'Finding similar objects (Color + Shape)...' : 'Finding similar objects...', 4000);
+                showToast(useColor ? 'Scanning (Color + Shape)...' : 'Scanning...', 4000);
                 const payload = {
                     video_uuid: videoUuid,
                     frame_number: frameNumber,
                     prompt_boxes: positiveExampleBboxes,
-                    use_color: useColor // NEW: Send to backend
+                    use_color: useColor
                 };
                 $.ajax({
                     url: '/interactive_segment/predict',
@@ -1104,9 +1180,7 @@
                             $('#interactive-results-controls').slideDown();
                             $('#result-threshold').trigger('input');
                             redrawCanvas();
-                        } else {
-                            alert('Prediction failed: ' + res.message);
-                        }
+                        } else { alert('Prediction failed: ' + res.message); }
                     },
                     error: () => alert('Server error during prediction.'),
                     complete: () => $button.prop('disabled', false)
@@ -1114,7 +1188,7 @@
             };
 
             if (lastProcessedFrame !== frameNumber) {
-                showToast('Preprocessing frame for Smart Select...', 10000);
+                showToast('Preprocessing frame...', 10000);
                 const payload = { video_uuid: videoUuid, frame_number: frameNumber };
                 $.ajax({
                     url: '/interactive_segment/preprocess',
@@ -1131,14 +1205,9 @@
                             $button.prop('disabled', false);
                         }
                     },
-                    error: () => {
-                        alert('Server error during preprocessing.');
-                        $button.prop('disabled', false);
-                    }
+                    error: () => { alert('Server error during preprocessing.'); $button.prop('disabled', false); }
                 });
-            } else {
-                runPrediction();
-            }
+            } else { runPrediction(); }
         }
 
         function startNegativeSampling(count) {
@@ -1154,20 +1223,14 @@
                         negativeSamplesStore = {};
                         loadNegativeSampleFrame();
                         $('#negative-sampling-modal').modal({ backdrop: 'static', keyboard: false });
-                    } else {
-                        alert("Failed to fetch random frames: " + (res.message || "No frames returned."));
-                    }
+                    } else { alert("Failed to fetch random frames: " + (res.message || "No frames returned.")); }
                 },
-                error: function() {
-                    alert("Server error while fetching random frames.");
-                }
+                error: function() { alert("Server error while fetching random frames."); }
             });
         }
 
         function resizeNegCanvas() {
-            if (!negImage.complete || negImage.naturalWidth === 0 || !$('#negative-sampling-modal').is(':visible')) {
-                return;
-            }
+            if (!negImage.complete || negImage.naturalWidth === 0 || !$('#negative-sampling-modal').is(':visible')) return;
             const dpr = window.devicePixelRatio || 1;
             const rect = negImage.getBoundingClientRect();
             negCanvas.style.width = `${rect.width}px`;
@@ -1181,11 +1244,8 @@
         function loadNegativeSampleFrame() {
             if (currentNegSampleIndex < 0 || currentNegSampleIndex >= negSamplingFrames.length) return;
             const frameData = negSamplingFrames[currentNegSampleIndex];
-            $('#neg-frame-counter').text(`Frame ${currentNegSampleIndex + 1} / ${negSamplingFrames.length}`);
-
-            negImage.onload = () => {
-                resizeNegCanvas();
-            };
+            $('#neg-frame-counter').text(`FRAME ${currentNegSampleIndex + 1} / ${negSamplingFrames.length}`);
+            negImage.onload = () => { resizeNegCanvas(); };
             negImage.src = frameData.image_url;
         }
 
@@ -1210,14 +1270,10 @@
         }
 
         function triggerApplyToVideo(negativeSamples) {
-            if (!lastDatasetClassName) {
-                alert("An error occurred. The class to apply is unknown.");
-                return;
-            }
-
+            if (!lastDatasetClassName) { alert("An error occurred. The class to apply is unknown."); return; }
             const confirmMessage = negativeSamples && Object.keys(negativeSamples).length > 0
-                ? `This will start a background task to apply the REFINED model for '${lastDatasetClassName}' to all unlabeled frames. Continue?`
-                : `This will start a background task to apply the learned features for '${lastDatasetClassName}' to all unlabeled frames. Continue?`;
+                ? `Start background task to apply REFINED model for '${lastDatasetClassName}'?`
+                : `Start background task to apply learned features for '${lastDatasetClassName}'?`;
 
             if (confirm(confirmMessage)) {
                 const payload = {
@@ -1234,19 +1290,14 @@
                     data: JSON.stringify(payload),
                     success: function(res) {
                         if (res.success) {
-                            alert("Task started successfully! You can now close this page. The video status will update on the main page.");
+                            alert("Task started. Video status will update on dashboard.");
                             window.location.href = "/";
-                        } else {
-                            alert("Failed to start task: " + res.message);
-                        }
+                        } else { alert("Failed to start task: " + res.message); }
                     },
-                    error: function() {
-                        alert("Server error when trying to start the task.");
-                    }
+                    error: function() { alert("Server error when trying to start the task."); }
                 });
             }
         }
-
 
         function undoNegativeSample() {
             if (currentNegSampleIndex < 0 || currentNegSampleIndex >= negSamplingFrames.length) return;
@@ -1255,10 +1306,8 @@
             if (negativeSamplesStore[frameKey] && negativeSamplesStore[frameKey].length > 0) {
                 negativeSamplesStore[frameKey].pop();
                 redrawNegCanvas();
-                showToast('Last negative sample removed.', 1500);
-            } else {
-                showToast('Nothing to undo on this frame.', 1500);
-            }
+                showToast('Sample removed.', 1500);
+            } else { showToast('Nothing to undo.', 1500); }
         }
 
         function clearCurrentNegativeSamples() {
@@ -1268,23 +1317,14 @@
             if (negativeSamplesStore[frameKey] && negativeSamplesStore[frameKey].length > 0) {
                 negativeSamplesStore[frameKey] = [];
                 redrawNegCanvas();
-                showToast('All negative samples cleared for this frame.', 1500);
+                showToast('Frame cleared.', 1500);
             }
         }
 
         function resetInterpolationState(reloadFrame = false) {
-            interpolationState = {
-                isActive: false,
-                objectId: null,
-                startFrameData: null
-            };
+            interpolationState = { isActive: false, objectId: null, startFrameData: null };
             $('#interpolation-banner').slideUp();
-            if (reloadFrame) {
-                frameSlider.trigger("input");
-            } else {
-                renderBboxList();
-                redrawCanvas();
-            }
+            if (reloadFrame) { frameSlider.trigger("input"); } else { renderBboxList(); redrawCanvas(); }
         }
 
         function showLamSuggestions(bbox, suggestions, clickX, clickY) {
@@ -1298,18 +1338,15 @@
             const suggestionList = popup.find('.list-group');
 
             if (suggestions.length === 0) {
-                suggestionList.append('<div class="list-group-item">No suggestions, please label manually.</div>');
+                suggestionList.append('<div class="list-group-item">No suggestions.</div>');
             } else {
                 suggestions.forEach(sug => {
                     const color = stringToColor(sug.label);
                     const scorePercent = (sug.score * 100).toFixed(1);
                     const item = $(`
-                        <button type="button" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" data-label="${sug.label}">
-                            <div>
-                                <span class="color-swatch" style="background-color: ${color};"></span>
-                                ${sug.label}
-                            </div>
-                            <span class="badge badge-primary badge-pill">${scorePercent}%</span>
+                        <button type="button" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center bg-transparent text-white border-bottom border-secondary" data-label="${sug.label}">
+                            <div><span class="color-swatch" style="background-color: ${color};"></span> ${sug.label}</div>
+                            <span class="badge badge-primary rounded-0">${scorePercent}%</span>
                         </button>
                     `);
                     suggestionList.append(item);
@@ -1322,11 +1359,7 @@
             popup.on('click', 'button', function() {
                 const selectedLabel = $(this).data('label');
                 if (selectedLabel) {
-                    const newBox = {
-                        ...bbox,
-                        label: selectedLabel,
-                        id: self.crypto.randomUUID()
-                    };
+                    const newBox = { ...bbox, label: selectedLabel, id: self.crypto.randomUUID() };
                     bboxes.push(newBox);
                     saveStateToHistory();
                     selectedBboxIndex = bboxes.length - 1;
@@ -1338,10 +1371,7 @@
 
             setTimeout(() => {
                 $(document).one('mousedown', function(e) {
-                    if (!$(e.target).closest('#lam-suggestion-popup').length) {
-                        popup.remove();
-                        redrawCanvas();
-                    }
+                    if (!$(e.target).closest('#lam-suggestion-popup').length) { popup.remove(); redrawCanvas(); }
                 });
             }, 100);
         }
@@ -1352,9 +1382,7 @@
             resizeCanvas();
             const frameNumber = frameSlider.val();
             loadBboxesForFrame(frameNumber);
-            // --- 修改：使用智能触发器替代直接调用 ---
             smartTriggerPreprocess(frameNumber);
-
             const defaultThreshold = 0.50;
             const currentFrameThreshold = frameConfidence[frameNumber] ?? defaultThreshold;
             $('#result-threshold').val(currentFrameThreshold);
@@ -1364,44 +1392,59 @@
         frameImage.addEventListener('dragstart', (e) => e.preventDefault());
         window.onresize = resizeCanvas;
 
+        // --- 修改后的帧导航逻辑 (支持自动保存) ---
         frameSlider.on("input", function() {
-            const frameNumber = $(this).val();
-            $("#frame-number-display").text(frameNumber);
-            const imageUrl = `/media/frames/${videoUuid}/frame_${String(frameNumber).padStart(5, "0")}.jpg`;
+            const newFrameNumber = parseInt($(this).val());
+
+            // 如果帧号没变，直接返回
+            if (newFrameNumber === currentEditingFrame) return;
+
+            // === AUTOSAVE 逻辑 ===
+            if (settings.autosave_enabled) {
+                const currentData = formatBboxesToString();
+                performSave(currentEditingFrame, currentData, true); // True = 静默保存
+            }
+            // ====================
+
+            // 更新记录
+            currentEditingFrame = newFrameNumber;
+
+            // UI 更新
+            $("#frame-number-display").text(newFrameNumber);
+            const imageUrl = `/media/frames/${videoUuid}/frame_${String(newFrameNumber).padStart(5, "0")}.jpg`;
+
             if (frameImage.src.endsWith(imageUrl) === false) {
                 frameImage.src = imageUrl;
             } else if (frameImage.complete) {
-                loadBboxesForFrame(frameNumber);
-                // --- 修改：使用智能触发器替代直接调用 ---
-                smartTriggerPreprocess(frameNumber);
+                loadBboxesForFrame(newFrameNumber);
+                smartTriggerPreprocess(newFrameNumber);
             }
+
+            const defaultThreshold = 0.50;
+            const currentFrameThreshold = frameConfidence[newFrameNumber] ?? defaultThreshold;
+            $('#result-threshold').val(currentFrameThreshold);
+            $('#threshold-value').text(currentFrameThreshold.toFixed(2));
         });
 
         canvasContainer.on('mousedown', function(e) {
+            // ... (Drawing logic remains unchanged) ...
             if (repeatMode.isActive) {
                 e.preventDefault();
                 const pos = getMousePos(drawingCanvas, e);
                 const scaleX = frameImage.naturalWidth / frameImage.clientWidth;
                 const scaleY = frameImage.naturalHeight / frameImage.clientHeight;
-
                 const halfW = (repeatMode.width / 2);
                 const halfH = (repeatMode.height / 2);
-
                 const newBox = {
-                    x1: Math.round((pos.x * scaleX) - halfW),
-                    y1: Math.round((pos.y * scaleY) - halfH),
-                    x2: Math.round((pos.x * scaleX) + halfW),
-                    y2: Math.round((pos.y * scaleY) + halfH),
-                    label: repeatMode.label,
-                    id: self.crypto.randomUUID()
+                    x1: Math.round((pos.x * scaleX) - halfW), y1: Math.round((pos.y * scaleY) - halfH),
+                    x2: Math.round((pos.x * scaleX) + halfW), y2: Math.round((pos.y * scaleY) + halfH),
+                    label: repeatMode.label, id: self.crypto.randomUUID()
                 };
-
                 bboxes.push(newBox);
                 saveStateToHistory();
                 selectedBboxIndex = bboxes.length - 1;
                 renderBboxList();
                 redrawCanvas();
-
                 return;
             }
             if (isLamModeActive) {
@@ -1412,33 +1455,28 @@
                 const scaleY = frameImage.naturalHeight / frameImage.clientHeight;
 
                 canvasContainer.addClass('sam-loading');
-                showToast('LAM is thinking...', 5000);
+                // UX: 显示等待光标
+                $('body').css('cursor', 'wait');
+                showToast('LAM processing...', 5000);
 
                 $.ajax({
                     url: "/lam_predict",
                     type: "POST",
                     contentType: "application/json",
                     data: JSON.stringify({
-                        video_uuid: videoUuid,
-                        frame_number: frameSlider.val(),
-                        point: {
-                            x: Math.round(pos.x * scaleX),
-                            y: Math.round(pos.y * scaleY)
-                        }
+                        video_uuid: videoUuid, frame_number: frameSlider.val(),
+                        point: { x: Math.round(pos.x * scaleX), y: Math.round(pos.y * scaleY) }
                     }),
                     success: function(response) {
                         if (response.success) {
                             showLamSuggestions(response.bbox, response.suggestions, e.clientX, e.clientY);
-                            showToast('Success! Please select a class.', 3000);
-                        } else {
-                            showToast(response.message || "LAM failed to identify an object.", 3000);
-                        }
+                            showToast('Select class.', 3000);
+                        } else { showToast(response.message || "LAM failed.", 3000); }
                     },
-                    error: function(xhr) {
-                        showToast('Server Error: ' + (xhr.responseJSON ? xhr.responseJSON.message : 'Unknown Error'), 4000);
-                    },
+                    error: function(xhr) { showToast('Server Error: ' + (xhr.responseJSON ? xhr.responseJSON.message : 'Unknown Error'), 4000); },
                     complete: function() {
                         canvasContainer.removeClass('sam-loading');
+                        $('body').css('cursor', 'default');
                     }
                 });
                 return;
@@ -1450,54 +1488,40 @@
                 const scaleX = frameImage.naturalWidth / frameImage.clientWidth;
                 const scaleY = frameImage.naturalHeight / frameImage.clientHeight;
                 canvasContainer.addClass('sam-loading');
-                showToast('SAM is thinking...', 5000);
+                $('body').css('cursor', 'wait');
+                showToast('SAM processing...', 5000);
 
                 $.ajax({
                     url: "/samPredict",
                     type: "POST",
                     contentType: "application/json",
                     data: JSON.stringify({
-                        video_uuid: videoUuid,
-                        frame_number: frameSlider.val(),
-                        point: {
-                            x: Math.round(pos.x * scaleX),
-                            y: Math.round(pos.y * scaleY)
-                        }
+                        video_uuid: videoUuid, frame_number: frameSlider.val(),
+                        point: { x: Math.round(pos.x * scaleX), y: Math.round(pos.y * scaleY) }
                     }),
                     success: function(response) {
-                        if (!response.success) {
-                            showToast(response.message || "SAM failed to find an object.", 3000);
-                            return;
-                        }
-
+                        if (!response.success) { showToast(response.message || "SAM failed.", 3000); return; }
                         if (isInteractiveMode) {
                             positiveExampleBboxes = [response.bbox];
                             redrawCanvas();
-                            showToast('Positive SAM sample added. Auto-finding similar objects...', 2000);
+                            showToast('Sample added. Scanning...', 2000);
                             triggerFindSimilar();
                         } else {
                             if (activeClass) {
-                                const newBox = { ...response.bbox,
-                                    label: activeClass,
-                                    id: self.crypto.randomUUID()
-                                };
+                                const newBox = { ...response.bbox, label: activeClass, id: self.crypto.randomUUID() };
                                 bboxes.push(newBox);
                                 saveStateToHistory();
                                 selectedBboxIndex = bboxes.length - 1;
                                 renderBboxList();
                                 redrawCanvas();
-                                showToast('SAM found an object!', 2000);
-                            } else {
-                                showToast('Please select a class before using SAM.', 3000);
-                            }
+                                showToast('SAM object added!', 2000);
+                            } else { showToast('Select class first.', 3000); }
                         }
                     },
-                    error: function(xhr) {
-                        const errorMsg = xhr.responseJSON ? xhr.responseJSON.message : 'Unknown error';
-                        showToast('Server error during SAM prediction: ' + errorMsg, 4000);
-                    },
+                    error: function(xhr) { showToast('SAM Error: ' + (xhr.responseJSON ? xhr.responseJSON.message : 'Unknown'), 4000); },
                     complete: function() {
                         canvasContainer.removeClass('sam-loading');
+                        $('body').css('cursor', 'default');
                     }
                 });
                 return;
@@ -1526,35 +1550,25 @@
                 if (clickedSuggestionIndex !== -1) {
                     e.preventDefault();
                     const acceptedSuggestion = suggestionBboxes.splice(clickedSuggestionIndex, 1)[0];
-
                     bboxes.push({
-                        x1: acceptedSuggestion.box[0],
-                        y1: acceptedSuggestion.box[1],
-                        x2: acceptedSuggestion.box[2],
-                        y2: acceptedSuggestion.box[3],
-                        label: acceptedSuggestion.label,
-                        id: self.crypto.randomUUID()
+                        x1: acceptedSuggestion.box[0], y1: acceptedSuggestion.box[1], x2: acceptedSuggestion.box[2], y2: acceptedSuggestion.box[3],
+                        label: acceptedSuggestion.label, id: self.crypto.randomUUID()
                     });
-
                     saveStateToHistory();
                     selectedBboxIndex = bboxes.length - 1;
                     redrawCanvas();
                     renderBboxList();
-                    showToast(`Suggestion for '${acceptedSuggestion.label}' accepted!`, 2000);
+                    showToast(`Accepted suggestion.`, 2000);
                     return;
                 }
             }
 
             if ((isInteractiveMode || interactivePreviewBboxes.length > 0) && interactivePreviewBboxes.length > 0) {
-                if (!activeClass) {
-                    alert("Please select a class from the list to assign it.");
-                    return;
-                }
+                if (!activeClass) { alert("Select a class to assign."); return; }
                 const threshold = parseFloat($('#result-threshold').val());
                 const scaleX = frameImage.clientWidth / frameImage.naturalWidth;
                 const scaleY = frameImage.clientHeight / frameImage.naturalHeight;
                 let targetBoxIndex = -1;
-
                 const overlappingIndices = [];
                 interactivePreviewBboxes.forEach((res, index) => {
                     if (res.score >= threshold) {
@@ -1576,16 +1590,9 @@
                         targetBoxIndex = overlappingIndices[0];
                         lastClickPosForCycle = null;
                     }
-
                     const res = interactivePreviewBboxes[targetBoxIndex];
                     const b = res.box;
-                    bboxes.push({
-                        x1: b[0],
-                        y1: b[1],
-                        x2: b[2],
-                        y2: b[3],
-                        label: res.label || activeClass
-                    });
+                    bboxes.push({ x1: b[0], y1: b[1], x2: b[2], y2: b[3], label: res.label || activeClass });
                     interactivePreviewBboxes.splice(targetBoxIndex, 1);
                     saveStateToHistory();
                     renderBboxList();
@@ -1616,10 +1623,7 @@
             let clickedOnBoxIndex = -1;
             for (let i = bboxes.length - 1; i >= 0; i--) {
                 const box = bboxes[i];
-                const bx = box.x1 * scaleX,
-                    by = box.y1 * scaleY,
-                    bw = (box.x2 - box.x1) * scaleX,
-                    bh = (box.y2 - box.y1) * scaleY;
+                const bx = box.x1 * scaleX, by = box.y1 * scaleY, bw = (box.x2 - box.x1) * scaleX, bh = (box.y2 - box.y1) * scaleY;
                 if (pos.x > bx && pos.x < bx + bw && pos.y > by && pos.y < by + bh) {
                     clickedOnBoxIndex = i;
                     break;
@@ -1650,10 +1654,7 @@
 
         $(document).on('mousemove', function(e) {
             if (!$(e.target).closest('#canvas-container').length) {
-                if (hoveredPreviewIndex !== -1) {
-                    hoveredPreviewIndex = -1;
-                    redrawCanvas();
-                }
+                if (hoveredPreviewIndex !== -1) { hoveredPreviewIndex = -1; redrawCanvas(); }
                 $(drawingCanvas).removeClass((index, className) => (className.match(/\bcursor-\S+/g) || []).join(' '));
                 return;
             }
@@ -1710,8 +1711,7 @@
                     for (let i = 0; i < bboxes.length; i++) {
                         const box = bboxes[i];
                         if (pos.x > box.x1 * scaleX && pos.x < box.x2 * scaleX && pos.y > box.y1 * scaleY && pos.y < box.y2 * scaleY) {
-                            onBox = true;
-                            break;
+                            onBox = true; break;
                         }
                     }
                     if (onBox) $(drawingCanvas).addClass('cursor-move');
@@ -1727,15 +1727,11 @@
                         if (res.score >= threshold) {
                             const b = res.box;
                             if (pos.x > b[0] * scaleX && pos.x < b[2] * scaleX && pos.y > b[1] * scaleY && pos.y < b[3] * scaleY) {
-                                foundIndex = i;
-                                break;
+                                foundIndex = i; break;
                             }
                         }
                     }
-                    if (foundIndex !== hoveredPreviewIndex) {
-                        hoveredPreviewIndex = foundIndex;
-                        redrawCanvas();
-                    }
+                    if (foundIndex !== hoveredPreviewIndex) { hoveredPreviewIndex = foundIndex; redrawCanvas(); }
                 }
             }
         }).on('mouseup', function(e) {
@@ -1745,18 +1741,13 @@
                 let endX = Math.max(0, Math.min(pos.x, frameImage.clientWidth));
                 let endY = Math.max(0, Math.min(pos.y, frameImage.clientHeight));
 
-                if (Math.abs(startX - endX) < 5 || Math.abs(startY - endY) < 5) {
-                    redrawCanvas();
-                    return;
-                }
+                if (Math.abs(startX - endX) < 5 || Math.abs(startY - endY) < 5) { redrawCanvas(); return; }
 
                 const scaleX = frameImage.naturalWidth / frameImage.clientWidth;
                 const scaleY = frameImage.naturalHeight / frameImage.clientHeight;
                 const newBoxRaw = {
-                    x1: Math.round(Math.min(startX, endX) * scaleX),
-                    y1: Math.round(Math.min(startY, endY) * scaleY),
-                    x2: Math.round(Math.max(startX, endX) * scaleX),
-                    y2: Math.round(Math.max(startY, endY) * scaleY)
+                    x1: Math.round(Math.min(startX, endX) * scaleX), y1: Math.round(Math.min(startY, endY) * scaleY),
+                    x2: Math.round(Math.max(startX, endX) * scaleX), y2: Math.round(Math.max(startY, endY) * scaleY)
                 };
 
                 if (isInteractiveMode) {
@@ -1764,10 +1755,7 @@
                     redrawCanvas();
                     triggerFindSimilar();
                 } else if (activeClass) {
-                    const newBox = { ...newBoxRaw,
-                        label: activeClass,
-                        id: self.crypto.randomUUID()
-                    };
+                    const newBox = { ...newBoxRaw, label: activeClass, id: self.crypto.randomUUID() };
                     bboxes.push(newBox);
                     saveStateToHistory();
                     selectedBboxIndex = bboxes.length - 1;
@@ -1777,19 +1765,12 @@
 
             } else if (isDraggingBbox) {
                 let finalBox = bboxes[selectedBboxIndex];
-                finalBox.x1 = Math.round(finalBox.x1);
-                finalBox.y1 = Math.round(finalBox.y1);
-                finalBox.x2 = Math.round(finalBox.x2);
-                finalBox.y2 = Math.round(finalBox.y2);
-
+                finalBox.x1 = Math.round(finalBox.x1); finalBox.y1 = Math.round(finalBox.y1);
+                finalBox.x2 = Math.round(finalBox.x2); finalBox.y2 = Math.round(finalBox.y2);
                 if (finalBox.x1 > finalBox.x2) [finalBox.x1, finalBox.x2] = [finalBox.x2, finalBox.x1];
                 if (finalBox.y1 > finalBox.y2) [finalBox.y1, finalBox.y2] = [finalBox.y2, finalBox.y1];
-
                 saveStateToHistory();
-                isDraggingBbox = false;
-                editMode = null;
-                draggedHandle = null;
-                draggedBboxInitialState = null;
+                isDraggingBbox = false; editMode = null; draggedHandle = null; draggedBboxInitialState = null;
                 redrawCanvas();
             }
         });
@@ -1801,17 +1782,11 @@
 
         $('#add-class-btn').on('click', function() {
             const className = $('#new-class-name').val().trim();
-            if (className) {
-                addClass(className);
-                $('#new-class-name').val('');
-            }
+            if (className) { addClass(className); $('#new-class-name').val(''); }
         });
 
         $('#new-class-name').on("keydown", function(e) {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                $('#add-class-btn').click();
-            }
+            if (e.key === 'Enter') { e.preventDefault(); $('#add-class-btn').click(); }
         });
 
         $("#class-list").on("click", ".list-group-item", function() {
@@ -1836,45 +1811,17 @@
             renderBboxList();
         });
 
+        // --- 修改后的手动保存按钮 ---
         $("#save-bboxes").on("click", function() {
-            const frameNumber = frameSlider.val();
-            if (isReviewMode) {
-                trackedBboxCache[frameNumber] = formatBboxesToString();
-                showToast(`Frame ${frameNumber} updated in review cache.`, 1500);
-            } else {
-                $.ajax({
-                    url: "/storeVideoFrameBboxesText",
-                    type: "POST",
-                    contentType: "application/json",
-                    data: JSON.stringify({
-                        video_uuid: videoUuid,
-                        frame_number: frameNumber,
-                        bboxes_text: formatBboxesToString()
-                    }),
-                    success: function(response) {
-                        if (response.success) {
-                            showToast("Frame " + frameSlider.val() + " saved successfully!");
-                            window.cachedFrames = null;
-                            if (window.cachedFrames) {
-                                const frameData = window.cachedFrames.find(f => f.frame_number == frameNumber);
-                                if (frameData) frameData.suggested_bboxes_text = "";
-                            }
-                            suggestionBboxes = [];
-                            $('#suggestion-review-controls').slideUp();
-                            redrawCanvas();
-                        }
-                    },
-                    error: function() {
-                        showToast("Error: Failed to save bounding boxes.", 3000);
-                    }
-                });
-            }
+            const frameNumber = parseInt(frameSlider.val());
+            const dataStr = formatBboxesToString();
+            performSave(frameNumber, dataStr, false); // false = 显示提示
         });
 
         $('#rebuild-prototypes-btn').on('click', function() {
-            if (confirm('This will start a background task to update the AI prototypes for all classes based on the latest labels. This may take a moment. Continue?')) {
+            if (confirm('Rebuild AI prototypes for all classes?')) {
                 const $btn = $(this);
-                $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Rebuilding...');
+                $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> BUSY');
 
                 $.ajax({
                     url: '/api/rebuild_prototypes',
@@ -1882,19 +1829,11 @@
                     contentType: 'application/json',
                     data: JSON.stringify({}),
                     success: function(res) {
-                        if(res.success) {
-                            showToast(res.message, 4000);
-                        } else {
-                            showToast('Error: ' + res.message, 5000);
-                        }
+                        if(res.success) { showToast(res.message, 4000); } else { showToast('Error: ' + res.message, 5000); }
                     },
-                    error: function() {
-                        showToast('Error: Failed to start prototype rebuild task.', 5000);
-                    },
+                    error: function() { showToast('Error: Failed to start task.', 5000); },
                     complete: function() {
-                        setTimeout(() => {
-                            $btn.prop('disabled', false).html('<i class="bi bi-arrow-clockwise"></i> Rebuild AI Models');
-                        }, 2000);
+                        setTimeout(() => { $btn.prop('disabled', false).html('<i class="bi bi-cpu"></i> Rebuild AI'); }, 2000);
                     }
                 });
             }
@@ -1906,14 +1845,13 @@
             canvasContainer.toggleClass('lam-active', isLamModeActive);
 
             if (isLamModeActive) {
-                $(this).html('<i class="bi bi-bullseye"></i> LAM Mode ON');
+                $(this).html('<i class="bi bi-bullseye"></i> LAM ON').addClass('btn-primary').removeClass('btn-outline-primary');
                 if (isSamModeActive) $('#sam-toggle-btn').click();
                 if (isInteractiveMode) $('#interactive-mode-toggle').click();
-                showToast('LAM Mode Activated: Click an object to get class suggestions.', 3000);
-                // --- 修改：手动开启时立即触发预处理 ---
+                showToast('LAM ACTIVE: Click object.', 3000);
                 triggerBackgroundPreprocess(frameSlider.val());
             } else {
-                $(this).html('<i class="bi bi-bullseye"></i> Enable LAM (Click to Label)');
+                $(this).html('<i class="bi bi-fonts"></i> LAM Text').removeClass('btn-primary').addClass('btn-outline-primary');
                 $('#lam-suggestion-popup').remove();
             }
         });
@@ -1929,129 +1867,53 @@
             }
         });
 
+        // --- 修改后的 Video Tracking 按钮逻辑 ---
         $('#sam2-track-btn').on('click', function() {
-            if (bboxes.length === 0) {
-                alert("Please label at least one object on the current frame to start tracking.");
-                return;
-            }
+            // 1. 检查是否有标注
+            if (bboxes.length === 0) { alert("Label at least one object first."); return; }
+
+            // --- 强制保存当前帧 ---
+            const currentFrame = frameSlider.val();
+            const currentBboxes = formatBboxesToString();
+
+            $.ajax({
+                url: "/storeVideoFrameBboxesText",
+                type: "POST",
+                contentType: "application/json",
+                async: false, // 强制同步
+                data: JSON.stringify({ video_uuid: videoUuid, frame_number: parseInt(currentFrame), bboxes_text: currentBboxes })
+            });
+            // ---------------------
+
             const startFrame = parseInt(frameSlider.val());
-            const maxFrame = parseInt(frameSlider.attr("max"));
-            $('#batch-end-frame').val(maxFrame).attr('min', startFrame + 1).attr('max', maxFrame);
-            $('#tracking-options-modal').modal('show');
-        });
+            const endFrame = parseInt(frameSlider.attr("max"));
+            const initBboxesText = formatBboxesToString(); // 获取刚刚保存的数据
 
-        $('input[name="tracking-mode"]').on('change', function() {
-            $('#batch-mode-options').toggle($(this).val() === 'batch');
-        });
+            if (confirm(`Start SAM2 tracking from frame ${startFrame} to ${endFrame}?`)) {
+                $(this).prop("disabled", true);
+                setTrackingUiState(true);
+                trackedBboxCache = {};
+                trackedBboxCache[startFrame] = initBboxesText;
 
-        $('#confirm-tracking-start').on('click', function() {
-            const mode = $('input[name="tracking-mode"]:checked').val();
-            const startFrame = parseInt(frameSlider.val());
-            const initBboxesText = formatBboxesToString();
-
-            $('#tracking-options-modal').modal('hide');
-            $(this).prop("disabled", true);
-            setTrackingUiState(true);
-            trackedBboxCache = {};
-            trackedBboxCache[startFrame] = initBboxesText;
-
-            if (mode === 'interactive') {
-                const endFrame = parseInt(frameSlider.attr("max"));
-                startInteractiveTracking(startFrame, endFrame, initBboxesText);
-            } else {
-                const endFrameBatch = parseInt($('#batch-end-frame').val());
-                if (endFrameBatch <= startFrame) {
-                    alert("End frame must be after the start frame.");
-                    exitReviewMode();
-                    return;
-                }
-                $("#track-status-header").text("Batch Tracking Initializing...");
-                startBatchTracking(startFrame, endFrameBatch, initBboxesText);
+                startTrackingSequence(startFrame, endFrame, initBboxesText);
             }
         });
 
-        function startInteractiveTracking(startFrame, endFrame, initBboxesText) {
+        function startTrackingSequence(startFrame, endFrame, initBboxesText) {
              $.ajax({
                 url: "/startSam2Tracking",
                 type: "POST",
                 contentType: "application/json",
-                data: JSON.stringify({
-                    video_uuid: videoUuid,
-                    start_frame: startFrame,
-                    end_frame: endFrame,
-                    init_bboxes_text: initBboxesText
-                }),
+                data: JSON.stringify({ video_uuid: videoUuid, start_frame: startFrame, end_frame: endFrame, init_bboxes_text: initBboxesText }),
                 success: (res) => {
                     if (res.success) {
                         sam2TrackerUuid = res.tracker_uuid;
                         sam2EventSource = new EventSource(`/streamSam2Tracking/${sam2TrackerUuid}`);
-                        sam2EventSource.onmessage = function(event) {
-                            const data = JSON.parse(event.data);
-                            handleSseEvent(data);
-                        };
-                        sam2EventSource.onerror = function(err) {
-                            showToast("Connection to tracking stream lost.", 3000);
-                            handleTrackingEnd("FAILED", "Connection lost");
-                            if (sam2EventSource) sam2EventSource.close();
-                        };
-                    } else {
-                        alert("Error starting interactive tracking: " + res.message);
-                        exitReviewMode();
-                    }
+                        sam2EventSource.onmessage = function(event) { handleSseEvent(JSON.parse(event.data)); };
+                        sam2EventSource.onerror = function(err) { showToast("Connection lost.", 3000); handleTrackingEnd("FAILED", "Connection lost"); if (sam2EventSource) sam2EventSource.close(); };
+                    } else { alert("Error: " + res.message); exitReviewMode(); }
                 },
-                error: () => {
-                    alert("Server error starting interactive tracking.");
-                    exitReviewMode();
-                }
-            });
-        }
-        function triggerBackgroundPreprocess(frameNumber) {
-            if (isReviewMode) {
-                return;
-            }
-            $.ajax({
-                url: "/api/background_preprocess_frame",
-                type: "POST",
-                contentType: "application/json",
-                data: JSON.stringify({
-                    video_uuid: videoUuid,
-                    frame_number: parseInt(frameNumber)
-                }),
-            });
-        }
-        function startBatchTracking(startFrame, endFrame, initBboxesText) {
-             $.ajax({
-                url: "/startSam2BatchTracking",
-                type: "POST",
-                contentType: "application/json",
-                data: JSON.stringify({
-                    video_uuid: videoUuid,
-                    start_frame: startFrame,
-                    end_frame: endFrame,
-                    init_bboxes_text: initBboxesText
-                }),
-                success: (res) => {
-                    if (res.success) {
-                        sam2TrackerUuid = res.tracker_uuid;
-                        sam2EventSource = new EventSource(`/streamSam2Tracking/${sam2TrackerUuid}`);
-                        sam2EventSource.onmessage = function(event) {
-                            const data = JSON.parse(event.data);
-                            handleSseEvent(data);
-                        };
-                         sam2EventSource.onerror = function(err) {
-                            showToast("Connection to tracking stream lost.", 3000);
-                            handleTrackingEnd("FAILED", "Connection lost");
-                            if (sam2EventSource) sam2EventSource.close();
-                        };
-                    } else {
-                        alert("Error starting batch tracking: " + res.message);
-                        exitReviewMode();
-                    }
-                },
-                error: () => {
-                    alert("Server error starting batch tracking.");
-                    exitReviewMode();
-                }
+                error: () => { alert("Server error."); exitReviewMode(); }
             });
         }
 
@@ -2062,9 +1924,7 @@
                     url: "/stopSam2Tracking",
                     type: "POST",
                     contentType: "application/json",
-                    data: JSON.stringify({
-                        tracker_uuid: sam2TrackerUuid
-                    })
+                    data: JSON.stringify({ tracker_uuid: sam2TrackerUuid })
                 });
             }
         });
@@ -2073,27 +1933,21 @@
 
         $('#save-all-tracked-btn').on('click', function() {
             const frameCount = Object.keys(trackedBboxCache).length;
-            if (confirm(`This will save all ${frameCount} reviewed annotations to the database. Are you sure?`)) {
+            if (confirm(`Save ${frameCount} reviewed frames?`)) {
                 const savePromises = Object.entries(trackedBboxCache).map(([frame_number, bboxes_text]) =>
                     $.ajax({
                         url: "/storeVideoFrameBboxesText",
                         type: "POST",
                         contentType: "application/json",
-                        data: JSON.stringify({
-                            video_uuid: videoUuid,
-                            frame_number: parseInt(frame_number),
-                            bboxes_text: bboxes_text
-                        })
+                        data: JSON.stringify({ video_uuid: videoUuid, frame_number: parseInt(frame_number), bboxes_text: bboxes_text })
                     })
                 );
                 showToast(`Saving ${savePromises.length} frames...`, 5000);
                 Promise.all(savePromises).then(() => {
-                    showToast("All tracked frames saved successfully!", 3000);
+                    showToast("Tracking saved!", 3000);
                     window.cachedFrames = null;
                     exitReviewMode();
-                }).catch(err => {
-                    alert("An error occurred while saving some frames.");
-                });
+                }).catch(err => { alert("Save error."); });
             }
         });
 
@@ -2103,29 +1957,17 @@
             const clickedBox = bboxes[boxIndex];
             const currentFrame = parseInt(frameSlider.val());
 
-            if (!clickedBox.id) {
-                showToast("Error: This object has no ID. Please save first.", 3000);
-                return;
-            }
+            if (!clickedBox.id) { showToast("Object needs ID. Save first.", 3000); return; }
 
             if (!interpolationState.isActive) {
                 interpolationState.isActive = true;
                 interpolationState.objectId = clickedBox.id;
-                interpolationState.startFrameData = {
-                    frame_number: currentFrame,
-                    bbox: JSON.parse(JSON.stringify(clickedBox))
-                };
+                interpolationState.startFrameData = { frame_number: currentFrame, bbox: JSON.parse(JSON.stringify(clickedBox)) };
                 $('#interpolation-banner').slideDown();
-                showToast(`Keyframe 1 set for object ${clickedBox.id.substring(0,4)}. Go to another frame, adjust the box, and click the green 'Confirm' button.`, 5000);
+                showToast(`Keyframe 1 set. Move to target frame.`, 5000);
             } else if (interpolationState.objectId === clickedBox.id) {
-                if (currentFrame === interpolationState.startFrameData.frame_number) {
-                    showToast("You are on the same frame. Move to a different frame to set the second keyframe.", 3000);
-                    return;
-                }
-                const endFrameData = {
-                    frame_number: currentFrame,
-                    bbox: JSON.parse(JSON.stringify(clickedBox))
-                };
+                if (currentFrame === interpolationState.startFrameData.frame_number) { showToast("Move to different frame.", 3000); return; }
+                const endFrameData = { frame_number: currentFrame, bbox: JSON.parse(JSON.stringify(clickedBox)) };
                 const $btn = $(this);
                 $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span>');
 
@@ -2133,31 +1975,15 @@
                     url: "/api/interpolateBboxes",
                     type: "POST",
                     contentType: "application/json",
-                    data: JSON.stringify({
-                        video_uuid: videoUuid,
-                        object_id: interpolationState.objectId,
-                        start_frame: interpolationState.startFrameData,
-                        end_frame: endFrameData
-                    }),
+                    data: JSON.stringify({ video_uuid: videoUuid, object_id: interpolationState.objectId, start_frame: interpolationState.startFrameData, end_frame: endFrameData }),
                     success: function(response) {
-                        if (response.success) {
-                            showToast(response.message, 4000);
-                            window.cachedFrames = null;
-                        } else {
-                            showToast("Error: " + response.message, 5000);
-                        }
+                        if (response.success) { showToast(response.message, 4000); window.cachedFrames = null; } else { showToast("Error: " + response.message, 5000); }
                     },
-                    error: function() {
-                        showToast("Server error during interpolation.", 5000);
-                    },
+                    error: function() { showToast("Interpolation error.", 5000); },
                     complete: function() {
                         const nextFrame = Math.min(parseInt(interpolationState.startFrameData.frame_number), parseInt(endFrameData.frame_number)) + 1;
                         resetInterpolationState(false);
-                        if (nextFrame < frameCount && nextFrame > 0) {
-                            frameSlider.val(nextFrame).trigger("input");
-                        } else {
-                            frameSlider.trigger("input");
-                        }
+                        if (nextFrame < frameCount && nextFrame > 0) { frameSlider.val(nextFrame).trigger("input"); } else { frameSlider.trigger("input"); }
                     }
                 });
             }
@@ -2170,13 +1996,12 @@
             $(this).toggleClass('active', isInteractiveMode);
             $('#interactive-segment-controls').slideToggle(isInteractiveMode);
             if (isInteractiveMode) {
-                $(this).html('<i class="bi bi-stars"></i> Smart Select ON');
+                $(this).html('<i class="bi bi-crosshair"></i> SMART SELECT ON').addClass('btn-info').removeClass('btn-outline-info');
                 if(isLamModeActive) $('#lam-toggle-btn').click();
                 clearCrosshairs();
-                // --- 修改：手动开启时立即触发预处理 ---
                 triggerBackgroundPreprocess(frameSlider.val());
             } else {
-                $(this).html('<i class="bi bi-stars"></i> Enable Smart Select');
+                $(this).html('<i class="bi bi-crosshair"></i> Smart Select').removeClass('btn-info').addClass('btn-outline-info');
                 clearInteractiveSession();
             }
             updateSamButtonText();
@@ -2184,29 +2009,20 @@
 
         $('#clear-samples-btn').on('click', function() {
             clearInteractiveSession();
-            showToast('Sample box and previews cleared.', 2000);
+            showToast('Signal cleared.', 2000);
         });
 
         $('#find-from-dataset-btn').on('click', function() {
-            if (!activeClass) {
-                alert('Please select a class first!');
-                return;
-            }
+            if (!activeClass) { alert('Select class first!'); return; }
             const frameNumber = parseInt(frameSlider.val());
             const $button = $(this);
-            // NEW: Get color checkbox state
             const useColor = $('#dataset-find-use-color').is(':checked');
 
             $button.prop('disabled', true);
-            showToast(useColor ? `Learning '${activeClass}' (Shape + Color)...` : `Learning '${activeClass}'...`, 10000);
+            showToast(useColor ? `Querying '${activeClass}' (Color+Shape)...` : `Querying '${activeClass}'...`, 10000);
             lastDatasetClassName = activeClass;
 
-            const payload = { 
-                video_uuid: videoUuid, 
-                frame_number: frameNumber, 
-                class_name: activeClass,
-                use_color: useColor // NEW: Send to backend
-            };
+            const payload = { video_uuid: videoUuid, frame_number: frameNumber, class_name: activeClass, use_color: useColor };
 
             $.ajax({
                 url: '/interactive_segment/predict_from_dataset',
@@ -2219,18 +2035,13 @@
                         $('#interactive-results-controls').slideDown();
                         $('#result-threshold').trigger('input');
                         redrawCanvas();
-                        showToast(`Found ${res.results.length} potential '${activeClass}' objects.`, 4000);
-
+                        showToast(`Found ${res.results.length} entities.`, 4000);
                         setTimeout(() => {
-                           if (confirm(`Preview successful.\n\nDo you want to apply the '${activeClass}' model to all unlabeled frames in this video?`)) {
-                               startNegativeSampling(10);
-                           }
+                           if (confirm(`Entities detected. Apply '${activeClass}' model to unlabeled frames?`)) { startNegativeSampling(10); }
                         }, 500);
-                    } else {
-                        alert('Dataset-driven prediction failed: ' + res.message);
-                    }
+                    } else { alert('Prediction failed: ' + res.message); }
                 },
-                error: function() { alert('Server error during dataset-driven prediction.'); },
+                error: function() { alert('Server error.'); },
                 complete: function() { $button.prop('disabled', false); }
             });
         });
@@ -2238,8 +2049,7 @@
         $('#neg-canvas-container').on('mousedown', function(e) {
             isDrawingNeg = true;
             const pos = getMousePos(negCanvas, e);
-            negStartX = pos.x;
-            negStartY = pos.y;
+            negStartX = pos.x; negStartY = pos.y;
         }).on('mousemove', function(e) {
             if (!isDrawingNeg) return;
             redrawNegCanvas();
@@ -2261,15 +2071,10 @@
             const x2 = Math.round(Math.max(negStartX, pos.x) * scaleX);
             const y2 = Math.round(Math.max(negStartY, pos.y) * scaleY);
 
-            if (Math.abs(x1 - x2) < 5 || Math.abs(y1 - y2) < 5) {
-                redrawNegCanvas();
-                return;
-            }
+            if (Math.abs(x1 - x2) < 5 || Math.abs(y1 - y2) < 5) { redrawNegCanvas(); return; }
             const frameData = negSamplingFrames[currentNegSampleIndex];
             const frameKey = `${frameData.video_uuid};${frameData.frame_number}`;
-            if (!negativeSamplesStore[frameKey]) {
-                negativeSamplesStore[frameKey] = [];
-            }
+            if (!negativeSamplesStore[frameKey]) negativeSamplesStore[frameKey] = [];
             negativeSamplesStore[frameKey].push([x1, y1, x2, y2]);
             redrawNegCanvas();
         });
@@ -2279,26 +2084,17 @@
 
         $('#finish-neg-sampling-btn').on('click', function() {
             $('#negative-sampling-modal').modal('hide');
-
-            const finalNegativeSamples = Object.fromEntries(
-                Object.entries(negativeSamplesStore).filter(([key, value]) => value.length > 0)
-            );
-
-            const message = Object.keys(finalNegativeSamples).length > 0
-                ? `Refining model with ${Object.keys(finalNegativeSamples).length} frames of negative samples.`
-                : "No negative samples were added. Applying original model.";
+            const finalNegativeSamples = Object.fromEntries(Object.entries(negativeSamplesStore).filter(([key, value]) => value.length > 0));
+            const message = Object.keys(finalNegativeSamples).length > 0 ? `Refining with ${Object.keys(finalNegativeSamples).length} negative samples.` : "No negative samples. Using base model.";
             showToast(message);
-
             triggerApplyToVideo(finalNegativeSamples);
         });
 
         $('#result-threshold').on('input', function() {
             const value = parseFloat($(this).val());
             $('#threshold-value').text(value.toFixed(2));
-
             const currentFrame = frameSlider.val();
             frameConfidence[currentFrame] = value;
-
             redrawCanvas();
         });
 
@@ -2310,34 +2106,20 @@
 
         $('#accept-all-suggestions-btn').on('click', function() {
             if (suggestionBboxes.length === 0) return;
-
             const threshold = parseFloat($('#suggestion-threshold').val());
             let acceptedCount = 0;
             const remainingSuggestions = [];
-
             suggestionBboxes.forEach(sug => {
                 if (sug.score >= threshold) {
-                    bboxes.push({
-                        x1: sug.box[0], y1: sug.box[1], x2: sug.box[2], y2: sug.box[3],
-                        label: sug.label,
-                        id: self.crypto.randomUUID()
-                    });
+                    bboxes.push({ x1: sug.box[0], y1: sug.box[1], x2: sug.box[2], y2: sug.box[3], label: sug.label, id: self.crypto.randomUUID() });
                     acceptedCount++;
-                } else {
-                    remainingSuggestions.push(sug);
-                }
+                } else { remainingSuggestions.push(sug); }
             });
-
             if (acceptedCount > 0) {
                 suggestionBboxes = remainingSuggestions;
-                saveStateToHistory();
-                selectedBboxIndex = -1;
-                redrawCanvas();
-                renderBboxList();
-                showToast(`Accepted ${acceptedCount} visible suggestions.`, 2000);
-            } else {
-                showToast('No visible suggestions to accept.', 2000);
-            }
+                saveStateToHistory(); selectedBboxIndex = -1; redrawCanvas(); renderBboxList();
+                showToast(`Accepted ${acceptedCount} suggestions.`, 2000);
+            } else { showToast('No suggestions visible.', 2000); }
         });
 
         $('#apply-confidence-threshold').on('input', function() {
@@ -2345,171 +2127,89 @@
         });
 
         $('#accept-visible-btn').on('click', function() {
-            if (!activeClass) {
-                alert('Please select a class before accepting results.');
-                return
-            }
+            if (!activeClass) { alert('Select class first.'); return }
             const threshold = parseFloat($('#result-threshold').val());
             let addedCount = 0;
             const remainingPreviews = [];
             interactivePreviewBboxes.forEach(res => {
                 if (res.score >= threshold) {
                     const b = res.box;
-                    bboxes.push({
-                        x1: b[0],
-                        y1: b[1],
-                        x2: b[2],
-                        y2: b[3],
-                        label: res.label || activeClass
-                    });
+                    bboxes.push({ x1: b[0], y1: b[1], x2: b[2], y2: b[3], label: res.label || activeClass });
                     addedCount++;
-                } else {
-                    remainingPreviews.push(res);
-                }
+                } else { remainingPreviews.push(res); }
             });
             if (addedCount > 0) {
                 interactivePreviewBboxes = remainingPreviews;
-                saveStateToHistory();
-                renderBboxList();
-                redrawCanvas();
-                showToast(`${addedCount} new bounding boxes added.`, 2000);
-            } else {
-                showToast('No boxes above the current threshold to accept.', 2000);
-            }
+                saveStateToHistory(); renderBboxList(); redrawCanvas();
+                showToast(`${addedCount} entities added.`, 2000);
+            } else { showToast('No visible entities.', 2000); }
         });
 
         $('#finish-interactive-btn').on('click', clearInteractiveSession);
 
         $(document).on("keydown", function(e) {
             if ($(e.target).is("input, textarea")) return;
-
             const isNegModalVisible = $('#negative-sampling-modal').is(':visible');
             const key = e.key.toLowerCase();
 
-            if (key === 'c') {
-                e.preventDefault();
-                isCKeyPressed = true;
-            }
+            if (key === 'c') { e.preventDefault(); isCKeyPressed = true; }
 
             if (e.ctrlKey && key === "z") {
                 e.preventDefault();
-                if (isNegModalVisible) {
-                    undoNegativeSample();
-                } else {
-                    undo();
-                }
+                if (isNegModalVisible) { undoNegativeSample(); } else { undo(); }
             } else if (e.ctrlKey && (key === "y" || (e.shiftKey && key === "z"))) {
-                if (!isNegModalVisible) {
-                    e.preventDefault();
-                    redo();
-                }
+                if (!isNegModalVisible) { e.preventDefault(); redo(); }
             } else if (e.key === "Delete" || e.key === "Backspace") {
                 e.preventDefault();
-                if (isNegModalVisible) {
-                    clearCurrentNegativeSamples();
-                } else if (selectedBboxIndex !== -1) {
-                    bboxes.splice(selectedBboxIndex, 1);
-                    saveStateToHistory();
-                    selectedBboxIndex = -1;
-                    redrawCanvas();
-                    renderBboxList();
-                }
+                if (isNegModalVisible) { clearCurrentNegativeSamples(); }
+                else if (selectedBboxIndex !== -1) { bboxes.splice(selectedBboxIndex, 1); saveStateToHistory(); selectedBboxIndex = -1; redrawCanvas(); renderBboxList(); }
             } else if (e.key === "Escape") {
                 e.preventDefault();
-                if (interpolationState.isActive) {
-                    resetInterpolationState(true);
-                    showToast("插值操作已取消。", 2000);
-                }
-                if (repeatMode.isActive) {
-                    repeatMode.isActive = false;
-                    showToast("重复标注模式已关闭。", 2000);
-                    canvasContainer.css('cursor', 'crosshair');
-                }
+                if (interpolationState.isActive) { resetInterpolationState(true); showToast("Interpolation aborted.", 2000); }
+                if (repeatMode.isActive) { repeatMode.isActive = false; showToast("Repeat mode off.", 2000); canvasContainer.css('cursor', 'crosshair'); }
             } else {
                 switch (key) {
                     case "r":
                         e.preventDefault();
                         if (repeatMode.isActive) {
-                            repeatMode.isActive = false;
-                            showToast("重复标注模式已关闭。", 2000);
-                            canvasContainer.css('cursor', 'crosshair');
+                            repeatMode.isActive = false; showToast("Repeat mode off.", 2000); canvasContainer.css('cursor', 'crosshair');
                         } else if (selectedBboxIndex !== -1) {
                             const sourceBox = bboxes[selectedBboxIndex];
-                            repeatMode = {
-                                isActive: true,
-                                width: sourceBox.x2 - sourceBox.x1,
-                                height: sourceBox.y2 - sourceBox.y1,
-                                label: sourceBox.label
-                            };
-                            showToast(`重复模式已激活: ${repeatMode.label} (${repeatMode.width}x${repeatMode.height})`, 3000);
-                            canvasContainer.css('cursor', 'copy');
+                            repeatMode = { isActive: true, width: sourceBox.x2 - sourceBox.x1, height: sourceBox.y2 - sourceBox.y1, label: sourceBox.label };
+                            showToast(`Repeat mode: ${repeatMode.label}`, 3000); canvasContainer.css('cursor', 'copy');
                         } else if (bboxes.length > 0) {
                             const sourceBox = bboxes[bboxes.length - 1];
-                            repeatMode = {
-                                isActive: true,
-                                width: sourceBox.x2 - sourceBox.x1,
-                                height: sourceBox.y2 - sourceBox.y1,
-                                label: sourceBox.label
-                            };
-                            showToast(`重复模式已激活 (基于最后一个框): ${repeatMode.label} (${repeatMode.width}x${repeatMode.height})`, 3000);
-                            canvasContainer.css('cursor', 'copy');
-                        } else {
-                            showToast("请先创建或选中一个标注框以激活重复模式。", 3000);
-                        }
+                            repeatMode = { isActive: true, width: sourceBox.x2 - sourceBox.x1, height: sourceBox.y2 - sourceBox.y1, label: sourceBox.label };
+                            showToast(`Repeat mode (last): ${repeatMode.label}`, 3000); canvasContainer.css('cursor', 'copy');
+                        } else { showToast("Select box to repeat.", 3000); }
                         break;
-                    case "s":
-                        if (!isNegModalVisible) {
-                            e.preventDefault();
-                            $("#save-bboxes").click();
-                        }
-                        break;
+                    case "s": if (!isNegModalVisible) { e.preventDefault(); $("#save-bboxes").click(); } break;
                     case "a":
                         e.preventDefault();
-                        if (isNegModalVisible) {
-                            $('#neg-prev-btn').click();
-                        } else {
-                            let prevFrame = parseInt(frameSlider.val()) - 1;
-                            if (prevFrame >= task.start_frame) {
-                                frameSlider.val(prevFrame).trigger("input");
-                            }
-                        }
+                        if (isNegModalVisible) { $('#neg-prev-btn').click(); }
+                        else { let prevFrame = parseInt(frameSlider.val()) - 1; if (prevFrame >= task.start_frame) frameSlider.val(prevFrame).trigger("input"); }
                         break;
                     case "d":
                         e.preventDefault();
-                        if (isNegModalVisible) {
-                            $('#neg-next-btn').click();
-                        } else {
-                            let nextFrame = parseInt(frameSlider.val()) + 1;
-                            if (nextFrame < frameCount) {
-                                frameSlider.val(nextFrame).trigger("input");
-                            }
-                        }
+                        if (isNegModalVisible) { $('#neg-next-btn').click(); }
+                        else { let nextFrame = parseInt(frameSlider.val()) + 1; if (nextFrame < frameCount) frameSlider.val(nextFrame).trigger("input"); }
                         break;
                 }
             }
         }).on("keyup", function(e) {
-            if (e.key.toLowerCase() === 'c') {
-                isCKeyPressed = false;
-            }
+            if (e.key.toLowerCase() === 'c') isCKeyPressed = false;
         });
 
         function performInitialLoad() {
             $.get('/listClasses', function(response) {
                 if (response.success) {
-                    response.labels.forEach(label => {
-                        if (!availableClasses.includes(label)) {
-                            availableClasses.push(label);
-                        }
-                    });
+                    response.labels.forEach(label => { if (!availableClasses.includes(label)) availableClasses.push(label); });
                     renderClassList();
-
                     const urlParams = new URLSearchParams(window.location.search);
                     const frameFromUrl = urlParams.get('frame');
                     if (frameFromUrl) {
                         const frameNumber = parseInt(frameFromUrl);
-                        if (frameNumber >= parseInt(frameSlider.attr('min')) && frameNumber <= parseInt(frameSlider.attr('max'))) {
-                            frameSlider.val(frameNumber);
-                        }
+                        if (frameNumber >= parseInt(frameSlider.attr('min')) && frameNumber <= parseInt(frameSlider.attr('max'))) frameSlider.val(frameNumber);
                     }
                     resizeCanvas();
                     frameSlider.trigger('input');
@@ -2517,25 +2217,11 @@
             });
         }
         
-        $('#negative-sampling-modal').on('shown.bs.modal', function () {
-            resizeNegCanvas();
-        });
-        
-        $(window).on('resize', function() {
-            if ($('#negative-sampling-modal').is(':visible')) {
-                resizeNegCanvas();
-            }
-        });
+        $('#negative-sampling-modal').on('shown.bs.modal', function () { resizeNegCanvas(); });
+        $(window).on('resize', function() { if ($('#negative-sampling-modal').is(':visible')) resizeNegCanvas(); });
 
-        if (window.cachedFrames) {
-            delete window.cachedFrames;
-        }
-
-        if (frameImage.complete && frameImage.naturalWidth > 0) {
-            performInitialLoad();
-        } else {
-            $(frameImage).one('load', performInitialLoad);
-        }
+        if (window.cachedFrames) delete window.cachedFrames;
+        if (frameImage.complete && frameImage.naturalWidth > 0) { performInitialLoad(); } else { $(frameImage).one('load', performInitialLoad); }
     });
 </script>
 {% endblock %}

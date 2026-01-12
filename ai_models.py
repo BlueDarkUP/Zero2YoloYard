@@ -303,45 +303,57 @@ def get_features_for_all_masks(video_uuid, frame_number):
     DEVICE = settings_manager.get_device()
     cache_key = f"{video_uuid}_{frame_number}"
 
+    # 1. 检查一级缓存
     if cache_key in PREPROCESSED_DATA_CACHE:
         return PREPROCESSED_DATA_CACHE[cache_key]
 
     with AI_MODEL_LOCK:
+        # 2. 检查二级缓存 (防止并发重复计算)
         if cache_key in PREPROCESSED_DATA_CACHE:
             return PREPROCESSED_DATA_CACHE[cache_key]
 
         with torch.no_grad(), torch.amp.autocast(device_type=DEVICE.type, enabled=(DEVICE.type == 'cuda')):
-            logging.info(f"正在为 {cache_key} 开始新的预处理...")
+            logging.info(f"正在为 {cache_key} 开始新的预处理 (SAM2)...")
+
             frame_path = file_storage.get_frame_path(video_uuid, frame_number)
             if not os.path.exists(frame_path):
                 raise FileNotFoundError(f"帧图像文件未找到于 {frame_path}")
 
-            sam_model = sam_tasks.get_sam_model()
-            if not sam_model:
-                raise RuntimeError("SAM model not loaded.")
+            # === 核心修改：调用 SAM2 的自动掩码生成器 ===
+            # generate_masks_for_frame 已经处理了推理、NMS (由SAM2内部处理) 和 Tensor 转换
+            # 返回: (boxes_tensor[N,4], masks_tensor[N,1,H,W])，都在目标 DEVICE 上
+            all_boxes, all_masks = sam_tasks.generate_masks_for_frame(video_uuid, frame_number)
 
-            settings = settings_manager.load_settings()
-            results = sam_model(frame_path, verbose=False, conf=settings.get('sam_mask_confidence', 0.35))
-            all_boxes, all_masks = postprocess_sam_results(results,
-                                                           nms_iou_threshold=settings.get('nms_iou_threshold', 0.7))
-
-            if len(all_masks) == 0:
-                cached_data = {"all_boxes": torch.empty(0, 4, device=DEVICE),
-                               "all_features": torch.empty(0, 1, device=DEVICE)}
+            # 处理未检测到对象的情况
+            if all_boxes is None or len(all_boxes) == 0:
+                cached_data = {
+                    "all_boxes": torch.empty(0, 4, device=DEVICE),
+                    "all_features": torch.empty(0, 1, device=DEVICE)
+                }
                 PREPROCESSED_DATA_CACHE[cache_key] = cached_data
                 return cached_data
 
-            pil_image = Image.open(frame_path).convert("RGB")
+            # 3. 提取语义特征 (使用 MobileNet)
+            # MobileNet 需要 PIL Image
+            try:
+                pil_image = Image.open(frame_path).convert("RGB")
+            except Exception as e:
+                logging.error(f"无法打开图像进行特征提取: {e}")
+                return None
 
+            # get_features_for_single_bbox 需要 numpy 数组格式的 boxes
             all_features = get_features_for_single_bbox(pil_image, all_boxes.cpu().numpy())
 
             if all_features is None:
                 raise RuntimeError(f"为 {cache_key} 提取特征时返回了 None。")
 
+            # 4. 存入缓存
             cached_data = {"all_boxes": all_boxes, "all_features": all_features}
             PREPROCESSED_DATA_CACHE[cache_key] = cached_data
-            logging.info(f"为 {cache_key} 的预处理完成并已缓存。")
+            logging.info(f"为 {cache_key} 的预处理完成并已缓存 (SAM2 + MobileNet)。")
 
+            # 5. 触发后台保存 (如果间隔时间到了)
+            settings = settings_manager.load_settings()
             cache_save_interval = settings.get('cache_save_interval_seconds', 30)
             if time.time() - _last_cache_save_time > cache_save_interval:
                 threading.Thread(target=save_preprocessed_cache_to_disk).start()
@@ -799,23 +811,28 @@ def get_all_prototypes():
 def lam_predict(video_uuid, frame_number, point_coords):
     with AI_MODEL_LOCK:
         frame_path = file_storage.get_frame_path(video_uuid, frame_number)
-        sam_model = sam_tasks.get_sam_model()
-        if not sam_model:
-            raise RuntimeError("SAM 模型不可用。")
 
-        results = sam_model(frame_path, points=[point_coords], labels=[1], verbose=False)
-        if not results or not results[0].boxes or results[0].boxes.xyxy.numel() == 0:
+        # 1. 使用新的 SAM2 封装函数进行单点预测
+        # point_coords 是 (x, y) 元组
+        bbox_dict = sam_tasks.predict_box_from_point_ultralytics(frame_path, point_coords)
+
+        if not bbox_dict:
             return None, "SAM 未在指定点找到对象。"
 
-        box_tensor = results[0].boxes.xyxy[0]
-        bbox_coords = box_tensor.cpu().numpy()
-        bbox_dict = {'x1': int(bbox_coords[0]), 'y1': int(bbox_coords[1]), 'x2': int(bbox_coords[2]),
-                     'y2': int(bbox_coords[3])}
+        # bbox_dict 格式: {'x1': ..., 'y1': ..., 'x2': ..., 'y2': ...}
 
-        feature_vector = get_features_for_specific_bboxes(video_uuid, frame_number, [bbox_coords])
+        # 2. 准备数据进行特征提取 (Feature Extractor 需要 [x1, y1, x2, y2] 列表格式)
+        bbox_coords_list = [
+            bbox_dict['x1'], bbox_dict['y1'],
+            bbox_dict['x2'], bbox_dict['y2']
+        ]
+
+        feature_vector = get_features_for_specific_bboxes(video_uuid, frame_number, [bbox_coords_list])
+
         if feature_vector is None or feature_vector.numel() == 0:
             return None, "无法为 SAM 找到的物体提取特征。"
 
+        # 3. 计算相似度 (保持原有逻辑)
         prototype_library = get_all_prototypes()
         if not prototype_library:
             return {"bbox": bbox_dict, "suggestions": []}, None

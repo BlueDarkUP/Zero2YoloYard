@@ -6,26 +6,26 @@ import torch
 
 SETTINGS_FILE = os.path.join(config.BASE_DIR, 'settings.json')
 DEFAULT_SETTINGS = {
-    "sam_model_name": "SAM 2.1 Tiny",
-    "sam_model_checkpoint": "sam2.1_t.pt",
+    # 指向 sam2 仓库里的 config 文件路径 (相对路径或绝对路径)
+    # 注意：确保你的项目中能找到 configs/sam2.1/sam2.1_hiera_l.yaml
+    "sam_model_config": "configs/sam2.1/sam2.1_hiera_l.yaml",
+    "sam_model_checkpoint": "sam2.1_hiera_large.pt",
+
     "feature_extractor_model_name": "mobilenet_v3_large",
     "gpu_device": "auto",
 
-    "sam_mask_confidence": 0.35,
-    "nms_iou_threshold": 0.7,
+    # SAM2 自动掩码生成的参数
+    "sam_mask_confidence": 0.70,  # pred_iou_thresh
+    "nms_iou_threshold": 0.7,  # stability_score_thresh
+
+    # 原型与追踪参数
     "prototype_temperature": 0.07,
     "prototype_sample_limit": 50,
-
-    "batch_tracking_imgsz": 1024,
-    "batch_tracking_conf": 0.30,
-    "batch_tracking_chunk_size": 10,
-
     "default_preannotation_conf": 0.5,
     "default_opencv_tracker": "CSRT",
     "frame_extraction_jpeg_quality": 75,
     "default_annotation_mode": "manual",
     "autosave_enabled": False,
-
     "cache_save_interval_seconds": 30,
     "class_colors": {}
 }

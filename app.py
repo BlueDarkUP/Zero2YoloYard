@@ -25,7 +25,8 @@ import ai_models
 from bbox_writer import validate_bboxes_text, convert_text_to_rects_and_labels, extract_labels
 from concurrent.futures import ThreadPoolExecutor
 from colorama import Fore, Style, init
-
+import webview
+from threading import Thread
 
 class ColoredFormatter(logging.Formatter):
     COLORS = {
@@ -300,21 +301,59 @@ def upload_video():
 @app.route('/importFrames', methods=['POST'])
 def import_frames():
     video_uuid = request.form.get('video_uuid')
-    frame_files = request.files.getlist('frame_files')
+    uploaded_files = request.files.getlist('frame_files')
 
-    if not video_uuid or not frame_files:
-        return jsonify({'success': False, 'message': 'Missing video UUID or frame files.'}), 400
+    if not video_uuid or not uploaded_files:
+        return jsonify({'success': False, 'message': 'Missing video UUID or files.'}), 400
 
     video = database.get_video_entity(video_uuid)
     if not video:
         return jsonify({'success': False, 'message': 'Video not found.'}), 404
 
+    total_imported = 0
+
     try:
-        imported_count = database.add_frames_from_upload(video_uuid, frame_files)
-        return jsonify({'success': True, 'imported_count': imported_count})
+        # 分离图片和视频处理
+        image_bytes_list = []
+
+        for file in uploaded_files:
+            filename = file.filename.lower()
+
+            # 1. 如果是视频文件 -> 抽帧
+            if filename.endswith(('.mp4', '.avi', '.mov', '.mkv', '.webm')):
+                # 保存临时文件以便 OpenCV 读取
+                temp_video_path = os.path.join(config.STORAGE_DIR, f"temp_import_{uuid.uuid4().hex}.mp4")
+                file.save(temp_video_path)
+
+                try:
+                    cap = cv2.VideoCapture(temp_video_path)
+                    while True:
+                        ret, frame = cap.read()
+                        if not ret: break
+
+                        # 编码为 JPG binary
+                        success, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
+                        if success:
+                            image_bytes_list.append(buffer.tobytes())
+                    cap.release()
+                finally:
+                    # 清理临时视频
+                    if os.path.exists(temp_video_path):
+                        os.remove(temp_video_path)
+
+            # 2. 如果是图片文件 -> 直接读取
+            elif filename.endswith(('.jpg', '.jpeg', '.png', '.bmp', '.webp')):
+                image_bytes_list.append(file.read())
+
+        # 3. 统一写入数据库 (使用 database.py 中新写的安全函数)
+        if image_bytes_list:
+            total_imported = database.add_frames_to_video(video_uuid, image_bytes_list)
+
+        return jsonify({'success': True, 'imported_count': total_imported})
+
     except Exception as e:
-        logging.error(f"Failed to import frames for {video_uuid}: {e}")
-        return jsonify({'success': False, 'message': str(e)}), 500
+        logging.error(f"Failed to import frames for {video_uuid}: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': f"Import failed: {str(e)}"}), 500
 
 
 @app.route('/retrieveVideoEntity', methods=['POST'])
@@ -1482,10 +1521,14 @@ def preview_augmentations():
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
-if __name__ == '__main__':
-    from waitress import serve
+def start_server():
+    """
+    此函数在后台线程运行，负责所有的初始化和 Flask 服务器启动
+    """
+    # 1. 初始化 Colorama (保留终端颜色支持)
     init(autoreset=True)
 
+    # 2. 配置日志格式 (完全保留你原有的 ColoredFormatter)
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.INFO)
 
@@ -1496,20 +1539,62 @@ if __name__ == '__main__':
     formatter = ColoredFormatter('%(asctime)s - %(levelname)s - %(threadName)s - %(message)s')
     console_handler.setFormatter(formatter)
     root_logger.addHandler(console_handler)
+
+    # 3. AI 模型初始化
     logging.info("正在初始化AI模型，请稍候...")
     ai_models.startup_ai_models()
+
+    # 注册退出钩子
     atexit.register(ai_models.save_preprocessed_cache_to_disk)
     atexit.register(ai_models.save_prototypes_to_disk)
+
     time.sleep(0.01)
 
+    # 4. 打印 ASCII 艺术字到终端
     logging.info("=" * 121)
-    logging.info("███████╗ ███████╗ ██████╗   ██████╗  ██████╗  ██╗   ██╗  ██████╗  ██╗       ██████╗  ██╗   ██╗  █████╗  ██████╗  ██████╗")
-    logging.info("╚══███╔╝ ██╔════╝ ██╔══██╗ ██╔═══██╗ ╚════██╗ ╚██╗ ██╔╝ ██╔═══██╗ ██║      ██╔═══██╗ ╚██╗ ██╔╝ ██╔══██╗ ██╔══██╗ ██╔══██╗")
-    logging.info("███╔╝    █████╗   ██████╔╝ ██║   ██║  █████╔╝  ╚████╔╝  ██║   ██║ ██║      ██║   ██║  ╚████╔╝  ███████║ ██████╔╝ ██║  ██║")
-    logging.info("███╔╝    ██╔══╝   ██╔══██╗ ██║   ██║ ██╔═══╝    ╚██╔╝   ██║   ██║ ██║      ██║   ██║   ╚██╔╝   ██╔══██║ ██╔══██╗ ██║  ██║")
-    logging.info("███████╗ ███████╗ ██║  ██║ ╚██████╔╝ ███████╗    ██║    ╚██████╔╝ ███████╗ ╚██████╔╝    ██║    ██║  ██║ ██║  ██║ ██████╔╝")
-    logging.info("╚══════╝ ╚══════╝ ╚═╝  ╚═╝  ╚═════╝  ╚══════╝    ╚═╝     ╚═════╝  ╚══════╝  ╚═════╝     ╚═╝    ╚═╝  ╚═╝ ╚═╝  ╚═╝ ╚═════╝ ")
-    logging.info("Developed by BlueDarkUP from FIRST Tech Challenge team 27570           Be based on -- FIRST Machine Learning Toolchain --")
-    logging.info("Open your web browser and go to http://127.0.0.1:5000")
+    logging.info(
+        "███████╗ ███████╗ ██████╗   ██████╗  ██████╗  ██╗   ██╗  ██████╗  ██╗       ██████╗  ██╗   ██╗  █████╗  ██████╗  ██████╗")
+    logging.info(
+        "╚══███╔╝ ██╔════╝ ██╔══██╗ ██╔═══██╗ ╚════██╗ ╚██╗ ██╔╝ ██╔═══██╗ ██║      ██╔═══██╗ ╚██╗ ██╔╝ ██╔══██╗ ██╔══██╗ ██╔══██╗")
+    logging.info(
+        "███╔╝    █████╗   ██████╔╝ ██║   ██║  █████╔╝  ╚████╔╝  ██║   ██║ ██║      ██║   ██║  ╚████╔╝  ███████║ ██████╔╝ ██║  ██║")
+    logging.info(
+        "███╔╝    ██╔══╝   ██╔══██╗ ██║   ██║ ██╔═══╝    ╚██╔╝   ██║   ██║ ██║      ██║   ██║   ╚██╔╝   ██╔══██║ ██╔══██╗ ██║  ██║")
+    logging.info(
+        "███████╗ ███████╗ ██║  ██║ ╚██████╔╝ ███████╗    ██║    ╚██████╔╝ ███████╗ ╚██████╔╝    ██║    ██║  ██║ ██║  ██║ ██████╔╝")
+    logging.info(
+        "╚══════╝ ╚══════╝ ╚═╝  ╚═╝  ╚═════╝  ╚══════╝    ╚═╝     ╚═════╝  ╚══════╝  ╚═════╝     ╚═╝    ╚═╝  ╚═╝ ╚═╝  ╚═╝ ╚═════╝ ")
+    logging.info(
+        "Developed by BlueDarkUP from FIRST Tech Challenge team 27570           Be based on -- FIRST Machine Learning Toolchain --")
     logging.info("=" * 121)
-    serve(app, host='0.0.0.0', port=5000)
+
+    # 5. 启动 Flask (绑定到本地 127.0.0.1 提高安全性)
+    # 使用 waitress 提供 WSGI 服务
+    from waitress import serve
+    serve(app, host='127.0.0.1', port=5000, threads=8)
+
+
+if __name__ == '__main__':
+    # A. 启动 Flask 服务器后台线程
+    # 设置 daemon=True 确保关闭窗口进程时，后台线程能跟随主进程一起退出
+    server_thread = Thread(target=start_server, daemon=True)
+    server_thread.start()
+
+    # B. 等待服务器预热（根据 AI 模型加载速度可适当调整）
+    # 给一点时间让端口监听起来，避免窗口打开时显示“无法连接”
+    time.sleep(2)
+
+    # C. 创建 pywebview 窗口
+    # 设置窗口标题、URL 以及初始尺寸
+    window = webview.create_window(
+        title='Zero2YoloYard | Developed by BlueDarkUP from FIRST Tech Challenge team 27570 | Be based on -- FIRST Machine Learning Toolchain --',
+        url='http://127.0.0.1:5000',
+        width=1920,
+        height=1080,
+        min_size=(1280, 720),
+        background_color='#ffffff'
+    )
+
+    # D. 启动 GUI 循环 (此行会阻塞主线程直到窗口关闭)
+    # debug=False 隐藏 webview 默认的右键开发工具
+    webview.start()
