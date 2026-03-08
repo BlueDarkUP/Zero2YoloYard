@@ -387,9 +387,6 @@ def get_features_for_all_masks(video_uuid, frame_number):
             if not os.path.exists(frame_path):
                 raise FileNotFoundError(f"Frame image not found: {frame_path}")
 
-            # 调用 SAM2 自动生成掩码
-            # all_boxes: [N, 4] on DEVICE
-            # all_masks: [N, 1, H, W] on DEVICE (未使用，但为了兼容性保留接口)
             all_boxes, all_masks = sam_tasks.generate_masks_for_frame(video_uuid, frame_number)
 
             # 处理未检测到对象的情况

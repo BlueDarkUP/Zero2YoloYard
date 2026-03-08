@@ -47,9 +47,25 @@ def _load_sam2_models(mode="video"):
     if not HAS_SAM2: return None
 
     settings = settings_manager.load_settings()
-    model_cfg = settings.get('sam_model_config', 'configs/sam2.1/sam2.1_hiera_t.yaml')
-    checkpoint_name = settings.get('sam_model_checkpoint', 'sam2.1_hiera_tiny.pt')
+
+    # --- [核心修改区 开始] ---
+    # 获取当前选中的权重文件名
+    checkpoint_name = settings.get('sam_model_checkpoint', 'sam2.1_t.pt')
     checkpoint_path = os.path.join(config.BASE_DIR, "checkpoints", checkpoint_name)
+
+    # 建立权重到配置文件的智能映射，防止前端切换模型时由于架构不匹配导致 PyTorch 崩溃
+    yaml_mapping = {
+        "sam2.1_t.pt": "configs/sam2.1/sam2.1_hiera_t.yaml",
+        "sam2.1_s.pt": "configs/sam2.1/sam2.1_hiera_s.yaml",
+        "sam2.1_b.pt": "configs/sam2.1/sam2.1_hiera_b+.yaml",  # SAM 2.1 Base 官方通常使用 b+ 配置
+        "sam2.1_l.pt": "configs/sam2.1/sam2.1_hiera_l.yaml"
+    }
+
+    # 动态获取对应的 yaml 配置，如果找不到对应关系则回退到 settings 或默认配置
+    fallback_cfg = settings.get('sam_model_config', 'configs/sam2.1/sam2.1_hiera_t.yaml')
+    model_cfg = yaml_mapping.get(checkpoint_name, fallback_cfg)
+    # --- [核心修改区 结束] ---
+
     device = settings_manager.get_device()
 
     if (_sam_cache["config"] != model_cfg or

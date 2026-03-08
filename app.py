@@ -1575,6 +1575,9 @@ def start_server():
 
 
 if __name__ == '__main__':
+    import multiprocessing
+    multiprocessing.freeze_support()
+
     # A. 启动 Flask 服务器后台线程
     # 设置 daemon=True 确保关闭窗口进程时，后台线程能跟随主进程一起退出
     server_thread = Thread(target=start_server, daemon=True)
@@ -1585,7 +1588,6 @@ if __name__ == '__main__':
     time.sleep(2)
 
     # C. 创建 pywebview 窗口
-    # 设置窗口标题、URL 以及初始尺寸
     window = webview.create_window(
         title='Zero2YoloYard | Developed by BlueDarkUP from FIRST Tech Challenge team 27570 | Be based on -- FIRST Machine Learning Toolchain --',
         url='http://127.0.0.1:5000',
@@ -1595,6 +1597,4 @@ if __name__ == '__main__':
         background_color='#ffffff'
     )
 
-    # D. 启动 GUI 循环 (此行会阻塞主线程直到窗口关闭)
-    # debug=False 隐藏 webview 默认的右键开发工具
     webview.start()

@@ -6,10 +6,10 @@ import torch
 
 SETTINGS_FILE = os.path.join(config.BASE_DIR, 'settings.json')
 DEFAULT_SETTINGS = {
-    # 指向 sam2 仓库里的 config 文件路径 (相对路径或绝对路径)
-    # 注意：确保你的项目中能找到 configs/sam2.1/sam2.1_hiera_l.yaml
-    "sam_model_config": "configs/sam2.1/sam2.1_hiera_l.yaml",
-    "sam_model_checkpoint": "sam2.1_hiera_large.pt",
+    # 指向 sam2 仓库里的 config 文件路径
+    # 修改默认值为 tiny 模型，匹配你截图中的新命名体系
+    "sam_model_config": "configs/sam2.1/sam2.1_hiera_t.yaml",
+    "sam_model_checkpoint": "sam2.1_t.pt",
 
     "feature_extractor_model_name": "mobilenet_v3_large",
     "gpu_device": "auto",
@@ -73,6 +73,7 @@ def update_device():
     _device = None
     logging.info("Device setting updated. Will re-evaluate on next use.")
 
+
 def load_settings():
     if not os.path.exists(SETTINGS_FILE):
         logging.info(f"Settings file not found. Creating a new one at {SETTINGS_FILE}")
@@ -81,6 +82,8 @@ def load_settings():
     try:
         with open(SETTINGS_FILE, 'r') as f:
             settings = json.load(f)
+
+            # 补全缺失的默认设置
             for key, value in DEFAULT_SETTINGS.items():
                 if key not in settings:
                     settings[key] = value
@@ -88,10 +91,24 @@ def load_settings():
                     for sub_key, sub_value in value.items():
                         if key in settings and isinstance(settings[key], dict) and sub_key not in settings[key]:
                             settings[key][sub_key] = sub_value
+
+            ckpt = settings.get("sam_model_checkpoint", "sam2.1_t.pt")
+
+            if ckpt == "sam2.1_t.pt":
+                settings["sam_model_config"] = "configs/sam2.1/sam2.1_hiera_t.yaml"
+            elif ckpt == "sam2.1_s.pt":
+                settings["sam_model_config"] = "configs/sam2.1/sam2.1_hiera_s.yaml"
+            elif ckpt == "sam2.1_b.pt":
+                settings["sam_model_config"] = "configs/sam2.1/sam2.1_hiera_b+.yaml"
+            elif ckpt == "sam2.1_l.pt":
+                settings["sam_model_config"] = "configs/sam2.1/sam2.1_hiera_l.yaml"
+
             return settings
+
     except (json.JSONDecodeError, IOError) as e:
         logging.error(f"Failed to load settings file: {e}. Returning default settings.")
         return DEFAULT_SETTINGS
+
 
 def save_settings(settings_data):
     try:
