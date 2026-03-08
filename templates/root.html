@@ -51,7 +51,7 @@
                 </button>
             </div>
 
-            <input type="file" id="frame-import-input" multiple accept="image/*,video/mp4,video/x-m4v,video/*" style="display: none;" />
+            <input type="file" id="frame-import-input" webkitdirectory directory multiple accept="image/*,video/mp4,video/x-m4v,video/*" style="display: none;" />
 
             <!-- 使用标准的 card 类以应用 CSS 中的 HUD 装饰 -->
             <div class="card">
@@ -954,7 +954,7 @@
 
         $('#frame-import-input').on('change', function(e) {
             if (!videoUuidForImport || e.target.files.length === 0) return;
-            const formData = new FormData(this);
+            const formData = new FormData();
             formData.append('video_uuid', videoUuidForImport);
             for (let i = 0; i < e.target.files.length; i++) formData.append('frame_files', e.target.files[i]);
 
