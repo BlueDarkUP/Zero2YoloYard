@@ -5,14 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <title>FTC-ML // ABYSSAL TELEMETRY</title>
 
-    <!-- 依赖库 -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
 
-    <!-- 核心设计规范样式 -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/modern.css') }}">
 
-    <!-- 引入 Orbitron 字体用于标题 -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
@@ -20,8 +17,8 @@
     <style>
         /* 布局特定的补充样式 (Move cursor logic to CSS variables) */
         :root {
-            --cursor-x: 50%;
-            --cursor-y: 50%;
+            --cursor-x: 50vw;
+            --cursor-y: 50vh;
         }
 
         /* 光标探照灯效果：在 body 上叠加一个跟随鼠标的径向渐变 */
@@ -31,11 +28,12 @@
             top: 0; left: 0; width: 100%; height: 100%;
             background: radial-gradient(
                 circle 600px at var(--cursor-x) var(--cursor-y),
-                rgba(0, 240, 255, 0.08) 0%,
+                rgba(0, 240, 255, 0.06) 0%,
                 transparent 60%
             );
             pointer-events: none;
-            z-index: 1; /* 在网格之上，内容之下 */
+            z-index: 1;
+            transition: background 0.1s ease-out; /* 让探照灯略带滞后感，更显沉稳 */
         }
 
         /* 底部系统状态栏 */
@@ -45,7 +43,7 @@
             left: 0;
             width: 100%;
             height: 24px;
-            background-color: #000;
+            background-color: var(--bg-surface-secondary);
             border-top: 1px solid var(--border-color);
             display: flex;
             align-items: center;
@@ -76,58 +74,59 @@
         main {
             padding-bottom: 40px;
         }
+
+        /* 修复硬编码的警报动画 */
+        @keyframes alert-blink {
+            0% { opacity: 1; text-shadow: 0 0 10px var(--color-danger); color: var(--color-danger); }
+            50% { opacity: 0.3; text-shadow: none; color: var(--color-danger); }
+            100% { opacity: 1; text-shadow: 0 0 10px var(--color-danger); color: var(--color-danger); }
+        }
+        .feed-alert { animation: alert-blink 2s infinite; }
     </style>
     {% block head %}{% endblock %}
 </head>
 <body class="d-flex flex-column min-vh-100">
 
-    <!-- 导航栏：去除背景色，依靠 CSS 的模糊效果 -->
-    <nav class="navbar navbar-expand-lg navbar-dark pt-3 pb-3 px-4 border-bottom border-dark" style="border-color: var(--border-color) !important; z-index: 100;">
-    <a class="navbar-brand d-flex align-items-center" href="/">
-        <!-- 图标：去除圆形背景，改为纯色霓虹 -->
-        <i class="bi bi-cpu-fill text-primary mr-3" style="font-size: 1.6rem; text-shadow: 0 0 10px var(--color-primary-glow);"></i>
-
-        <!-- 修改点：增加了 justify-content-center 确保垂直居中，增加了 mt-1 进行视觉下沉补偿 -->
-        <div class="d-flex flex-column justify-content-center mt-1">
-            <!-- 修改点：line-height 改为 1.1，避免文字过于紧凑 -->
-            <span class="font-weight-bold" style="font-family: 'Orbitron', sans-serif; letter-spacing: 0.1em; line-height: 1.1;">ZERO 2 YOLO YARD</span>
-            <span class="small text-muted" style="font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; letter-spacing: 0.2em;">// TRAINING_GROUND_V1.0</span>
-        </div>
-    </a>
-
-    <button class="navbar-toggler border-0" type="button" data-toggle="collapse" data-target="#navbarContent">
-        <span class="navbar-toggler-icon"></span>
-    </button>
-
-    <div class="collapse navbar-collapse" id="navbarContent">
-        <ul class="navbar-nav mr-auto"></ul>
-
-        <div class="d-flex align-items-center text-right">
-            <div class="d-none d-md-block mr-4 text-right">
-                <div class="small text-muted font-monospace" style="font-size: 0.7rem;">OPERATOR_ID: BLUEDARK_UP</div>
-                <div class="small text-primary font-monospace" style="font-size: 0.6rem;">SECURE_CONNECTION_ESTABLISHED</div>
+    <nav class="navbar navbar-expand-lg navbar-dark pt-3 pb-3 px-4 border-bottom" style="background: rgba(10,11,16,0.95); border-color: var(--border-color) !important; z-index: 100;">
+        <a class="navbar-brand d-flex align-items-center" href="/">
+            <i class="bi bi-cpu-fill text-primary mr-3" style="font-size: 1.6rem; text-shadow: 0 0 10px var(--color-primary-glow);"></i>
+            <div class="d-flex flex-column justify-content-center mt-1">
+                <span class="font-weight-bold" style="font-family: 'Orbitron', sans-serif; letter-spacing: 0.1em; line-height: 1.1;">ZERO 2 YOLO YARD</span>
+                <span class="small text-muted" style="font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; letter-spacing: 0.2em;">// TRAINING_GROUND_V1.0</span>
             </div>
-            <i class="bi bi-broadcast text-danger" title="LIVE FEED" style="animation: blink 2s infinite;"></i>
-        </div>
-    </div>
-</nav>
+        </a>
 
-    <!-- 主内容区 -->
+        <button class="navbar-toggler border-0" type="button" data-toggle="collapse" data-target="#navbarContent">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarContent">
+            <ul class="navbar-nav mr-auto"></ul>
+
+            <div class="d-flex align-items-center text-right">
+                <div class="d-none d-md-block mr-4 text-right">
+                    <div class="small text-muted font-monospace" style="font-size: 0.7rem;">OPERATOR_ID: BLUEDARK_UP</div>
+                    <div class="small text-primary font-monospace" style="font-size: 0.6rem;">SECURE_CONNECTION_ESTABLISHED</div>
+                </div>
+                <i class="bi bi-broadcast feed-alert" title="LIVE FEED"></i>
+            </div>
+        </div>
+    </nav>
+
     <main role="main" class="flex-grow-1 position-relative" style="z-index: 10;">
         {% block content %}{% endblock %}
     </main>
 
-    <!-- 底部装饰性状态栏 -->
     <footer class="system-status-bar">
         <div class="d-flex">
             <div class="status-item">
                 <div class="status-indicator"></div> SYSTEM_ONLINE
             </div>
             <div class="status-item text-muted">
-                LATENCY: <span class="text-primary ml-1">12ms</span>
+                LATENCY: <span id="sys-latency" class="text-primary ml-1">12ms</span>
             </div>
             <div class="status-item text-muted">
-                MEM_LOAD: <span class="text-primary ml-1">42%</span>
+                MEM_LOAD: <span id="sys-memory" class="text-primary ml-1">42%</span>
             </div>
         </div>
         <div class="d-flex">
@@ -139,30 +138,29 @@
 
     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
-
-    <!-- 核心 JS -->
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 
     <script>
-        // 光标探照灯逻辑 (Cursor Spotlight)
-        // 追踪鼠标位置并更新 CSS 变量，照亮背景网格
+        // 光标探照灯逻辑：引入 requestAnimationFrame 节流，消除掉帧
+        let isCursorTicking = false;
         document.addEventListener('mousemove', (e) => {
-            const x = e.clientX;
-            const y = e.clientY;
-            document.documentElement.style.setProperty('--cursor-x', x + 'px');
-            document.documentElement.style.setProperty('--cursor-y', y + 'px');
+            if (!isCursorTicking) {
+                window.requestAnimationFrame(() => {
+                    document.documentElement.style.setProperty('--cursor-x', e.clientX + 'px');
+                    document.documentElement.style.setProperty('--cursor-y', e.clientY + 'px');
+                    isCursorTicking = false;
+                });
+                isCursorTicking = true;
+            }
         });
 
-        // 简单的呼吸灯动画定义
-        const styleSheet = document.createElement("style");
-        styleSheet.innerText = `
-            @keyframes blink {
-                0% { opacity: 1; text-shadow: 0 0 10px red; }
-                50% { opacity: 0.3; text-shadow: none; }
-                100% { opacity: 1; text-shadow: 0 0 10px red; }
-            }
-        `;
-        document.head.appendChild(styleSheet);
+        // 模拟底层系统数据波动 (Telemetry Simulation)
+        setInterval(() => {
+            const latency = Math.floor(Math.random() * (18 - 8 + 1)) + 8; // 8-18ms
+            const memory = (40 + Math.random() * 5).toFixed(1); // 40.0 - 45.0%
+            document.getElementById('sys-latency').innerText = latency + 'ms';
+            document.getElementById('sys-memory').innerText = memory + '%';
+        }, 2000);
     </script>
 
     {% block scripts %}{% endblock %}

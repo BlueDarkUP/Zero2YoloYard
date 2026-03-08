@@ -1,4 +1,3 @@
-<!-- START OF FILE labelVideo.html -->
 {% extends "layout.html" %}
 
 {% block head %}
@@ -13,9 +12,10 @@
         background-color: var(--bg-body);
     }
 
-    /* 整体布局容器 */
+    /* 整体布局容器：修改为 row 以支持 Resizer */
     .ide-layout {
         display: flex;
+        flex-direction: row;
         width: 100%;
         height: 100%;
         color: var(--text-main);
@@ -28,8 +28,51 @@
         flex-direction: column;
         position: relative;
         overflow: hidden;
-        border-right: 1px solid var(--border-color);
         background: radial-gradient(circle at center, rgba(0,240,255,0.02) 0%, transparent 70%);
+    }
+
+    /* 拖拽分割线 (Resizer) */
+    .ide-resizer {
+        width: 6px;
+        background-color: var(--bg-surface-secondary);
+        border-left: 1px solid var(--border-color);
+        border-right: 1px solid var(--border-color);
+        cursor: col-resize;
+        z-index: 100;
+        transition: background-color 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .ide-resizer::after {
+        content: "";
+        height: 30px;
+        width: 2px;
+        background-color: var(--text-muted);
+        border-radius: 2px;
+        transition: background-color 0.2s;
+    }
+    .ide-resizer:hover, .ide-resizer.dragging {
+        background-color: var(--color-primary-dim);
+    }
+    .ide-resizer:hover::after, .ide-resizer.dragging::after {
+        background-color: var(--color-primary);
+        box-shadow: 0 0 8px var(--color-primary-glow);
+    }
+
+    /* 右侧：侧边栏 */
+    .ide-sidebar {
+        width: 350px;
+        min-width: 280px;
+        max-width: 50vw; /* 防止过宽 */
+        background-color: var(--bg-surface);
+        display: flex;
+        flex-direction: column;
+        overflow-y: auto;
+        padding: 1.2rem;
+        box-shadow: -5px 0 20px rgba(0,0,0,0.5);
+        gap: 1.2rem;
+        flex-shrink: 0;
     }
 
     /* 顶部工具栏 (HUD Header) */
@@ -54,7 +97,6 @@
         display: flex;
         justify-content: center;
         align-items: center;
-        /* 背景网格 */
         background-image:
             linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
             linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
@@ -73,7 +115,7 @@
         transition: box-shadow 0.3s ease;
     }
 
-    /* HUD Corner Decos (CSS 模拟四角战术装饰) */
+    /* HUD Corner Decos */
     #canvas-container::before, #canvas-container::after {
         content: "";
         position: absolute;
@@ -105,14 +147,15 @@
         opacity: 0.7;
     }
 
+    /* 多层 Canvas 架构设置 */
     #canvas-container canvas {
         position: absolute;
         top: 0; left: 0;
         pointer-events: none;
     }
 
-    #drawing-canvas { pointer-events: auto; z-index: 10; }
-    #crosshair-canvas { z-index: 5; }
+    #static-canvas { z-index: 5; } /* 底层：静态框 */
+    #dynamic-canvas { pointer-events: auto; z-index: 10; } /* 顶层：交互框、十字线 */
     #frame-image { display: block; user-select: none; }
 
     /* 底部时间轴区域 */
@@ -129,9 +172,7 @@
         width: 100%;
         background: transparent;
     }
-    input[type=range].custom-range:focus {
-        outline: none;
-    }
+    input[type=range].custom-range:focus { outline: none; }
     input[type=range].custom-range::-webkit-slider-thumb {
         -webkit-appearance: none;
         height: 20px;
@@ -180,20 +221,6 @@
         color: var(--color-primary);
         border-color: var(--color-primary);
         background: rgba(0, 240, 255, 0.05);
-    }
-
-    /* 右侧：侧边栏 */
-    .ide-sidebar {
-        width: 350px;
-        min-width: 350px;
-        background-color: var(--bg-surface);
-        display: flex;
-        flex-direction: column;
-        overflow-y: auto;
-        padding: 1.2rem;
-        border-left: 1px solid var(--border-color);
-        gap: 1.2rem;
-        box-shadow: -5px 0 20px rgba(0,0,0,0.5);
     }
 
     /* 侧边栏标题 */
@@ -258,8 +285,8 @@
     }
 
     /* 按钮微调 (覆盖 Bootstrap) */
-    .btn { 
-        border-radius: 2px !important; 
+    .btn {
+        border-radius: 2px !important;
         transition: all 0.2s ease;
     }
     .btn:hover {
@@ -269,7 +296,6 @@
     .btn-outline-primary:hover {
         box-shadow: 0 0 15px var(--color-primary-glow);
     }
-
     .btn-xs {
         padding: 0.2rem 0.5rem;
         font-size: 0.7rem;
@@ -295,11 +321,11 @@
     }
 
     /* 鼠标样式 */
-    #drawing-canvas.cursor-move { cursor: move; }
-    #drawing-canvas.cursor-nwse-resize { cursor: nwse-resize; }
-    #drawing-canvas.cursor-nesw-resize { cursor: nesw-resize; }
-    #drawing-canvas.cursor-ns-resize { cursor: ns-resize; }
-    #drawing-canvas.cursor-ew-resize { cursor: ew-resize; }
+    #dynamic-canvas.cursor-move { cursor: move; }
+    #dynamic-canvas.cursor-nwse-resize { cursor: nwse-resize; }
+    #dynamic-canvas.cursor-nesw-resize { cursor: nesw-resize; }
+    #dynamic-canvas.cursor-ns-resize { cursor: ns-resize; }
+    #dynamic-canvas.cursor-ew-resize { cursor: ew-resize; }
 
     .bbox-controls { opacity: 0; transition: opacity 0.2s; }
     #bbox-list .list-group-item:hover .bbox-controls { opacity: 1; }
@@ -321,7 +347,7 @@
         border-radius: 4px;
     }
 
-    /* Hidden Control Panels (Smart Select / Tracking) */
+    /* Hidden Control Panels */
     #interactive-segment-controls,
     #suggestion-review-controls,
     #track-controls {
@@ -343,10 +369,8 @@
 
 {% block content %}
 <div class="ide-layout fade-in">
-    <!-- 左侧：主画布区域 -->
     <div class="ide-canvas-area">
 
-        <!-- 1. 顶部工具栏 (HUD Header) -->
         <div class="ide-toolbar">
             <div class="d-flex align-items-center" style="min-width: 0;">
                 <a href="/" class="btn btn-sm btn-outline-secondary mr-3 text-uppercase font-weight-bold" style="letter-spacing: 0.05em; border-color: transparent;">
@@ -358,7 +382,6 @@
                 </div>
             </div>
 
-            <!-- 帧导航控制器 (HUD Center) -->
             <div class="d-flex align-items-center border border-secondary px-3 py-1 mx-2" style="background: rgba(0,0,0,0.6); border-radius: 20px;">
                 <button class="btn btn-sm btn-link text-secondary p-0 mr-2" onclick="document.getElementById('frame-slider').stepDown(); document.getElementById('frame-slider').dispatchEvent(new Event('input'));" style="transition: color 0.2s;"><i class="bi bi-caret-left-fill"></i></button>
                 <span class="font-weight-bold mx-2 text-monospace text-primary" style="min-width: 100px; text-align: center; font-size: 1.1em; text-shadow: 0 0 8px var(--color-primary-glow);">
@@ -374,7 +397,6 @@
             </div>
         </div>
 
-        <!-- 2. 画布滚动容器 -->
         <div class="ide-canvas-wrapper custom-scrollbar">
             <div id="interpolation-banner" class="position-absolute" style="top: 20px; z-index: 100; min-width: 320px; display: none;">
                 <div class="d-flex align-items-center">
@@ -388,12 +410,11 @@
 
             <div id="canvas-container">
                 <img id="frame-image" src="{{ first_frame_url }}" class="img-fluid" alt="Video Frame" draggable="false" />
-                <canvas id="crosshair-canvas"></canvas>
-                <canvas id="drawing-canvas"></canvas>
+                <canvas id="static-canvas"></canvas>
+                <canvas id="dynamic-canvas"></canvas>
             </div>
         </div>
 
-        <!-- 3. 底部进度条与快捷键 -->
         <div class="ide-timeline">
             <input type="range" class="custom-range" id="frame-slider" min="{{ task_entity.start_frame }}" max="{{ task_entity.end_frame }}" value="{{ task_entity.start_frame }}">
             <div class="shortcut-keys-container">
@@ -407,10 +428,10 @@
         </div>
     </div>
 
-    <!-- 右侧：侧边工具栏 -->
-    <div class="ide-sidebar custom-scrollbar">
+    <div class="ide-resizer" id="sidebar-resizer"></div>
 
-        <!-- SECTION: Classes -->
+    <div class="ide-sidebar custom-scrollbar" id="ide-sidebar">
+
         <div class="tool-section-title">
             <span>Class Registry</span>
             <i class="bi bi-tag-fill"></i>
@@ -436,7 +457,6 @@
             </div>
         </div>
 
-        <!-- SECTION: Tools -->
         <div class="tool-section-title">
             <span>Inference Tools</span>
             <i class="bi bi-lightning-charge-fill"></i>
@@ -456,7 +476,6 @@
             </div>
         </div>
 
-        <!-- Hidden Control Panels -->
         <div id="interactive-segment-controls" style="display: none;">
             <h6 class="small font-weight-bold mb-2 text-info text-uppercase"><i class="bi bi-crosshair"></i> Smart Select Active</h6>
             <p class="text-muted small mb-3 font-monospace" style="font-size: 0.7rem;">> DESIGNATE TARGET BOX <br>> SYSTEM WILL LOCATE SIMILAR</p>
@@ -504,21 +523,17 @@
             </div>
         </div>
 
-        <!-- SECTION: Objects List -->
         <div class="tool-section-title mt-3">
             <span>Detected Entities</span>
             <i class="bi bi-layers-fill"></i>
         </div>
         <div class="flex-grow-1 position-relative" style="min-height: 150px;">
             <ul id="bbox-list" class="list-group list-group-flush h-100 custom-scrollbar border border-secondary" style="position: absolute; width: 100%; overflow-y: auto; background: rgba(0,0,0,0.3);">
-                <!-- Populated by JS -->
-            </ul>
+                </ul>
         </div>
 
     </div>
 </div>
-
-<!-- ==================== TEMPLATES & MODALS ==================== -->
 
 <div id="toast-notification"></div>
 
@@ -542,7 +557,6 @@
     </div>
 </template>
 
-<!-- Negative Sampling Modal -->
 {% from "_macros.html" import render_modal %}
 {% call render_modal('negative-sampling-modal', 'MODEL_REFINEMENT_PROTOCOL') %}
 <div class="mb-3 p-3 border border-secondary" style="background: rgba(255,255,255,0.02);">
@@ -592,11 +606,10 @@
 
         let preprocessTimeout = null;
 
-        // 记录当前正在编辑的帧号，用于在切换前保存
+        // 记录当前正在编辑的帧号
         let currentEditingFrame = parseInt($('#frame-slider').val());
 
         // --- ABYSSAL TELEMETRY COLOR PALETTE ---
-        // 强制使用高对比度霓虹配色，无视亮/暗模式
         const themeColors = {
             selectionShadow: 'rgba(0, 240, 255, 0.8)',
             handleFill: '#00F0FF',
@@ -605,24 +618,19 @@
             labelBg: '#00F0FF',
             crosshair: 'rgba(0, 240, 255, 0.9)',
 
-            // Interpolation
             interpolationGhost: 'rgba(255, 208, 0, 0.5)',
             interpolationConfirm: '#00FF94',
 
-            // Suggestions
             suggestionStroke: 'rgba(46, 154, 255, 0.8)',
             suggestionFill: 'rgba(46, 154, 255, 0.2)',
             suggestionHoverStroke: '#FFD000',
             suggestionHoverFill: 'rgba(255, 208, 0, 0.3)',
 
-            // Interactive
             positiveExampleStroke: '#00FF94',
             negativeSampleStroke: '#FF2A2A'
         };
 
-        function getColor(key) {
-            return themeColors[key];
-        }
+        function getColor(key) { return themeColors[key]; }
 
         let availableClasses = [];
         let activeClass = null;
@@ -668,18 +676,51 @@
         let negStartX, negStartY;
 
         let toastTimeout;
-        let isRequestingAnimationFrame = false; // 【优化】渲染节流开关
+        let isRequestingAnimationFrame = false; // 渲染节流开关
 
+        // === DOM 元素与 Canvas 双层架构设置 ===
         const canvasContainer = $('#canvas-container');
-        const drawingCanvas = document.getElementById('drawing-canvas');
-        const drawingCtx = drawingCanvas.getContext('2d');
-        const crosshairCanvas = document.getElementById('crosshair-canvas');
-        const crosshairCtx = crosshairCanvas.getContext('2d');
         const frameImage = document.getElementById('frame-image');
         const frameSlider = $('#frame-slider');
+
+        // 静态层：绘制已确认的 BBox 和建议框
+        const staticCanvas = document.getElementById('static-canvas');
+        const staticCtx = staticCanvas.getContext('2d');
+        // 动态层：绘制跟随鼠标的交互、拖拽中的框、绘制中的框
+        const dynamicCanvas = document.getElementById('dynamic-canvas');
+        const dynamicCtx = dynamicCanvas.getContext('2d');
+        let lastMousePos = null;
+
         const negCanvas = document.getElementById('neg-drawing-canvas');
         const negCtx = negCanvas.getContext('2d');
         const negImage = document.getElementById('neg-frame-image');
+
+        // --- 侧边栏拖拽逻辑 (Resizer) ---
+        let isResizingSidebar = false;
+        const $sidebar = $('#ide-sidebar');
+        $('#sidebar-resizer').on('mousedown', function(e) {
+            isResizingSidebar = true;
+            $(this).addClass('dragging');
+            $('body').css({ 'cursor': 'col-resize', 'user-select': 'none' });
+            e.preventDefault();
+        });
+        $(document).on('mousemove', function(e) {
+            if (!isResizingSidebar) return;
+            const containerWidth = $('.ide-layout').width();
+            const newWidth = containerWidth - e.clientX;
+            // 限制最小 250px，最大为屏幕宽度的 50%
+            if (newWidth >= 250 && newWidth <= (containerWidth * 0.5)) {
+                $sidebar.css('width', newWidth + 'px');
+                resizeCanvas();
+            }
+        }).on('mouseup', function() {
+            if (isResizingSidebar) {
+                isResizingSidebar = false;
+                $('#sidebar-resizer').removeClass('dragging');
+                $('body').css({ 'cursor': '', 'user-select': '' });
+                resizeCanvas();
+            }
+        });
 
         // --- 封装通用的保存函数 ---
         function performSave(frameNum, bboxesString, isSilent = false) {
@@ -691,26 +732,18 @@
                     url: "/storeVideoFrameBboxesText",
                     type: "POST",
                     contentType: "application/json",
-                    data: JSON.stringify({
-                        video_uuid: videoUuid,
-                        frame_number: parseInt(frameNum),
-                        bboxes_text: bboxesString
-                    }),
+                    data: JSON.stringify({ video_uuid: videoUuid, frame_number: parseInt(frameNum), bboxes_text: bboxesString }),
                     success: function(response) {
                         if (response.success) {
                             if (!isSilent) showToast(`FRAME ${frameNum} SAVED.`);
-
-                            // 如果是在操作当前帧，且有建议框，则清理建议框
                             if (parseInt(frameSlider.val()) === frameNum) {
                                 suggestionBboxes = [];
                                 $('#suggestion-review-controls').slideUp();
-                                if(!isSilent) redrawCanvas();
+                                if(!isSilent) redrawStaticCanvas();
                             }
                         }
                     },
-                    error: function() {
-                        if (!isSilent) showToast("ERROR: SAVE FAILED.", 3000);
-                    }
+                    error: function() { if (!isSilent) showToast("ERROR: SAVE FAILED.", 3000); }
                 });
             }
         }
@@ -718,89 +751,89 @@
         function smartTriggerPreprocess(frameNumber) {
             if (!isInteractiveMode && !isLamModeActive) return;
             if (preprocessTimeout) clearTimeout(preprocessTimeout);
-            preprocessTimeout = setTimeout(() => {
-                triggerBackgroundPreprocess(frameNumber);
-            }, 500);
+            preprocessTimeout = setTimeout(() => { triggerBackgroundPreprocess(frameNumber); }, 500);
         }
-        
-        // 此函数补齐之前遗漏的后端调用
+
         function triggerBackgroundPreprocess(frameNumber) {
             $.ajax({
-                url: '/api/background_preprocess_frame',
-                type: 'POST',
-                contentType: 'application/json',
+                url: '/api/background_preprocess_frame', type: 'POST', contentType: 'application/json',
                 data: JSON.stringify({ video_uuid: videoUuid, frame_number: parseInt(frameNumber) })
             });
         }
 
+        // --- 画布重绘逻辑 (分离动静两层) ---
         function resizeCanvas() {
             const dpr = window.devicePixelRatio || 1;
             const rect = frameImage.getBoundingClientRect();
-            [drawingCanvas, crosshairCanvas].forEach(canvas => {
+            [staticCanvas, dynamicCanvas].forEach(canvas => {
                 canvas.style.width = `${rect.width}px`;
                 canvas.style.height = `${rect.height}px`;
                 canvas.width = Math.round(rect.width * dpr);
                 canvas.height = Math.round(rect.height * dpr);
             });
-            drawingCtx.scale(dpr, dpr);
-            crosshairCtx.scale(dpr, dpr);
-            redrawCanvas();
+            staticCtx.scale(dpr, dpr);
+            dynamicCtx.scale(dpr, dpr);
+            redrawStaticCanvas();
         }
 
-        function redrawCanvas() {
+        function redrawStaticCanvas() {
             if (!frameImage.complete || frameImage.naturalWidth === 0) return;
 
             const dpr = window.devicePixelRatio || 1;
-            drawingCtx.clearRect(0, 0, drawingCanvas.width / dpr, drawingCanvas.height / dpr);
+            staticCtx.clearRect(0, 0, staticCanvas.width / dpr, staticCanvas.height / dpr);
             const scaleX = frameImage.clientWidth / frameImage.naturalWidth;
             const scaleY = frameImage.clientHeight / frameImage.naturalHeight;
 
+            // 1. Interpolation Ghost
             if (interpolationState.isActive) {
                 const startBox = interpolationState.startFrameData.bbox;
                 const x = startBox.x1 * scaleX, y = startBox.y1 * scaleY, w = (startBox.x2 - startBox.x1) * scaleX, h = (startBox.y2 - startBox.y1) * scaleY;
-                drawingCtx.strokeStyle = getColor('interpolationGhost');
-                drawingCtx.lineWidth = 2 / dpr;
-                drawingCtx.setLineDash([4 / dpr, 4 / dpr]);
-                drawingCtx.strokeRect(x, y, w, h);
-                drawingCtx.setLineDash([]);
+                staticCtx.strokeStyle = getColor('interpolationGhost');
+                staticCtx.lineWidth = 2 / dpr;
+                staticCtx.setLineDash([4 / dpr, 4 / dpr]);
+                staticCtx.strokeRect(x, y, w, h);
+                staticCtx.setLineDash([]);
             }
 
+            // 2. Saved BBoxes
             bboxes.forEach((box, index) => {
+                // 如果正在拖拽且是当前选中的框，则跳过静态绘制（交由动态层绘制）
+                if (isDraggingBbox && index === selectedBboxIndex) return;
+
                 const color = stringToColor(box.label);
 
                 if (index === selectedBboxIndex) {
-                    drawingCtx.strokeStyle = '#fff';
-                    drawingCtx.lineWidth = 3 / dpr;
-                    drawingCtx.shadowColor = getColor('selectionShadow');
-                    drawingCtx.shadowBlur = 15 / dpr;
+                    staticCtx.strokeStyle = '#fff';
+                    staticCtx.lineWidth = 3 / dpr;
+                    staticCtx.shadowColor = getColor('selectionShadow');
+                    staticCtx.shadowBlur = 15 / dpr;
                 } else {
-                    drawingCtx.strokeStyle = color;
-                    drawingCtx.lineWidth = 2 / dpr;
-                    drawingCtx.shadowBlur = 0;
+                    staticCtx.strokeStyle = color;
+                    staticCtx.lineWidth = 2 / dpr;
+                    staticCtx.shadowBlur = 0;
                 }
 
                 if (interpolationState.isActive && box.id === interpolationState.objectId) {
-                    drawingCtx.strokeStyle = getColor('interpolationConfirm');
-                    drawingCtx.setLineDash([5 / dpr, 3 / dpr]);
+                    staticCtx.strokeStyle = getColor('interpolationConfirm');
+                    staticCtx.setLineDash([5 / dpr, 3 / dpr]);
                 }
 
                 const x = box.x1 * scaleX, y = box.y1 * scaleY, w = (box.x2 - box.x1) * scaleX, h = (box.y2 - box.y1) * scaleY;
-                drawingCtx.strokeRect(x, y, w, h);
-                drawingCtx.setLineDash([]);
-                drawingCtx.shadowBlur = 0;
+                staticCtx.strokeRect(x, y, w, h);
+                staticCtx.setLineDash([]);
+                staticCtx.shadowBlur = 0;
 
                 // Label Tag
-                drawingCtx.fillStyle = interpolationState.isActive && box.id === interpolationState.objectId ? getColor('interpolationConfirm') : color;
-                drawingCtx.font = `bold ${11/dpr}px 'JetBrains Mono', monospace`;
-                const textMetrics = drawingCtx.measureText(box.label);
-                const textWidth = textMetrics.width;
+                staticCtx.fillStyle = interpolationState.isActive && box.id === interpolationState.objectId ? getColor('interpolationConfirm') : color;
+                staticCtx.font = `bold ${11/dpr}px 'JetBrains Mono', monospace`;
+                const textWidth = staticCtx.measureText(box.label).width;
                 const textHeight = 16 / dpr;
 
-                drawingCtx.fillRect(x, y - textHeight, textWidth + (8 / dpr), textHeight);
-                drawingCtx.fillStyle = '#000000';
-                drawingCtx.fillText(box.label.toUpperCase(), x + (4 / dpr), y - (3 / dpr));
+                staticCtx.fillRect(x, y - textHeight, textWidth + (8 / dpr), textHeight);
+                staticCtx.fillStyle = '#000000';
+                staticCtx.fillText(box.label.toUpperCase(), x + (4 / dpr), y - (3 / dpr));
 
-                // Handles (Hollow style for industrial look)
+                // Handles (静态层：只在没有交互模式时绘制选中框的锚点)
                 if (index === selectedBboxIndex && !isInteractiveMode) {
                     const handleSize = 8 / dpr;
                     const halfHandle = handleSize / 2;
@@ -809,62 +842,146 @@
                         'middle-left': { x: x, y: y + h / 2 }, 'middle-right': { x: x + w, y: y + h / 2 },
                         'bottom-left': { x: x, y: y + h }, 'bottom-middle': { x: x + w / 2, y: y + h }, 'bottom-right': { x: x + w, y: y + h }
                     };
-                    
                     for (const key in handles) {
                         const pos = handles[key];
-                        // 绘制手柄（实心填充，带对比度边框）
-                        drawingCtx.fillStyle = getColor('handleFill');
-                        drawingCtx.fillRect(pos.x - halfHandle, pos.y - halfHandle, handleSize, handleSize);
-                        drawingCtx.strokeStyle = getColor('handleStroke');
-                        drawingCtx.lineWidth = 1 / dpr;
-                        drawingCtx.strokeRect(pos.x - halfHandle, pos.y - halfHandle, handleSize, handleSize);
+                        staticCtx.fillStyle = getColor('handleFill');
+                        staticCtx.fillRect(pos.x - halfHandle, pos.y - halfHandle, handleSize, handleSize);
+                        staticCtx.strokeStyle = getColor('handleStroke');
+                        staticCtx.lineWidth = 1 / dpr;
+                        staticCtx.strokeRect(pos.x - halfHandle, pos.y - halfHandle, handleSize, handleSize);
                     }
                 }
             });
 
+            // 3. Suggestions
             if (suggestionBboxes.length > 0) {
                  const threshold = parseFloat($('#suggestion-threshold').val());
-                 drawingCtx.strokeStyle = getColor('suggestionStroke');
-                 drawingCtx.fillStyle = getColor('suggestionFill');
-                 drawingCtx.lineWidth = 1 / dpr;
+                 staticCtx.strokeStyle = getColor('suggestionStroke');
+                 staticCtx.fillStyle = getColor('suggestionFill');
+                 staticCtx.lineWidth = 1 / dpr;
                  suggestionBboxes.forEach(sug => {
                     if (sug.score >= threshold) {
                         const box = sug.box;
                         const x = box[0] * scaleX, y = box[1] * scaleY, w = (box[2] - box[0]) * scaleX, h = (box[3] - box[1]) * scaleY;
-                        drawingCtx.strokeRect(x,y,w,h);
-                        drawingCtx.fillRect(x,y,w,h);
+                        staticCtx.strokeRect(x,y,w,h);
+                        staticCtx.fillRect(x,y,w,h);
                     }
                  });
             }
-             if (interactivePreviewBboxes.length > 0) {
+
+            // 4. Interactive Previews (底色)
+            if (interactivePreviewBboxes.length > 0) {
                 const threshold = parseFloat($('#result-threshold').val());
                 interactivePreviewBboxes.forEach((res, index) => {
                     if (res.score >= threshold) {
                          const box = res.box;
-                         if (index === hoveredPreviewIndex) {
-                            drawingCtx.strokeStyle = getColor('suggestionHoverStroke');
-                            drawingCtx.lineWidth = 2 / dpr;
-                            drawingCtx.fillStyle = getColor('suggestionHoverFill');
-                            const x = box[0] * scaleX, y = box[1] * scaleY, w = (box[2] - box[0]) * scaleX, h = (box[3] - box[1]) * scaleY;
-                            drawingCtx.fillRect(x,y,w,h);
-                        } else {
-                            drawingCtx.strokeStyle = getColor('suggestionStroke');
-                            drawingCtx.lineWidth = 1 / dpr;
-                        }
-                        const x = box[0] * scaleX, y = box[1] * scaleY, w = (box[2] - box[0]) * scaleX, h = (box[3] - box[1]) * scaleY;
-                        drawingCtx.strokeRect(x,y,w,h);
+                         staticCtx.strokeStyle = getColor('suggestionStroke');
+                         staticCtx.lineWidth = 1 / dpr;
+                         const x = box[0] * scaleX, y = box[1] * scaleY, w = (box[2] - box[0]) * scaleX, h = (box[3] - box[1]) * scaleY;
+                         staticCtx.strokeRect(x,y,w,h);
                     }
                 });
             }
+
+            // 5. Interactive Mode Positive Examples
             if (isInteractiveMode) {
-                 drawingCtx.strokeStyle = getColor('positiveExampleStroke');
-                 drawingCtx.lineWidth = 2 / dpr;
-                 drawingCtx.setLineDash([5/dpr, 3/dpr]);
+                 staticCtx.strokeStyle = getColor('positiveExampleStroke');
+                 staticCtx.lineWidth = 2 / dpr;
+                 staticCtx.setLineDash([5/dpr, 3/dpr]);
                  positiveExampleBboxes.forEach(box => {
-                      const x = box.x1 * scaleX, y = box.y1 * scaleY, w = (box.x2 - box.x1) * scaleX, h = (box.y2 - box.y1) * scaleY;
-                      drawingCtx.strokeRect(x,y,w,h);
+                      const x = box.x1 * scaleX, y = box.y1 * scaleY, w = (box[2] - box[0]) * scaleX, h = (box[3] - box[1]) * scaleY;
+                      staticCtx.strokeRect(x,y,w,h);
                  });
-                 drawingCtx.setLineDash([]);
+                 staticCtx.setLineDash([]);
+            }
+
+            // 每次静态层更新后，同步刷新一次动态层
+            redrawDynamicCanvas(null);
+        }
+
+        // 动态层重绘机制
+        function redrawDynamicCanvas(pos) {
+            if (pos) lastMousePos = pos;
+            const currentPos = pos || lastMousePos;
+
+            const dpr = window.devicePixelRatio || 1;
+            dynamicCtx.clearRect(0, 0, dynamicCanvas.width / dpr, dynamicCanvas.height / dpr);
+
+            const scaleX = frameImage.clientWidth / frameImage.naturalWidth;
+            const scaleY = frameImage.clientHeight / frameImage.naturalHeight;
+
+            // 1. Hover effect for Interactive Previews
+            if (hoveredPreviewIndex !== -1 && interactivePreviewBboxes.length > 0) {
+                const res = interactivePreviewBboxes[hoveredPreviewIndex];
+                if (res) {
+                     dynamicCtx.strokeStyle = getColor('suggestionHoverStroke');
+                     dynamicCtx.lineWidth = 2 / dpr;
+                     dynamicCtx.fillStyle = getColor('suggestionHoverFill');
+                     const box = res.box;
+                     const x = box[0] * scaleX, y = box[1] * scaleY, w = (box[2] - box[0]) * scaleX, h = (box[3] - box[1]) * scaleY;
+                     dynamicCtx.fillRect(x,y,w,h);
+                     dynamicCtx.strokeRect(x,y,w,h);
+                }
+            }
+
+            // 2. Dragged Box
+            if (isDraggingBbox && selectedBboxIndex !== -1 && bboxes[selectedBboxIndex]) {
+                const box = bboxes[selectedBboxIndex];
+                const color = stringToColor(box.label);
+
+                dynamicCtx.strokeStyle = '#fff';
+                dynamicCtx.lineWidth = 3 / dpr;
+                dynamicCtx.shadowColor = getColor('selectionShadow');
+                dynamicCtx.shadowBlur = 15 / dpr;
+
+                const x = box.x1 * scaleX, y = box.y1 * scaleY, w = (box.x2 - box.x1) * scaleX, h = (box.y2 - box.y1) * scaleY;
+                dynamicCtx.strokeRect(x, y, w, h);
+                dynamicCtx.shadowBlur = 0;
+
+                dynamicCtx.fillStyle = color;
+                dynamicCtx.font = `bold ${11/dpr}px 'JetBrains Mono', monospace`;
+                const textWidth = dynamicCtx.measureText(box.label).width;
+                const textHeight = 16 / dpr;
+                dynamicCtx.fillRect(x, y - textHeight, textWidth + (8 / dpr), textHeight);
+                dynamicCtx.fillStyle = '#000000';
+                dynamicCtx.fillText(box.label.toUpperCase(), x + (4 / dpr), y - (3 / dpr));
+
+                const handleSize = 8 / dpr;
+                const halfHandle = handleSize / 2;
+                const handles = {
+                    'top-left': { x: x, y: y }, 'top-middle': { x: x + w / 2, y: y }, 'top-right': { x: x + w, y: y },
+                    'middle-left': { x: x, y: y + h / 2 }, 'middle-right': { x: x + w, y: y + h / 2 },
+                    'bottom-left': { x: x, y: y + h }, 'bottom-middle': { x: x + w / 2, y: y + h }, 'bottom-right': { x: x + w, y: y + h }
+                };
+                for (const key in handles) {
+                    const handlePos = handles[key];
+                    dynamicCtx.fillStyle = getColor('handleFill');
+                    dynamicCtx.fillRect(handlePos.x - halfHandle, handlePos.y - halfHandle, handleSize, handleSize);
+                    dynamicCtx.strokeStyle = getColor('handleStroke');
+                    dynamicCtx.lineWidth = 1 / dpr;
+                    dynamicCtx.strokeRect(handlePos.x - halfHandle, handlePos.y - halfHandle, handleSize, handleSize);
+                }
+            }
+
+            // 3. Drawing Box
+            if (isDrawing && currentPos) {
+                let currentX = Math.max(0, Math.min(currentPos.x, frameImage.clientWidth));
+                let currentY = Math.max(0, Math.min(currentPos.y, frameImage.clientHeight));
+                dynamicCtx.lineWidth = 2 / dpr;
+                dynamicCtx.strokeStyle = isInteractiveMode ? getColor('positiveExampleStroke') : stringToColor(activeClass || 'blue');
+                dynamicCtx.setLineDash(isInteractiveMode ? [5 / dpr, 3 / dpr] : []);
+                dynamicCtx.strokeRect(startX, startY, currentX - startX, currentY - startY);
+                dynamicCtx.setLineDash([]);
+            }
+
+            // 4. Crosshairs
+            if (!isDrawing && !isReviewMode && !isDraggingBbox && currentPos) {
+                dynamicCtx.strokeStyle = getColor('crosshair');
+                dynamicCtx.lineWidth = 1 / dpr;
+                dynamicCtx.beginPath();
+                dynamicCtx.moveTo(0, currentPos.y); dynamicCtx.lineTo(dynamicCanvas.width / dpr, currentPos.y);
+                dynamicCtx.moveTo(currentPos.x, 0); dynamicCtx.lineTo(currentPos.x, dynamicCanvas.height / dpr);
+                dynamicCtx.stroke();
             }
         }
 
@@ -919,24 +1036,7 @@
             if (customClassColors && customClassColors[str]) return customClassColors[str];
             let hash = 0;
             for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
-            return `hsl(${(hash % 360 + 360) % 360}, 80%, 55%)`; // 稍亮一点增加霓虹感
-        }
-
-        function drawCrosshairs(x, y) {
-            if (isDrawing || isReviewMode || isDraggingBbox) return;
-            const dpr = window.devicePixelRatio || 1;
-            crosshairCtx.clearRect(0, 0, crosshairCanvas.width / dpr, crosshairCanvas.height / dpr);
-            crosshairCtx.strokeStyle = getColor('crosshair');
-            crosshairCtx.lineWidth = 1 / dpr;
-            crosshairCtx.beginPath();
-            crosshairCtx.moveTo(0, y); crosshairCtx.lineTo(crosshairCanvas.width / dpr, y);
-            crosshairCtx.moveTo(x, 0); crosshairCtx.lineTo(x, crosshairCanvas.height / dpr);
-            crosshairCtx.stroke();
-        }
-
-        function clearCrosshairs() {
-            const dpr = window.devicePixelRatio || 1;
-            crosshairCtx.clearRect(0, 0, crosshairCanvas.width / dpr, crosshairCanvas.height / dpr);
+            return `hsl(${(hash % 360 + 360) % 360}, 80%, 55%)`;
         }
 
         function showToast(message, duration = 3000) {
@@ -957,7 +1057,7 @@
                 historyIndex--;
                 bboxes = JSON.parse(JSON.stringify(history[historyIndex]));
                 selectedBboxIndex = -1;
-                redrawCanvas();
+                redrawStaticCanvas();
                 renderBboxList();
             }
         }
@@ -967,7 +1067,7 @@
                 historyIndex++;
                 bboxes = JSON.parse(JSON.stringify(history[historyIndex]));
                 selectedBboxIndex = -1;
-                redrawCanvas();
+                redrawStaticCanvas();
                 renderBboxList();
             }
         }
@@ -986,7 +1086,7 @@
             const scaleY = frameImage.clientHeight / frameImage.naturalHeight;
             const box = bboxes[selectedBboxIndex];
             const bx = box.x1 * scaleX, by = box.y1 * scaleY, bw = (box.x2 - box.x1) * scaleX, bh = (box.y2 - box.y1) * scaleY;
-            const handleSize = 10; // 稍微扩大判定范围以提升体验
+            const handleSize = 10;
             const handles = {
                 'top-left': { x: bx, y: by }, 'top-middle': { x: bx + bw / 2, y: by }, 'top-right': { x: bx + bw, y: by },
                 'middle-left': { x: bx, y: by + bh / 2 }, 'middle-right': { x: bx + bw, y: by + bh / 2 },
@@ -1089,21 +1189,15 @@
 
             history = [JSON.parse(JSON.stringify(bboxes))];
             historyIndex = 0;
-            redrawCanvas();
+            redrawStaticCanvas();
             renderBboxList();
         }
 
         function addClass(className) {
             if (className && !availableClasses.includes(className)) {
                 $.ajax({
-                    url: "/addClass",
-                    type: "POST",
-                    contentType: "application/json",
-                    data: JSON.stringify({ label_name: className }),
-                    success: function() {
-                        availableClasses.push(className);
-                        renderClassList();
-                    },
+                    url: "/addClass", type: "POST", contentType: "application/json", data: JSON.stringify({ label_name: className }),
+                    success: function() { availableClasses.push(className); renderClassList(); },
                     error: function() { showToast("Error: Failed to add new class.", 3000); }
                 });
             }
@@ -1150,11 +1244,11 @@
                     const frameNumber = eventData.frame_number;
                     if (frameNumber <= parseInt(frameSlider.attr("max"))) {
                         frameSlider.val(frameNumber);
-                        currentEditingFrame = frameNumber; // Sync internal tracker
+                        currentEditingFrame = frameNumber;
                         $("#frame-number-display").text(frameNumber);
                         const imageUrl = `/media/frames/${videoUuid}/frame_${String(frameNumber).padStart(5, "0")}.jpg`;
                         if (!frameImage.src.endsWith(imageUrl)) frameImage.src = imageUrl;
-                        loadBboxesForFrame(frameNumber); // Update UI
+                        loadBboxesForFrame(frameNumber);
                     }
                     break;
                 case "completed":
@@ -1172,7 +1266,6 @@
 
         function handleTrackingEnd(status, message) {
             if (sam2EventSource) { sam2EventSource.close(); sam2EventSource = null; }
-
             $("#sam2-track-btn").prop("disabled", false);
             $("#stop-sam2-track-btn").prop("disabled", true);
             const progressBar = $("#track-progress-bar");
@@ -1198,9 +1291,7 @@
             showToast(statusText + (message ? ` (${message})` : ""), 4000);
 
             const firstFrame = Math.min(...Object.keys(trackedBboxCache).map(Number));
-            if (isFinite(firstFrame)) {
-                frameSlider.val(firstFrame).trigger("input");
-            }
+            if (isFinite(firstFrame)) frameSlider.val(firstFrame).trigger("input");
         }
 
         function clearInteractiveSession(shouldRedraw = true) {
@@ -1211,7 +1302,7 @@
             overlappingCycleIndex = 0;
             lastClickPosForCycle = null;
             $('#interactive-results-controls').slideUp();
-            if (shouldRedraw) redrawCanvas();
+            if (shouldRedraw) redrawStaticCanvas();
         }
 
         function triggerFindSimilar() {
@@ -1224,23 +1315,15 @@
             $button.prop('disabled', true);
             const runPrediction = () => {
                 showToast(useColor ? 'Scanning (Color + Shape)...' : 'Scanning...', 4000);
-                const payload = {
-                    video_uuid: videoUuid,
-                    frame_number: frameNumber,
-                    prompt_boxes: positiveExampleBboxes,
-                    use_color: useColor
-                };
+                const payload = { video_uuid: videoUuid, frame_number: frameNumber, prompt_boxes: positiveExampleBboxes, use_color: useColor };
                 $.ajax({
-                    url: '/interactive_segment/predict',
-                    type: 'POST',
-                    contentType: 'application/json',
-                    data: JSON.stringify(payload),
+                    url: '/interactive_segment/predict', type: 'POST', contentType: 'application/json', data: JSON.stringify(payload),
                     success: res => {
                         if (res.success) {
                             interactivePreviewBboxes = res.results;
                             $('#interactive-results-controls').slideDown();
                             $('#result-threshold').trigger('input');
-                            redrawCanvas();
+                            redrawStaticCanvas();
                         } else { alert('Prediction failed: ' + res.message); }
                     },
                     error: () => alert('Server error during prediction.'),
@@ -1250,21 +1333,15 @@
 
             if (lastProcessedFrame !== frameNumber) {
                 showToast('Preprocessing frame...', 10000);
-                const payload = { video_uuid: videoUuid, frame_number: frameNumber };
                 $.ajax({
-                    url: '/interactive_segment/preprocess',
-                    type: 'POST',
-                    contentType: 'application/json',
-                    data: JSON.stringify(payload),
+                    url: '/interactive_segment/preprocess', type: 'POST', contentType: 'application/json',
+                    data: JSON.stringify({ video_uuid: videoUuid, frame_number: frameNumber }),
                     success: res => {
                         if (res.success) {
                             currentCacheKey = res.cache_key;
                             lastProcessedFrame = frameNumber;
                             runPrediction();
-                        } else {
-                            alert('Preprocessing failed: ' + res.message);
-                            $button.prop('disabled', false);
-                        }
+                        } else { alert('Preprocessing failed: ' + res.message); $button.prop('disabled', false); }
                     },
                     error: () => { alert('Server error during preprocessing.'); $button.prop('disabled', false); }
                 });
@@ -1273,15 +1350,11 @@
 
         function startNegativeSampling(count) {
             $.ajax({
-                url: '/api/get_random_frames_for_neg_sampling',
-                type: 'POST',
-                contentType: 'application/json',
+                url: '/api/get_random_frames_for_neg_sampling', type: 'POST', contentType: 'application/json',
                 data: JSON.stringify({ video_uuid: videoUuid, count: count }),
                 success: function(res) {
                     if (res.success && res.frames.length > 0) {
-                        negSamplingFrames = res.frames;
-                        currentNegSampleIndex = 0;
-                        negativeSamplesStore = {};
+                        negSamplingFrames = res.frames; currentNegSampleIndex = 0; negativeSamplesStore = {};
                         loadNegativeSampleFrame();
                         $('#negative-sampling-modal').modal({ backdrop: 'static', keyboard: false });
                     } else { alert("Failed to fetch random frames: " + (res.message || "No frames returned.")); }
@@ -1294,66 +1367,47 @@
             if (!negImage.complete || negImage.naturalWidth === 0 || !$('#negative-sampling-modal').is(':visible')) return;
             const dpr = window.devicePixelRatio || 1;
             const rect = negImage.getBoundingClientRect();
-            negCanvas.style.width = `${rect.width}px`;
-            negCanvas.style.height = `${rect.height}px`;
-            negCanvas.width = Math.round(rect.width * dpr);
-            negCanvas.height = Math.round(rect.height * dpr);
+            negCanvas.style.width = `${rect.width}px`; negCanvas.style.height = `${rect.height}px`;
+            negCanvas.width = Math.round(rect.width * dpr); negCanvas.height = Math.round(rect.height * dpr);
             negCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
             redrawNegCanvas();
         }
 
         function loadNegativeSampleFrame() {
             if (currentNegSampleIndex < 0 || currentNegSampleIndex >= negSamplingFrames.length) return;
-            const frameData = negSamplingFrames[currentNegSampleIndex];
             $('#neg-frame-counter').text(`FRAME ${currentNegSampleIndex + 1} / ${negSamplingFrames.length}`);
             negImage.onload = () => { resizeNegCanvas(); };
-            negImage.src = frameData.image_url;
+            negImage.src = negSamplingFrames[currentNegSampleIndex].image_url;
         }
 
         function redrawNegCanvas() {
             const dpr = window.devicePixelRatio || 1;
             negCtx.clearRect(0, 0, negCanvas.width / dpr, negCanvas.height / dpr);
-            if (negSamplingFrames.length === 0) return;
-            const frameData = negSamplingFrames[currentNegSampleIndex];
-            const frameKey = `${frameData.video_uuid};${frameData.frame_number}`;
+            if (negSamplingFrames.length === 0 || !negImage.naturalWidth) return;
+            const frameKey = `${negSamplingFrames[currentNegSampleIndex].video_uuid};${negSamplingFrames[currentNegSampleIndex].frame_number}`;
             const boxes = negativeSamplesStore[frameKey] || [];
-            if (!negImage.naturalWidth) return;
-            const scaleX = negImage.clientWidth / negImage.naturalWidth;
-            const scaleY = negImage.clientHeight / negImage.naturalHeight;
+            const scaleX = negImage.clientWidth / negImage.naturalWidth, scaleY = negImage.clientHeight / negImage.naturalHeight;
             boxes.forEach(box => {
                 negCtx.strokeStyle = getColor('negativeSampleStroke');
-                negCtx.lineWidth = 2 / dpr;
-                negCtx.setLineDash([5 / dpr, 3 / dpr]);
-                const x = box[0] * scaleX, y = box[1] * scaleY, w = (box[2] - box[0]) * scaleX, h = (box[3] - box[1]) * scaleY;
-                negCtx.strokeRect(x, y, w, h);
+                negCtx.lineWidth = 2 / dpr; negCtx.setLineDash([5 / dpr, 3 / dpr]);
+                negCtx.strokeRect(box[0] * scaleX, box[1] * scaleY, (box[2] - box[0]) * scaleX, (box[3] - box[1]) * scaleY);
                 negCtx.setLineDash([]);
             });
         }
 
         function triggerApplyToVideo(negativeSamples) {
             if (!lastDatasetClassName) { alert("An error occurred. The class to apply is unknown."); return; }
-            const confirmMessage = negativeSamples && Object.keys(negativeSamples).length > 0
+            const msg = negativeSamples && Object.keys(negativeSamples).length > 0
                 ? `Start background task to apply REFINED model for '${lastDatasetClassName}'?`
                 : `Start background task to apply learned features for '${lastDatasetClassName}'?`;
 
-            if (confirm(confirmMessage)) {
-                const payload = {
-                    video_uuid: videoUuid,
-                    class_name: lastDatasetClassName,
-                    negative_samples: negativeSamples,
-                    confidence_threshold: parseFloat($('#apply-confidence-threshold').val())
-                };
-
+            if (confirm(msg)) {
                 $.ajax({
-                    url: '/apply_prototypes_to_video',
-                    type: 'POST',
-                    contentType: 'application/json',
-                    data: JSON.stringify(payload),
+                    url: '/apply_prototypes_to_video', type: 'POST', contentType: 'application/json',
+                    data: JSON.stringify({ video_uuid: videoUuid, class_name: lastDatasetClassName, negative_samples: negativeSamples, confidence_threshold: parseFloat($('#apply-confidence-threshold').val()) }),
                     success: function(res) {
-                        if (res.success) {
-                            alert("Task started. Video status will update on dashboard.");
-                            window.location.href = "/";
-                        } else { alert("Failed to start task: " + res.message); }
+                        if (res.success) { alert("Task started. Video status will update on dashboard."); window.location.href = "/"; }
+                        else { alert("Failed to start task: " + res.message); }
                     },
                     error: function() { alert("Server error when trying to start the task."); }
                 });
@@ -1362,37 +1416,29 @@
 
         function undoNegativeSample() {
             if (currentNegSampleIndex < 0 || currentNegSampleIndex >= negSamplingFrames.length) return;
-            const frameData = negSamplingFrames[currentNegSampleIndex];
-            const frameKey = `${frameData.video_uuid};${frameData.frame_number}`;
+            const frameKey = `${negSamplingFrames[currentNegSampleIndex].video_uuid};${negSamplingFrames[currentNegSampleIndex].frame_number}`;
             if (negativeSamplesStore[frameKey] && negativeSamplesStore[frameKey].length > 0) {
-                negativeSamplesStore[frameKey].pop();
-                redrawNegCanvas();
-                showToast('Sample removed.', 1500);
+                negativeSamplesStore[frameKey].pop(); redrawNegCanvas(); showToast('Sample removed.', 1500);
             } else { showToast('Nothing to undo.', 1500); }
         }
 
         function clearCurrentNegativeSamples() {
             if (currentNegSampleIndex < 0 || currentNegSampleIndex >= negSamplingFrames.length) return;
-            const frameData = negSamplingFrames[currentNegSampleIndex];
-            const frameKey = `${frameData.video_uuid};${frameData.frame_number}`;
+            const frameKey = `${negSamplingFrames[currentNegSampleIndex].video_uuid};${negSamplingFrames[currentNegSampleIndex].frame_number}`;
             if (negativeSamplesStore[frameKey] && negativeSamplesStore[frameKey].length > 0) {
-                negativeSamplesStore[frameKey] = [];
-                redrawNegCanvas();
-                showToast('Frame cleared.', 1500);
+                negativeSamplesStore[frameKey] = []; redrawNegCanvas(); showToast('Frame cleared.', 1500);
             }
         }
 
         function resetInterpolationState(reloadFrame = false) {
             interpolationState = { isActive: false, objectId: null, startFrameData: null };
             $('#interpolation-banner').slideUp();
-            if (reloadFrame) { frameSlider.trigger("input"); } else { renderBboxList(); redrawCanvas(); }
+            if (reloadFrame) { frameSlider.trigger("input"); } else { renderBboxList(); redrawStaticCanvas(); }
         }
 
         function showLamSuggestions(bbox, suggestions, clickX, clickY) {
             const tempBbox = { ...bbox, label: 'suggestion', id: 'temp' };
-            bboxes.push(tempBbox);
-            redrawCanvas();
-            bboxes.pop();
+            bboxes.push(tempBbox); redrawStaticCanvas(); bboxes.pop();
 
             const template = document.getElementById('lam-suggestion-popup-template').content.cloneNode(true);
             const popup = $(template).find('#lam-suggestion-popup');
@@ -1403,14 +1449,12 @@
             } else {
                 suggestions.forEach(sug => {
                     const color = stringToColor(sug.label);
-                    const scorePercent = (sug.score * 100).toFixed(1);
-                    const item = $(`
+                    suggestionList.append(`
                         <button type="button" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center bg-transparent text-white border-bottom border-secondary" style="transition: all 0.2s;" data-label="${sug.label}">
                             <div><span class="color-swatch" style="background-color: ${color};"></span> ${sug.label}</div>
-                            <span class="badge badge-primary rounded-0">${scorePercent}%</span>
+                            <span class="badge badge-primary rounded-0">${(sug.score * 100).toFixed(1)}%</span>
                         </button>
                     `);
-                    suggestionList.append(item);
                 });
             }
 
@@ -1420,69 +1464,41 @@
             popup.on('click', 'button', function() {
                 const selectedLabel = $(this).data('label');
                 if (selectedLabel) {
-                    const newBox = { ...bbox, label: selectedLabel, id: self.crypto.randomUUID() };
-                    bboxes.push(newBox);
-                    saveStateToHistory();
-                    selectedBboxIndex = bboxes.length - 1;
-                    renderBboxList();
+                    bboxes.push({ ...bbox, label: selectedLabel, id: self.crypto.randomUUID() });
+                    saveStateToHistory(); selectedBboxIndex = bboxes.length - 1; renderBboxList();
                 }
-                popup.remove();
-                redrawCanvas();
+                popup.remove(); redrawStaticCanvas();
             });
 
-            setTimeout(() => {
-                $(document).one('mousedown', function(e) {
-                    if (!$(e.target).closest('#lam-suggestion-popup').length) { popup.remove(); redrawCanvas(); }
-                });
-            }, 100);
+            setTimeout(() => { $(document).one('mousedown', function(e) { if (!$(e.target).closest('#lam-suggestion-popup').length) { popup.remove(); redrawStaticCanvas(); } }); }, 100);
         }
 
         frameImage.onload = function() {
-            bboxes = [];
-            selectedBboxIndex = -1;
-            resizeCanvas();
+            bboxes = []; selectedBboxIndex = -1; resizeCanvas();
             const frameNumber = frameSlider.val();
             loadBboxesForFrame(frameNumber);
             smartTriggerPreprocess(frameNumber);
-            const defaultThreshold = 0.50;
-            const currentFrameThreshold = frameConfidence[frameNumber] ?? defaultThreshold;
-            $('#result-threshold').val(currentFrameThreshold);
-            $('#result-threshold').trigger('input');
+            const currentFrameThreshold = frameConfidence[frameNumber] ?? 0.50;
+            $('#result-threshold').val(currentFrameThreshold).trigger('input');
         };
 
         frameImage.addEventListener('dragstart', (e) => e.preventDefault());
         window.onresize = resizeCanvas;
 
-        // --- 修改后的帧导航逻辑 (支持自动保存) ---
         frameSlider.on("input", function() {
             const newFrameNumber = parseInt($(this).val());
-
-            // 如果帧号没变，直接返回
             if (newFrameNumber === currentEditingFrame) return;
 
-            // === AUTOSAVE 逻辑 ===
-            if (settings.autosave_enabled) {
-                const currentData = formatBboxesToString();
-                performSave(currentEditingFrame, currentData, true); // True = 静默保存
-            }
-            // ====================
+            if (settings.autosave_enabled) { performSave(currentEditingFrame, formatBboxesToString(), true); }
 
-            // 更新记录
             currentEditingFrame = newFrameNumber;
-
-            // UI 更新
             $("#frame-number-display").text(newFrameNumber);
             const imageUrl = `/media/frames/${videoUuid}/frame_${String(newFrameNumber).padStart(5, "0")}.jpg`;
 
-            if (frameImage.src.endsWith(imageUrl) === false) {
-                frameImage.src = imageUrl;
-            } else if (frameImage.complete) {
-                loadBboxesForFrame(newFrameNumber);
-                smartTriggerPreprocess(newFrameNumber);
-            }
+            if (frameImage.src.endsWith(imageUrl) === false) { frameImage.src = imageUrl; }
+            else if (frameImage.complete) { loadBboxesForFrame(newFrameNumber); smartTriggerPreprocess(newFrameNumber); }
 
-            const defaultThreshold = 0.50;
-            const currentFrameThreshold = frameConfidence[newFrameNumber] ?? defaultThreshold;
+            const currentFrameThreshold = frameConfidence[newFrameNumber] ?? 0.50;
             $('#result-threshold').val(currentFrameThreshold);
             $('#threshold-value').text(currentFrameThreshold.toFixed(2));
         });
@@ -1490,133 +1506,85 @@
         canvasContainer.on('mousedown', function(e) {
             if (repeatMode.isActive) {
                 e.preventDefault();
-                const pos = getMousePos(drawingCanvas, e);
+                const pos = getMousePos(dynamicCanvas, e);
                 const scaleX = frameImage.naturalWidth / frameImage.clientWidth;
                 const scaleY = frameImage.naturalHeight / frameImage.clientHeight;
-                const halfW = (repeatMode.width / 2);
-                const halfH = (repeatMode.height / 2);
-                const newBox = {
+                const halfW = (repeatMode.width / 2), halfH = (repeatMode.height / 2);
+                bboxes.push({
                     x1: Math.round((pos.x * scaleX) - halfW), y1: Math.round((pos.y * scaleY) - halfH),
                     x2: Math.round((pos.x * scaleX) + halfW), y2: Math.round((pos.y * scaleY) + halfH),
                     label: repeatMode.label, id: self.crypto.randomUUID()
-                };
-                bboxes.push(newBox);
-                saveStateToHistory();
-                selectedBboxIndex = bboxes.length - 1;
-                renderBboxList();
-                redrawCanvas();
+                });
+                saveStateToHistory(); selectedBboxIndex = bboxes.length - 1; renderBboxList(); redrawStaticCanvas();
                 return;
             }
             if (isLamModeActive) {
-                e.preventDefault();
-                $('#lam-suggestion-popup').remove();
-                const pos = getMousePos(drawingCanvas, e);
-                const scaleX = frameImage.naturalWidth / frameImage.clientWidth;
-                const scaleY = frameImage.naturalHeight / frameImage.clientHeight;
-
-                canvasContainer.addClass('sam-loading');
-                $('body').css('cursor', 'wait');
-                showToast('LAM processing...', 5000);
-
+                e.preventDefault(); $('#lam-suggestion-popup').remove();
+                const pos = getMousePos(dynamicCanvas, e);
+                const scaleX = frameImage.naturalWidth / frameImage.clientWidth, scaleY = frameImage.naturalHeight / frameImage.clientHeight;
+                canvasContainer.addClass('sam-loading'); $('body').css('cursor', 'wait'); showToast('LAM processing...', 5000);
                 $.ajax({
-                    url: "/lam_predict",
-                    type: "POST",
-                    contentType: "application/json",
-                    data: JSON.stringify({
-                        video_uuid: videoUuid, frame_number: frameSlider.val(),
-                        point: { x: Math.round(pos.x * scaleX), y: Math.round(pos.y * scaleY) }
-                    }),
-                    success: function(response) {
-                        if (response.success) {
-                            showLamSuggestions(response.bbox, response.suggestions, e.clientX, e.clientY);
-                            showToast('Select class.', 3000);
-                        } else { showToast(response.message || "LAM failed.", 3000); }
+                    url: "/lam_predict", type: "POST", contentType: "application/json",
+                    data: JSON.stringify({ video_uuid: videoUuid, frame_number: frameSlider.val(), point: { x: Math.round(pos.x * scaleX), y: Math.round(pos.y * scaleY) } }),
+                    success: function(res) {
+                        if (res.success) { showLamSuggestions(res.bbox, res.suggestions, e.clientX, e.clientY); showToast('Select class.', 3000); }
+                        else { showToast(res.message || "LAM failed.", 3000); }
                     },
                     error: function(xhr) { showToast('Server Error: ' + (xhr.responseJSON ? xhr.responseJSON.message : 'Unknown Error'), 4000); },
-                    complete: function() {
-                        canvasContainer.removeClass('sam-loading');
-                        $('body').css('cursor', 'default');
-                    }
+                    complete: function() { canvasContainer.removeClass('sam-loading'); $('body').css('cursor', 'default'); }
                 });
                 return;
             }
 
             if (isSamModeActive) {
                 e.preventDefault();
-                const pos = getMousePos(drawingCanvas, e);
-                const scaleX = frameImage.naturalWidth / frameImage.clientWidth;
-                const scaleY = frameImage.naturalHeight / frameImage.clientHeight;
-                canvasContainer.addClass('sam-loading');
-                $('body').css('cursor', 'wait');
-                showToast('SAM processing...', 5000);
+                const pos = getMousePos(dynamicCanvas, e);
+                const scaleX = frameImage.naturalWidth / frameImage.clientWidth, scaleY = frameImage.naturalHeight / frameImage.clientHeight;
+                canvasContainer.addClass('sam-loading'); $('body').css('cursor', 'wait'); showToast('SAM processing...', 5000);
 
                 $.ajax({
-                    url: "/samPredict",
-                    type: "POST",
-                    contentType: "application/json",
-                    data: JSON.stringify({
-                        video_uuid: videoUuid, frame_number: frameSlider.val(),
-                        point: { x: Math.round(pos.x * scaleX), y: Math.round(pos.y * scaleY) }
-                    }),
-                    success: function(response) {
-                        if (!response.success) { showToast(response.message || "SAM failed.", 3000); return; }
+                    url: "/samPredict", type: "POST", contentType: "application/json",
+                    data: JSON.stringify({ video_uuid: videoUuid, frame_number: frameSlider.val(), point: { x: Math.round(pos.x * scaleX), y: Math.round(pos.y * scaleY) } }),
+                    success: function(res) {
+                        if (!res.success) { showToast(res.message || "SAM failed.", 3000); return; }
                         if (isInteractiveMode) {
-                            positiveExampleBboxes = [response.bbox];
-                            redrawCanvas();
-                            showToast('Sample added. Scanning...', 2000);
-                            triggerFindSimilar();
+                            positiveExampleBboxes = [res.bbox]; redrawStaticCanvas(); showToast('Sample added. Scanning...', 2000); triggerFindSimilar();
                         } else {
                             if (activeClass) {
-                                const newBox = { ...response.bbox, label: activeClass, id: self.crypto.randomUUID() };
-                                bboxes.push(newBox);
-                                saveStateToHistory();
-                                selectedBboxIndex = bboxes.length - 1;
-                                renderBboxList();
-                                redrawCanvas();
-                                showToast('SAM object added!', 2000);
+                                bboxes.push({ ...res.bbox, label: activeClass, id: self.crypto.randomUUID() });
+                                saveStateToHistory(); selectedBboxIndex = bboxes.length - 1; renderBboxList(); redrawStaticCanvas(); showToast('SAM object added!', 2000);
                             } else { showToast('Select class first.', 3000); }
                         }
                     },
                     error: function(xhr) { showToast('SAM Error: ' + (xhr.responseJSON ? xhr.responseJSON.message : 'Unknown'), 4000); },
-                    complete: function() {
-                        canvasContainer.removeClass('sam-loading');
-                        $('body').css('cursor', 'default');
-                    }
+                    complete: function() { canvasContainer.removeClass('sam-loading'); $('body').css('cursor', 'default'); }
                 });
                 return;
             }
 
             if (isReviewMode) return;
-            const pos = getMousePos(drawingCanvas, e);
+            const pos = getMousePos(dynamicCanvas, e);
 
             if (suggestionBboxes.length > 0) {
                 const threshold = parseFloat($('#suggestion-threshold').val());
-                const scaleX = frameImage.clientWidth / frameImage.naturalWidth;
-                const scaleY = frameImage.clientHeight / frameImage.naturalHeight;
-                let clickedSuggestionIndex = -1;
+                const scaleX = frameImage.clientWidth / frameImage.naturalWidth, scaleY = frameImage.clientHeight / frameImage.naturalHeight;
+                let clickedSugIndex = -1;
 
                 for (let i = suggestionBboxes.length - 1; i >= 0; i--) {
                     const sug = suggestionBboxes[i];
                     if (sug.score >= threshold) {
                         const b = sug.box;
                         if (pos.x > b[0] * scaleX && pos.x < b[2] * scaleX && pos.y > b[1] * scaleY && pos.y < b[3] * scaleY) {
-                            clickedSuggestionIndex = i;
-                            break;
+                            clickedSugIndex = i; break;
                         }
                     }
                 }
 
-                if (clickedSuggestionIndex !== -1) {
+                if (clickedSugIndex !== -1) {
                     e.preventDefault();
-                    const acceptedSuggestion = suggestionBboxes.splice(clickedSuggestionIndex, 1)[0];
-                    bboxes.push({
-                        x1: acceptedSuggestion.box[0], y1: acceptedSuggestion.box[1], x2: acceptedSuggestion.box[2], y2: acceptedSuggestion.box[3],
-                        label: acceptedSuggestion.label, id: self.crypto.randomUUID()
-                    });
-                    saveStateToHistory();
-                    selectedBboxIndex = bboxes.length - 1;
-                    redrawCanvas();
-                    renderBboxList();
+                    const acc = suggestionBboxes.splice(clickedSugIndex, 1)[0];
+                    bboxes.push({ x1: acc.box[0], y1: acc.box[1], x2: acc.box[2], y2: acc.box[3], label: acc.label, id: self.crypto.randomUUID() });
+                    saveStateToHistory(); selectedBboxIndex = bboxes.length - 1; redrawStaticCanvas(); renderBboxList();
                     showToast(`Accepted suggestion.`, 2000);
                     return;
                 }
@@ -1625,16 +1593,13 @@
             if ((isInteractiveMode || interactivePreviewBboxes.length > 0) && interactivePreviewBboxes.length > 0) {
                 if (!activeClass) { alert("Select a class to assign."); return; }
                 const threshold = parseFloat($('#result-threshold').val());
-                const scaleX = frameImage.clientWidth / frameImage.naturalWidth;
-                const scaleY = frameImage.clientHeight / frameImage.naturalHeight;
+                const scaleX = frameImage.clientWidth / frameImage.naturalWidth, scaleY = frameImage.clientHeight / frameImage.naturalHeight;
                 let targetBoxIndex = -1;
                 const overlappingIndices = [];
                 interactivePreviewBboxes.forEach((res, index) => {
                     if (res.score >= threshold) {
                         const b = res.box;
-                        if (pos.x > b[0] * scaleX && pos.x < b[2] * scaleX && pos.y > b[1] * scaleY && pos.y < b[3] * scaleY) {
-                            overlappingIndices.unshift(index);
-                        }
+                        if (pos.x > b[0] * scaleX && pos.x < b[2] * scaleX && pos.y > b[1] * scaleY && pos.y < b[3] * scaleY) overlappingIndices.unshift(index);
                     }
                 });
 
@@ -1645,175 +1610,144 @@
                         overlappingCycleIndex = isSameClick ? (overlappingCycleIndex + 1) % overlappingIndices.length : 0;
                         targetBoxIndex = overlappingIndices[overlappingCycleIndex];
                         lastClickPosForCycle = pos;
-                    } else {
-                        targetBoxIndex = overlappingIndices[0];
-                        lastClickPosForCycle = null;
-                    }
-                    const res = interactivePreviewBboxes[targetBoxIndex];
-                    const b = res.box;
+                    } else { targetBoxIndex = overlappingIndices[0]; lastClickPosForCycle = null; }
+
+                    const res = interactivePreviewBboxes[targetBoxIndex]; const b = res.box;
                     bboxes.push({ x1: b[0], y1: b[1], x2: b[2], y2: b[3], label: res.label || activeClass });
                     interactivePreviewBboxes.splice(targetBoxIndex, 1);
-                    saveStateToHistory();
-                    renderBboxList();
-                    hoveredPreviewIndex = -1;
-                    redrawCanvas();
+                    saveStateToHistory(); renderBboxList(); hoveredPreviewIndex = -1; redrawStaticCanvas();
                     return;
                 }
             }
 
             if (isInteractiveMode) {
-                isDrawing = true;
-                startX = pos.x;
-                startY = pos.y;
-                clearCrosshairs();
+                isDrawing = true; startX = pos.x; startY = pos.y;
+                lastMousePos = null; redrawDynamicCanvas(null);
                 return;
             }
 
             draggedHandle = getHandleAtPos(pos.x, pos.y);
             if (draggedHandle) {
-                isDraggingBbox = true;
-                editMode = 'resize';
+                isDraggingBbox = true; editMode = 'resize';
                 draggedBboxInitialState = JSON.parse(JSON.stringify(bboxes[selectedBboxIndex]));
+                redrawStaticCanvas(); // 从静态层隐藏
                 return;
             }
 
-            const scaleX = frameImage.clientWidth / frameImage.naturalWidth;
-            const scaleY = frameImage.clientHeight / frameImage.naturalHeight;
+            const scaleX = frameImage.clientWidth / frameImage.naturalWidth, scaleY = frameImage.clientHeight / frameImage.naturalHeight;
             let clickedOnBoxIndex = -1;
             for (let i = bboxes.length - 1; i >= 0; i--) {
                 const box = bboxes[i];
                 const bx = box.x1 * scaleX, by = box.y1 * scaleY, bw = (box.x2 - box.x1) * scaleX, bh = (box.y2 - box.y1) * scaleY;
-                if (pos.x > bx && pos.x < bx + bw && pos.y > by && pos.y < by + bh) {
-                    clickedOnBoxIndex = i;
-                    break;
-                }
+                if (pos.x > bx && pos.x < bx + bw && pos.y > by && pos.y < by + bh) { clickedOnBoxIndex = i; break; }
             }
 
             if (clickedOnBoxIndex !== -1) {
                 selectedBboxIndex = clickedOnBoxIndex;
-                isDraggingBbox = true;
-                editMode = 'move';
+                isDraggingBbox = true; editMode = 'move';
                 draggedBboxInitialState = JSON.parse(JSON.stringify(bboxes[selectedBboxIndex]));
-                startX = pos.x;
-                startY = pos.y;
-                renderBboxList();
-                redrawCanvas();
+                startX = pos.x; startY = pos.y;
+                renderBboxList(); redrawStaticCanvas(); // 从静态层隐藏
             } else {
-                selectedBboxIndex = -1;
-                renderBboxList();
-                redrawCanvas();
+                selectedBboxIndex = -1; renderBboxList(); redrawStaticCanvas();
                 if (activeClass) {
-                    isDrawing = true;
-                    startX = pos.x;
-                    startY = pos.y;
-                    clearCrosshairs();
+                    isDrawing = true; startX = pos.x; startY = pos.y;
+                    lastMousePos = null; redrawDynamicCanvas(null);
                 }
             }
         });
 
-        // 【性能优化】使用 requestAnimationFrame 进行渲染节流
+        // 【性能优化】使用 requestAnimationFrame 进行渲染节流 + 双层画布交互更新
         $(document).on('mousemove', function(e) {
             if (isRequestingAnimationFrame) return;
             isRequestingAnimationFrame = true;
 
             requestAnimationFrame(() => {
                 if (!$(e.target).closest('#canvas-container').length) {
-                    if (hoveredPreviewIndex !== -1) { hoveredPreviewIndex = -1; redrawCanvas(); }
-                    $(drawingCanvas).removeClass((index, className) => (className.match(/\bcursor-\S+/g) || []).join(' '));
+                    if (hoveredPreviewIndex !== -1) { hoveredPreviewIndex = -1; redrawStaticCanvas(); }
+                    $(dynamicCanvas).removeClass((index, className) => (className.match(/\bcursor-\S+/g) || []).join(' '));
+                    lastMousePos = null; redrawDynamicCanvas(null);
                     isRequestingAnimationFrame = false;
                     return;
                 }
 
-                const pos = getMousePos(drawingCanvas, e);
+                const pos = getMousePos(dynamicCanvas, e);
 
                 if (isDrawing) {
-                    redrawCanvas();
-                    const dpr = window.devicePixelRatio || 1;
-                    let currentX = Math.max(0, Math.min(pos.x, frameImage.clientWidth));
-                    let currentY = Math.max(0, Math.min(pos.y, frameImage.clientHeight));
-                    drawingCtx.lineWidth = 2 / dpr;
-                    drawingCtx.strokeStyle = isInteractiveMode ? getColor('positiveExampleStroke') : stringToColor(activeClass || 'blue');
-                    drawingCtx.setLineDash(isInteractiveMode ? [5 / dpr, 3 / dpr] : []);
-                    drawingCtx.strokeRect(startX, startY, currentX - startX, currentY - startY);
-                    drawingCtx.setLineDash([]);
-
+                    redrawDynamicCanvas(pos);
                 } else if (isDraggingBbox) {
                     const scaleX = frameImage.naturalWidth / frameImage.clientWidth;
                     const scaleY = frameImage.naturalHeight / frameImage.clientHeight;
                     let currentBox = bboxes[selectedBboxIndex];
 
                     if (editMode === 'move') {
-                        const dx = (pos.x - startX) * scaleX;
-                        const dy = (pos.y - startY) * scaleY;
-                        currentBox.x1 = draggedBboxInitialState.x1 + dx;
-                        currentBox.y1 = draggedBboxInitialState.y1 + dy;
-                        currentBox.x2 = draggedBboxInitialState.x2 + dx;
-                        currentBox.y2 = draggedBboxInitialState.y2 + dy;
+                        const dx = (pos.x - startX) * scaleX, dy = (pos.y - startY) * scaleY;
+                        currentBox.x1 = draggedBboxInitialState.x1 + dx; currentBox.y1 = draggedBboxInitialState.y1 + dy;
+                        currentBox.x2 = draggedBboxInitialState.x2 + dx; currentBox.y2 = draggedBboxInitialState.y2 + dy;
                     } else if (editMode === 'resize') {
-                        const newX = pos.x * scaleX;
-                        const newY = pos.y * scaleY;
+                        const newX = pos.x * scaleX, newY = pos.y * scaleY;
                         const initialState = draggedBboxInitialState;
                         if (draggedHandle.includes('left')) currentBox.x1 = Math.min(newX, initialState.x2 - 1);
                         if (draggedHandle.includes('right')) currentBox.x2 = Math.max(newX, initialState.x1 + 1);
                         if (draggedHandle.includes('top')) currentBox.y1 = Math.min(newY, initialState.y2 - 1);
                         if (draggedHandle.includes('bottom')) currentBox.y2 = Math.max(newY, initialState.y1 + 1);
                     }
-                    redrawCanvas();
-
+                    redrawDynamicCanvas(pos);
                 } else {
-                    drawCrosshairs(pos.x, pos.y);
-                    const handle = getHandleAtPos(pos.x, pos.y);
-                    $(drawingCanvas).removeClass((index, className) => (className.match(/\bcursor-\S+/g) || []).join(' '));
-                    if (handle) {
-                        if (handle.includes('top-left') || handle.includes('bottom-right')) $(drawingCanvas).addClass('cursor-nwse-resize');
-                        else if (handle.includes('top-right') || handle.includes('bottom-left')) $(drawingCanvas).addClass('cursor-nesw-resize');
-                        else if (handle.includes('top') || handle.includes('bottom')) $(drawingCanvas).addClass('cursor-ns-resize');
-                        else if (handle.includes('left') || handle.includes('right')) $(drawingCanvas).addClass('cursor-ew-resize');
-                    } else {
-                        const scaleX = frameImage.clientWidth / frameImage.naturalWidth;
-                        const scaleY = frameImage.clientHeight / frameImage.naturalHeight;
-                        let onBox = false;
-                        for (let i = 0; i < bboxes.length; i++) {
-                            const box = bboxes[i];
-                            if (pos.x > box.x1 * scaleX && pos.x < box.x2 * scaleX && pos.y > box.y1 * scaleY && pos.y < box.y2 * scaleY) {
-                                onBox = true; break;
-                            }
-                        }
-                        if (onBox) $(drawingCanvas).addClass('cursor-move');
-                    }
-
+                    // Hover states
+                    let newHoveredIndex = -1;
                     if ((isInteractiveMode || interactivePreviewBboxes.length > 0) && interactivePreviewBboxes.length > 0) {
                         const scaleX = frameImage.clientWidth / frameImage.naturalWidth;
                         const scaleY = frameImage.clientHeight / frameImage.naturalHeight;
                         const threshold = parseFloat($('#result-threshold').val());
-                        let foundIndex = -1;
                         for (let i = interactivePreviewBboxes.length - 1; i >= 0; i--) {
                             const res = interactivePreviewBboxes[i];
                             if (res.score >= threshold) {
                                 const b = res.box;
                                 if (pos.x > b[0] * scaleX && pos.x < b[2] * scaleX && pos.y > b[1] * scaleY && pos.y < b[3] * scaleY) {
-                                    foundIndex = i; break;
+                                    newHoveredIndex = i; break;
                                 }
                             }
                         }
-                        if (foundIndex !== hoveredPreviewIndex) { hoveredPreviewIndex = foundIndex; redrawCanvas(); }
+                    }
+                    if (newHoveredIndex !== hoveredPreviewIndex) {
+                        hoveredPreviewIndex = newHoveredIndex;
+                        redrawStaticCanvas();
+                    }
+
+                    redrawDynamicCanvas(pos);
+
+                    // Cursor styles
+                    const handle = getHandleAtPos(pos.x, pos.y);
+                    $(dynamicCanvas).removeClass((index, className) => (className.match(/\bcursor-\S+/g) || []).join(' '));
+                    if (handle) {
+                        if (handle.includes('top-left') || handle.includes('bottom-right')) $(dynamicCanvas).addClass('cursor-nwse-resize');
+                        else if (handle.includes('top-right') || handle.includes('bottom-left')) $(dynamicCanvas).addClass('cursor-nesw-resize');
+                        else if (handle.includes('top') || handle.includes('bottom')) $(dynamicCanvas).addClass('cursor-ns-resize');
+                        else if (handle.includes('left') || handle.includes('right')) $(dynamicCanvas).addClass('cursor-ew-resize');
+                    } else {
+                        const scaleX = frameImage.clientWidth / frameImage.naturalWidth, scaleY = frameImage.clientHeight / frameImage.naturalHeight;
+                        let onBox = false;
+                        for (let i = 0; i < bboxes.length; i++) {
+                            const box = bboxes[i];
+                            if (pos.x > box.x1 * scaleX && pos.x < box.x2 * scaleX && pos.y > box.y1 * scaleY && pos.y < box.y2 * scaleY) { onBox = true; break; }
+                        }
+                        if (onBox) $(dynamicCanvas).addClass('cursor-move');
                     }
                 }
-                
-                // 释放锁，允许下一帧执行
+
                 isRequestingAnimationFrame = false;
             });
         }).on('mouseup', function(e) {
             if (isDrawing) {
                 isDrawing = false;
-                const pos = getMousePos(drawingCanvas, e);
+                const pos = getMousePos(dynamicCanvas, e);
                 let endX = Math.max(0, Math.min(pos.x, frameImage.clientWidth));
                 let endY = Math.max(0, Math.min(pos.y, frameImage.clientHeight));
 
-                if (Math.abs(startX - endX) < 5 || Math.abs(startY - endY) < 5) { redrawCanvas(); return; }
+                if (Math.abs(startX - endX) < 5 || Math.abs(startY - endY) < 5) { redrawStaticCanvas(); return; }
 
-                const scaleX = frameImage.naturalWidth / frameImage.clientWidth;
-                const scaleY = frameImage.naturalHeight / frameImage.clientHeight;
+                const scaleX = frameImage.naturalWidth / frameImage.clientWidth, scaleY = frameImage.naturalHeight / frameImage.clientHeight;
                 const newBoxRaw = {
                     x1: Math.round(Math.min(startX, endX) * scaleX), y1: Math.round(Math.min(startY, endY) * scaleY),
                     x2: Math.round(Math.max(startX, endX) * scaleX), y2: Math.round(Math.max(startY, endY) * scaleY)
@@ -1821,16 +1755,12 @@
 
                 if (isInteractiveMode) {
                     positiveExampleBboxes = [newBoxRaw];
-                    redrawCanvas();
-                    triggerFindSimilar();
+                    redrawStaticCanvas(); triggerFindSimilar();
                 } else if (activeClass) {
-                    const newBox = { ...newBoxRaw, label: activeClass, id: self.crypto.randomUUID() };
-                    bboxes.push(newBox);
-                    saveStateToHistory();
-                    selectedBboxIndex = bboxes.length - 1;
-                    renderBboxList();
+                    bboxes.push({ ...newBoxRaw, label: activeClass, id: self.crypto.randomUUID() });
+                    saveStateToHistory(); selectedBboxIndex = bboxes.length - 1; renderBboxList();
                 }
-                redrawCanvas();
+                redrawStaticCanvas();
 
             } else if (isDraggingBbox) {
                 let finalBox = bboxes[selectedBboxIndex];
@@ -1840,23 +1770,20 @@
                 if (finalBox.y1 > finalBox.y2) [finalBox.y1, finalBox.y2] = [finalBox.y2, finalBox.y1];
                 saveStateToHistory();
                 isDraggingBbox = false; editMode = null; draggedHandle = null; draggedBboxInitialState = null;
-                redrawCanvas();
+                redrawStaticCanvas(); // 恢复到静态层绘制
             }
         });
 
         $('#canvas-container').on('mouseleave', function() {
-            clearCrosshairs();
-            $(drawingCanvas).removeClass((index, className) => (className.match(/\bcursor-\S+/g) || []).join(' '));
+            lastMousePos = null; redrawDynamicCanvas(null);
+            $(dynamicCanvas).removeClass((index, className) => (className.match(/\bcursor-\S+/g) || []).join(' '));
         });
 
         $('#add-class-btn').on('click', function() {
             const className = $('#new-class-name').val().trim();
             if (className) { addClass(className); $('#new-class-name').val(''); }
         });
-
-        $('#new-class-name').on("keydown", function(e) {
-            if (e.key === 'Enter') { e.preventDefault(); $('#add-class-btn').click(); }
-        });
+        $('#new-class-name').on("keydown", function(e) { if (e.key === 'Enter') { e.preventDefault(); $('#add-class-btn').click(); } });
 
         $("#class-list").on("click", ".list-group-item", function() {
             const clickedClass = $(this).data("class-name");
@@ -1866,44 +1793,26 @@
 
         $('#bbox-list').on("click", ".list-group-item", function() {
             selectedBboxIndex = parseInt($(this).data("index"));
-            redrawCanvas();
-            renderBboxList();
+            redrawStaticCanvas(); renderBboxList();
         });
 
         $("#bbox-list").on("click", ".delete-bbox-btn", function(e) {
             e.stopPropagation();
-            const index = parseInt($(this).data("index"));
-            bboxes.splice(index, 1);
-            saveStateToHistory();
-            selectedBboxIndex = -1;
-            redrawCanvas();
-            renderBboxList();
+            bboxes.splice(parseInt($(this).data("index")), 1);
+            saveStateToHistory(); selectedBboxIndex = -1; redrawStaticCanvas(); renderBboxList();
         });
 
-        // --- 手动保存按钮 ---
-        $("#save-bboxes").on("click", function() {
-            const frameNumber = parseInt(frameSlider.val());
-            const dataStr = formatBboxesToString();
-            performSave(frameNumber, dataStr, false); // false = 显示提示
-        });
+        $("#save-bboxes").on("click", function() { performSave(parseInt(frameSlider.val()), formatBboxesToString(), false); });
 
         $('#rebuild-prototypes-btn').on('click', function() {
             if (confirm('Rebuild AI prototypes for all classes?')) {
                 const $btn = $(this);
                 $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> BUSY');
-
                 $.ajax({
-                    url: '/api/rebuild_prototypes',
-                    type: 'POST',
-                    contentType: 'application/json',
-                    data: JSON.stringify({}),
-                    success: function(res) {
-                        if(res.success) { showToast(res.message, 4000); } else { showToast('Error: ' + res.message, 5000); }
-                    },
+                    url: '/api/rebuild_prototypes', type: 'POST', contentType: 'application/json', data: JSON.stringify({}),
+                    success: function(res) { if(res.success) { showToast(res.message, 4000); } else { showToast('Error: ' + res.message, 5000); } },
                     error: function() { showToast('Error: Failed to start task.', 5000); },
-                    complete: function() {
-                        setTimeout(() => { $btn.prop('disabled', false).html('<i class="bi bi-cpu"></i> Rebuild AI'); }, 2000);
-                    }
+                    complete: function() { setTimeout(() => { $btn.prop('disabled', false).html('<i class="bi bi-cpu"></i> Rebuild AI'); }, 2000); }
                 });
             }
         });
@@ -1932,47 +1841,32 @@
             updateSamButtonText();
             if (isSamModeActive) {
                 if(isLamModeActive) $('#lam-toggle-btn').click();
-                clearCrosshairs();
+                lastMousePos = null; redrawDynamicCanvas(null);
             }
         });
 
-        // --- Video Tracking 按钮逻辑 ---
         $('#sam2-track-btn').on('click', function() {
-            // 1. 检查是否有标注
             if (bboxes.length === 0) { alert("Label at least one object first."); return; }
 
-            // --- 强制保存当前帧 ---
             const currentFrame = frameSlider.val();
             const currentBboxes = formatBboxesToString();
 
             $.ajax({
-                url: "/storeVideoFrameBboxesText",
-                type: "POST",
-                contentType: "application/json",
-                async: false, // 强制同步
+                url: "/storeVideoFrameBboxesText", type: "POST", contentType: "application/json", async: false,
                 data: JSON.stringify({ video_uuid: videoUuid, frame_number: parseInt(currentFrame), bboxes_text: currentBboxes })
             });
-            // ---------------------
 
-            const startFrame = parseInt(frameSlider.val());
-            const endFrame = parseInt(frameSlider.attr("max"));
-            const initBboxesText = formatBboxesToString(); // 获取刚刚保存的数据
-
+            const startFrame = parseInt(frameSlider.val()), endFrame = parseInt(frameSlider.attr("max"));
             if (confirm(`Start SAM2 tracking from frame ${startFrame} to ${endFrame}?`)) {
-                $(this).prop("disabled", true);
-                setTrackingUiState(true);
-                trackedBboxCache = {};
-                trackedBboxCache[startFrame] = initBboxesText;
-
-                startTrackingSequence(startFrame, endFrame, initBboxesText);
+                $(this).prop("disabled", true); setTrackingUiState(true);
+                trackedBboxCache = {}; trackedBboxCache[startFrame] = currentBboxes;
+                startTrackingSequence(startFrame, endFrame, currentBboxes);
             }
         });
 
         function startTrackingSequence(startFrame, endFrame, initBboxesText) {
              $.ajax({
-                url: "/startSam2Tracking",
-                type: "POST",
-                contentType: "application/json",
+                url: "/startSam2Tracking", type: "POST", contentType: "application/json",
                 data: JSON.stringify({ video_uuid: videoUuid, start_frame: startFrame, end_frame: endFrame, init_bboxes_text: initBboxesText }),
                 success: (res) => {
                     if (res.success) {
@@ -1989,12 +1883,7 @@
         $('#stop-sam2-track-btn').on('click', function() {
             if (sam2TrackerUuid) {
                 $(this).prop("disabled", true).html('<span class="spinner-border spinner-border-sm" role="status"></span> Stopping...');
-                $.ajax({
-                    url: "/stopSam2Tracking",
-                    type: "POST",
-                    contentType: "application/json",
-                    data: JSON.stringify({ tracker_uuid: sam2TrackerUuid })
-                });
+                $.ajax({ url: "/stopSam2Tracking", type: "POST", contentType: "application/json", data: JSON.stringify({ tracker_uuid: sam2TrackerUuid }) });
             }
         });
 
@@ -2005,49 +1894,35 @@
             if (confirm(`Save ${frameCount} reviewed frames?`)) {
                 const savePromises = Object.entries(trackedBboxCache).map(([frame_number, bboxes_text]) =>
                     $.ajax({
-                        url: "/storeVideoFrameBboxesText",
-                        type: "POST",
-                        contentType: "application/json",
+                        url: "/storeVideoFrameBboxesText", type: "POST", contentType: "application/json",
                         data: JSON.stringify({ video_uuid: videoUuid, frame_number: parseInt(frame_number), bboxes_text: bboxes_text })
                     })
                 );
                 showToast(`Saving ${savePromises.length} frames...`, 5000);
-                Promise.all(savePromises).then(() => {
-                    showToast("Tracking saved!", 3000);
-                    window.cachedFrames = null;
-                    exitReviewMode();
-                }).catch(err => { alert("Save error."); });
+                Promise.all(savePromises).then(() => { showToast("Tracking saved!", 3000); window.cachedFrames = null; exitReviewMode(); }).catch(err => { alert("Save error."); });
             }
         });
 
         $('#bbox-list').on('click', '.interpolate-btn', function(e) {
             e.stopPropagation();
-            const boxIndex = parseInt($(this).closest('li').data('index'));
-            const clickedBox = bboxes[boxIndex];
+            const clickedBox = bboxes[parseInt($(this).closest('li').data('index'))];
             const currentFrame = parseInt(frameSlider.val());
 
             if (!clickedBox.id) { showToast("Object needs ID. Save first.", 3000); return; }
 
             if (!interpolationState.isActive) {
-                interpolationState.isActive = true;
-                interpolationState.objectId = clickedBox.id;
+                interpolationState.isActive = true; interpolationState.objectId = clickedBox.id;
                 interpolationState.startFrameData = { frame_number: currentFrame, bbox: JSON.parse(JSON.stringify(clickedBox)) };
-                $('#interpolation-banner').slideDown();
-                showToast(`Keyframe 1 set. Move to target frame.`, 5000);
+                $('#interpolation-banner').slideDown(); showToast(`Keyframe 1 set. Move to target frame.`, 5000);
             } else if (interpolationState.objectId === clickedBox.id) {
                 if (currentFrame === interpolationState.startFrameData.frame_number) { showToast("Move to different frame.", 3000); return; }
                 const endFrameData = { frame_number: currentFrame, bbox: JSON.parse(JSON.stringify(clickedBox)) };
-                const $btn = $(this);
-                $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span>');
+                const $btn = $(this); $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span>');
 
                 $.ajax({
-                    url: "/api/interpolateBboxes",
-                    type: "POST",
-                    contentType: "application/json",
+                    url: "/api/interpolateBboxes", type: "POST", contentType: "application/json",
                     data: JSON.stringify({ video_uuid: videoUuid, object_id: interpolationState.objectId, start_frame: interpolationState.startFrameData, end_frame: endFrameData }),
-                    success: function(response) {
-                        if (response.success) { showToast(response.message, 4000); window.cachedFrames = null; } else { showToast("Error: " + response.message, 5000); }
-                    },
+                    success: function(res) { if (res.success) { showToast(res.message, 4000); window.cachedFrames = null; } else { showToast("Error: " + res.message, 5000); } },
                     error: function() { showToast("Interpolation error.", 5000); },
                     complete: function() {
                         const nextFrame = Math.min(parseInt(interpolationState.startFrameData.frame_number), parseInt(endFrameData.frame_number)) + 1;
@@ -2056,8 +1931,7 @@
                     }
                 });
             }
-            renderBboxList();
-            redrawCanvas();
+            renderBboxList(); redrawStaticCanvas();
         });
 
         $('#interactive-mode-toggle').on('click', function() {
@@ -2067,7 +1941,7 @@
             if (isInteractiveMode) {
                 $(this).html('<i class="bi bi-crosshair"></i> SMART SELECT ON').addClass('btn-info').removeClass('btn-outline-info');
                 if(isLamModeActive) $('#lam-toggle-btn').click();
-                clearCrosshairs();
+                lastMousePos = null; redrawDynamicCanvas(null);
                 smartTriggerPreprocess(frameSlider.val());
             } else {
                 $(this).html('<i class="bi bi-crosshair"></i> Smart Select').removeClass('btn-info').addClass('btn-outline-info');
@@ -2076,38 +1950,25 @@
             updateSamButtonText();
         });
 
-        $('#clear-samples-btn').on('click', function() {
-            clearInteractiveSession();
-            showToast('Signal cleared.', 2000);
-        });
+        $('#clear-samples-btn').on('click', function() { clearInteractiveSession(); showToast('Signal cleared.', 2000); });
 
         $('#find-from-dataset-btn').on('click', function() {
             if (!activeClass) { alert('Select class first!'); return; }
-            const frameNumber = parseInt(frameSlider.val());
-            const $button = $(this);
-            const useColor = $('#dataset-find-use-color').is(':checked');
+            const frameNumber = parseInt(frameSlider.val()), $button = $(this), useColor = $('#dataset-find-use-color').is(':checked');
 
             $button.prop('disabled', true);
             showToast(useColor ? `Querying '${activeClass}' (Color+Shape)...` : `Querying '${activeClass}'...`, 10000);
             lastDatasetClassName = activeClass;
 
-            const payload = { video_uuid: videoUuid, frame_number: frameNumber, class_name: activeClass, use_color: useColor };
-
             $.ajax({
-                url: '/interactive_segment/predict_from_dataset',
-                type: 'POST',
-                contentType: 'application/json',
-                data: JSON.stringify(payload),
+                url: '/interactive_segment/predict_from_dataset', type: 'POST', contentType: 'application/json',
+                data: JSON.stringify({ video_uuid: videoUuid, frame_number: frameNumber, class_name: activeClass, use_color: useColor }),
                 success: function(res) {
                     if (res.success) {
                         interactivePreviewBboxes = res.results;
-                        $('#interactive-results-controls').slideDown();
-                        $('#result-threshold').trigger('input');
-                        redrawCanvas();
+                        $('#interactive-results-controls').slideDown(); $('#result-threshold').trigger('input'); redrawStaticCanvas();
                         showToast(`Found ${res.results.length} entities.`, 4000);
-                        setTimeout(() => {
-                           if (confirm(`Entities detected. Apply '${activeClass}' model to unlabeled frames?`)) { startNegativeSampling(10); }
-                        }, 500);
+                        setTimeout(() => { if (confirm(`Entities detected. Apply '${activeClass}' model to unlabeled frames?`)) { startNegativeSampling(10); } }, 500);
                     } else { alert('Prediction failed: ' + res.message); }
                 },
                 error: function() { alert('Server error.'); },
@@ -2116,36 +1977,25 @@
         });
 
         $('#neg-canvas-container').on('mousedown', function(e) {
-            isDrawingNeg = true;
-            const pos = getMousePos(negCanvas, e);
+            isDrawingNeg = true; const pos = getMousePos(negCanvas, e);
             negStartX = pos.x; negStartY = pos.y;
         }).on('mousemove', function(e) {
             if (!isDrawingNeg) return;
             redrawNegCanvas();
-            const pos = getMousePos(negCanvas, e);
-            const dpr = window.devicePixelRatio || 1;
-            negCtx.strokeStyle = getColor('negativeSampleStroke');
-            negCtx.lineWidth = 2 / dpr;
-            negCtx.setLineDash([5 / dpr, 3 / dpr]);
-            negCtx.strokeRect(negStartX, negStartY, pos.x - negStartX, pos.y - negStartY);
-            negCtx.setLineDash([]);
+            const pos = getMousePos(negCanvas, e), dpr = window.devicePixelRatio || 1;
+            negCtx.strokeStyle = getColor('negativeSampleStroke'); negCtx.lineWidth = 2 / dpr; negCtx.setLineDash([5 / dpr, 3 / dpr]);
+            negCtx.strokeRect(negStartX, negStartY, pos.x - negStartX, pos.y - negStartY); negCtx.setLineDash([]);
         }).on('mouseup', function(e) {
             if (!isDrawingNeg) return;
             isDrawingNeg = false;
-            const pos = getMousePos(negCanvas, e);
-            const scaleX = negImage.naturalWidth / negImage.clientWidth;
-            const scaleY = negImage.naturalHeight / negImage.clientHeight;
-            const x1 = Math.round(Math.min(negStartX, pos.x) * scaleX);
-            const y1 = Math.round(Math.min(negStartY, pos.y) * scaleY);
-            const x2 = Math.round(Math.max(negStartX, pos.x) * scaleX);
-            const y2 = Math.round(Math.max(negStartY, pos.y) * scaleY);
+            const pos = getMousePos(negCanvas, e), scaleX = negImage.naturalWidth / negImage.clientWidth, scaleY = negImage.naturalHeight / negImage.clientHeight;
+            const x1 = Math.round(Math.min(negStartX, pos.x) * scaleX), y1 = Math.round(Math.min(negStartY, pos.y) * scaleY);
+            const x2 = Math.round(Math.max(negStartX, pos.x) * scaleX), y2 = Math.round(Math.max(negStartY, pos.y) * scaleY);
 
             if (Math.abs(x1 - x2) < 5 || Math.abs(y1 - y2) < 5) { redrawNegCanvas(); return; }
-            const frameData = negSamplingFrames[currentNegSampleIndex];
-            const frameKey = `${frameData.video_uuid};${frameData.frame_number}`;
+            const frameKey = `${negSamplingFrames[currentNegSampleIndex].video_uuid};${negSamplingFrames[currentNegSampleIndex].frame_number}`;
             if (!negativeSamplesStore[frameKey]) negativeSamplesStore[frameKey] = [];
-            negativeSamplesStore[frameKey].push([x1, y1, x2, y2]);
-            redrawNegCanvas();
+            negativeSamplesStore[frameKey].push([x1, y1, x2, y2]); redrawNegCanvas();
         });
 
         $('#neg-prev-btn').on('click', function() { if (currentNegSampleIndex > 0) { currentNegSampleIndex--; loadNegativeSampleFrame(); } });
@@ -2154,62 +2004,50 @@
         $('#finish-neg-sampling-btn').on('click', function() {
             $('#negative-sampling-modal').modal('hide');
             const finalNegativeSamples = Object.fromEntries(Object.entries(negativeSamplesStore).filter(([key, value]) => value.length > 0));
-            const message = Object.keys(finalNegativeSamples).length > 0 ? `Refining with ${Object.keys(finalNegativeSamples).length} negative samples.` : "No negative samples. Using base model.";
-            showToast(message);
+            showToast(Object.keys(finalNegativeSamples).length > 0 ? `Refining with ${Object.keys(finalNegativeSamples).length} negative samples.` : "No negative samples. Using base model.");
             triggerApplyToVideo(finalNegativeSamples);
         });
 
         $('#result-threshold').on('input', function() {
             const value = parseFloat($(this).val());
             $('#threshold-value').text(value.toFixed(2));
-            const currentFrame = frameSlider.val();
-            frameConfidence[currentFrame] = value;
-            redrawCanvas();
+            frameConfidence[frameSlider.val()] = value;
+            redrawStaticCanvas();
         });
 
         $('#suggestion-threshold').on('input', function() {
-            const value = parseFloat($(this).val());
-            $('#suggestion-threshold-value').text(value.toFixed(2));
-            redrawCanvas();
+            $('#suggestion-threshold-value').text(parseFloat($(this).val()).toFixed(2));
+            redrawStaticCanvas();
         });
 
         $('#accept-all-suggestions-btn').on('click', function() {
             if (suggestionBboxes.length === 0) return;
             const threshold = parseFloat($('#suggestion-threshold').val());
-            let acceptedCount = 0;
-            const remainingSuggestions = [];
+            let acceptedCount = 0; const remainingSuggestions = [];
             suggestionBboxes.forEach(sug => {
-                if (sug.score >= threshold) {
-                    bboxes.push({ x1: sug.box[0], y1: sug.box[1], x2: sug.box[2], y2: sug.box[3], label: sug.label, id: self.crypto.randomUUID() });
-                    acceptedCount++;
-                } else { remainingSuggestions.push(sug); }
+                if (sug.score >= threshold) { bboxes.push({ x1: sug.box[0], y1: sug.box[1], x2: sug.box[2], y2: sug.box[3], label: sug.label, id: self.crypto.randomUUID() }); acceptedCount++; }
+                else { remainingSuggestions.push(sug); }
             });
             if (acceptedCount > 0) {
                 suggestionBboxes = remainingSuggestions;
-                saveStateToHistory(); selectedBboxIndex = -1; redrawCanvas(); renderBboxList();
+                saveStateToHistory(); selectedBboxIndex = -1; redrawStaticCanvas(); renderBboxList();
                 showToast(`Accepted ${acceptedCount} suggestions.`, 2000);
             } else { showToast('No suggestions visible.', 2000); }
         });
 
-        $('#apply-confidence-threshold').on('input', function() {
-            $('#apply-confidence-value').text(parseFloat($(this).val()).toFixed(2));
-        });
+        $('#apply-confidence-threshold').on('input', function() { $('#apply-confidence-value').text(parseFloat($(this).val()).toFixed(2)); });
 
         $('#accept-visible-btn').on('click', function() {
             if (!activeClass) { alert('Select class first.'); return }
             const threshold = parseFloat($('#result-threshold').val());
-            let addedCount = 0;
-            const remainingPreviews = [];
+            let addedCount = 0; const remainingPreviews = [];
             interactivePreviewBboxes.forEach(res => {
-                if (res.score >= threshold) {
-                    const b = res.box;
-                    bboxes.push({ x1: b[0], y1: b[1], x2: b[2], y2: b[3], label: res.label || activeClass });
-                    addedCount++;
-                } else { remainingPreviews.push(res); }
+                if (res.score >= threshold) { bboxes.push({ x1: res.box[0], y1: res.box[1], x2: res.box[2], y2: res.box[3], label: res.label || activeClass }); addedCount++; }
+                else { remainingPreviews.push(res); }
             });
             if (addedCount > 0) {
                 interactivePreviewBboxes = remainingPreviews;
-                saveStateToHistory(); renderBboxList(); redrawCanvas();
+                saveStateToHistory(); renderBboxList(); redrawStaticCanvas();
                 showToast(`${addedCount} entities added.`, 2000);
             } else { showToast('No visible entities.', 2000); }
         });
@@ -2231,7 +2069,7 @@
             } else if (e.key === "Delete" || e.key === "Backspace") {
                 e.preventDefault();
                 if (isNegModalVisible) { clearCurrentNegativeSamples(); }
-                else if (selectedBboxIndex !== -1) { bboxes.splice(selectedBboxIndex, 1); saveStateToHistory(); selectedBboxIndex = -1; redrawCanvas(); renderBboxList(); }
+                else if (selectedBboxIndex !== -1) { bboxes.splice(selectedBboxIndex, 1); saveStateToHistory(); selectedBboxIndex = -1; redrawStaticCanvas(); renderBboxList(); }
             } else if (e.key === "Escape") {
                 e.preventDefault();
                 if (interpolationState.isActive) { resetInterpolationState(true); showToast("Interpolation aborted.", 2000); }
@@ -2265,23 +2103,19 @@
                         break;
                 }
             }
-        }).on("keyup", function(e) {
-            if (e.key.toLowerCase() === 'c') isCKeyPressed = false;
-        });
+        }).on("keyup", function(e) { if (e.key.toLowerCase() === 'c') isCKeyPressed = false; });
 
         function performInitialLoad() {
             $.get('/listClasses', function(response) {
                 if (response.success) {
                     response.labels.forEach(label => { if (!availableClasses.includes(label)) availableClasses.push(label); });
                     renderClassList();
-                    const urlParams = new URLSearchParams(window.location.search);
-                    const frameFromUrl = urlParams.get('frame');
+                    const frameFromUrl = new URLSearchParams(window.location.search).get('frame');
                     if (frameFromUrl) {
                         const frameNumber = parseInt(frameFromUrl);
                         if (frameNumber >= parseInt(frameSlider.attr('min')) && frameNumber <= parseInt(frameSlider.attr('max'))) frameSlider.val(frameNumber);
                     }
-                    resizeCanvas();
-                    frameSlider.trigger('input');
+                    resizeCanvas(); frameSlider.trigger('input');
                 }
             });
         }

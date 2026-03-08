@@ -1,4 +1,3 @@
-<!-- START OF FILE dataset_analysis.html -->
 {% extends "layout.html" %}
 
 {% block head %}
@@ -66,8 +65,6 @@
     #gallery .gallery-item:hover img {
         filter: grayscale(0%);
     }
-
-    #gallery .gallery-item.hidden { display: none; }
 
     #gallery .caption {
         background: rgba(0,0,0,0.8);
@@ -161,7 +158,6 @@
 
 {% block content %}
 <div class="container-fluid content-wrapper fade-in">
-    <!-- Header -->
     <div class="d-flex justify-content-between align-items-end mb-4 pb-2 border-bottom border-secondary">
          <div>
             <h3 class="mb-0 text-uppercase" style="font-family: 'Orbitron'; color: var(--text-main); letter-spacing: 0.1em;">DATASET ANALYSIS</h3>
@@ -172,17 +168,14 @@
         </a>
     </div>
 
-    <!-- Loading State -->
     <div id="loading-indicator">
         <div class="spinner-border mb-3" role="status" style="width: 3rem; height: 3rem; border-width: 2px;"></div>
         <h4 class="text-uppercase" style="letter-spacing: 0.2em;">PROCESSING DATA...</h4>
         <p class="text-muted font-monospace small">CALCULATING STATISTICS // GENERATING PREVIEWS</p>
     </div>
 
-    <!-- Main Content -->
     <div id="analysis-content" style="display: none;">
 
-        <!-- Summary Card -->
         <div class="card mb-4">
             <div class="card-header">
                 <i class="bi bi-terminal mr-2"></i> SYSTEM_DIAGNOSTICS
@@ -207,7 +200,6 @@
             </div>
         </div>
 
-        <!-- Charts Row 1 -->
         <div class="row">
             <div class="col-lg-4 mb-4">
                 <div class="card h-100">
@@ -235,7 +227,6 @@
             </div>
         </div>
 
-        <!-- Charts Row 2 -->
         <div class="row">
              <div class="col-lg-4 mb-4">
                  <div class="card h-100">
@@ -257,7 +248,6 @@
             </div>
         </div>
 
-        <!-- Augmentation Previewer -->
         <div class="row">
             <div class="col-12 mb-4">
                 <div class="card">
@@ -266,7 +256,6 @@
                     </div>
                     <div class="card-body p-0">
                         <div class="row no-gutters">
-                            <!-- Left: Controls -->
                             <div class="col-lg-4 border-right border-secondary p-3 bg-dark">
                                 <h6 class="font-weight-bold mb-3 border-bottom border-secondary pb-2 text-uppercase text-muted font-monospace small">01 // PARAMETERS</h6>
                                 <div id="preview-aug-controls" class="custom-scrollbar">
@@ -274,7 +263,6 @@
                                 </div>
                             </div>
 
-                            <!-- Right: Preview -->
                             <div class="col-lg-8 p-3">
                                 <h6 class="font-weight-bold mb-3 border-bottom border-secondary pb-2 text-uppercase text-muted font-monospace small">02 // LIVE FEED</h6>
 
@@ -297,7 +285,6 @@
             </div>
         </div>
 
-        <!-- Annotator Stats -->
         <div class="row">
             <div class="col-lg-12 mb-4">
                 <div class="card">
@@ -309,7 +296,6 @@
             </div>
         </div>
 
-        <!-- Image Gallery -->
         <div class="row">
             <div class="col-12">
                  <div class="card">
@@ -368,7 +354,6 @@ $(document).ready(function() {
     };
 
     // --- Core Color Palette (Abyssal Telemetry) ---
-    // Hardcoded Neon Colors
     function getColor(type) {
         switch (type) {
             case 'primary': return 'rgba(0, 240, 255, 0.6)'; // Cyan
@@ -381,49 +366,48 @@ $(document).ready(function() {
         }
     }
 
-    // Chart Theme Options (Dark Industrial)
+    // --- Chart Theme Options (Industrial Terminal) ---
     function getChartThemeOptions() {
-        const gridColor = 'rgba(255, 255, 255, 0.05)';
+        const gridColor = 'rgba(255, 255, 255, 0.03)';
         const textColor = '#888';
 
         return {
             maintainAspectRatio: false,
             responsive: true,
+            // 终端扫描式入场动画
+            animation: {
+                duration: 800,
+                easing: 'linear'
+            },
             plugins: {
-                legend: { labels: { color: textColor, font: { family: 'JetBrains Mono' } } },
+                legend: { labels: { color: textColor, font: { family: 'JetBrains Mono', size: 10 } } },
                 tooltip: {
-                    backgroundColor: 'rgba(0, 0, 0, 0.9)',
-                    titleColor: '#fff',
-                    bodyColor: '#ccc',
-                    borderColor: 'rgba(0, 240, 255, 0.5)',
+                    backgroundColor: 'rgba(10, 11, 16, 0.95)',
+                    titleColor: 'var(--color-primary)',
+                    bodyColor: '#fff',
+                    borderColor: 'var(--color-primary)',
                     borderWidth: 1,
-                    padding: 10,
-                    cornerRadius: 0, // Sharp corners
-                    titleFont: { family: 'Orbitron' },
-                    bodyFont: { family: 'JetBrains Mono' }
+                    padding: 12,
+                    cornerRadius: 0, // 赛博朋克直角
+                    titleFont: { family: 'Orbitron', size: 13 },
+                    bodyFont: { family: 'JetBrains Mono', size: 11 },
+                    displayColors: false
                 }
             },
             scales: {
                 x: {
-                    grid: { color: gridColor },
-                    ticks: { color: textColor, font: { family: 'JetBrains Mono' } },
-                    title: { display: true, color: textColor, font: { family: 'Orbitron' } }
+                    grid: { color: gridColor, drawBorder: false },
+                    ticks: { color: textColor, font: { family: 'JetBrains Mono', size: 10 } },
+                    title: { display: true, color: textColor, font: { family: 'Orbitron', size: 10 } }
                 },
                 y: {
                     beginAtZero: true,
-                    grid: { color: gridColor },
-                    ticks: { color: textColor, font: { family: 'JetBrains Mono' } },
-                    title: { display: true, color: textColor, font: { family: 'Orbitron' } }
+                    grid: { color: gridColor, drawBorder: false },
+                    ticks: { color: textColor, font: { family: 'JetBrains Mono', size: 10 } },
+                    title: { display: true, color: textColor, font: { family: 'Orbitron', size: 10 } }
                 }
             }
         };
-    }
-
-    // No need for theme observer, always dark mode
-
-    function updateChartOptions(chart, newOptions) {
-        // ... (standard chart update logic)
-        chart.update();
     }
 
     // --- Augmentation Controls Logic ---
@@ -448,7 +432,6 @@ $(document).ready(function() {
         const context = $('#preview-aug-controls');
         const getVal = (selector, type = 'float') => type === 'int' ? parseInt(context.find(selector).val()) : parseFloat(context.find(selector).val());
         const isEnabled = (selector) => context.find(selector).is(':checked');
-        // ... (same logic as before)
         let augOptions = {
             enabled: true,
             hflip: { enabled: isEnabled('#aug-hflip-enabled'), p: getVal('#aug-hflip-p') },
@@ -555,66 +538,6 @@ $(document).ready(function() {
         });
     }
 
-    function renderGallery(images) {
-        const gallery = $('#gallery');
-        gallery.empty();
-        $('#gallery-count').text(images.length);
-        images.forEach((image, index) => {
-            const annotatedUrl = `/media/annotated_frame/${image.video_uuid}/${image.frame}.jpg`;
-            const goToLabelUrl = image.task_uuid ? `/labelVideo?task_uuid=${image.task_uuid}&frame=${image.frame}` : '#';
-            const buttonDisabled = image.task_uuid ? '' : 'disabled';
-            const item = $(`
-                <div class="gallery-item" data-index="${index}">
-                    <img src="${annotatedUrl}" alt="Frame ${image.frame}" loading="lazy">
-                    <div class="caption">
-                        <span class="caption-text text-truncate w-100" title="${image.video}">FILE: ${image.video}</span>
-                        <span class="text-muted small">SEQ: ${image.frame}</span>
-                        <a href="${goToLabelUrl}" class="btn btn-sm btn-outline-primary rounded-0 mt-2 ${buttonDisabled}"><i class="bi bi-pencil-square"></i> EDIT</a>
-                    </div>
-                </div>`);
-            item.find('img').on('click', () => window.open(image.original_url, '_blank'));
-            gallery.append(item);
-        });
-    }
-
-    function filterGalleryByClass(className) {
-        const classImageIndices = [];
-        for (const [imageIndex, classList] of Object.entries(imageClassMap)) {
-            if (classList.includes(className)) { classImageIndices.push(parseInt(imageIndex)); }
-        }
-        $('#outlier-filter').val('none');
-        $('#gallery .gallery-item').each(function() {
-            const itemIndex = parseInt($(this).data('index'));
-            $(this).toggleClass('hidden', !classImageIndices.includes(itemIndex));
-        });
-    }
-
-    function resetGalleryFilter() {
-        $('#outlier-filter').val('none');
-        $('#gallery .gallery-item').removeClass('hidden');
-    }
-
-    $('#outlier-filter').on('change', function() {
-        const filterType = $(this).val();
-        if (filterType === 'none') { $('#gallery .gallery-item').removeClass('hidden'); return; }
-        let sortedBboxes, targetImageIndices;
-        switch(filterType) {
-            case 'area_smallest': sortedBboxes = [...allBboxesData].sort((a, b) => a.area - b.area); break;
-            case 'area_largest': sortedBboxes = [...allBboxesData].sort((a, b) => b.area - a.area); break;
-            case 'ar_smallest': sortedBboxes = [...allBboxesData].sort((a, b) => Math.abs(a.aspect_ratio - 1) - Math.abs(b.aspect_ratio - 1)); break;
-            case 'ar_largest': sortedBboxes = [...allBboxesData].sort((a, b) => Math.abs(b.aspect_ratio - 1) - Math.abs(a.aspect_ratio - 1)); break;
-            case 'iou_high': targetImageIndices = [...new Set(suspiciousPairsData.map(p => p.image_index))]; break;
-            case 'consistency_outliers': targetImageIndices = consistencyOutlierIndices; break;
-        }
-        if (sortedBboxes) { targetImageIndices = [...new Set(sortedBboxes.slice(0, 10).map(b => b.image_index))]; }
-        $('#gallery .gallery-item').each(function() {
-            const itemIndex = parseInt($(this).data('index'));
-            $(this).toggleClass('hidden', !targetImageIndices.includes(itemIndex));
-        });
-    });
-
-    $('#reset-filter-btn').on('click', resetGalleryFilter);
-
     function renderClassCounts(classCounts) {
         const chartData = { labels: Object.keys(classCounts), datasets: [{ label: 'Count', data: Object.values(classCounts), backgroundColor: getColor('primary') }]};
         if (charts.classCounts) { charts.classCounts.destroy(); }
@@ -672,6 +595,104 @@ $(document).ready(function() {
         charts.annotator = new Chart($('#annotator-chart'), { type: 'bar', data: chartData, options: getChartThemeOptions() });
     }
 
+    // --- DOM Optimized Gallery Rendering (Infinite Scroll + Batching) ---
+    const renderBatchSize = 50;
+    let currentRenderIndex = 0;
+    let imagesToRender = [];
+
+    function renderGallery(images) {
+        const gallery = $('#gallery');
+        gallery.empty();
+        $('#gallery-count').text(images.length);
+
+        imagesToRender = images;
+        currentRenderIndex = 0;
+
+        renderNextBatch();
+    }
+
+    function renderNextBatch() {
+        if (currentRenderIndex >= imagesToRender.length) return;
+
+        const gallery = $('#gallery');
+        const fragment = document.createDocumentFragment();
+        const endIndex = Math.min(currentRenderIndex + renderBatchSize, imagesToRender.length);
+
+        for (let i = currentRenderIndex; i < endIndex; i++) {
+            const image = imagesToRender[i];
+            const annotatedUrl = `/media/annotated_frame/${image.video_uuid}/${image.frame}.jpg`;
+            const goToLabelUrl = image.task_uuid ? `/labelVideo?task_uuid=${image.task_uuid}&frame=${image.frame}` : '#';
+            const buttonDisabled = image.task_uuid ? '' : 'disabled';
+
+            const item = document.createElement('div');
+            item.className = 'gallery-item fade-in';
+            item.setAttribute('data-index', i); // Keep index for reference
+            item.innerHTML = `
+                <img src="${annotatedUrl}" alt="Frame ${image.frame}" loading="lazy">
+                <div class="caption">
+                    <span class="caption-text text-truncate w-100" title="${image.video}">FILE: ${image.video}</span>
+                    <span class="text-muted small">SEQ: ${image.frame}</span>
+                    <a href="${goToLabelUrl}" class="btn btn-sm btn-outline-primary rounded-0 mt-2 ${buttonDisabled}">
+                        <i class="bi bi-pencil-square"></i> EDIT
+                    </a>
+                </div>
+            `;
+
+            item.querySelector('img').addEventListener('click', () => window.open(image.original_url, '_blank'));
+            fragment.appendChild(item);
+        }
+
+        gallery.append(fragment);
+        currentRenderIndex = endIndex;
+    }
+
+    // Infinite Scroll trigger
+    $('#gallery').on('scroll', function() {
+        const { scrollTop, scrollHeight, clientHeight } = this;
+        if (scrollTop + clientHeight >= scrollHeight - 200) {
+            renderNextBatch();
+        }
+    });
+
+    // --- Array Filtering System (Instead of DOM hiding) ---
+    function filterGalleryByClass(className) {
+        const classImageIndices = [];
+        for (const [imageIndex, classList] of Object.entries(imageClassMap)) {
+            if (classList.includes(className)) { classImageIndices.push(parseInt(imageIndex)); }
+        }
+        $('#outlier-filter').val('none');
+
+        // Filter the actual data array and re-render
+        const filteredImages = fullGalleryData.filter((img, idx) => classImageIndices.includes(idx));
+        renderGallery(filteredImages);
+    }
+
+    function resetGalleryFilter() {
+        $('#outlier-filter').val('none');
+        renderGallery(fullGalleryData);
+    }
+
+    $('#outlier-filter').on('change', function() {
+        const filterType = $(this).val();
+        if (filterType === 'none') { resetGalleryFilter(); return; }
+
+        let sortedBboxes, targetImageIndices = [];
+        switch(filterType) {
+            case 'area_smallest': sortedBboxes = [...allBboxesData].sort((a, b) => a.area - b.area); break;
+            case 'area_largest': sortedBboxes = [...allBboxesData].sort((a, b) => b.area - a.area); break;
+            case 'ar_smallest': sortedBboxes = [...allBboxesData].sort((a, b) => Math.abs(a.aspect_ratio - 1) - Math.abs(b.aspect_ratio - 1)); break;
+            case 'ar_largest': sortedBboxes = [...allBboxesData].sort((a, b) => Math.abs(b.aspect_ratio - 1) - Math.abs(a.aspect_ratio - 1)); break;
+            case 'iou_high': targetImageIndices = [...new Set(suspiciousPairsData.map(p => p.image_index))]; break;
+            case 'consistency_outliers': targetImageIndices = consistencyOutlierIndices; break;
+        }
+        if (sortedBboxes) { targetImageIndices = [...new Set(sortedBboxes.slice(0, 10).map(b => b.image_index))]; }
+
+        const filteredImages = fullGalleryData.filter((img, idx) => targetImageIndices.includes(idx));
+        renderGallery(filteredImages);
+    });
+
+    $('#reset-filter-btn').on('click', resetGalleryFilter);
+
     // --- Main Fetch Logic ---
     $.ajax({
         url: `/api/datasetAnalysis/${datasetUuid}`, type: 'GET',
@@ -694,6 +715,7 @@ $(document).ready(function() {
                 if (response.brightness_levels) renderBrightness(response.brightness_levels);
                 if (response.annotator_stats) renderAnnotatorStats(response.annotator_stats);
 
+                // Using the optimized DOM rendering
                 renderGallery(fullGalleryData);
 
                 setupAugmentationListeners('#preview-aug-controls');
@@ -715,9 +737,9 @@ $(document).ready(function() {
                     $(this).addClass('active');
                     triggerAugmentationPreview();
                 });
-            } else { $('#loading-indicator').html(`<div class="alert alert-danger shadow-sm">ERROR: ${response.message}</div>`); }
+            } else { $('#loading-indicator').html(`<div class="alert alert-danger shadow-sm rounded-0">ERROR: ${response.message}</div>`); }
         },
-        error: function() { $('#loading-indicator').html('<div class="alert alert-danger shadow-sm">SERVER COMMUNICATION FAILED</div>'); }
+        error: function() { $('#loading-indicator').html('<div class="alert alert-danger shadow-sm rounded-0">SERVER COMMUNICATION FAILED</div>'); }
     });
 
     // AI Consistency Check Button
