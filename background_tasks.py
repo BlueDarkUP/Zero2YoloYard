@@ -653,12 +653,14 @@ def create_dataset_task(dataset_uuid, video_uuids, eval_percent, test_percent, a
             for frame_info in split_data:
                 all_tasks.append((frame_info, img_dir, lbl_dir, class_map, augmentation_options))
 
+        safe_workers = min(4, max(1, cpu_count() // 2))
+
         database.update_dataset_status(dataset_uuid, status="PROCESSING",
-                                       message=f"Processing {len(all_tasks)} images across {cpu_count()} CPU cores...")
-        logging.info(f"Starting parallel processing of {len(all_tasks)} images using up to {cpu_count()} cores.")
+                                       message=f"Processing {len(all_tasks)} images across {safe_workers} CPU cores...")
+        logging.info(f"Starting parallel processing of {len(all_tasks)} images using {safe_workers} cores.")
 
         processed_count = 0
-        with Pool(processes=cpu_count()) as pool:
+        with Pool(processes=safe_workers) as pool:
             for result in pool.imap_unordered(process_frame_worker, all_tasks):
                 if result:
                     processed_count += 1

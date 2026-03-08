@@ -1008,7 +1008,13 @@
         loadSettings();
         function runAllRefreshes() { refreshVideos(); refreshDatasets(); refreshModels(); }
         runAllRefreshes();
-        setInterval(runAllRefreshes, 5000);
+
+        // 【优化】只有当前网页处于激活状态时，才去刷新数据，降低后台服务器压力
+        setInterval(() => {
+            if (document.hasFocus()) {
+                runAllRefreshes();
+            }
+        }, 5000);
     });
 </script>
 {% endblock %}

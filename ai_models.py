@@ -4,17 +4,10 @@ import random
 import threading
 import time
 import cv2
+import gc
+from collections import defaultdict, OrderedDict
 
 import numpy as np
-
-try:
-    from sklearn.cluster import KMeans
-    from sklearn.metrics import silhouette_score
-except ImportError:
-    logging.warning("scikit-learn not found. Sub-prototype clustering will be disabled. Run 'pip install scikit-learn'")
-    KMeans = None
-    silhouette_score = None
-
 import torch
 import torch.nn.functional as F
 import torchvision
@@ -24,12 +17,19 @@ from torchvision.models import MobileNet_V3_Large_Weights, MobileNet_V3_Small_We
 from torchvision.ops import nms, box_iou
 from torchvision.transforms.functional import to_tensor
 
+try:
+    from sklearn.cluster import KMeans
+    from sklearn.metrics import silhouette_score
+except ImportError:
+    logging.warning("scikit-learn not found. Sub-prototype clustering will be disabled. Run 'pip install scikit-learn'")
+    KMeans = None
+    silhouette_score = None
+
 import config
 import database
 import file_storage
 import settings_manager
 from bbox_writer import convert_text_to_rects_and_labels
-from collections import defaultdict
 
 try:
     import ultralytics_sam_tasks as sam_tasks
@@ -37,13 +37,39 @@ except ImportError:
     logging.warning("ultralytics_sam_tasks.py not found or failed to import. All SAM features will be disabled.")
     sam_tasks = None
 
+
+# ==============================================================================
+# 内存与缓存管理优化 (LRU Cache Implementation)
+# ==============================================================================
+
+class LRUCache(OrderedDict):
+    """
+    定长最近最少使用缓存。
+    当缓存超过 maxsize 时，自动剔除最旧的数据，并清理显存。
+    """
+
+    def __init__(self, maxsize=30, *args, **kwds):
+        self.maxsize = maxsize
+        super().__init__(*args, **kwds)
+
+    def __setitem__(self, key, value):
+        super().__setitem__(key, value)
+        if len(self) > self.maxsize:
+            oldest = next(iter(self))
+            del self[oldest]
+            # 触发显存清理
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
+
 models = {}
-PREPROCESSED_DATA_CACHE = {}
+# 使用 LRU Cache 替代普通字典，限制最大缓存帧数为 30，防止显存爆炸
+PREPROCESSED_DATA_CACHE = LRUCache(maxsize=30)
+
 # New structure: {'class_name': {'semantic': Tensor, 'color': np.array}}
 PROTOTYPE_CACHE = {}
 
 AI_MODEL_LOCK = threading.RLock()
-
 PROTOTYPE_LOCKS = {}
 _PROTOTYPE_LOCKS_LOCK = threading.Lock()
 _cache_save_lock = threading.Lock()
@@ -61,8 +87,14 @@ _mobilenet_pytorch_cache = {"model": None, "name": None}
 
 
 def get_features_for_single_bbox(pil_image, target_rects):
+    """
+    使用 MobileNetV3 提取指定 BBox 区域的语义特征向量
+    """
     if 'feature_extractor_pytorch' not in models:
-        raise RuntimeError("PyTorch特征提取模型未加载，请检查启动过程。")
+        # 尝试懒加载
+        startup_ai_models()
+        if 'feature_extractor_pytorch' not in models:
+            raise RuntimeError("PyTorch特征提取模型未加载，请检查启动过程。")
 
     input_size = 0
     if target_rects is not None:
@@ -90,9 +122,11 @@ def get_features_for_single_bbox(pil_image, target_rects):
 
         boxes_for_crop = torch.from_numpy(target_rects_np).to(DEVICE)
 
+        # 构建 ROI Align 输入格式: [batch_index, x1, y1, x2, y2]
         box_indices = torch.zeros(boxes_for_crop.size(0), 1, device=DEVICE)
         boxes_for_roi = torch.cat([box_indices, boxes_for_crop], dim=1)
 
+        # ROI Align 提取特征图
         batch_of_crops = torchvision.ops.roi_align(
             img_tensor.unsqueeze(0),
             boxes_for_roi,
@@ -101,10 +135,12 @@ def get_features_for_single_bbox(pil_image, target_rects):
             aligned=True
         )
 
+        # ImageNet 标准化
         IMAGENET_MEAN = torch.tensor([0.485, 0.456, 0.406], device=DEVICE).view(1, 3, 1, 1)
         IMAGENET_STD = torch.tensor([0.229, 0.224, 0.225], device=DEVICE).view(1, 3, 1, 1)
         batch_tensor = (batch_of_crops - IMAGENET_MEAN) / IMAGENET_STD
 
+        # 混合精度推理
         with torch.amp.autocast(device_type=DEVICE.type, enabled=(DEVICE.type == 'cuda')):
             features_map = pytorch_model.features(batch_tensor)
             pooled_features = pytorch_model.avgpool(features_map)
@@ -133,31 +169,30 @@ def save_prototypes_to_disk():
                     cpu_cache[k] = {'semantic': v.cpu(), 'color': None}
 
         torch.save(cpu_cache, config.PROTOTYPE_FILE)
-        logging.info(f"成功将 {len(cpu_cache)} 个原型保存至 {config.PROTOTYPE_FILE}")
+        logging.info(f"成功将 {len(cpu_cache)} 个原型保存至磁盘。")
     except Exception as e:
         logging.error(f"保存原型文件失败: {e}", exc_info=True)
 
 
 def save_preprocessed_cache_to_disk():
+    """
+    保存预处理缓存到磁盘。
+    注意：LRUCache 中的数据已经在 CPU 上，可以直接保存。
+    """
     global _last_cache_save_time
     with _cache_save_lock:
-        logging.info("正在尝试保存预处理缓存...")
+        logging.info("正在尝试后台保存预处理缓存...")
+        # 转换为普通字典保存，避免序列化问题
         cache_copy = dict(PREPROCESSED_DATA_CACHE)
         if not cache_copy:
-            logging.info("预处理缓存为空，无需保存。")
+            logging.info("预处理缓存为空，跳过保存。")
             return
 
         try:
-            cpu_cache = {}
-            for key, value in cache_copy.items():
-                cpu_cache[key] = {
-                    'all_boxes': value['all_boxes'].cpu(),
-                    'all_features': value['all_features'].cpu()
-                }
-
-            torch.save(cpu_cache, config.PREPROCESSED_CACHE_FILE)
+            # 这里的 value 已经是 CPU tensor 了
+            torch.save(cache_copy, config.PREPROCESSED_CACHE_FILE)
             _last_cache_save_time = time.time()
-            logging.info(f"成功将 {len(cpu_cache)} 个预处理帧数据保存至文件。")
+            logging.info(f"成功将 {len(cache_copy)} 个预处理帧数据保存至文件。")
         except Exception as e:
             logging.error(f"保存预处理缓存文件失败: {e}", exc_info=True)
 
@@ -175,32 +210,37 @@ def load_prototypes_from_disk():
 
             # Check for legacy format (Direct Tensor vs Dict)
             if loaded_cache and isinstance(next(iter(loaded_cache.values())), torch.Tensor):
-                logging.warning("检测到旧版原型缓存格式 (无颜色信息)。正在清除缓存以强制重建...")
+                logging.warning("检测到旧版原型缓存格式。正在清除缓存以强制重建...")
                 PROTOTYPE_CACHE = {}
             else:
                 PROTOTYPE_CACHE = loaded_cache
-                logging.info(f"成功从文件加载了 {len(PROTOTYPE_CACHE)} 个类别原型。")
+                logging.info(f"成功加载 {len(PROTOTYPE_CACHE)} 个类别原型。")
         except Exception as e:
-            logging.error(f"加载原型文件失败，将在需要时重新构建: {e}")
+            logging.error(f"加载原型文件失败: {e}")
             PROTOTYPE_CACHE = {}
     else:
-        logging.info("未找到原型文件。将在首次需要时自动创建。")
         PROTOTYPE_CACHE = {}
 
 
 def clear_feature_extractor_cache():
-    global _mobilenet_cache
-    logging.info("Clearing Feature Extractor model cache due to setting change.")
-    _mobilenet_cache = {"model": None, "name": None}
-    if 'feature_extractor' in models:
-        del models['feature_extractor']
+    global _mobilenet_pytorch_cache
+    logging.info("清除 Feature Extractor 模型缓存。")
+    _mobilenet_pytorch_cache = {"model": None, "name": None}
+    if 'feature_extractor_pytorch' in models:
+        del models['feature_extractor_pytorch']
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
 
 def load_preprocessed_cache_from_disk():
+    """
+    从磁盘加载缓存，并填充到 LRUCache 中。
+    注意：数据加载到内存(CPU)，只有在使用时才上传 GPU。
+    """
     global PREPROCESSED_DATA_CACHE
-    DEVICE = settings_manager.get_device()
+    # 重新初始化 LRU Cache 确保清空
+    PREPROCESSED_DATA_CACHE = LRUCache(maxsize=30)
+
     if os.path.exists(config.PREPROCESSED_CACHE_FILE):
         try:
             logging.info("正在从磁盘加载预处理缓存...")
@@ -209,32 +249,40 @@ def load_preprocessed_cache_from_disk():
             except TypeError:
                 loaded_cache = torch.load(config.PREPROCESSED_CACHE_FILE, map_location='cpu')
 
+            # 填充 LRUCache，保持在 CPU 上
             for key, value in loaded_cache.items():
                 PREPROCESSED_DATA_CACHE[key] = {
-                    'all_boxes': value['all_boxes'].to(DEVICE),
-                    'all_features': value['all_features'].to(DEVICE)
+                    'all_boxes': value['all_boxes'].cpu(),
+                    'all_features': value['all_features'].cpu()
                 }
-            logging.info(f"成功从文件加载了 {len(PREPROCESSED_DATA_CACHE)} 个预处理帧数据。")
+            logging.info(f"成功加载 {len(PREPROCESSED_DATA_CACHE)} 个预处理帧数据 (CPU Mode)。")
         except Exception as e:
             logging.error(f"加载预处理缓存文件失败: {e}")
-            PREPROCESSED_DATA_CACHE = {}
+            # 出错时重置
+            PREPROCESSED_DATA_CACHE = LRUCache(maxsize=30)
     else:
         logging.info("未找到预处理缓存文件。")
-        PREPROCESSED_DATA_CACHE = {}
 
 
 def startup_ai_models():
+    """
+    初始化 AI 模型。
+    """
     load_prototypes_from_disk()
     load_preprocessed_cache_from_disk()
 
     global _mobilenet_pytorch_cache
     DEVICE = settings_manager.get_device()
 
+    # 1. 检查 SAM
     if sam_tasks:
-        logging.info("正在检查 SAM 点选/跟踪模型...")
-        sam_tasks.get_sam_model()
-        logging.info("SAM 点选/跟踪模型检查完成。")
+        logging.info("正在初始化 SAM2 环境...")
+        try:
+            sam_tasks.get_sam_model()  # 触发一次 check
+        except Exception as e:
+            logging.error(f"SAM2 初始化检查失败: {e}")
 
+    # 2. 加载 MobileNet 特征提取器
     try:
         settings = settings_manager.load_settings()
         target_model_name = settings.get("feature_extractor_model_name", "mobilenet_v3_large")
@@ -246,13 +294,14 @@ def startup_ai_models():
             logging.info(f"已从缓存加载 PyTorch 特征提取器 '{target_model_name}'。")
             return
 
-        logging.info(f"正在加载原生 PyTorch 特征提取器 '{target_model_name}' 到设备 '{DEVICE}'...")
+        logging.info(f"正在加载 PyTorch 特征提取器 '{target_model_name}' 到设备 '{DEVICE}'...")
 
         if target_model_name == "mobilenet_v3_small":
             model = torchvision.models.mobilenet_v3_small(weights=MobileNet_V3_Small_Weights.IMAGENET1K_V1)
         else:
             model = torchvision.models.mobilenet_v3_large(weights=MobileNet_V3_Large_Weights.IMAGENET1K_V1)
 
+        # 移除分类头，只保留特征提取
         model.classifier = torch.nn.Identity()
 
         model.eval()
@@ -273,6 +322,7 @@ def startup_ai_models():
 
 
 def postprocess_sam_results(results, nms_iou_threshold):
+    # 此函数主要用于旧版 SAM1，SAM2 已内置 NMS，保留以防万一
     DEVICE = settings_manager.get_device()
     if not results or not results[0].masks:
         return torch.empty(0, 4, device=DEVICE), torch.empty(0, 1, 1, device=DEVICE)
@@ -280,7 +330,6 @@ def postprocess_sam_results(results, nms_iou_threshold):
     all_scores = results[0].boxes.conf.to(DEVICE)
     all_masks = results[0].masks.data.to(DEVICE)
     kept_indices = nms(all_boxes, all_scores, nms_iou_threshold)
-    logging.info(f"[智能选择] NMS: 从 {len(all_boxes)} 个初始掩码中保留了 {len(kept_indices)} 个。")
     final_boxes = all_boxes[kept_indices]
     final_masks = all_masks[kept_indices]
     return final_boxes, final_masks
@@ -297,73 +346,102 @@ def find_best_matching_masks_by_iou(reference_boxes_np, candidate_boxes_tensor):
 
 
 def get_features_for_all_masks(video_uuid, frame_number):
+    """
+    核心函数：获取当前帧所有潜在物体的特征。
+    优化策略：
+    1. 优先查缓存。
+    2. 缓存命中时，从 CPU 搬运到 GPU。
+    3. 缓存未命中时，计算后将数据搬运到 CPU 并存入缓存。
+    """
     if 'feature_extractor_pytorch' not in models:
-        raise RuntimeError("PyTorch特征提取模型未加载。")
+        # 尝试重新加载
+        startup_ai_models()
+        if 'feature_extractor_pytorch' not in models:
+            raise RuntimeError("PyTorch特征提取模型加载失败。")
 
     DEVICE = settings_manager.get_device()
     cache_key = f"{video_uuid}_{frame_number}"
 
-    # 1. 检查一级缓存
+    # 1. 检查一级缓存 (快速路径)
     if cache_key in PREPROCESSED_DATA_CACHE:
-        return PREPROCESSED_DATA_CACHE[cache_key]
+        # 数据在 CPU 上，转移到 GPU 用于计算
+        data_cpu = PREPROCESSED_DATA_CACHE[cache_key]
+        return {
+            "all_boxes": data_cpu["all_boxes"].to(DEVICE),
+            "all_features": data_cpu["all_features"].to(DEVICE)
+        }
 
     with AI_MODEL_LOCK:
-        # 2. 检查二级缓存 (防止并发重复计算)
+        # 2. 检查二级缓存 (防止并发计算)
         if cache_key in PREPROCESSED_DATA_CACHE:
-            return PREPROCESSED_DATA_CACHE[cache_key]
+            data_cpu = PREPROCESSED_DATA_CACHE[cache_key]
+            return {
+                "all_boxes": data_cpu["all_boxes"].to(DEVICE),
+                "all_features": data_cpu["all_features"].to(DEVICE)
+            }
 
         with torch.no_grad(), torch.amp.autocast(device_type=DEVICE.type, enabled=(DEVICE.type == 'cuda')):
-            logging.info(f"正在为 {cache_key} 开始新的预处理 (SAM2)...")
+            logging.info(f"正在为 {cache_key} 生成掩码特征 (SAM2 + MobileNet)...")
 
             frame_path = file_storage.get_frame_path(video_uuid, frame_number)
             if not os.path.exists(frame_path):
-                raise FileNotFoundError(f"帧图像文件未找到于 {frame_path}")
+                raise FileNotFoundError(f"Frame image not found: {frame_path}")
 
-            # === 核心修改：调用 SAM2 的自动掩码生成器 ===
-            # generate_masks_for_frame 已经处理了推理、NMS (由SAM2内部处理) 和 Tensor 转换
-            # 返回: (boxes_tensor[N,4], masks_tensor[N,1,H,W])，都在目标 DEVICE 上
+            # 调用 SAM2 自动生成掩码
+            # all_boxes: [N, 4] on DEVICE
+            # all_masks: [N, 1, H, W] on DEVICE (未使用，但为了兼容性保留接口)
             all_boxes, all_masks = sam_tasks.generate_masks_for_frame(video_uuid, frame_number)
 
             # 处理未检测到对象的情况
             if all_boxes is None or len(all_boxes) == 0:
-                cached_data = {
+                cached_data_empty = {
+                    "all_boxes": torch.empty(0, 4, device='cpu'),
+                    "all_features": torch.empty(0, 1, device='cpu')
+                }
+                PREPROCESSED_DATA_CACHE[cache_key] = cached_data_empty
+                return {
                     "all_boxes": torch.empty(0, 4, device=DEVICE),
                     "all_features": torch.empty(0, 1, device=DEVICE)
                 }
-                PREPROCESSED_DATA_CACHE[cache_key] = cached_data
-                return cached_data
 
-            # 3. 提取语义特征 (使用 MobileNet)
-            # MobileNet 需要 PIL Image
+            # 3. 提取语义特征 (MobileNet)
             try:
                 pil_image = Image.open(frame_path).convert("RGB")
             except Exception as e:
-                logging.error(f"无法打开图像进行特征提取: {e}")
+                logging.error(f"Image load failed: {e}")
                 return None
 
-            # get_features_for_single_bbox 需要 numpy 数组格式的 boxes
+            # 这里的 all_boxes 在 GPU 上，需要转 numpy 给 feature extractor (crop logic)
+            # 注意：get_features_for_single_bbox 内部会将 numpy 转回 GPU tensor
             all_features = get_features_for_single_bbox(pil_image, all_boxes.cpu().numpy())
 
             if all_features is None:
-                raise RuntimeError(f"为 {cache_key} 提取特征时返回了 None。")
+                raise RuntimeError(f"Feature extraction returned None for {cache_key}")
 
-            # 4. 存入缓存
-            cached_data = {"all_boxes": all_boxes, "all_features": all_features}
-            PREPROCESSED_DATA_CACHE[cache_key] = cached_data
-            logging.info(f"为 {cache_key} 的预处理完成并已缓存 (SAM2 + MobileNet)。")
+            # 4. 存入缓存 (CRITICAL OPTIMIZATION: Move to CPU)
+            cached_data_cpu = {
+                "all_boxes": all_boxes.cpu(),
+                "all_features": all_features.cpu()
+            }
+            PREPROCESSED_DATA_CACHE[cache_key] = cached_data_cpu
 
-            # 5. 触发后台保存 (如果间隔时间到了)
+            logging.info(f"缓存成功: {cache_key} (Count: {len(PREPROCESSED_DATA_CACHE)})")
+
+            # 5. 触发后台保存 (定时)
             settings = settings_manager.load_settings()
             cache_save_interval = settings.get('cache_save_interval_seconds', 30)
             if time.time() - _last_cache_save_time > cache_save_interval:
                 threading.Thread(target=save_preprocessed_cache_to_disk).start()
 
-            return cached_data
+            # 返回 GPU 数据给当前计算使用
+            return {"all_boxes": all_boxes, "all_features": all_features}
 
 
 def get_features_for_specific_bboxes(video_uuid, frame_number, target_rects):
     try:
         processed_data = get_features_for_all_masks(video_uuid, frame_number)
+        if processed_data is None: return None
+
         all_boxes = processed_data.get("all_boxes")
         all_features = processed_data.get("all_features")
 
@@ -377,7 +455,7 @@ def get_features_for_specific_bboxes(video_uuid, frame_number, target_rects):
             return None
 
     except Exception as e:
-        logging.warning(f"Skipping frame {frame_number} for specific feature extraction due to error: {e}")
+        logging.warning(f"Feature match failed for {frame_number}: {e}")
         return None
 
 
@@ -401,10 +479,10 @@ def get_prototypes_from_drawn_boxes(drawn_samples_data):
                 all_prototypes.append(embeddings)
 
         except Exception as e:
-            logging.warning(f"Skipping frame {frame_key} for on-the-fly prototype building due to error: {e}")
+            logging.warning(f"Skipping frame {frame_key} for prototype building: {e}")
 
     if not all_prototypes:
-        logging.error("Could not extract any valid on-the-fly prototypes after processing drawn samples.")
+        logging.error("Could not extract any valid prototypes from user samples.")
         return None
 
     return torch.cat(all_prototypes, dim=0)
@@ -412,25 +490,20 @@ def get_prototypes_from_drawn_boxes(drawn_samples_data):
 
 def _calculate_region_color_hist(image_bgr, rect):
     """
-    计算指定区域的HSV颜色直方图.
-    IMPROVEMENT: 使用 Center Crop (中心采样)，仅计算 BBox 中心 50% 区域的颜色。
-    这能有效剔除 bounding box 边缘的背景颜色 (如草地、地面)，大幅提高对物体本色的敏感度。
+    计算区域颜色直方图 (Center Crop 50%)
     """
     x1, y1, x2, y2 = map(int, rect)
     h, w = image_bgr.shape[:2]
 
-    # 基础越界检查
     x1, y1 = max(0, x1), max(0, y1)
     x2, y2 = min(w, x2), min(h, y2)
 
     if x2 <= x1 or y2 <= y1:
         return None
 
-    # 计算中心区域 (Center Crop)
     bw = x2 - x1
     bh = y2 - y1
 
-    # 取中心 50% 的区域 (margin = 25% on each side)
     crop_margin_x = int(bw * 0.25)
     crop_margin_y = int(bh * 0.25)
 
@@ -439,7 +512,6 @@ def _calculate_region_color_hist(image_bgr, rect):
     cx2 = x2 - crop_margin_x
     cy2 = y2 - crop_margin_y
 
-    # 如果裁剪后区域太小 (例如物体本身很小)，则退回到使用整个框
     if (cx2 - cx1) < 2 or (cy2 - cy1) < 2:
         cx1, cy1, cx2, cy2 = x1, y1, x2, y2
 
@@ -449,15 +521,15 @@ def _calculate_region_color_hist(image_bgr, rect):
         return None
 
     hsv_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
-
-    # 使用 HSV 直方图: Hue (色调) 分 16 级, Saturation (饱和度) 分 16 级
-    # 忽略 Value (亮度) 以增强对光照的鲁棒性
     hist = cv2.calcHist([hsv_roi], [0, 1], None, [16, 16], [0, 180, 0, 256])
     cv2.normalize(hist, hist, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX)
     return hist.flatten()
 
 
 def predict_from_one_shot(video_uuid, frame_number, positive_prompt_box, use_color=False):
+    """
+    智能选择 (Smart Select)
+    """
     with AI_MODEL_LOCK:
         processed_data = get_features_for_all_masks(video_uuid, frame_number)
         all_boxes = processed_data.get("all_boxes")
@@ -471,7 +543,7 @@ def predict_from_one_shot(video_uuid, frame_number, positive_prompt_box, use_col
         # 1. Semantic Similarity
         target_feature_tensor = get_features_for_specific_bboxes(video_uuid, frame_number, [prompt_rect])
         if target_feature_tensor is None or target_feature_tensor.numel() == 0:
-            raise ValueError("Could not extract features for the provided positive prompt box.")
+            raise ValueError("Could not extract features for the prompt box.")
 
         target_feature = target_feature_tensor[0].unsqueeze(0)
         DEVICE = settings_manager.get_device()
@@ -479,7 +551,7 @@ def predict_from_one_shot(video_uuid, frame_number, positive_prompt_box, use_col
         with torch.no_grad(), autocast(device_type=DEVICE.type, enabled=(DEVICE.type == 'cuda')):
             sim_scores = F.cosine_similarity(target_feature, all_features, dim=1)
 
-        # 2. Color Similarity (Optional) with VETO Logic
+        # 2. Color Similarity (Optional)
         if use_color:
             try:
                 frame_path = file_storage.get_frame_path(video_uuid, frame_number)
@@ -495,8 +567,6 @@ def predict_from_one_shot(video_uuid, frame_number, positive_prompt_box, use_col
                         for box in all_boxes_cpu:
                             cand_hist = _calculate_region_color_hist(image_bgr, box)
                             if cand_hist is not None:
-                                # Use Bhattacharyya distance: 0 is match, 1 is mismatch.
-                                # Convert to similarity: 1 - dist
                                 dist = cv2.compareHist(target_hist, cand_hist, cv2.HISTCMP_BHATTACHARYYA)
                                 score = max(0.0, 1.0 - dist)
                                 color_scores.append(score)
@@ -505,30 +575,13 @@ def predict_from_one_shot(video_uuid, frame_number, positive_prompt_box, use_col
 
                         color_scores_tensor = torch.tensor(color_scores, device=DEVICE, dtype=torch.float32)
 
-                        # --- FUSION LOGIC WITH VETO ---
-                        # If color score is low, severely penalize the result.
-                        # This effectively filters out correct shapes with wrong colors.
-
-                        # Create a "Gate": 1.0 if color > 0.65, else drastically drops towards 0
-                        # Using a smooth sigmoid-like transition or just multiplication
-
-                        # Logic:
-                        # If color matches (>0.7), score relies mostly on shape.
-                        # If color mismatches (<0.6), score gets decimated.
-
+                        # Veto Logic
                         veto_mask = (color_scores_tensor < 0.65).float()
-                        # Penalty factor: 0.1 if vetoed, 1.0 if passed
                         penalty_factor = (1.0 - veto_mask) + (veto_mask * 0.1)
-
-                        # Base combination
                         combined = (sim_scores * 0.5) + (color_scores_tensor * 0.5)
-
-                        # Apply Veto
                         sim_scores = combined * penalty_factor
-
-                        logging.info(f"Applied Smart Select color scoring with Bhattacharyya distance + Veto.")
             except Exception as e:
-                logging.error(f"Error calculating color similarity: {e}")
+                logging.error(f"Color similarity error: {e}")
 
         settings = settings_manager.load_settings()
         nms_iou = settings.get('nms_iou_threshold', 0.7)
@@ -548,10 +601,6 @@ def predict_from_one_shot(video_uuid, frame_number, positive_prompt_box, use_col
 
 
 def _calculate_similarity_scores(all_embeddings, positive_prototypes_dict, negative_prototypes=None):
-    """
-    Calculates similarity scores.
-    positive_prototypes_dict: {'semantic': Tensor, 'color': np.array (optional)}
-    """
     settings = settings_manager.load_settings()
     score_temperature = settings.get('prototype_temperature', 0.07)
     DEVICE = settings_manager.get_device()
@@ -583,8 +632,7 @@ def _calculate_similarity_scores(all_embeddings, positive_prototypes_dict, negat
 def predict_with_prototypes(video_uuid, frame_number, positive_prototypes_dict, negative_prototypes=None,
                             confidence_threshold=0.5, use_color=False):
     """
-    Find objects matching the prototype.
-    positive_prototypes_dict: {'semantic': Tensor, 'color': np.array}
+    使用原型库进行预测
     """
     with AI_MODEL_LOCK:
         processed_data = get_features_for_all_masks(video_uuid, frame_number)
@@ -594,10 +642,10 @@ def predict_with_prototypes(video_uuid, frame_number, positive_prototypes_dict, 
         if all_boxes is None or all_boxes.numel() == 0:
             return []
 
-        # 1. Semantic Similarity
+        # 1. Semantic
         final_scores = _calculate_similarity_scores(all_features, positive_prototypes_dict, negative_prototypes)
 
-        # 2. Color Similarity with VETO (Find Similar)
+        # 2. Color Veto
         if use_color and 'color' in positive_prototypes_dict and positive_prototypes_dict['color'] is not None:
             try:
                 frame_path = file_storage.get_frame_path(video_uuid, frame_number)
@@ -611,7 +659,6 @@ def predict_with_prototypes(video_uuid, frame_number, positive_prototypes_dict, 
                     for box in all_boxes_cpu:
                         cand_hist = _calculate_region_color_hist(image_bgr, box)
                         if cand_hist is not None:
-                            # Bhattacharyya
                             dist = cv2.compareHist(target_hist, cand_hist, cv2.HISTCMP_BHATTACHARYYA)
                             score = max(0.0, 1.0 - dist)
                             color_scores.append(score)
@@ -621,19 +668,13 @@ def predict_with_prototypes(video_uuid, frame_number, positive_prototypes_dict, 
                     DEVICE = settings_manager.get_device()
                     color_scores_tensor = torch.tensor(color_scores, device=DEVICE, dtype=torch.float32)
 
-                    # --- VETO LOGIC for Find Similar ---
-                    # Strict filtering: If color score < 0.65, reduce total score by 90%
                     veto_mask = (color_scores_tensor < 0.65).float()
                     penalty_factor = (1.0 - veto_mask) + (veto_mask * 0.1)
 
-                    # If color is good, help the score a bit (0.7 sem + 0.3 col)
-                    # If color is bad, veto it.
                     combined = (final_scores * 0.7) + (color_scores_tensor * 0.3)
                     final_scores = combined * penalty_factor
-
-                    logging.info(f"Applied Find Similar color scoring with Bhattacharyya Veto.")
             except Exception as e:
-                logging.error(f"Error calculating color similarity with prototype: {e}")
+                logging.error(f"Color proto calc error: {e}")
 
         settings = settings_manager.load_settings()
         nms_iou = settings.get('nms_iou_threshold', 0.7)
@@ -659,22 +700,18 @@ def predict_with_prototypes(video_uuid, frame_number, positive_prototypes_dict, 
 
 def _calculate_prototype_from_db(class_name):
     """
-    Returns a dict: {'semantic': Tensor, 'color': np.array or None}
+    从数据库计算原型
     """
     all_class_features_tensors = []
     all_color_hists = []
 
     sample_frames = database.get_all_frames_with_class(class_name)
     if not sample_frames:
-        logging.warning(f"在数据库中找不到类别 '{class_name}' 的任何样本。")
+        logging.warning(f"No samples found for class '{class_name}'.")
         return None
 
     settings = settings_manager.load_settings()
-    sample_limit = settings.get('prototype_sample_limit')
-    if sample_limit is None:
-        sample_limit = 50
-    else:
-        sample_limit = int(sample_limit)
+    sample_limit = int(settings.get('prototype_sample_limit', 50))
 
     if len(sample_frames) > sample_limit:
         sample_frames = random.sample(sample_frames, sample_limit)
@@ -687,22 +724,21 @@ def _calculate_prototype_from_db(class_name):
         if target_rects_in_frame:
             grouped_boxes[frame_key].extend(target_rects_in_frame)
 
-    if not grouped_boxes:
-        return None
+    if not grouped_boxes: return None
 
     for (video_uuid, frame_number), all_rects_for_frame in grouped_boxes.items():
         try:
             pil_image = Image.open(file_storage.get_frame_path(video_uuid, frame_number)).convert("RGB")
             image_bgr = cv2.imread(file_storage.get_frame_path(video_uuid, frame_number))
 
-            # 1. Semantic Features
+            # 1. Semantic
             for i in range(0, len(all_rects_for_frame), 64):
                 rect_chunk = all_rects_for_frame[i:i + 64]
                 features = get_features_for_single_bbox(pil_image, rect_chunk)
                 if features is not None and features.numel() > 0:
                     all_class_features_tensors.append(features)
 
-            # 2. Color Histograms
+            # 2. Color
             if image_bgr is not None:
                 for rect in all_rects_for_frame:
                     hist = _calculate_region_color_hist(image_bgr, rect)
@@ -710,22 +746,18 @@ def _calculate_prototype_from_db(class_name):
                         all_color_hists.append(hist)
 
         except Exception as e:
-            logging.warning(f"为原型构建跳过帧 {video_uuid}/{frame_number} 时出错: {e}")
+            logging.warning(f"Error extracting features for prototype {video_uuid}/{frame_number}: {e}")
 
-    if not all_class_features_tensors:
-        logging.error(f"未能为类别 '{class_name}' 提取任何有效的特征向量。")
-        return None
+    if not all_class_features_tensors: return None
 
-    # --- Process Semantic Features ---
     all_features = torch.cat(all_class_features_tensors, dim=0)
     num_samples = all_features.shape[0]
 
-    MIN_SAMPLES_FOR_CLUSTERING = 15
-    if KMeans is None or num_samples < MIN_SAMPLES_FOR_CLUSTERING:
-        logging.info(f"样本过少或 scikit-learn 未安装，为 '{class_name}' 创建单个平均语义原型。")
+    # Clustering
+    MIN_SAMPLES = 15
+    if KMeans is None or num_samples < MIN_SAMPLES:
         semantic_prototype = torch.mean(all_features, dim=0, keepdim=True)
     else:
-        logging.info(f"正在为 '{class_name}' ({num_samples} 个样本) 运行聚类分析以发现子原型...")
         best_k = 1
         best_score = -1
         max_clusters = min(5, num_samples - 1)
@@ -742,9 +774,7 @@ def _calculate_prototype_from_db(class_name):
             except ValueError:
                 pass
 
-        SILHOUETTE_THRESHOLD = 0.55
-        if best_k > 1 and best_score > SILHOUETTE_THRESHOLD:
-            logging.info(f"发现 {best_k} 个清晰的子类别 (得分: {best_score:.4f})。")
+        if best_k > 1 and best_score > 0.55:
             kmeans = KMeans(n_clusters=best_k, random_state=42, n_init='auto')
             kmeans.fit(features_np)
             prototypes_np = kmeans.cluster_centers_
@@ -752,10 +782,8 @@ def _calculate_prototype_from_db(class_name):
         else:
             semantic_prototype = torch.mean(all_features, dim=0, keepdim=True)
 
-    # --- Process Color Features ---
     color_prototype = None
     if all_color_hists:
-        # Simple average of all valid histograms
         color_prototype = np.mean(np.array(all_color_hists), axis=0)
 
     return {'semantic': semantic_prototype, 'color': color_prototype}
@@ -773,12 +801,11 @@ def build_prototypes_for_class(class_name):
         prototype_dict = _calculate_prototype_from_db(class_name)
 
         if prototype_dict is not None:
-            # Check shape of semantic tensor
             if prototype_dict['semantic'].dim() == 1:
                 prototype_dict['semantic'] = prototype_dict['semantic'].unsqueeze(0)
 
             PROTOTYPE_CACHE[class_name] = prototype_dict
-            logging.info(f"类别 '{class_name}' 的原型构建完成并已缓存。")
+            logging.info(f"Prototype built for '{class_name}'.")
             save_prototypes_to_disk()
 
         return prototype_dict
@@ -787,15 +814,10 @@ def build_prototypes_for_class(class_name):
 def update_prototype_for_class(class_name):
     class_lock = _get_class_lock(class_name)
     with class_lock:
-        logging.info(f"后台任务开始更新类别 '{class_name}' 的原型。")
         new_prototype = _calculate_prototype_from_db(class_name)
-
         if new_prototype is not None:
             PROTOTYPE_CACHE[class_name] = new_prototype
-            logging.info(f"类别 '{class_name}' 的原型已在后台成功更新。")
             save_prototypes_to_disk()
-        else:
-            logging.error(f"后台更新原型失败: 无法为 '{class_name}' 计算新原型。")
 
 
 def get_all_prototypes():
@@ -812,27 +834,18 @@ def lam_predict(video_uuid, frame_number, point_coords):
     with AI_MODEL_LOCK:
         frame_path = file_storage.get_frame_path(video_uuid, frame_number)
 
-        # 1. 使用新的 SAM2 封装函数进行单点预测
-        # point_coords 是 (x, y) 元组
+        # 1. SAM Point Predict
         bbox_dict = sam_tasks.predict_box_from_point_ultralytics(frame_path, point_coords)
+        if not bbox_dict: return None, "SAM failed to find object."
 
-        if not bbox_dict:
-            return None, "SAM 未在指定点找到对象。"
-
-        # bbox_dict 格式: {'x1': ..., 'y1': ..., 'x2': ..., 'y2': ...}
-
-        # 2. 准备数据进行特征提取 (Feature Extractor 需要 [x1, y1, x2, y2] 列表格式)
-        bbox_coords_list = [
-            bbox_dict['x1'], bbox_dict['y1'],
-            bbox_dict['x2'], bbox_dict['y2']
-        ]
-
+        # 2. Extract Features
+        bbox_coords_list = [bbox_dict['x1'], bbox_dict['y1'], bbox_dict['x2'], bbox_dict['y2']]
         feature_vector = get_features_for_specific_bboxes(video_uuid, frame_number, [bbox_coords_list])
 
         if feature_vector is None or feature_vector.numel() == 0:
-            return None, "无法为 SAM 找到的物体提取特征。"
+            return None, "Failed to extract features for LAM."
 
-        # 3. 计算相似度 (保持原有逻辑)
+        # 3. Match against prototypes
         prototype_library = get_all_prototypes()
         if not prototype_library:
             return {"bbox": bbox_dict, "suggestions": []}, None
@@ -842,12 +855,10 @@ def lam_predict(video_uuid, frame_number, point_coords):
 
         with torch.no_grad(), autocast(device_type=DEVICE.type, enabled=(DEVICE.type == 'cuda')):
             for class_name, prototype_dict in prototype_library.items():
-                # Use semantic component for LAM matching
                 semantic_proto = prototype_dict['semantic']
                 sim_matrix = F.cosine_similarity(feature_vector.unsqueeze(1), semantic_proto.unsqueeze(0), dim=2)
                 max_similarity = torch.max(sim_matrix)
                 scores.append({"label": class_name, "score": round(max_similarity.item(), 4)})
 
         sorted_suggestions = sorted(scores, key=lambda x: x['score'], reverse=True)
-
         return {"bbox": bbox_dict, "suggestions": sorted_suggestions[:5]}, None

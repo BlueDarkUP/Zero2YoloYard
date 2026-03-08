@@ -29,6 +29,7 @@
         position: relative;
         overflow: hidden;
         border-right: 1px solid var(--border-color);
+        background: radial-gradient(circle at center, rgba(0,240,255,0.02) 0%, transparent 70%);
     }
 
     /* 顶部工具栏 (HUD Header) */
@@ -42,6 +43,7 @@
         justify-content: space-between;
         font-family: 'JetBrains Mono', monospace;
         z-index: 50;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.5);
     }
 
     /* 画布滚动包裹层 */
@@ -54,8 +56,8 @@
         align-items: center;
         /* 背景网格 */
         background-image:
-            linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+            linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
         background-size: 40px 40px;
         background-position: center center;
     }
@@ -65,9 +67,10 @@
         position: relative;
         cursor: crosshair;
         display: inline-block;
-        box-shadow: 0 0 0 1px var(--border-color);
+        box-shadow: 0 0 0 1px var(--border-color), 0 10px 40px rgba(0,0,0,0.8);
         background: #000;
         margin: 20px;
+        transition: box-shadow 0.3s ease;
     }
 
     /* HUD Corner Decos (CSS 模拟四角战术装饰) */
@@ -80,7 +83,7 @@
         transition: all 0.3s ease;
         pointer-events: none;
         z-index: 20;
-        box-shadow: 0 0 5px var(--color-primary-glow);
+        box-shadow: 0 0 8px var(--color-primary-glow);
     }
     #canvas-container::before {
         top: -1px; left: -1px;
@@ -94,8 +97,8 @@
     /* 状态光标 */
     #canvas-container.sam-active,
     #canvas-container.lam-active {
-        cursor: copy !important;
-        box-shadow: 0 0 0 1px var(--color-primary);
+        cursor: crosshair !important;
+        box-shadow: 0 0 0 1px var(--color-primary), 0 0 30px rgba(0, 240, 255, 0.15);
     }
     #canvas-container.sam-loading {
         cursor: wait !important;
@@ -131,21 +134,26 @@
     }
     input[type=range].custom-range::-webkit-slider-thumb {
         -webkit-appearance: none;
-        height: 18px;
-        width: 10px;
+        height: 20px;
+        width: 8px;
         background: var(--color-primary);
         cursor: pointer;
-        margin-top: -7px;
+        margin-top: -8px;
         border: 1px solid #000;
-        box-shadow: 0 0 8px var(--color-primary-glow);
-        border-radius: 0; /* 直角 */
+        box-shadow: 0 0 10px var(--color-primary-glow);
+        border-radius: 2px;
+        transition: background 0.2s, transform 0.1s;
+    }
+    input[type=range].custom-range::-webkit-slider-thumb:hover {
+        background: #fff;
+        transform: scale(1.1);
     }
     input[type=range].custom-range::-webkit-slider-runnable-track {
         width: 100%;
         height: 4px;
         background: var(--border-color);
         border: none;
-        border-radius: 0;
+        border-radius: 2px;
     }
 
     /* 快捷键提示 */
@@ -161,16 +169,23 @@
         font-size: 0.7rem;
         color: var(--text-secondary);
         background: rgba(255,255,255,0.03);
-        padding: 3px 8px;
+        padding: 4px 10px;
         border: 1px solid var(--border-color);
         text-transform: uppercase;
         letter-spacing: 0.05em;
+        transition: all 0.2s;
+        border-radius: 2px;
+    }
+    .shortcut-key:hover {
+        color: var(--color-primary);
+        border-color: var(--color-primary);
+        background: rgba(0, 240, 255, 0.05);
     }
 
     /* 右侧：侧边栏 */
     .ide-sidebar {
-        width: 340px;
-        min-width: 340px;
+        width: 350px;
+        min-width: 350px;
         background-color: var(--bg-surface);
         display: flex;
         flex-direction: column;
@@ -178,6 +193,7 @@
         padding: 1.2rem;
         border-left: 1px solid var(--border-color);
         gap: 1.2rem;
+        box-shadow: -5px 0 20px rgba(0,0,0,0.5);
     }
 
     /* 侧边栏标题 */
@@ -194,51 +210,68 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
+        text-shadow: 0 0 8px rgba(0,240,255,0.3);
     }
 
     /* 列表项样式 (Class List & Object List) */
     #class-list .list-group-item,
     #bbox-list .list-group-item {
-        background: transparent;
+        background: rgba(0,0,0,0.2);
         color: var(--text-main);
         border: 1px solid transparent;
+        border-bottom: 1px solid var(--border-color);
         border-radius: 0;
-        margin-bottom: 2px;
+        margin-bottom: 0;
         cursor: pointer;
         font-family: 'JetBrains Mono', monospace;
         font-size: 0.8rem;
-        transition: all 0.1s;
-        padding: 0.5rem 0.75rem;
+        transition: all 0.2s ease-out;
+        padding: 0.6rem 0.75rem;
         border-left: 3px solid transparent;
     }
     #class-list .list-group-item:hover,
     #bbox-list .list-group-item:hover {
         background: rgba(255,255,255,0.05);
-        border-left-color: var(--text-secondary);
+        border-left-color: rgba(255,255,255,0.5);
+        transform: translateX(2px);
     }
     #class-list .list-group-item.active,
     #bbox-list .list-group-item.selected {
         background: rgba(0, 240, 255, 0.08);
-        border: 1px solid var(--color-primary-dim);
+        border-top: 1px solid var(--color-primary-dim);
+        border-bottom: 1px solid var(--color-primary-dim);
         border-left: 3px solid var(--color-primary);
         color: var(--text-main);
+        transform: translateX(4px);
+        box-shadow: inset 20px 0 30px -20px var(--color-primary-dim);
     }
 
     /* 颜色块 */
     .color-swatch {
         display: inline-block;
-        width: 10px;
-        height: 10px;
-        margin-right: 10px;
-        border: 1px solid rgba(255,255,255,0.5);
-        border-radius: 0; /* 直角 */
+        width: 12px;
+        height: 12px;
+        margin-right: 12px;
+        border: 1px solid rgba(255,255,255,0.8);
+        border-radius: 2px;
+        box-shadow: 0 0 5px currentColor;
     }
 
     /* 按钮微调 (覆盖 Bootstrap) */
-    .btn { border-radius: 0 !important; }
+    .btn { 
+        border-radius: 2px !important; 
+        transition: all 0.2s ease;
+    }
+    .btn:hover {
+        box-shadow: 0 0 10px rgba(255,255,255,0.1);
+        transform: translateY(-1px);
+    }
+    .btn-outline-primary:hover {
+        box-shadow: 0 0 15px var(--color-primary-glow);
+    }
 
     .btn-xs {
-        padding: 0.15rem 0.5rem;
+        padding: 0.2rem 0.5rem;
         font-size: 0.7rem;
         font-family: 'JetBrains Mono', monospace;
         text-transform: uppercase;
@@ -246,18 +279,19 @@
 
     /* 工具栏输入框 */
     .tool-input {
-        background: rgba(0,0,0,0.3);
+        background: rgba(0,0,0,0.4);
         border: 1px solid var(--border-color);
         color: var(--text-main);
-        border-radius: 0;
+        border-radius: 2px;
         font-family: 'JetBrains Mono';
         font-size: 0.85rem;
+        transition: all 0.2s;
     }
     .tool-input:focus {
-        background: rgba(0,0,0,0.5);
+        background: rgba(0,0,0,0.6);
         border-color: var(--color-primary);
         color: #fff;
-        box-shadow: none;
+        box-shadow: 0 0 8px var(--color-primary-glow);
     }
 
     /* 鼠标样式 */
@@ -271,30 +305,37 @@
     #bbox-list .list-group-item:hover .bbox-controls { opacity: 1; }
 
     /* Interpolation Banner HUD */
+    @keyframes pulse-warning {
+        0% { box-shadow: 0 0 10px rgba(255, 208, 0, 0.2); }
+        50% { box-shadow: 0 0 25px rgba(255, 208, 0, 0.5); }
+        100% { box-shadow: 0 0 10px rgba(255, 208, 0, 0.2); }
+    }
     #interpolation-banner {
-        background: rgba(10, 10, 10, 0.95);
+        background: rgba(20, 15, 0, 0.95);
         border: 1px solid var(--color-warning);
         color: var(--color-warning);
         font-family: 'JetBrains Mono';
-        padding: 12px;
-        box-shadow: 0 0 20px rgba(255, 208, 0, 0.1);
+        padding: 12px 20px;
         backdrop-filter: blur(5px);
+        animation: pulse-warning 2s infinite;
+        border-radius: 4px;
     }
 
     /* Hidden Control Panels (Smart Select / Tracking) */
     #interactive-segment-controls,
     #suggestion-review-controls,
     #track-controls {
-        background: rgba(255,255,255,0.03);
+        background: rgba(0, 0, 0, 0.3);
         border: 1px dashed var(--border-color);
-        padding: 12px;
+        padding: 15px;
         margin-top: 10px;
+        border-radius: 4px;
     }
 
     /* 滚动条 */
-    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-    .custom-scrollbar::-webkit-scrollbar-track { background: #0a0a0a; }
-    .custom-scrollbar::-webkit-scrollbar-thumb { background: #333; border: 1px solid #000; }
+    .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; transition: background 0.3s; }
     .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--color-primary); }
 
 </style>
@@ -312,23 +353,23 @@
                     <i class="bi bi-chevron-left"></i> Return
                 </a>
                 <div class="pl-3 border-left border-secondary" style="overflow: hidden; white-space: nowrap;">
-                    <h6 class="mb-0 font-weight-bold text-uppercase text-white" style="font-family: 'Orbitron'; letter-spacing: 0.05em;">{{ video_entity.description }}</h6>
-                    <small class="text-muted text-monospace">TASK: {{ task_entity.assigned_to }} // FRAMES: {{ task_entity.start_frame }}-{{ task_entity.end_frame }}</small>
+                    <h6 class="mb-0 font-weight-bold text-uppercase text-white" style="font-family: 'Orbitron'; letter-spacing: 0.05em; text-shadow: 0 0 5px rgba(255,255,255,0.3);">{{ video_entity.description }}</h6>
+                    <small class="text-muted text-monospace">TASK: <span class="text-primary">{{ task_entity.assigned_to }}</span> // FRAMES: {{ task_entity.start_frame }}-{{ task_entity.end_frame }}</small>
                 </div>
             </div>
 
             <!-- 帧导航控制器 (HUD Center) -->
-            <div class="d-flex align-items-center border border-secondary px-3 py-1 mx-2" style="background: rgba(0,0,0,0.5);">
-                <button class="btn btn-sm btn-link text-secondary p-0 mr-2" onclick="document.getElementById('frame-slider').stepDown(); document.getElementById('frame-slider').dispatchEvent(new Event('input'));"><i class="bi bi-caret-left-fill"></i></button>
-                <span class="font-weight-bold mx-2 text-monospace text-primary" style="min-width: 100px; text-align: center; font-size: 1.1em;">
+            <div class="d-flex align-items-center border border-secondary px-3 py-1 mx-2" style="background: rgba(0,0,0,0.6); border-radius: 20px;">
+                <button class="btn btn-sm btn-link text-secondary p-0 mr-2" onclick="document.getElementById('frame-slider').stepDown(); document.getElementById('frame-slider').dispatchEvent(new Event('input'));" style="transition: color 0.2s;"><i class="bi bi-caret-left-fill"></i></button>
+                <span class="font-weight-bold mx-2 text-monospace text-primary" style="min-width: 100px; text-align: center; font-size: 1.1em; text-shadow: 0 0 8px var(--color-primary-glow);">
                     <span id="frame-number-display" class="text-white">{{ task_entity.start_frame }}</span> <span class="text-muted">/</span> {{ task_entity.end_frame }}
                 </span>
-                <button class="btn btn-sm btn-link text-secondary p-0 ml-2" onclick="document.getElementById('frame-slider').stepUp(); document.getElementById('frame-slider').dispatchEvent(new Event('input'));"><i class="bi bi-caret-right-fill"></i></button>
+                <button class="btn btn-sm btn-link text-secondary p-0 ml-2" onclick="document.getElementById('frame-slider').stepUp(); document.getElementById('frame-slider').dispatchEvent(new Event('input'));" style="transition: color 0.2s;"><i class="bi bi-caret-right-fill"></i></button>
             </div>
 
             <div>
-                <button id="save-bboxes" class="btn btn-sm btn-primary border-primary text-uppercase font-weight-bold px-3">
-                    <i class="bi bi-sd-card-fill mr-2"></i> Save Data
+                <button id="save-bboxes" class="btn btn-sm btn-primary border-primary text-uppercase font-weight-bold px-4" style="box-shadow: 0 0 15px rgba(0,240,255,0.4);">
+                    <i class="bi bi-sd-card-fill mr-2"></i> Commit Data
                 </button>
             </div>
         </div>
@@ -337,10 +378,10 @@
         <div class="ide-canvas-wrapper custom-scrollbar">
             <div id="interpolation-banner" class="position-absolute" style="top: 20px; z-index: 100; min-width: 320px; display: none;">
                 <div class="d-flex align-items-center">
-                    <i class="bi bi-bezier2 mr-3" style="font-size: 1.5rem;"></i>
+                    <i class="bi bi-bezier2 mr-3" style="font-size: 1.8rem; text-shadow: 0 0 10px var(--color-warning);"></i>
                     <div>
-                        <strong class="text-uppercase" style="letter-spacing: 0.1em;">Interpolation Active</strong><br>
-                        <small class="text-monospace">Adjust Target -> Click 'Confirm' to execute.</small>
+                        <strong class="text-uppercase" style="letter-spacing: 0.1em; font-size: 1.1em;">Interpolation Active</strong><br>
+                        <small class="text-monospace text-white">Adjust Target -> Click 'Confirm' to execute.</small>
                     </div>
                 </div>
             </div>
@@ -381,9 +422,9 @@
                     <button id="add-class-btn" class="btn btn-outline-secondary" type="button"><i class="bi bi-plus-lg"></i></button>
                 </div>
             </div>
-            <ul id="class-list" class="list-group list-group-flush border border-secondary" style="max-height: 200px; overflow-y: auto;"></ul>
+            <ul id="class-list" class="list-group list-group-flush border border-secondary" style="max-height: 220px; overflow-y: auto; background: rgba(0,0,0,0.3);"></ul>
 
-            <div class="mt-2">
+            <div class="mt-3">
                 <div class="custom-control custom-switch mb-2">
                     <input type="checkbox" class="custom-control-input" id="dataset-find-use-color">
                     <label class="custom-control-label small text-muted text-uppercase font-weight-bold" for="dataset-find-use-color">Strict Color Match</label>
@@ -418,29 +459,29 @@
         <!-- Hidden Control Panels -->
         <div id="interactive-segment-controls" style="display: none;">
             <h6 class="small font-weight-bold mb-2 text-info text-uppercase"><i class="bi bi-crosshair"></i> Smart Select Active</h6>
-            <p class="text-muted small mb-2 font-monospace" style="font-size: 0.7rem;">> DESIGNATE TARGET BOX <br>> SYSTEM WILL LOCATE SIMILAR</p>
+            <p class="text-muted small mb-3 font-monospace" style="font-size: 0.7rem;">> DESIGNATE TARGET BOX <br>> SYSTEM WILL LOCATE SIMILAR</p>
 
-            <div class="custom-control custom-switch mb-2">
+            <div class="custom-control custom-switch mb-3 border-bottom border-secondary pb-2">
                 <input type="checkbox" class="custom-control-input" id="smart-select-use-color">
                 <label class="custom-control-label small text-muted text-uppercase" for="smart-select-use-color">Strict Color Match</label>
             </div>
 
-            <button id="find-similar-btn" class="btn btn-sm btn-primary w-100 mb-2 text-uppercase" style="display: none;"><i class="bi bi-radar"></i> Scan Frame</button>
+            <button id="find-similar-btn" class="btn btn-sm btn-primary w-100 mb-2 text-uppercase font-weight-bold" style="display: none;"><i class="bi bi-radar"></i> Scan Frame</button>
             <button id="clear-samples-btn" class="btn btn-sm btn-secondary w-100 mb-2 text-uppercase"><i class="bi bi-eraser"></i> Clear Signal</button>
 
-            <div id="interactive-results-controls" style="display: none;" class="mt-2 border-top border-secondary pt-2">
-                <div class="form-group mb-2">
+            <div id="interactive-results-controls" style="display: none;" class="mt-3 border-top border-secondary pt-3">
+                <div class="form-group mb-3">
                     <label class="small mb-1 d-flex justify-content-between text-muted text-uppercase"><span>Confidence</span> <span id="threshold-value" class="font-weight-bold text-white">0.50</span></label>
                     <input type="range" class="custom-range" id="result-threshold" min="0.1" max="0.99" step="0.01" value="0.50">
                 </div>
-                <button id="accept-visible-btn" class="btn btn-sm btn-success w-100 mb-1 text-uppercase"><i class="bi bi-check2-square"></i> Confirm All</button>
+                <button id="accept-visible-btn" class="btn btn-sm btn-success w-100 mb-2 text-uppercase font-weight-bold"><i class="bi bi-check2-square"></i> Confirm All</button>
                 <button id="finish-interactive-btn" class="btn btn-sm btn-outline-light w-100 text-uppercase">Terminate</button>
             </div>
         </div>
 
         <div id="suggestion-review-controls" style="display: none;">
-            <h6 class="small font-weight-bold mb-2 text-warning text-uppercase"><i class="bi bi-lightbulb"></i> AI Suggestions</h6>
-            <div class="form-group mb-2">
+            <h6 class="small font-weight-bold mb-3 text-warning text-uppercase"><i class="bi bi-lightbulb"></i> AI Suggestions</h6>
+            <div class="form-group mb-3">
                 <label class="small mb-1 d-flex justify-content-between text-muted text-uppercase"><span>Confidence</span> <span id="suggestion-threshold-value" class="font-weight-bold text-white">0.50</span></label>
                 <input type="range" class="custom-range" id="suggestion-threshold" min="0.1" max="0.99" step="0.01" value="0.50">
             </div>
@@ -449,16 +490,16 @@
 
         <div id="track-controls" style="display: none;">
             <div class="d-flex justify-content-between align-items-center mb-2">
-                <h6 class="small font-weight-bold mb-0 text-primary text-uppercase" id="track-status-header">TRACKING_SEQUENCE...</h6>
+                <h6 class="small font-weight-bold mb-0 text-success text-uppercase" id="track-status-header">TRACKING_SEQUENCE...</h6>
             </div>
-            <div class="progress mb-2 rounded-0 bg-dark" style="height: 6px;">
-                <div id="track-progress-bar" class="progress-bar bg-primary" role="progressbar" style="width: 0%;"></div>
+            <div class="progress mb-3 rounded-0 bg-dark" style="height: 8px; border: 1px solid var(--border-color);">
+                <div id="track-progress-bar" class="progress-bar bg-success" role="progressbar" style="width: 0%; box-shadow: 0 0 10px var(--color-success);"></div>
             </div>
-            <button id="stop-sam2-track-btn" class="btn btn-sm btn-danger w-100 mb-2 text-uppercase"><i class="bi bi-stop-fill"></i> Abort</button>
+            <button id="stop-sam2-track-btn" class="btn btn-sm btn-danger w-100 mb-3 text-uppercase font-weight-bold"><i class="bi bi-stop-fill"></i> Abort</button>
 
-            <div class="border-top border-secondary pt-2 mt-2">
+            <div class="border-top border-secondary pt-3 mt-2">
                 <small class="text-muted d-block mb-2 text-uppercase font-monospace">> Review Mode Active</small>
-                <button id="save-all-tracked-btn" class="btn btn-sm btn-success w-100 mb-1 text-uppercase" disabled><i class="bi bi-hdd-fill"></i> Commit Results</button>
+                <button id="save-all-tracked-btn" class="btn btn-sm btn-success w-100 mb-2 text-uppercase font-weight-bold" disabled><i class="bi bi-hdd-fill"></i> Commit Results</button>
                 <button id="exit-track-mode-btn" class="btn btn-sm btn-secondary w-100 text-uppercase">Exit</button>
             </div>
         </div>
@@ -468,8 +509,8 @@
             <span>Detected Entities</span>
             <i class="bi bi-layers-fill"></i>
         </div>
-        <div class="flex-grow-1 position-relative" style="min-height: 100px;">
-            <ul id="bbox-list" class="list-group list-group-flush h-100 custom-scrollbar border border-secondary" style="position: absolute; width: 100%; overflow-y: auto;">
+        <div class="flex-grow-1 position-relative" style="min-height: 150px;">
+            <ul id="bbox-list" class="list-group list-group-flush h-100 custom-scrollbar border border-secondary" style="position: absolute; width: 100%; overflow-y: auto; background: rgba(0,0,0,0.3);">
                 <!-- Populated by JS -->
             </ul>
         </div>
@@ -489,8 +530,8 @@
             <small class="bbox-id text-muted ml-2 text-monospace" style="font-size: 0.65em; opacity: 0.7;"></small>
         </div>
         <div class="bbox-controls flex-shrink-0">
-            <button class="btn btn-xs btn-link text-info p-0 interpolate-btn mr-2" title="Interpolate"><i class="bi bi-bezier2"></i></button>
-            <button class="btn btn-xs btn-link text-danger p-0 delete-bbox-btn" title="Delete"><i class="bi bi-x-lg"></i></button>
+            <button class="btn btn-xs btn-link text-info p-0 interpolate-btn mr-2" title="Interpolate" style="transition: transform 0.2s;"><i class="bi bi-bezier2" style="font-size: 1.1rem;"></i></button>
+            <button class="btn btn-xs btn-link text-danger p-0 delete-bbox-btn" title="Delete" style="transition: transform 0.2s;"><i class="bi bi-x-lg" style="font-size: 1.1rem;"></i></button>
         </div>
     </li>
 </template>
@@ -519,7 +560,7 @@
     <p class="text-muted small font-monospace"><i class="bi bi-exclamation-triangle mr-1"></i> Draw boxes on areas to IGNORE.</p>
 
     <div class="text-center mb-3 bg-black border border-secondary p-1">
-        <div id="neg-canvas-container" style="position: relative; display: inline-block; max-width: 100%;">
+        <div id="neg-canvas-container" style="position: relative; display: inline-block; max-width: 100%; box-shadow: 0 0 15px rgba(255,0,0,0.1);">
             <img id="neg-frame-image" src="" class="img-fluid" alt="Negative Sample Frame" draggable="false" />
             <canvas id="neg-drawing-canvas" style="position: absolute; top: 0; left: 0; cursor: crosshair;"></canvas>
         </div>
@@ -532,9 +573,9 @@
     </div>
     <p class="text-muted small mt-2 text-center font-monospace">CTRL+Z: UNDO | DEL: CLEAR</p>
 </div>
-<div class="modal-footer border-secondary bg-transparent">
+<div class="modal-footer border-secondary bg-transparent pt-3 mt-2 border-top">
     <button type="button" class="btn btn-secondary rounded-0 text-uppercase" data-dismiss="modal">Cancel</button>
-    <button type="button" id="finish-neg-sampling-btn" class="btn btn-primary rounded-0 text-uppercase"><i class="bi bi-check2-circle"></i> Execute</button>
+    <button type="button" id="finish-neg-sampling-btn" class="btn btn-primary rounded-0 text-uppercase font-weight-bold"><i class="bi bi-check2-circle"></i> Execute Protocol</button>
 </div>
 {% endcall %}
 
@@ -557,21 +598,22 @@
         // --- ABYSSAL TELEMETRY COLOR PALETTE ---
         // 强制使用高对比度霓虹配色，无视亮/暗模式
         const themeColors = {
-            selectionShadow: 'rgba(0, 240, 255, 0.6)',
+            selectionShadow: 'rgba(0, 240, 255, 0.8)',
             handleFill: '#00F0FF',
+            handleStroke: '#FFFFFF',
             labelText: '#000000',
             labelBg: '#00F0FF',
-            crosshair: 'rgba(0, 240, 255, 0.8)',
+            crosshair: 'rgba(0, 240, 255, 0.9)',
 
             // Interpolation
             interpolationGhost: 'rgba(255, 208, 0, 0.5)',
             interpolationConfirm: '#00FF94',
 
             // Suggestions
-            suggestionStroke: 'rgba(46, 154, 255, 0.7)',
-            suggestionFill: 'rgba(46, 154, 255, 0.15)',
+            suggestionStroke: 'rgba(46, 154, 255, 0.8)',
+            suggestionFill: 'rgba(46, 154, 255, 0.2)',
             suggestionHoverStroke: '#FFD000',
-            suggestionHoverFill: 'rgba(255, 208, 0, 0.2)',
+            suggestionHoverFill: 'rgba(255, 208, 0, 0.3)',
 
             // Interactive
             positiveExampleStroke: '#00FF94',
@@ -626,6 +668,7 @@
         let negStartX, negStartY;
 
         let toastTimeout;
+        let isRequestingAnimationFrame = false; // 【优化】渲染节流开关
 
         const canvasContainer = $('#canvas-container');
         const drawingCanvas = document.getElementById('drawing-canvas');
@@ -679,6 +722,16 @@
                 triggerBackgroundPreprocess(frameNumber);
             }, 500);
         }
+        
+        // 此函数补齐之前遗漏的后端调用
+        function triggerBackgroundPreprocess(frameNumber) {
+            $.ajax({
+                url: '/api/background_preprocess_frame',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ video_uuid: videoUuid, frame_number: parseInt(frameNumber) })
+            });
+        }
 
         function resizeCanvas() {
             const dpr = window.devicePixelRatio || 1;
@@ -719,7 +772,7 @@
                     drawingCtx.strokeStyle = '#fff';
                     drawingCtx.lineWidth = 3 / dpr;
                     drawingCtx.shadowColor = getColor('selectionShadow');
-                    drawingCtx.shadowBlur = 10 / dpr;
+                    drawingCtx.shadowBlur = 15 / dpr;
                 } else {
                     drawingCtx.strokeStyle = color;
                     drawingCtx.lineWidth = 2 / dpr;
@@ -743,26 +796,27 @@
                 const textWidth = textMetrics.width;
                 const textHeight = 16 / dpr;
 
-                drawingCtx.fillRect(x, y - textHeight, textWidth + (6 / dpr), textHeight);
+                drawingCtx.fillRect(x, y - textHeight, textWidth + (8 / dpr), textHeight);
                 drawingCtx.fillStyle = '#000000';
-                drawingCtx.fillText(box.label.toUpperCase(), x + (3 / dpr), y - (3 / dpr));
+                drawingCtx.fillText(box.label.toUpperCase(), x + (4 / dpr), y - (3 / dpr));
 
                 // Handles (Hollow style for industrial look)
                 if (index === selectedBboxIndex && !isInteractiveMode) {
-                    const handleSize = 6 / dpr;
+                    const handleSize = 8 / dpr;
                     const halfHandle = handleSize / 2;
                     const handles = {
                         'top-left': { x: x, y: y }, 'top-middle': { x: x + w / 2, y: y }, 'top-right': { x: x + w, y: y },
                         'middle-left': { x: x, y: y + h / 2 }, 'middle-right': { x: x + w, y: y + h / 2 },
                         'bottom-left': { x: x, y: y + h }, 'bottom-middle': { x: x + w / 2, y: y + h }, 'bottom-right': { x: x + w, y: y + h }
                     };
-                    drawingCtx.fillStyle = '#000000';
-                    drawingCtx.strokeStyle = '#ffffff';
-                    drawingCtx.lineWidth = 1 / dpr;
-
+                    
                     for (const key in handles) {
                         const pos = handles[key];
+                        // 绘制手柄（实心填充，带对比度边框）
+                        drawingCtx.fillStyle = getColor('handleFill');
                         drawingCtx.fillRect(pos.x - halfHandle, pos.y - halfHandle, handleSize, handleSize);
+                        drawingCtx.strokeStyle = getColor('handleStroke');
+                        drawingCtx.lineWidth = 1 / dpr;
                         drawingCtx.strokeRect(pos.x - halfHandle, pos.y - halfHandle, handleSize, handleSize);
                     }
                 }
@@ -790,6 +844,9 @@
                          if (index === hoveredPreviewIndex) {
                             drawingCtx.strokeStyle = getColor('suggestionHoverStroke');
                             drawingCtx.lineWidth = 2 / dpr;
+                            drawingCtx.fillStyle = getColor('suggestionHoverFill');
+                            const x = box[0] * scaleX, y = box[1] * scaleY, w = (box[2] - box[0]) * scaleX, h = (box[3] - box[1]) * scaleY;
+                            drawingCtx.fillRect(x,y,w,h);
                         } else {
                             drawingCtx.strokeStyle = getColor('suggestionStroke');
                             drawingCtx.lineWidth = 1 / dpr;
@@ -802,7 +859,7 @@
             if (isInteractiveMode) {
                  drawingCtx.strokeStyle = getColor('positiveExampleStroke');
                  drawingCtx.lineWidth = 2 / dpr;
-                 drawingCtx.setLineDash([4/dpr, 2/dpr]);
+                 drawingCtx.setLineDash([5/dpr, 3/dpr]);
                  positiveExampleBboxes.forEach(box => {
                       const x = box.x1 * scaleX, y = box.y1 * scaleY, w = (box.x2 - box.x1) * scaleX, h = (box.y2 - box.y1) * scaleY;
                       drawingCtx.strokeRect(x,y,w,h);
@@ -833,7 +890,7 @@
                 if (interpolationState.isActive) {
                     if (interpolationState.objectId === box.id) {
                         interpolateBtn.removeClass('text-info').addClass('text-success')
-                            .html('<i class="bi bi-check-lg"></i>')
+                            .html('<i class="bi bi-check-lg" style="font-size: 1.2rem;"></i>')
                             .prop('disabled', false);
                     } else {
                         interpolateBtn.prop('disabled', true).css('opacity', 0.2);
@@ -862,7 +919,7 @@
             if (customClassColors && customClassColors[str]) return customClassColors[str];
             let hash = 0;
             for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
-            return `hsl(${(hash % 360 + 360) % 360}, 80%, 50%)`;
+            return `hsl(${(hash % 360 + 360) % 360}, 80%, 55%)`; // 稍亮一点增加霓虹感
         }
 
         function drawCrosshairs(x, y) {
@@ -929,7 +986,7 @@
             const scaleY = frameImage.clientHeight / frameImage.naturalHeight;
             const box = bboxes[selectedBboxIndex];
             const bx = box.x1 * scaleX, by = box.y1 * scaleY, bw = (box.x2 - box.x1) * scaleX, bh = (box.y2 - box.y1) * scaleY;
-            const handleSize = 8;
+            const handleSize = 10; // 稍微扩大判定范围以提升体验
             const handles = {
                 'top-left': { x: bx, y: by }, 'top-middle': { x: bx + bw / 2, y: by }, 'top-right': { x: bx + bw, y: by },
                 'middle-left': { x: bx, y: by + bh / 2 }, 'middle-right': { x: bx + bw, y: by + bh / 2 },
@@ -1069,8 +1126,8 @@
 
             if (!isReview) {
                 $("#track-progress-bar").css("width", "0%").text("0%").removeClass("bg-success bg-danger").addClass("progress-bar-animated");
-                $("#track-status-header").text("TRACKING_SEQUENCE...");
-                $("#stop-sam2-track-btn").prop("disabled", false).text("Abort");
+                $("#track-status-header").text("TRACKING_SEQUENCE...").removeClass("text-warning text-danger").addClass("text-success");
+                $("#stop-sam2-track-btn").prop("disabled", false).text("Abort").html('<i class="bi bi-stop-fill"></i> Abort');
                 $("#save-all-tracked-btn").prop("disabled", true);
                 sam2TrackerUuid = null;
                 if (sam2EventSource) { sam2EventSource.close(); sam2EventSource = null; }
@@ -1120,19 +1177,23 @@
             $("#stop-sam2-track-btn").prop("disabled", true);
             const progressBar = $("#track-progress-bar");
             progressBar.removeClass("progress-bar-animated");
+            const statusHeader = $("#track-status-header");
 
             let statusText = "REVIEW RESULTS";
             if (status === "COMPLETED") {
                 statusText = "SEQUENCE COMPLETE. REVIEW RESULTS.";
                 progressBar.css("width", "100%").text("100%").addClass("bg-success");
+                statusHeader.removeClass("text-danger text-warning").addClass("text-success");
             } else if (status === "STOPPED") {
                 statusText = "SEQUENCE ABORTED. REVIEW RESULTS.";
+                statusHeader.removeClass("text-success text-danger").addClass("text-warning");
             } else if (status === "FAILED") {
                 statusText = "SEQUENCE FAILED.";
                 progressBar.addClass("bg-danger");
+                statusHeader.removeClass("text-success text-warning").addClass("text-danger");
             }
 
-            $("#track-status-header").text(statusText);
+            statusHeader.text(statusText);
             $("#save-all-tracked-btn").prop("disabled", Object.keys(trackedBboxCache).length === 0);
             showToast(statusText + (message ? ` (${message})` : ""), 4000);
 
@@ -1338,13 +1399,13 @@
             const suggestionList = popup.find('.list-group');
 
             if (suggestions.length === 0) {
-                suggestionList.append('<div class="list-group-item">No suggestions.</div>');
+                suggestionList.append('<div class="list-group-item bg-transparent text-white border-0">No suggestions.</div>');
             } else {
                 suggestions.forEach(sug => {
                     const color = stringToColor(sug.label);
                     const scorePercent = (sug.score * 100).toFixed(1);
                     const item = $(`
-                        <button type="button" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center bg-transparent text-white border-bottom border-secondary" data-label="${sug.label}">
+                        <button type="button" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center bg-transparent text-white border-bottom border-secondary" style="transition: all 0.2s;" data-label="${sug.label}">
                             <div><span class="color-swatch" style="background-color: ${color};"></span> ${sug.label}</div>
                             <span class="badge badge-primary rounded-0">${scorePercent}%</span>
                         </button>
@@ -1427,7 +1488,6 @@
         });
 
         canvasContainer.on('mousedown', function(e) {
-            // ... (Drawing logic remains unchanged) ...
             if (repeatMode.isActive) {
                 e.preventDefault();
                 const pos = getMousePos(drawingCanvas, e);
@@ -1455,7 +1515,6 @@
                 const scaleY = frameImage.naturalHeight / frameImage.clientHeight;
 
                 canvasContainer.addClass('sam-loading');
-                // UX: 显示等待光标
                 $('body').css('cursor', 'wait');
                 showToast('LAM processing...', 5000);
 
@@ -1652,88 +1711,98 @@
             }
         });
 
+        // 【性能优化】使用 requestAnimationFrame 进行渲染节流
         $(document).on('mousemove', function(e) {
-            if (!$(e.target).closest('#canvas-container').length) {
-                if (hoveredPreviewIndex !== -1) { hoveredPreviewIndex = -1; redrawCanvas(); }
-                $(drawingCanvas).removeClass((index, className) => (className.match(/\bcursor-\S+/g) || []).join(' '));
-                return;
-            }
+            if (isRequestingAnimationFrame) return;
+            isRequestingAnimationFrame = true;
 
-            const pos = getMousePos(drawingCanvas, e);
-
-            if (isDrawing) {
-                redrawCanvas();
-                const dpr = window.devicePixelRatio || 1;
-                let currentX = Math.max(0, Math.min(pos.x, frameImage.clientWidth));
-                let currentY = Math.max(0, Math.min(pos.y, frameImage.clientHeight));
-                drawingCtx.lineWidth = 2 / dpr;
-                drawingCtx.strokeStyle = isInteractiveMode ? getColor('positiveExampleStroke') : stringToColor(activeClass || 'blue');
-                drawingCtx.setLineDash(isInteractiveMode ? [5 / dpr, 3 / dpr] : []);
-                drawingCtx.strokeRect(startX, startY, currentX - startX, currentY - startY);
-                drawingCtx.setLineDash([]);
-
-            } else if (isDraggingBbox) {
-                const scaleX = frameImage.naturalWidth / frameImage.clientWidth;
-                const scaleY = frameImage.naturalHeight / frameImage.clientHeight;
-                let currentBox = bboxes[selectedBboxIndex];
-
-                if (editMode === 'move') {
-                    const dx = (pos.x - startX) * scaleX;
-                    const dy = (pos.y - startY) * scaleY;
-                    currentBox.x1 = draggedBboxInitialState.x1 + dx;
-                    currentBox.y1 = draggedBboxInitialState.y1 + dy;
-                    currentBox.x2 = draggedBboxInitialState.x2 + dx;
-                    currentBox.y2 = draggedBboxInitialState.y2 + dy;
-                } else if (editMode === 'resize') {
-                    const newX = pos.x * scaleX;
-                    const newY = pos.y * scaleY;
-                    const initialState = draggedBboxInitialState;
-                    if (draggedHandle.includes('left')) currentBox.x1 = Math.min(newX, initialState.x2 - 1);
-                    if (draggedHandle.includes('right')) currentBox.x2 = Math.max(newX, initialState.x1 + 1);
-                    if (draggedHandle.includes('top')) currentBox.y1 = Math.min(newY, initialState.y2 - 1);
-                    if (draggedHandle.includes('bottom')) currentBox.y2 = Math.max(newY, initialState.y1 + 1);
+            requestAnimationFrame(() => {
+                if (!$(e.target).closest('#canvas-container').length) {
+                    if (hoveredPreviewIndex !== -1) { hoveredPreviewIndex = -1; redrawCanvas(); }
+                    $(drawingCanvas).removeClass((index, className) => (className.match(/\bcursor-\S+/g) || []).join(' '));
+                    isRequestingAnimationFrame = false;
+                    return;
                 }
-                redrawCanvas();
 
-            } else {
-                drawCrosshairs(pos.x, pos.y);
-                const handle = getHandleAtPos(pos.x, pos.y);
-                $(drawingCanvas).removeClass((index, className) => (className.match(/\bcursor-\S+/g) || []).join(' '));
-                if (handle) {
-                    if (handle.includes('top-left') || handle.includes('bottom-right')) $(drawingCanvas).addClass('cursor-nwse-resize');
-                    else if (handle.includes('top-right') || handle.includes('bottom-left')) $(drawingCanvas).addClass('cursor-nesw-resize');
-                    else if (handle.includes('top') || handle.includes('bottom')) $(drawingCanvas).addClass('cursor-ns-resize');
-                    else if (handle.includes('left') || handle.includes('right')) $(drawingCanvas).addClass('cursor-ew-resize');
-                } else {
-                    const scaleX = frameImage.clientWidth / frameImage.naturalWidth;
-                    const scaleY = frameImage.clientHeight / frameImage.naturalHeight;
-                    let onBox = false;
-                    for (let i = 0; i < bboxes.length; i++) {
-                        const box = bboxes[i];
-                        if (pos.x > box.x1 * scaleX && pos.x < box.x2 * scaleX && pos.y > box.y1 * scaleY && pos.y < box.y2 * scaleY) {
-                            onBox = true; break;
-                        }
+                const pos = getMousePos(drawingCanvas, e);
+
+                if (isDrawing) {
+                    redrawCanvas();
+                    const dpr = window.devicePixelRatio || 1;
+                    let currentX = Math.max(0, Math.min(pos.x, frameImage.clientWidth));
+                    let currentY = Math.max(0, Math.min(pos.y, frameImage.clientHeight));
+                    drawingCtx.lineWidth = 2 / dpr;
+                    drawingCtx.strokeStyle = isInteractiveMode ? getColor('positiveExampleStroke') : stringToColor(activeClass || 'blue');
+                    drawingCtx.setLineDash(isInteractiveMode ? [5 / dpr, 3 / dpr] : []);
+                    drawingCtx.strokeRect(startX, startY, currentX - startX, currentY - startY);
+                    drawingCtx.setLineDash([]);
+
+                } else if (isDraggingBbox) {
+                    const scaleX = frameImage.naturalWidth / frameImage.clientWidth;
+                    const scaleY = frameImage.naturalHeight / frameImage.clientHeight;
+                    let currentBox = bboxes[selectedBboxIndex];
+
+                    if (editMode === 'move') {
+                        const dx = (pos.x - startX) * scaleX;
+                        const dy = (pos.y - startY) * scaleY;
+                        currentBox.x1 = draggedBboxInitialState.x1 + dx;
+                        currentBox.y1 = draggedBboxInitialState.y1 + dy;
+                        currentBox.x2 = draggedBboxInitialState.x2 + dx;
+                        currentBox.y2 = draggedBboxInitialState.y2 + dy;
+                    } else if (editMode === 'resize') {
+                        const newX = pos.x * scaleX;
+                        const newY = pos.y * scaleY;
+                        const initialState = draggedBboxInitialState;
+                        if (draggedHandle.includes('left')) currentBox.x1 = Math.min(newX, initialState.x2 - 1);
+                        if (draggedHandle.includes('right')) currentBox.x2 = Math.max(newX, initialState.x1 + 1);
+                        if (draggedHandle.includes('top')) currentBox.y1 = Math.min(newY, initialState.y2 - 1);
+                        if (draggedHandle.includes('bottom')) currentBox.y2 = Math.max(newY, initialState.y1 + 1);
                     }
-                    if (onBox) $(drawingCanvas).addClass('cursor-move');
-                }
+                    redrawCanvas();
 
-                if ((isInteractiveMode || interactivePreviewBboxes.length > 0) && interactivePreviewBboxes.length > 0) {
-                    const scaleX = frameImage.clientWidth / frameImage.naturalWidth;
-                    const scaleY = frameImage.clientHeight / frameImage.naturalHeight;
-                    const threshold = parseFloat($('#result-threshold').val());
-                    let foundIndex = -1;
-                    for (let i = interactivePreviewBboxes.length - 1; i >= 0; i--) {
-                        const res = interactivePreviewBboxes[i];
-                        if (res.score >= threshold) {
-                            const b = res.box;
-                            if (pos.x > b[0] * scaleX && pos.x < b[2] * scaleX && pos.y > b[1] * scaleY && pos.y < b[3] * scaleY) {
-                                foundIndex = i; break;
+                } else {
+                    drawCrosshairs(pos.x, pos.y);
+                    const handle = getHandleAtPos(pos.x, pos.y);
+                    $(drawingCanvas).removeClass((index, className) => (className.match(/\bcursor-\S+/g) || []).join(' '));
+                    if (handle) {
+                        if (handle.includes('top-left') || handle.includes('bottom-right')) $(drawingCanvas).addClass('cursor-nwse-resize');
+                        else if (handle.includes('top-right') || handle.includes('bottom-left')) $(drawingCanvas).addClass('cursor-nesw-resize');
+                        else if (handle.includes('top') || handle.includes('bottom')) $(drawingCanvas).addClass('cursor-ns-resize');
+                        else if (handle.includes('left') || handle.includes('right')) $(drawingCanvas).addClass('cursor-ew-resize');
+                    } else {
+                        const scaleX = frameImage.clientWidth / frameImage.naturalWidth;
+                        const scaleY = frameImage.clientHeight / frameImage.naturalHeight;
+                        let onBox = false;
+                        for (let i = 0; i < bboxes.length; i++) {
+                            const box = bboxes[i];
+                            if (pos.x > box.x1 * scaleX && pos.x < box.x2 * scaleX && pos.y > box.y1 * scaleY && pos.y < box.y2 * scaleY) {
+                                onBox = true; break;
                             }
                         }
+                        if (onBox) $(drawingCanvas).addClass('cursor-move');
                     }
-                    if (foundIndex !== hoveredPreviewIndex) { hoveredPreviewIndex = foundIndex; redrawCanvas(); }
+
+                    if ((isInteractiveMode || interactivePreviewBboxes.length > 0) && interactivePreviewBboxes.length > 0) {
+                        const scaleX = frameImage.clientWidth / frameImage.naturalWidth;
+                        const scaleY = frameImage.clientHeight / frameImage.naturalHeight;
+                        const threshold = parseFloat($('#result-threshold').val());
+                        let foundIndex = -1;
+                        for (let i = interactivePreviewBboxes.length - 1; i >= 0; i--) {
+                            const res = interactivePreviewBboxes[i];
+                            if (res.score >= threshold) {
+                                const b = res.box;
+                                if (pos.x > b[0] * scaleX && pos.x < b[2] * scaleX && pos.y > b[1] * scaleY && pos.y < b[3] * scaleY) {
+                                    foundIndex = i; break;
+                                }
+                            }
+                        }
+                        if (foundIndex !== hoveredPreviewIndex) { hoveredPreviewIndex = foundIndex; redrawCanvas(); }
+                    }
                 }
-            }
+                
+                // 释放锁，允许下一帧执行
+                isRequestingAnimationFrame = false;
+            });
         }).on('mouseup', function(e) {
             if (isDrawing) {
                 isDrawing = false;
@@ -1811,7 +1880,7 @@
             renderBboxList();
         });
 
-        // --- 修改后的手动保存按钮 ---
+        // --- 手动保存按钮 ---
         $("#save-bboxes").on("click", function() {
             const frameNumber = parseInt(frameSlider.val());
             const dataStr = formatBboxesToString();
@@ -1849,7 +1918,7 @@
                 if (isSamModeActive) $('#sam-toggle-btn').click();
                 if (isInteractiveMode) $('#interactive-mode-toggle').click();
                 showToast('LAM ACTIVE: Click object.', 3000);
-                triggerBackgroundPreprocess(frameSlider.val());
+                smartTriggerPreprocess(frameSlider.val());
             } else {
                 $(this).html('<i class="bi bi-fonts"></i> LAM Text').removeClass('btn-primary').addClass('btn-outline-primary');
                 $('#lam-suggestion-popup').remove();
@@ -1867,7 +1936,7 @@
             }
         });
 
-        // --- 修改后的 Video Tracking 按钮逻辑 ---
+        // --- Video Tracking 按钮逻辑 ---
         $('#sam2-track-btn').on('click', function() {
             // 1. 检查是否有标注
             if (bboxes.length === 0) { alert("Label at least one object first."); return; }
@@ -1919,7 +1988,7 @@
 
         $('#stop-sam2-track-btn').on('click', function() {
             if (sam2TrackerUuid) {
-                $(this).prop("disabled", true).text("Stopping...");
+                $(this).prop("disabled", true).html('<span class="spinner-border spinner-border-sm" role="status"></span> Stopping...');
                 $.ajax({
                     url: "/stopSam2Tracking",
                     type: "POST",
@@ -1999,7 +2068,7 @@
                 $(this).html('<i class="bi bi-crosshair"></i> SMART SELECT ON').addClass('btn-info').removeClass('btn-outline-info');
                 if(isLamModeActive) $('#lam-toggle-btn').click();
                 clearCrosshairs();
-                triggerBackgroundPreprocess(frameSlider.val());
+                smartTriggerPreprocess(frameSlider.val());
             } else {
                 $(this).html('<i class="bi bi-crosshair"></i> Smart Select').removeClass('btn-info').addClass('btn-outline-info');
                 clearInteractiveSession();
