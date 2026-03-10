@@ -135,7 +135,4 @@ This project is a complete localized reconstruction and intelligent, disruptive 
 Special thanks to **BlueDarkUP** from **FIRST Tech Challenge Team 27570** for outstanding contributions to the architectural design, core AI algorithm integration, and desktop adaptation of this project.
 
 We warmly welcome contributions of any kind! Whether it's reporting a bug via Issues, suggesting new features, or submitting a Pull Request, let's build the ultimate localized annotation tool for the open-source computer vision community together.
-
-```
-
 ```
