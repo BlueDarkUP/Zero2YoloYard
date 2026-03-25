@@ -736,8 +736,26 @@
                     success: function(response) {
                         if (response.success) {
                             if (!isSilent) showToast(`FRAME ${frameNum} SAVED.`);
+
+                            // 【核心修复：更新本地前端缓存】
+                            // 保存到后端成功后，必须同步更新内存，防止切回来时读取到空数据
+                            if (window.cachedFrames) {
+                                const frameData = window.cachedFrames.find(f => f.frame_number == frameNum);
+                                if (frameData) {
+                                    frameData.bboxes_text = bboxesString;
+                                } else {
+                                    // 容错：如果缓存中竟然没有这一帧，就 push 进去
+                                    window.cachedFrames.push({
+                                        video_uuid: videoUuid,
+                                        frame_number: parseInt(frameNum),
+                                        bboxes_text: bboxesString,
+                                        suggested_bboxes_text: ""
+                                    });
+                                }
+                            }
+
                             if (parseInt(frameSlider.val()) === frameNum) {
-                                suggestionBboxes = [];
+                                suggestionBboxes =[];
                                 $('#suggestion-review-controls').slideUp();
                                 if(!isSilent) redrawStaticCanvas();
                             }
@@ -2110,12 +2128,25 @@
                 if (response.success) {
                     response.labels.forEach(label => { if (!availableClasses.includes(label)) availableClasses.push(label); });
                     renderClassList();
+
                     const frameFromUrl = new URLSearchParams(window.location.search).get('frame');
                     if (frameFromUrl) {
                         const frameNumber = parseInt(frameFromUrl);
-                        if (frameNumber >= parseInt(frameSlider.attr('min')) && frameNumber <= parseInt(frameSlider.attr('max'))) frameSlider.val(frameNumber);
+                        if (frameNumber >= parseInt(frameSlider.attr('min')) && frameNumber <= parseInt(frameSlider.attr('max'))) {
+                            frameSlider.val(frameNumber);
+                        }
                     }
-                    resizeCanvas(); frameSlider.trigger('input');
+
+                    resizeCanvas();
+                    frameSlider.trigger('input');
+
+                    // 【核心修复：强制渲染初始帧】
+                    // 应对图片加载早于 JS 脚本执行，导致 onload 没触发的竞态问题
+                    const initialFrame = parseInt(frameSlider.val());
+                    loadBboxesForFrame(initialFrame);
+                    smartTriggerPreprocess(initialFrame);
+                    const currentFrameThreshold = frameConfidence[initialFrame] ?? 0.50;
+                    $('#result-threshold').val(currentFrameThreshold).trigger('input');
                 }
             });
         }
