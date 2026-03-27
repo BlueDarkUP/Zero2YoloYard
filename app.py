@@ -129,14 +129,11 @@ def generate_mosaic_previews(sample_pool, selected_video_uuid, selected_frame_nu
     all_labels = database.get_all_class_labels()
     class_map = {name: i for i, name in enumerate(all_labels)}
 
-    conn = database.get_db_connection()
     image_infos = []
     for sample in sample_pool:
         video_info = database.get_video_entity(sample['video_uuid'])
-        frame_info = conn.execute(
-            'SELECT bboxes_text FROM video_frames WHERE video_uuid = ? AND frame_number = ?',
-            (sample['video_uuid'], sample['frame_number'])
-        ).fetchone()
+        # 替换为使用新的通用查询方法
+        frame_info = database.get_frame_bboxes(sample['video_uuid'], sample['frame_number'])
 
         if video_info and frame_info and frame_info['bboxes_text']:
             image_infos.append({
@@ -146,7 +143,6 @@ def generate_mosaic_previews(sample_pool, selected_video_uuid, selected_frame_nu
                 "width": video_info['width'],
                 "height": video_info['height']
             })
-    conn.close()
 
     if len(image_infos) < 4:
         return jsonify({'success': False,
@@ -236,12 +232,8 @@ def serve_annotated_frame(video_uuid, frame_number):
         if image is None:
             return "Could not read frame image", 500
 
-        conn = database.get_db_connection()
-        frame_data = conn.execute(
-            'SELECT bboxes_text FROM video_frames WHERE video_uuid = ? AND frame_number = ?',
-            (video_uuid, frame_number)
-        ).fetchone()
-        conn.close()
+        # 替换为使用新的通用查询方法
+        frame_data = database.get_frame_bboxes(video_uuid, frame_number)
 
         bboxes_text = frame_data['bboxes_text'] if frame_data else None
 
@@ -478,6 +470,7 @@ def rebuild_prototypes():
 
     return jsonify({'success': True, 'message': message})
 
+
 @app.route('/api/interpolateBboxes', methods=['POST'])
 def interpolate_bboxes():
     data = request.json
@@ -512,9 +505,9 @@ def interpolate_bboxes():
             interp_y2 = int(start_bbox['y2'] + (end_bbox['y2'] - start_bbox['y2']) * t)
 
             new_bbox_line = f"{interp_x1},{interp_y1},{interp_x2},{interp_y2},{label},{object_id}"
-            conn = database.get_db_connection()
-            frame_db = conn.execute('SELECT bboxes_text FROM video_frames WHERE video_uuid = ? AND frame_number = ?',
-                                    (video_uuid, current_frame_num)).fetchone()
+
+            # 替换为使用新的通用查询方法
+            frame_db = database.get_frame_bboxes(video_uuid, current_frame_num)
 
             existing_bboxes = frame_db['bboxes_text'] if frame_db else ''
             lines = existing_bboxes.split('\n') if existing_bboxes else []
@@ -523,7 +516,6 @@ def interpolate_bboxes():
             updated_lines.append(new_bbox_line)
             final_bboxes_text = '\n'.join(filter(None, updated_lines))
 
-            conn.close()
             database.save_frame_bboxes(video_uuid, current_frame_num, final_bboxes_text)
 
         return jsonify({'success': True, 'message': f'Interpolated {total_steps - 1} frames successfully.'})
@@ -1441,6 +1433,7 @@ def lam_predict_route():
         logging.error(f"LAM 预测失败: {e}", exc_info=True)
         return jsonify({'success': False, 'message': f'Internal Server Error: {str(e)}'}), 500
 
+
 @app.route('/api/previewAugmentations', methods=['POST'])
 def preview_augmentations():
     if not background_tasks.A:
@@ -1470,10 +1463,9 @@ def preview_augmentations():
         image = cv2.imread(frame_path)
         image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         video_info = database.get_video_entity(video_uuid)
-        conn = database.get_db_connection()
-        frame_db_info = conn.execute('SELECT bboxes_text FROM video_frames WHERE video_uuid = ? AND frame_number = ?',
-                                     (video_uuid, frame_number)).fetchone()
-        conn.close()
+
+        # 替换为使用新的通用查询方法
+        frame_db_info = database.get_frame_bboxes(video_uuid, frame_number)
 
         if not frame_db_info or not frame_db_info['bboxes_text']:
             return jsonify({'success': False, 'message': 'No labels found for this frame.'}), 404

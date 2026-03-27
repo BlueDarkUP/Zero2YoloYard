@@ -559,3 +559,12 @@ def get_frame_numbers_for_video(video_uuid):
             text('SELECT frame_number FROM video_frames WHERE video_uuid = :u ORDER BY frame_number ASC'),
             {"u": video_uuid})
         return [row[0] for row in result]
+
+def get_frame_bboxes(video_uuid, frame_number):
+    """获取指定帧的边界框数据"""
+    with engine.connect() as conn:
+        result = conn.execute(
+            text('SELECT bboxes_text FROM video_frames WHERE video_uuid = :u AND frame_number = :fn'),
+            {"u": video_uuid, "fn": frame_number}
+        ).fetchone()
+        return dict(result._mapping) if result else None
