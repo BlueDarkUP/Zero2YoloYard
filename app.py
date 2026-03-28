@@ -89,6 +89,7 @@ else:
 
 app = flask.Flask(__name__)
 app.secret_key = os.urandom(24)
+APP_BOOT_ID = uuid.uuid4().hex
 prototype_executor = ThreadPoolExecutor(max_workers=max_workers_setting)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(threadName)s - %(message)s')
 
@@ -200,7 +201,8 @@ def generate_mosaic_previews(sample_pool, selected_video_uuid, selected_frame_nu
 def index():
     return render_template('root.html',
                            limit_data=config.get_limit_data_for_render_template(),
-                           tracker_fns=config.TRACKER_FNS)
+                           tracker_fns=config.TRACKER_FNS,
+                           server_boot_id=APP_BOOT_ID)
 
 
 @app.route('/labelVideo')
