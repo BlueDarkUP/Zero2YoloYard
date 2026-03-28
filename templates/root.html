@@ -12,7 +12,7 @@
         background: rgba(0, 240, 255, 0.05);
         border: 1px solid var(--border-color);
         padding: 4px 12px;
-        border-radius: 2px;
+        border-radius: var(--radius-sm); /* 改用现代圆角变量 */
     }
 
     .pulse-dot {
@@ -20,7 +20,7 @@
         height: 6px;
         background-color: var(--color-success);
         box-shadow: 0 0 5px var(--color-success);
-        border-radius: 0;
+        border-radius: 50%; /* 圆形点更现代 */
         transition: all 0.15s ease-out;
         margin-right: 10px;
     }
@@ -28,7 +28,7 @@
     .pulse-dot.syncing {
         background-color: var(--color-primary);
         box-shadow: 0 0 12px var(--color-primary), 0 0 4px #fff;
-        transform: scale(1.5) rotate(45deg);
+        transform: scale(1.5);
     }
 
     .pulse-dot.error {
@@ -36,9 +36,9 @@
         box-shadow: 0 0 10px var(--color-danger);
     }
 
-    /* 表头追踪样式 */
+    /* 表头追踪样式 - 减弱生硬的间距 */
     .tracking-wider {
-        letter-spacing: 0.15em;
+        letter-spacing: 0.05em;
     }
 </style>
 {% endblock %}
@@ -48,34 +48,34 @@
 
     <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-end page-header border-bottom pb-3 mb-4 mt-4 pt-2" style="border-color: var(--border-color) !important;">
         <div>
-            <h1 class="page-title mb-2 text-uppercase" style="text-shadow: 0 0 10px var(--color-primary-glow);">
-                <i class="bi bi-terminal mr-2 text-primary"></i>Abyssal_Console
-            </h1>
-            <div class="telemetry-pulse-container font-monospace text-muted small mb-0">
-                <div id="sys-pulse" class="pulse-dot"></div>
-                <span id="sys-status-text">// UPLINK_ESTABLISHED : AWAITING_CMD</span>
+            <h3 class="page-title mb-1 font-weight-bold" style="font-family: 'Inter', sans-serif; letter-spacing: -0.02em;">
+                Projects Overview
+            </h3>
+            <div class="d-flex align-items-center text-muted small mb-0" style="font-family: 'Inter', sans-serif;">
+                <div id="sys-pulse" class="pulse-dot" style="width: 8px; height: 8px; margin-right: 8px; box-shadow: none;"></div>
+                <span id="sys-status-text">System Ready</span>
             </div>
         </div>
 
-        <ul class="nav nav-tabs mt-4 mt-md-0 border-0" id="mainTabs" role="tablist">
+        <ul class="nav nav-tabs mt-4 mt-md-0 border-0" id="mainTabs" role="tablist" style="gap: 0.5rem;">
             <li class="nav-item">
-                <a class="nav-link active" id="videos-tab" data-toggle="tab" href="#videos" role="tab" aria-selected="true">
-                    [ VIDEOS ]
+                <a class="nav-link active d-flex align-items-center" id="videos-tab" data-toggle="tab" href="#videos" role="tab" aria-selected="true">
+                    <i class="bi bi-camera-video mr-2"></i> Videos
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link" id="datasets-tab" data-toggle="tab" href="#datasets" role="tab" aria-selected="false">
-                    [ DATASETS ]
+                <a class="nav-link d-flex align-items-center" id="datasets-tab" data-toggle="tab" href="#datasets" role="tab" aria-selected="false">
+                    <i class="bi bi-database mr-2"></i> Datasets
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link" id="models-tab" data-toggle="tab" href="#models" role="tab" aria-selected="false">
-                    [ MODELS ]
+                <a class="nav-link d-flex align-items-center" id="models-tab" data-toggle="tab" href="#models" role="tab" aria-selected="false">
+                    <i class="bi bi-box mr-2"></i> Models
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link" id="settings-tab" data-toggle="tab" href="#settings" role="tab" aria-selected="false">
-                    [ CONFIG ]
+                <a class="nav-link d-flex align-items-center" id="settings-tab" data-toggle="tab" href="#settings" role="tab" aria-selected="false">
+                    <i class="bi bi-sliders mr-2"></i> Config
                 </a>
             </li>
         </ul>
@@ -94,7 +94,7 @@
 
             <div class="card">
                 <div class="card-header">
-                    <span class="text-uppercase small font-weight-bold tracking-wider">Stream Registry</span>
+                    <span class="font-weight-medium" style="font-size: 0.9rem; color: var(--text-main);">Stream Registry</span>
                 </div>
                 <div class="table-responsive">
                     <table class="table table-hover mb-0">

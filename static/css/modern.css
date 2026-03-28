@@ -1,592 +1,371 @@
 /* ==========================================================================
-   ABYSSAL TELEMETRY UI SPEC v1.1 (Ergonomic Refactor)
-   Core Philosophy: Precision, Rationality, Deep Space, High Load.
+   MODERN UI SPEC v2.3 (Ultra-Minimalist & Typography Refactor)
+   Core Philosophy: High-End Productivity, Zero Visual Clutter, Data First.
+   Includes Bootstrap active-tab fixes and IDE Toolbar typography overhaul.
    ========================================================================== */
 
-/* 引入字体：Orbitron (标题/数据), Inter (正文), JetBrains Mono (代码/参数) */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&family=Orbitron:wght@500;700;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
 
 :root {
-    /* --- 1. 色彩系统 (Color System) --- */
+    /* --- 1. 极致黑白灰系统 (Pure & Zinc) --- */
+    --bg-body: #000000;              /* 纯黑背景，极致深邃，凸显内容 */
+    --bg-surface: #0a0a0b;           /* 极深的卡片底色 */
+    --bg-surface-secondary: #141415; /* 悬浮/次级交互色 */
+    --bg-input: #000000;
+    --bg-hover: rgba(255, 255, 255, 0.04);
 
-    /* 基底色 (The Void) - 优化：采用偏冷的深灰代替绝对死黑，防视觉疲劳 */
-    --bg-body: #0a0b10;
-    --bg-surface: rgba(16, 18, 25, 0.85); /* 磨砂玻璃容器背景 */
-    --bg-surface-secondary: #12141c; /* 次级背景 */
-    --bg-input: #0d0e15;             /* 输入框深色背景 */
-    --bg-hover: #1a1c26;
+    /* --- 2. 核心主色：放弃彩色，使用最高对比度的“纯净白” --- */
+    --color-primary: #ededed;        /* 柔和的纯白 */
+    --color-primary-dim: rgba(255, 255, 255, 0.08);
+    --text-on-primary: #000000;      /* 主按钮上的黑字，极具现代感 */
 
-    /* 信号色 (The Signal) */
-    --color-primary: #00F0FF;        /* 赛博青 - 核心高亮 */
-    --color-primary-dim: rgba(0, 240, 255, 0.15);
-    --color-primary-glow: rgba(0, 240, 255, 0.3);
+    /* --- 3. 状态色降噪 (Muted Pastels)：降低饱和度，避免喧宾夺主 --- */
+    --color-success: #6ee7b7;        /* 柔和薄荷绿 */
+    --color-warning: #fcd34d;        /* 柔和沙黄 */
+    --color-danger:  #fca5a5;        /* 柔和脏粉/红 */
+    --color-info:    #7dd3fc;        /* 柔和冰蓝 */
 
-    /* 功能状态色 */
-    --color-success: #00FF94;        /* 荧光绿 */
-    --color-warning: #FFD000;        /* 工业黄 */
-    --color-danger: #FF2A2A;         /* 警报红 */
-    --color-info: #2E9AFF;           /* 切伦科夫蓝 */
+    /* --- 4. 极弱边框 --- */
+    --border-color: rgba(255, 255, 255, 0.08); /* 非常微弱的分割线 */
+    --border-active: rgba(255, 255, 255, 0.8);
 
-    /* 边框色 (The Frame) */
-    --border-color: rgba(255, 255, 255, 0.12);
-    --border-active: var(--color-primary);
+    /* --- 5. 文本层级结构 (严谨的灰度过渡) --- */
+    --text-main: rgba(255, 255, 255, 0.95);  /* 一级标题/关键数字 */
+    --text-body: #a1a1aa;                    /* 二级正文 (Zinc 400) */
+    --text-secondary: #71717a;               /* 三级辅助 (Zinc 500) */
+    --text-muted: #52525b;                   /* 四级微弱 (Zinc 600) */
 
-    /* 文本色 (The Data) */
-    --text-main: #FFFFFF;            /* 纯白 - 关键数据 */
-    --text-body: #D4D4D4;            /* 85%白 - 正文 */
-    --text-secondary: #888888;       /* 50%白 - 标签/次要 */
-    --text-muted: #555555;           /* 暗淡 - 禁用/占位 */
-    --text-on-primary: #000000;      /* 信号色上的文字 */
-
-    /* --- 2. 空间与结构 (Structure) --- */
-    --radius-zero: 0px;              /* 核心原则：直角 */
-    --radius-sm: 0px;
-    --radius-md: 0px;
-    --radius-lg: 2px;                /* 极少数情况允许微切角 */
-
-    --navbar-height: 64px;
-    --border-width: 1px;
-
-    /* --- 3. 动效与特效 (FX) --- */
-    --shadow-glow: 0 0 10px var(--color-primary-glow);
-    --backdrop-blur: blur(12px);
-    --transition-snap: all 0.15s cubic-bezier(0.4, 0.0, 0.2, 1); /* 机械式瞬时响应，微调了时长防生硬 */
-
-    /* 网格定义 - 优化：降低网格透明度，减少视觉噪音 */
-    --grid-size: 40px;
-    --grid-color: rgba(255, 255, 255, 0.02);
+    /* --- 6. 空间与结构 --- */
+    --radius-sm: 6px;
+    --radius-base: 10px; /* 稍微加大一点圆角，更显精致 */
+    --transition-smooth: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* ==========================================================================
-   全局设置 & 背景 (Global & Background)
+   全局设置
    ========================================================================== */
 
 body {
     background-color: var(--bg-body);
     color: var(--text-body);
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
-    letter-spacing: 0.02em; /* 略微增加字距以提升科技感 */
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.5;
     overflow-x: hidden;
-    /* 绘制全屏网格背景 */
-    background-image:
-        linear-gradient(var(--grid-color) 1px, transparent 1px),
-        linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
-    background-size: var(--grid-size) var(--grid-size);
-    background-position: center top;
+    /* 极致干净的背景，移除网格，让图片和视频标注区成为唯一的视觉焦点 */
+    background-image: none;
 }
 
-/* 扫描线动画 (Scanline) */
-body::after {
-    content: " ";
-    display: block;
-    position: fixed;
-    top: 0;
-    left: 0;
-    bottom: 0;
-    right: 0;
-    background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
-    z-index: 9999;
-    background-size: 100% 2px, 3px 100%;
-    pointer-events: none;
-}
+body::after, body::before { display: none !important; }
 
-/* 优化：大幅降低扫描线干扰，透明度从 0.4 降至 0.15 */
-body::before {
-    content: "";
-    position: fixed;
-    top: -10px;
-    left: 0;
-    width: 100%;
-    height: 5px;
-    background-color: rgba(0, 240, 255, 0.15);
-    box-shadow: 0 0 10px rgba(0, 240, 255, 0.2);
-    z-index: 10000;
-    animation: scanline 8s linear infinite;
-    pointer-events: none;
-    opacity: 0.15;
-}
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
 
-@keyframes scanline {
-    0% { top: -10%; opacity: 0; }
-    10% { opacity: 0.15; }
-    90% { opacity: 0.15; }
-    100% { top: 110%; opacity: 0; }
-}
-
-/* 滚动条：工业块状风格 */
-::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-    background: #000;
-}
-::-webkit-scrollbar-track {
-    background: var(--bg-body);
-    border-left: 1px solid var(--border-color);
-}
-::-webkit-scrollbar-thumb {
-    background: #333;
-    border: 1px solid #000;
-}
-::-webkit-scrollbar-thumb:hover {
-    background: var(--color-primary);
-}
-
-/* 链接风格：数码化 */
-a {
-    color: var(--color-primary);
-    text-decoration: none;
-    border-bottom: 1px solid transparent;
-    transition: var(--transition-snap);
-}
-a:hover {
-    color: #fff;
-    border-bottom-color: var(--color-primary);
-    text-shadow: 0 0 5px var(--color-primary-glow);
-}
+a { color: var(--text-main); text-decoration: none; transition: var(--transition-smooth); }
+a:hover { color: var(--text-body); }
 
 /* ==========================================================================
-   排版 (Typography)
+   排版与卡片
    ========================================================================== */
 
 h1, h2, h3, h4, h5, h6, .navbar-brand, .card-title, .page-title {
-    font-family: 'Orbitron', sans-serif;
+    font-family: 'Inter', sans-serif;
     color: var(--text-main);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    font-weight: 700;
+    font-weight: 600;
+    letter-spacing: normal;
+    text-transform: none;
+    text-shadow: none !important;
 }
 
-/* 标签与元数据：机器日志风格 */
 label, .text-muted, .small, th, .badge, .nav-link {
     font-family: 'JetBrains Mono', monospace;
-    text-transform: uppercase;
     font-size: 0.75rem;
-    letter-spacing: 0.08em;
 }
 
-code, pre {
-    font-family: 'JetBrains Mono', monospace;
-    color: var(--color-primary);
-}
-
-/* ==========================================================================
-   组件：容器与卡片 (Containers & HUD Cards)
-   ========================================================================== */
+code, pre { font-family: 'JetBrains Mono', monospace; color: var(--text-main); }
 
 .card {
     background-color: var(--bg-surface);
     border: 1px solid var(--border-color);
-    border-radius: var(--radius-zero);
-    backdrop-filter: var(--backdrop-blur);
-    box-shadow: none;
-    position: relative;
-    overflow: visible; /* 允许装饰溢出 */
+    border-radius: var(--radius-base);
+    box-shadow: none; /* 彻底扁平化，靠线条和背景色差区分 */
     margin-bottom: 1.5rem;
-    transition: border-color 0.2s;
 }
-
-/* HUD Corner Decos: 四角战术装饰 (优化：降低默认干扰透明度) */
-.card::before, .card::after {
-    content: "";
-    position: absolute;
-    width: 10px;
-    height: 10px;
-    border: 0 solid var(--text-secondary);
-    transition: all 0.3s;
-    pointer-events: none;
-    opacity: 0.2; /* 从 0.5 降到 0.2 */
-}
-
-/* 左上与右上 */
-.card::before {
-    top: -1px; left: -1px;
-    border-top-width: 2px;
-    border-left-width: 2px;
-    box-shadow: calc(100% + 2px) 0 0 -2px transparent;
-}
-/* 左下与右下 */
-.card::after {
-    bottom: -1px; right: -1px;
-    border-bottom-width: 2px;
-    border-right-width: 2px;
-}
-
-/* 卡片悬停：点亮装饰，边框变色 */
-.card:hover {
-    border-color: rgba(255, 255, 255, 0.25);
-}
-.card:hover::before, .card:hover::after {
-    border-color: var(--color-primary);
-    opacity: 0.8;
-    width: 15px;
-    height: 15px;
-    box-shadow: 0 0 5px var(--color-primary-glow);
-}
+.card::before, .card::after { display: none !important; }
 
 .card-header {
-    background-color: rgba(255, 255, 255, 0.02);
+    background-color: transparent;
     border-bottom: 1px solid var(--border-color);
     padding: 1rem 1.5rem;
-    display: flex;
-    align-items: center;
+    color: var(--text-main);
+    font-weight: 500;
 }
-/* 给 Header 加一个左侧装饰条 */
-.card-header::before {
-    content: "";
-    display: inline-block;
-    width: 4px;
-    height: 1.2em;
-    background-color: var(--color-primary);
-    margin-right: 10px;
-    box-shadow: 0 0 8px var(--color-primary-glow);
-}
-
-.card-body {
-    padding: 1.5rem;
-}
-
-.card-footer {
-    background-color: rgba(0, 0, 0, 0.2);
-    border-top: 1px dashed var(--border-color);
-}
+.card-header::before { display: none !important; }
+.card-body { padding: 1.5rem; }
+.card-footer { background-color: var(--bg-surface-secondary); border-top: 1px solid var(--border-color); }
 
 /* ==========================================================================
-   组件：按钮 (Buttons)
+   组件：按钮 (高质感黑白灰)
    ========================================================================== */
 
 .btn {
-    border-radius: var(--radius-zero);
-    font-family: 'JetBrains Mono', monospace;
-    text-transform: uppercase;
-    font-weight: 600;
-    font-size: 0.8rem;
-    letter-spacing: 0.1em;
-    padding: 0.6rem 1.5rem;
-    border: 1px solid var(--border-color);
-    background: rgba(255, 255, 255, 0.03);
-    color: var(--text-main);
-    transition: var(--transition-snap);
-    position: relative;
-    overflow: hidden;
+    border-radius: var(--radius-sm) !important;
+    font-family: 'Inter', sans-serif;
+    font-weight: 500;
+    font-size: 0.85rem;
+    padding: 0.5rem 1rem;
+    transition: var(--transition-smooth);
+    box-shadow: none !important;
+    border: 1px solid transparent;
 }
+.btn:active { transform: scale(0.97); }
 
-/* 按钮悬停：优化 - 移除夸张的 xy 位移以防止抖动，改为柔和的 Y 轴微抬和内发光 */
-.btn:hover {
-    border-color: var(--color-primary);
-    color: var(--color-primary);
-    background: rgba(0, 240, 255, 0.08);
-    box-shadow: 0 0 10px rgba(0, 240, 255, 0.15), inset 0 0 5px rgba(0, 240, 255, 0.1);
-    transform: translateY(-1px);
-}
-
-.btn:active {
-    transform: translateY(1px);
-    box-shadow: none;
-}
-
-/* 主按钮：实心信号色 */
+/* 主按钮：白底黑字，极致抓眼 */
 .btn-primary {
-    background-color: var(--color-primary-dim);
-    border-color: var(--color-primary);
-    color: var(--color-primary);
+    background-color: var(--color-primary) !important;
+    border-color: var(--color-primary) !important;
+    color: var(--text-on-primary) !important;
 }
+.btn-primary:hover { background-color: #ffffff !important; }
 
-.btn-primary:hover {
-    background-color: var(--color-primary);
-    color: #000;
-    box-shadow: 0 0 15px var(--color-primary-glow);
-}
-
-/* 次级按钮 */
-.btn-secondary {
+/* 次级/描边按钮：暗灰色，悬停变白 */
+.btn-outline-primary, .btn-outline-secondary, .btn-outline-info, .btn-outline-success, .btn-outline-warning {
     background-color: transparent;
-    border-color: var(--text-secondary);
-    color: var(--text-secondary);
+    border-color: var(--border-color);
+    color: var(--text-body);
 }
-.btn-secondary:hover {
-    border-color: var(--text-main);
-    color: var(--text-main);
-    background-color: rgba(255,255,255,0.05);
+.btn-outline-primary:hover, .btn-outline-primary.active,
+.btn-outline-secondary:hover, .btn-outline-info:hover, .btn-outline-success:hover {
+    background-color: rgba(255,255,255,0.08);
+    border-color: rgba(255,255,255,0.2);
+    color: var(--text-main) !important;
 }
 
-.btn-danger {
-    border-color: var(--color-danger);
-    color: var(--color-danger);
-    background: rgba(255, 42, 42, 0.05);
-}
-.btn-danger:hover {
-    background: var(--color-danger);
-    color: #000;
-    box-shadow: 0 0 10px rgba(255, 42, 42, 0.4);
-}
+.btn-secondary { background-color: var(--bg-surface-secondary); color: var(--text-main); border-color: var(--border-color); }
+.btn-secondary:hover { background-color: rgba(255,255,255,0.1); }
+.btn-danger { background-color: rgba(239, 68, 68, 0.1); color: var(--color-danger); border-color: rgba(239, 68, 68, 0.2); }
+.btn-danger:hover { background-color: rgba(239, 68, 68, 0.2); color: #fca5a5; }
 
 /* ==========================================================================
-   组件：表单 (Forms)
+   组件：表单与导航
    ========================================================================== */
 
 .form-control, .custom-select, .custom-file-label {
-    background-color: var(--bg-input);
-    border: 1px solid var(--border-color);
-    color: var(--text-main);
-    border-radius: var(--radius-zero);
-    font-family: 'JetBrains Mono', monospace;
-    transition: var(--transition-snap);
+    background-color: var(--bg-input) !important;
+    border: 1px solid var(--border-color) !important;
+    color: var(--text-main) !important;
+    border-radius: var(--radius-sm) !important;
+    box-shadow: none !important;
 }
-
 .form-control:focus, .custom-select:focus {
-    background-color: #050608;
-    border-color: var(--color-primary);
-    color: var(--text-main);
-    box-shadow: 0 0 0 1px var(--color-primary-dim);
+    border-color: rgba(255,255,255,0.3) !important;
+    box-shadow: 0 0 0 2px rgba(255,255,255,0.1) !important;
 }
+.form-control::placeholder { color: var(--text-muted); }
 
-.form-control::placeholder {
-    color: var(--text-muted);
-    font-style: italic;
-}
-
-/* 输入框组合 */
-.input-group-text {
-    background-color: var(--bg-surface-secondary);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-zero);
-    color: var(--text-secondary);
-    font-family: 'JetBrains Mono', monospace;
-}
-
-/* Range Slider (时间轴/帧滑块) */
-input[type=range] {
-    -webkit-appearance: none;
-    background: transparent;
-}
+/* Range Slider 现代化 */
+input[type=range] { -webkit-appearance: none; background: transparent; }
 input[type=range]::-webkit-slider-thumb {
     -webkit-appearance: none;
-    height: 16px;
-    width: 8px;
-    background: var(--color-primary);
+    height: 16px; width: 16px;
+    border-radius: 50%;
+    background: #fff;
     cursor: pointer;
     margin-top: -6px;
-    box-shadow: 0 0 5px var(--color-primary-glow);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+    border: 2px solid var(--bg-body);
+    transition: transform 0.1s;
 }
+input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.15); }
 input[type=range]::-webkit-slider-runnable-track {
-    width: 100%;
-    height: 4px;
+    width: 100%; height: 4px;
     background: var(--border-color);
-    border: none;
+    border-radius: 2px;
 }
-
-/* ==========================================================================
-   组件：导航与菜单 (Nav & Menus)
-   ========================================================================== */
 
 .navbar {
-    background-color: rgba(10, 11, 16, 0.95) !important;
-    border-bottom: 1px solid var(--border-color);
-    backdrop-filter: blur(10px);
+    background-color: rgba(0, 0, 0, 0.8) !important;
+    border-bottom: 1px solid var(--border-color) !important;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
 }
 
-.navbar-brand {
-    font-size: 1.4rem;
-    text-shadow: 0 0 10px rgba(255,255,255,0.1);
-}
-
-/* Tab页签：终端风格 */
+/* --- Bootstrap Nav Tabs 现代化重构 --- */
 .nav-tabs {
     border-bottom: 1px solid var(--border-color);
 }
+
 .nav-tabs .nav-link {
-    border: none;
-    color: var(--text-muted);
-    background: transparent;
-    border-radius: 0;
-    margin-right: 2px;
-    transition: all 0.2s;
-    border-top: 2px solid transparent;
+    font-family: 'Inter', sans-serif !important;
+    font-size: 0.875rem !important;
+    font-weight: 500;
+    color: var(--text-secondary);
+    background-color: transparent !important;
+    border: none !important;
+    padding: 0.6rem 1rem;
+    border-radius: var(--radius-sm);
+    transition: var(--transition-smooth);
+    letter-spacing: normal !important;
 }
+
+.nav-tabs .nav-link i {
+    font-size: 0.95rem;
+    opacity: 0.8;
+}
+
 .nav-tabs .nav-link:hover {
-    color: var(--text-main);
-    background-color: rgba(255,255,255,0.03);
+    color: var(--text-body);
+    background-color: var(--bg-surface-secondary) !important;
+    border: none !important;
 }
+
 .nav-tabs .nav-link.active {
-    color: var(--color-primary);
-    background-color: rgba(0, 240, 255, 0.05);
-    border-color: transparent;
-    border-top-color: var(--color-primary);
-    font-weight: 700;
+    color: var(--text-main) !important;
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    border: none !important;
+}
+
+.nav-tabs .nav-link.active i {
+    color: var(--text-main);
+    opacity: 1;
 }
 
 /* ==========================================================================
-   组件：表格 (Tables)
+   组件：表格与列表 (Table & List)
    ========================================================================== */
 
-.table {
-    color: var(--text-body);
-}
+.table { color: var(--text-body); font-size: 0.875rem; }
 .table th {
     border-top: none;
-    border-bottom: 1px solid var(--color-primary-dim);
-    color: var(--color-primary);
-    background-color: rgba(0, 240, 255, 0.02);
-}
-.table td {
-    border-top: 1px dashed rgba(255,255,255,0.08);
-    vertical-align: middle;
-}
-.table-hover tbody tr:hover {
-    background-color: rgba(255, 255, 255, 0.03);
-    color: var(--text-main);
-}
-.table-hover tbody tr:hover td {
-    border-top-color: rgba(255,255,255,0.15);
-}
-
-/* ==========================================================================
-   特定区域：IDE Layout & Canvas
-   ========================================================================== */
-
-.ide-layout {
-    background-color: var(--bg-body);
-}
-
-.ide-sidebar {
-    background-color: var(--bg-surface);
-    border-left: 1px solid var(--border-color);
-}
-/* Sidebar Header */
-.ide-sidebar .card-header {
-    font-size: 0.85rem;
-    color: var(--text-secondary);
-}
-
-.ide-toolbar {
-    background-color: var(--bg-surface-secondary);
     border-bottom: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    font-weight: 500;
+    text-transform: none;
 }
+.table td { border-top: 1px solid rgba(255,255,255,0.03); vertical-align: middle; }
+.table-hover tbody tr:hover { background-color: rgba(255, 255, 255, 0.02); }
 
-.ide-canvas-wrapper {
-    background-color: #08090d;
-    background-image:
-        linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
-    background-size: 20px 20px;
-}
-
-#canvas-container {
-    border: 1px solid var(--border-color);
-    box-shadow: 0 0 20px rgba(0,0,0,0.5);
-}
-
-#canvas-container::after {
-    content: "LIVE FEED // SOURCE_01";
-    position: absolute;
-    top: -20px;
-    left: 0;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.7rem;
-    color: var(--color-primary);
-    opacity: 0.6;
+.list-group-item { background-color: transparent; border-color: var(--border-color); color: var(--text-body); padding: 0.75rem 1rem;}
+.list-group-item:hover { background-color: var(--bg-hover); }
+.list-group-item.active, .list-group-item.selected {
+    background-color: rgba(255, 255, 255, 0.05);
+    color: var(--text-main);
+    border-left: 2px solid var(--text-main);
 }
 
 /* ==========================================================================
-   特定组件：Badges & Status
+   【核心优化】徽章降噪 & 强行覆写 Bootstrap 文字色 (Clean Badges)
    ========================================================================== */
 
 .badge {
-    border-radius: 0;
-    padding: 0.25em 0.6em;
+    background: var(--bg-surface-secondary) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 4px !important;
     font-weight: 500;
-    border: 1px solid transparent;
-}
-.badge-success { background: rgba(0, 255, 148, 0.1); color: var(--color-success); border-color: rgba(0, 255, 148, 0.3); }
-.badge-warning { background: rgba(255, 208, 0, 0.1); color: var(--color-warning); border-color: rgba(255, 208, 0, 0.3); }
-.badge-danger  { background: rgba(255, 42, 42, 0.1); color: var(--color-danger); border-color: rgba(255, 42, 42, 0.3); }
-.badge-info    { background: rgba(46, 154, 255, 0.1); color: var(--color-info); border-color: rgba(46, 154, 255, 0.3); }
-.badge-secondary { background: rgba(255,255,255,0.05); color: #888; border-color: rgba(255,255,255,0.1); }
-
-/* 快捷键提示 */
-.shortcut-key {
-    background: rgba(0,0,0,0.5);
-    border: 1px solid #333;
-    border-radius: 0;
-    color: var(--color-primary);
-    font-family: 'JetBrains Mono';
+    padding: 0.3em 0.6em;
+    font-family: 'JetBrains Mono', monospace;
 }
 
-/* 列表项选中状态 */
-.list-group-item {
-    background-color: transparent;
-    border: 1px solid transparent;
-    color: var(--text-body);
-}
-.list-group-item:hover {
-    background-color: rgba(255,255,255,0.03);
-}
-.list-group-item.active, .list-group-item.selected {
-    background-color: var(--color-primary-dim);
-    border: 1px solid var(--color-primary);
-    color: var(--text-main);
-    box-shadow: inset 2px 0 0 var(--color-primary);
+.badge-success, .text-success { color: var(--color-success) !important; }
+.badge-warning, .text-warning { color: var(--color-warning) !important; }
+.badge-danger,  .text-danger  { color: var(--color-danger) !important; }
+.badge-info,    .text-info    { color: var(--color-info) !important; }
+.badge-primary, .text-primary { color: var(--text-main) !important; }
+.badge-secondary, .text-secondary { color: var(--text-secondary) !important; }
+
+.tool-section-title {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 6px;
+    margin-bottom: 10px;
+    text-shadow: none !important;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
 }
 
 /* ==========================================================================
-   特定组件：Modal & Toast
+   特定的 IDE LAYOUT 区域 & 画布 (IDE Layout & Canvas)
+   ========================================================================= */
+
+.ide-layout { background-color: var(--bg-body); }
+.ide-sidebar { background-color: var(--bg-surface); border-left: 1px solid var(--border-color); }
+.ide-toolbar { background-color: var(--bg-surface); border-bottom: 1px solid var(--border-color); padding: 0.5rem; display: flex; align-items: center; gap: 4px;}
+
+/* 针对工具栏内的按钮和类似元素强行覆写字体，做成精细标签感 */
+.ide-toolbar .btn, .nav.nav-tabs .nav-item {
+    font-family: 'Inter', sans-serif !important;
+    font-size: 0.8rem !important;
+    font-weight: 500;
+    text-transform: capitalize !important;
+    letter-spacing: normal !important;
+    padding: 0.25rem 0.6rem !important;
+    border: 1px solid transparent !important;
+    background-color: transparent !important;
+    color: var(--text-main) !important;
+    border-radius: 20px !important;
+    transition: all 0.2s ease;
+    margin: 0;
+}
+
+.ide-toolbar .btn:hover, .nav.nav-tabs .nav-item:hover {
+    background-color: var(--bg-hover) !important;
+    border-color: var(--border-color) !important;
+    text-decoration: none;
+}
+.ide-toolbar .btn.active {
+    background-color: var(--bg-surface-secondary) !important;
+    border-color: var(--color-primary) !important;
+    color: var(--color-primary) !important;
+}
+
+.ide-canvas-wrapper { background-color: #000; background-image: none; }
+#canvas-container { border: 1px solid var(--border-color); border-radius: var(--radius-sm); overflow: hidden; }
+#canvas-container::before, #canvas-container::after { display: none !important; }
+
+/* ==========================================================================
+   特定组件：Modal, Toast & Animations
    ========================================================================== */
 
 .modal-content {
-    background-color: var(--bg-surface-secondary);
+    background-color: var(--bg-surface);
     border: 1px solid var(--border-color);
-    border-radius: 0;
-    box-shadow: 0 0 30px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.05);
+    border-radius: var(--radius-base);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
 }
-.modal-header {
-    border-bottom: 1px solid var(--border-color);
-    background: rgba(255,255,255,0.02);
-}
-.modal-footer {
-    border-top: 1px solid var(--border-color);
-}
+.modal-header { border-bottom: 1px solid var(--border-color); background: transparent; }
+.modal-footer { border-top: 1px solid var(--border-color); }
 
 #toast-notification {
-    background-color: #0a0b10;
-    border: 1px solid var(--color-primary);
-    color: var(--color-primary);
-    border-radius: 0;
-    box-shadow: 0 0 15px var(--color-primary-dim);
-    font-family: 'JetBrains Mono';
-    text-transform: uppercase;
-}
-#toast-notification::before {
-    content: "[SYS_MSG]: ";
-    opacity: 0.7;
-}
-
-/* ==========================================================================
-   动画 (Animations)
-   ========================================================================== */
-
-@keyframes techReveal {
-    0% { opacity: 0; transform: translateY(10px); clip-path: inset(0 100% 0 0); }
-    50% { opacity: 1; transform: translateY(0); }
-    100% { clip-path: inset(0 0 0 0); }
-}
-
-.slide-in-up, .fade-in {
-    animation: techReveal 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
-}
-
-/* Gallery 动画 - 移除导致大量重绘的阴影动画，改用纯边框发光 */
-.gallery-item {
-    border-radius: 0;
+    background-color: var(--bg-surface);
     border: 1px solid var(--border-color);
-    transition: all 0.2s;
+    color: var(--text-main);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+    font-family: 'Inter', sans-serif;
+    padding: 12px 16px;
+    text-transform: none;
 }
-.gallery-item:hover {
-    border-color: var(--color-primary);
-    transform: translateY(-2px);
-    box-shadow: 0 0 10px var(--color-primary-dim);
+#toast-notification::before { display: none; }
+
+.slide-in-up, .fade-in { animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
-/* 废弃类处理 (兼容旧HTML) */
-.bg-light, .bg-white { background-color: transparent !important; color: inherit !important; }
-.text-dark { color: var(--text-main) !important; }
-.border-top, .border-bottom { border-color: var(--border-color) !important; }
+.gallery-item {
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+    overflow: hidden;
+    transition: var(--transition-smooth);
+}
+.gallery-item:hover { border-color: rgba(255,255,255,0.3); transform: translateY(-2px); }
+
+.rounded-0 { border-radius: var(--radius-sm) !important; }
+.bg-dark { background-color: var(--bg-surface-secondary) !important; }
+.bg-black { background-color: #000 !important; }
