@@ -12,7 +12,7 @@
         background: rgba(0, 240, 255, 0.05);
         border: 1px solid var(--border-color);
         padding: 4px 12px;
-        border-radius: var(--radius-sm); /* 改用现代圆角变量 */
+        border-radius: var(--radius-sm);
     }
 
     .pulse-dot {
@@ -20,7 +20,7 @@
         height: 6px;
         background-color: var(--color-success);
         box-shadow: 0 0 5px var(--color-success);
-        border-radius: 50%; /* 圆形点更现代 */
+        border-radius: 50%;
         transition: all 0.15s ease-out;
         margin-right: 10px;
     }
@@ -36,10 +36,101 @@
         box-shadow: 0 0 10px var(--color-danger);
     }
 
-    /* 表头追踪样式 - 减弱生硬的间距 */
     .tracking-wider {
         letter-spacing: 0.05em;
     }
+
+    /* ==================== EMPTY STATE TUTORIAL (新手空状态引导) ==================== */
+    .empty-state-tutorial {
+        padding: 4rem 2rem;
+        text-align: center;
+        background: repeating-linear-gradient(
+            45deg,
+            rgba(0, 240, 255, 0.015),
+            rgba(0, 240, 255, 0.015) 10px,
+            transparent 10px,
+            transparent 20px
+        );
+        border: 1px dashed var(--border-color);
+        margin: 15px;
+        display: none;
+    }
+
+    .empty-step-badge {
+        display: inline-block;
+        font-family: 'Orbitron', sans-serif;
+        color: var(--color-primary);
+        border: 1px solid var(--color-primary);
+        padding: 4px 15px;
+        margin-bottom: 1.5rem;
+        letter-spacing: 0.1em;
+        font-size: 0.85rem;
+        background: rgba(0, 240, 255, 0.1);
+        box-shadow: 0 0 15px rgba(0, 240, 255, 0.1);
+    }
+
+    /* ==================== SYS_MANUAL POPOVER (系统悬浮数据手册) ==================== */
+    .info-trigger {
+        cursor: help;
+        opacity: 0.7;
+        transition: opacity 0.2s, text-shadow 0.2s;
+    }
+    .info-trigger:hover {
+        opacity: 1;
+        text-shadow: 0 0 10px var(--color-primary);
+    }
+
+    #sys-manual-panel {
+        position: absolute;
+        width: 360px;
+        background: rgba(10, 11, 16, 0.98);
+        border: 1px solid var(--color-primary);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8), 0 0 15px rgba(0, 240, 255, 0.15);
+        z-index: 99999;
+        pointer-events: none;
+        display: none;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+
+    #sys-manual-panel::before {
+        content: "";
+        display: block;
+        height: 4px;
+        background: repeating-linear-gradient(90deg, var(--color-primary) 0, var(--color-primary) 10px, transparent 10px, transparent 15px);
+    }
+
+    .manual-header {
+        background: rgba(255,255,255,0.05);
+        padding: 10px 15px;
+        border-bottom: 1px solid var(--border-color);
+        font-family: 'Orbitron', sans-serif;
+        font-size: 0.85rem;
+        color: var(--color-primary);
+        letter-spacing: 0.05em;
+    }
+
+    .manual-body { padding: 15px; }
+
+    .manual-section { margin-bottom: 12px; }
+    .manual-section:last-child { margin-bottom: 0; }
+    .manual-label {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.65rem;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        margin-bottom: 4px;
+        display: block;
+    }
+    .manual-text {
+        font-family: 'Inter', sans-serif;
+        font-size: 0.8rem;
+        color: #e0e0e0;
+        line-height: 1.5;
+    }
+    .manual-text.highlight-tune { color: var(--color-info); }
+    .manual-text.highlight-when { color: var(--color-warning); }
 </style>
 {% endblock %}
 
@@ -96,7 +187,8 @@
                 <div class="card-header">
                     <span class="font-weight-medium" style="font-size: 0.9rem; color: var(--text-main);">Stream Registry</span>
                 </div>
-                <div class="table-responsive">
+
+                <div class="table-responsive" id="video-table-wrapper">
                     <table class="table table-hover mb-0">
                         <thead>
                             <tr>
@@ -110,6 +202,17 @@
                         </thead>
                         <tbody id="video-list"></tbody>
                     </table>
+                </div>
+
+                <div id="video-empty-state" class="empty-state-tutorial">
+                    <div class="empty-step-badge">PHASE 01 // DATA_INGESTION</div>
+                    <h5 class="font-weight-bold text-white mb-3" style="font-family: 'Inter';">No Data Streams Detected</h5>
+                    <p class="text-muted font-monospace small mb-4" style="line-height: 1.8;">
+                        > SYSTEM AWAITING INPUT...<br>
+                        > To begin the machine learning pipeline, you must initialize a new data stream.<br>
+                        > Click the <strong class="text-primary">INIT_NEW_STREAM</strong> button above to upload a raw .mp4 feed.
+                    </p>
+                    <i class="bi bi-camera-video text-secondary" style="font-size: 3rem; opacity: 0.3;"></i>
                 </div>
             </div>
         </div>
@@ -125,7 +228,8 @@
                 <div class="card-header">
                      <span class="text-uppercase small font-weight-bold tracking-wider">Dataset Archives</span>
                 </div>
-                <div class="table-responsive">
+
+                <div class="table-responsive" id="dataset-table-wrapper">
                     <table class="table table-hover mb-0">
                         <thead>
                             <tr>
@@ -138,6 +242,17 @@
                         </thead>
                         <tbody id="dataset-list"></tbody>
                     </table>
+                </div>
+
+                <div id="dataset-empty-state" class="empty-state-tutorial" style="border-color: rgba(255,208,0,0.3); background: repeating-linear-gradient(45deg, rgba(255,208,0,0.015), rgba(255,208,0,0.015) 10px, transparent 10px, transparent 20px);">
+                    <div class="empty-step-badge" style="color: var(--color-warning); border-color: var(--color-warning); background: rgba(255,208,0,0.1); box-shadow: 0 0 15px rgba(255,208,0,0.1);">PHASE 02 // COMPILATION</div>
+                    <h5 class="font-weight-bold text-white mb-3" style="font-family: 'Inter';">No Dataset Archives Found</h5>
+                    <p class="text-muted font-monospace small mb-4" style="line-height: 1.8;">
+                        > AWAITING ANNOTATED STREAMS...<br>
+                        > Once you have labeled your data streams in PHASE 01, compile them here.<br>
+                        > This action bundles your frames into a balanced dataset (Train/Val/Test) ready for YOLO training.
+                    </p>
+                    <i class="bi bi-database text-secondary" style="font-size: 3rem; opacity: 0.3;"></i>
                 </div>
             </div>
         </div>
@@ -153,7 +268,8 @@
                 <div class="card-header">
                      <span class="text-uppercase small font-weight-bold tracking-wider">Inference Engines</span>
                 </div>
-                <div class="table-responsive">
+
+                <div class="table-responsive" id="model-table-wrapper">
                     <table class="table table-hover mb-0">
                         <thead>
                             <tr>
@@ -166,6 +282,17 @@
                         </thead>
                         <tbody id="model-list"></tbody>
                     </table>
+                </div>
+
+                <div id="model-empty-state" class="empty-state-tutorial" style="border-color: rgba(0,255,148,0.3); background: repeating-linear-gradient(45deg, rgba(0,255,148,0.015), rgba(0,255,148,0.015) 10px, transparent 10px, transparent 20px);">
+                    <div class="empty-step-badge" style="color: var(--color-success); border-color: var(--color-success); background: rgba(0,255,148,0.1); box-shadow: 0 0 15px rgba(0,255,148,0.1);">PHASE 03 // DEPLOYMENT</div>
+                    <h5 class="font-weight-bold text-white mb-3" style="font-family: 'Inter';">No Inference Engines Loaded</h5>
+                    <p class="text-muted font-monospace small mb-4" style="line-height: 1.8;">
+                        > AI CO-PILOT OFFLINE...<br>
+                        > Import a trained .tflite model engine alongside its label map.<br>
+                        > This will unlock advanced features: LAM (Label Anything), Auto-Labeling, and AI consistency checks.
+                    </p>
+                    <i class="bi bi-cpu text-secondary" style="font-size: 3rem; opacity: 0.3;"></i>
                 </div>
             </div>
         </div>
@@ -182,7 +309,7 @@
                             <div class="card-body">
                                 <div class="form-row">
                                     <div class="form-group col-md-6">
-                                        <label class="small text-muted font-weight-bold">COMPUTATION_NODE</label>
+                                        <label class="small text-muted font-weight-bold">COMPUTATION_NODE <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="gpu_device"></i></label>
                                         <select id="setting-gpu-device" class="form-control custom-select">
                                             <option value="auto">AUTO_DETECT</option>
                                             <option value="cpu">CPU_ONLY</option>
@@ -191,7 +318,7 @@
                                         </select>
                                     </div>
                                     <div class="form-group col-md-6">
-                                        <label class="small text-muted font-weight-bold">SEGMENTATION_CORE (SAM)</label>
+                                        <label class="small text-muted font-weight-bold">SEGMENTATION_CORE (SAM) <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="sam_model"></i></label>
                                         <select id="setting-sam-model" class="form-control custom-select">
                                             <option value="sam2.1_t.pt" data-name="SAM 2.1 Tiny">SAM 2.1 TINY (LOW_LATENCY)</option>
                                             <option value="sam2.1_s.pt" data-name="SAM 2.1 Small">SAM 2.1 SMALL (BALANCED)</option>
@@ -200,7 +327,7 @@
                                         </select>
                                     </div>
                                     <div class="form-group col-md-6">
-                                        <label class="small text-muted font-weight-bold">FEATURE_EXTRACTOR</label>
+                                        <label class="small text-muted font-weight-bold">FEATURE_EXTRACTOR <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="feature_extractor"></i></label>
                                         <select id="setting-feature-extractor-model" class="form-control custom-select">
                                             <option value="mobilenet_v3_large">MOBILENET_V3_LARGE</option>
                                             <option value="mobilenet_v3_small">MOBILENET_V3_SMALL</option>
@@ -220,20 +347,18 @@
                                 </div>
                                 <div class="form-row">
                                     <div class="form-group col-md-6">
-                                        <label class="small text-muted font-weight-bold">SEGMENT ANYTHING MODEL (SAM)</label>
+                                        <label class="small text-muted font-weight-bold">SEGMENT ANYTHING MODEL (SAM) <i class="bi bi-info-square-fill ml-1 text-info info-trigger" data-key="enable_sam"></i></label>
                                         <div class="custom-control custom-switch mt-2">
                                             <input type="checkbox" class="custom-control-input" id="setting-enable-sam">
                                             <label class="custom-control-label font-monospace" for="setting-enable-sam">ENABLE SAM FEATURES</label>
                                         </div>
-                                        <small class="text-muted font-monospace mt-1 d-block">> INCLUDES: SAM Point, LAM Text, Smart Select, Video Tracking</small>
                                     </div>
                                     <div class="form-group col-md-6">
-                                        <label class="small text-muted font-weight-bold">FEATURE EXTRACTOR (MobileNet)</label>
+                                        <label class="small text-muted font-weight-bold">FEATURE EXTRACTOR (MobileNet) <i class="bi bi-info-square-fill ml-1 text-info info-trigger" data-key="enable_feature"></i></label>
                                         <div class="custom-control custom-switch mt-2">
                                             <input type="checkbox" class="custom-control-input" id="setting-enable-feature-extractor">
                                             <label class="custom-control-label font-monospace" for="setting-enable-feature-extractor">ENABLE DEEP FEATURES</label>
                                         </div>
-                                        <small class="text-muted font-monospace mt-1 d-block">> INCLUDES: Smart Select, LAM, Find Similar, AI Consistency Check</small>
                                     </div>
                                 </div>
                             </div>
@@ -246,7 +371,7 @@
                             <div class="card-body">
                                 <div class="form-row">
                                     <div class="form-group col-md-4">
-                                        <label class="small text-muted font-weight-bold">MAX_WORKERS</label>
+                                        <label class="small text-muted font-weight-bold">MAX_WORKERS <i class="bi bi-info-square-fill ml-1 text-warning info-trigger" data-key="max_workers"></i></label>
                                         <select id="setting-max-workers" class="form-control custom-select">
                                             <option value="auto">AUTO_DETECT</option>
                                             <option value="4">4 THREADS (LOW_POWER)</option>
@@ -256,18 +381,16 @@
                                     </div>
                                     <div class="form-group col-md-4">
                                         <label class="d-flex justify-content-between small text-muted font-weight-bold">
-                                            <span>MAX_CACHE_SIZE (FRAMES)</span> <span id="max-cache-size-val" class="text-warning font-monospace">30</span>
+                                            <span>MAX_CACHE_SIZE <i class="bi bi-info-square-fill ml-1 text-warning info-trigger" data-key="max_cache_size"></i></span> <span id="max-cache-size-val" class="text-warning font-monospace">30</span>
                                         </label>
                                         <input type="range" class="custom-range" id="setting-max-cache-size" min="10" max="100" step="10">
-                                        <small class="text-muted font-monospace mt-1 d-block">> LOWER FOR LOW VRAM</small>
                                     </div>
                                     <div class="form-group col-md-4">
-                                        <label class="small text-muted font-weight-bold">MIXED_PRECISION</label>
+                                        <label class="small text-muted font-weight-bold">MIXED_PRECISION <i class="bi bi-info-square-fill ml-1 text-warning info-trigger" data-key="use_autocast"></i></label>
                                         <div class="custom-control custom-switch mt-2">
                                             <input type="checkbox" class="custom-control-input" id="setting-use-autocast">
                                             <label class="custom-control-label font-monospace" for="setting-use-autocast">ENABLE_FP16/BF16</label>
                                         </div>
-                                        <small class="text-muted font-monospace mt-1 d-block">> DISABLE ON OLDER GPUS</small>
                                     </div>
                                 </div>
                             </div>
@@ -280,7 +403,7 @@
                             <div class="card-body">
                                 <div class="form-row">
                                     <div class="form-group col-md-4">
-                                        <label class="small text-muted font-weight-bold">INFERENCE_RESOLUTION</label>
+                                        <label class="small text-muted font-weight-bold">INFERENCE_RESOLUTION <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="inference_size"></i></label>
                                         <select id="setting-inference-size" class="form-control custom-select">
                                             <option value="512">512x512 (FAST/LOW_VRAM)</option>
                                             <option value="640">640x640 (STANDARD)</option>
@@ -289,17 +412,16 @@
                                     </div>
                                     <div class="form-group col-md-4">
                                         <label class="d-flex justify-content-between small text-muted font-weight-bold">
-                                            <span>GLOBAL_DEFAULT_CONFIDENCE</span> <span id="default-confidence-val" class="text-primary font-monospace">0.50</span>
+                                            <span>DEFAULT_CONFIDENCE <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="default_confidence"></i></span> <span id="default-confidence-val" class="text-primary font-monospace">0.50</span>
                                         </label>
                                         <input type="range" class="custom-range" id="setting-default-confidence" min="0.1" max="0.95" step="0.05">
                                     </div>
                                     <div class="form-group col-md-4">
                                         <label class="d-flex justify-content-between small text-muted font-weight-bold">
-                                            <span>BBOX_PADDING</span> <span id="sam-box-padding-val" class="text-primary font-monospace">0%</span>
+                                            <span>BBOX_PADDING <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="sam_box_padding"></i></span> <span id="sam-box-padding-val" class="text-primary font-monospace">0%</span>
                                         </label>
                                         <input type="range" class="custom-range" id="setting-sam-box-padding" min="0.0" max="0.2" step="0.02">
-                                        <small class="text-muted font-monospace mt-1 d-block">> PREVENT EDGE CLIPPING</small>
-                    </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -311,7 +433,7 @@
                             <div class="card-body">
                                 <div class="form-row">
                                     <div class="form-group col-md-4">
-                                        <label class="small text-muted font-weight-bold">DATASET_COMPRESSION (ZIP)</label>
+                                        <label class="small text-muted font-weight-bold">DATASET_COMPRESSION <i class="bi bi-info-square-fill ml-1 text-success info-trigger" data-key="zip_compression"></i></label>
                                         <select id="setting-zip-compression" class="form-control custom-select">
                                             <option value="fast">FAST (STORE_ONLY)</option>
                                             <option value="standard">STANDARD</option>
@@ -319,20 +441,18 @@
                                         </select>
                                     </div>
                                     <div class="form-group col-md-4">
-                                        <label class="small text-muted font-weight-bold">AUTO_PREPROCESS</label>
+                                        <label class="small text-muted font-weight-bold">AUTO_PREPROCESS <i class="bi bi-info-square-fill ml-1 text-success info-trigger" data-key="auto_preprocess"></i></label>
                                         <div class="custom-control custom-switch mt-2">
                                             <input type="checkbox" class="custom-control-input" id="setting-auto-preprocess">
                                             <label class="custom-control-label font-monospace" for="setting-auto-preprocess">BACKGROUND_SCAN</label>
                                         </div>
-                                        <small class="text-muted font-monospace mt-1 d-block">> DISABLE FOR LOW_CPU</small>
                                     </div>
                                     <div class="form-group col-md-4">
-                                        <label class="small text-muted font-weight-bold text-danger">ORPHAN_FRAME_CLEANUP</label>
+                                        <label class="small text-muted font-weight-bold text-danger">ORPHAN_FRAME_CLEANUP <i class="bi bi-info-square-fill ml-1 text-danger info-trigger" data-key="auto_cleanup"></i></label>
                                         <div class="custom-control custom-switch mt-2">
                                             <input type="checkbox" class="custom-control-input" id="setting-auto-cleanup">
-                                            <label class="custom-control-label font-monospace text-danger" for="setting-auto-cleanup">DELETE_UNLABELED_ON_EXPORT</label>
+                                            <label class="custom-control-label font-monospace text-danger" for="setting-auto-cleanup">DELETE_ON_EXPORT</label>
                                         </div>
-                                        <small class="text-danger font-monospace mt-1 d-block">> WARNING: DELETES UNLABELED SOURCE FRAMES</small>
                                     </div>
                                 </div>
                             </div>
@@ -346,19 +466,19 @@
                                 <div class="form-row">
                                     <div class="form-group col-md-4">
                                         <label class="d-flex justify-content-between small text-muted font-weight-bold">
-                                            <span>MASK_CONFIDENCE</span> <span id="sam-mask-confidence-val" class="text-primary font-monospace">0.35</span>
+                                            <span>MASK_CONFIDENCE <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="sam_mask_confidence"></i></span> <span id="sam-mask-confidence-val" class="text-primary font-monospace">0.35</span>
                                         </label>
                                         <input type="range" class="custom-range" id="setting-sam-mask-confidence" min="0.1" max="0.9" step="0.05">
                                     </div>
                                     <div class="form-group col-md-4">
                                         <label class="d-flex justify-content-between small text-muted font-weight-bold">
-                                            <span>NMS_IOU_THRESH</span> <span id="nms-iou-threshold-val" class="text-primary font-monospace">0.70</span>
+                                            <span>NMS_IOU_THRESH <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="nms_iou_threshold"></i></span> <span id="nms-iou-threshold-val" class="text-primary font-monospace">0.70</span>
                                         </label>
                                         <input type="range" class="custom-range" id="setting-nms-iou-threshold" min="0.1" max="1.0" step="0.05">
                                     </div>
                                     <div class="form-group col-md-4">
                                         <label class="d-flex justify-content-between small text-muted font-weight-bold">
-                                            <span>PROTO_TEMP</span> <span id="prototype-temperature-val" class="text-primary font-monospace">0.07</span>
+                                            <span>PROTO_TEMP <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="prototype_temperature"></i></span> <span id="prototype-temperature-val" class="text-primary font-monospace">0.07</span>
                                         </label>
                                         <input type="range" class="custom-range" id="setting-prototype-temperature" min="0.01" max="0.5" step="0.01">
                                     </div>
@@ -374,28 +494,28 @@
                                 <div class="form-row">
                                     <div class="form-group col-md-6">
                                         <label class="d-flex justify-content-between small text-muted font-weight-bold">
-                                            <span>TRACKING_CONFIDENCE</span> <span id="batch-tracking-conf-val" class="text-primary font-monospace">0.30</span>
+                                            <span>TRACKING_CONFIDENCE <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="batch_tracking_conf"></i></span> <span id="batch-tracking-conf-val" class="text-primary font-monospace">0.30</span>
                                         </label>
                                         <input type="range" class="custom-range" id="setting-batch-tracking-conf" min="0.1" max="0.95" step="0.05">
                                     </div>
                                     <div class="form-group col-md-6">
                                         <label class="d-flex justify-content-between small text-muted font-weight-bold">
-                                            <span>PRE_ANNOTATION_CONF</span> <span id="preannotation-conf-val" class="text-primary font-monospace">0.50</span>
+                                            <span>PRE_ANNOTATION_CONF <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="preannotation_conf"></i></span> <span id="preannotation-conf-val" class="text-primary font-monospace">0.50</span>
                                         </label>
                                         <input type="range" class="custom-range" id="setting-preannotation-conf" min="0.1" max="0.95" step="0.05">
                                     </div>
                                 </div>
                                 <div class="form-row mt-2">
                                     <div class="form-group col-md-4">
-                                        <label class="small text-muted font-weight-bold">TRACKING_IMG_SIZE (PX)</label>
+                                        <label class="small text-muted font-weight-bold">TRACK_IMG_SIZE <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="batch_tracking_imgsz"></i></label>
                                         <input type="number" id="setting-batch-tracking-imgsz" class="form-control" step="32" min="256" max="2048">
                                     </div>
                                     <div class="form-group col-md-4">
-                                        <label class="small text-muted font-weight-bold">CHUNK_SIZE (FRAMES)</label>
+                                        <label class="small text-muted font-weight-bold">CHUNK_SIZE <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="batch_tracking_chunk"></i></label>
                                         <input type="number" id="setting-batch-tracking-chunk-size" class="form-control" min="1" max="100">
                                     </div>
                                     <div class="form-group col-md-4">
-                                        <label class="small text-muted font-weight-bold">PROTO_SAMPLE_LIMIT</label>
+                                        <label class="small text-muted font-weight-bold">PROTO_LIMIT <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="prototype_limit"></i></label>
                                         <input type="number" id="setting-prototype-sample-limit" class="form-control" min="1" max="50">
                                     </div>
                                 </div>
@@ -409,7 +529,7 @@
                             <div class="card-body">
                                 <div class="form-row">
                                     <div class="form-group col-md-6">
-                                        <label class="small text-muted font-weight-bold">DEFAULT_TOOL</label>
+                                        <label class="small text-muted font-weight-bold">DEFAULT_TOOL <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="default_annotation_mode"></i></label>
                                         <select id="setting-default-annotation-mode" class="form-control custom-select">
                                             <option value="manual">MANUAL_DRAW</option>
                                             <option value="sam">SAM (POINT_CLICK)</option>
@@ -418,48 +538,22 @@
                                         </select>
                                     </div>
                                     <div class="form-group col-md-6">
-                                        <label class="small text-muted font-weight-bold">AUTO_SAVE</label>
+                                        <label class="small text-muted font-weight-bold">AUTO_SAVE <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="autosave_enabled"></i></label>
                                         <div class="custom-control custom-switch mt-2">
                                             <input type="checkbox" class="custom-control-input" id="setting-autosave-enabled">
                                             <label class="custom-control-label font-monospace" for="setting-autosave-enabled">SAVE_ON_NAV</label>
                                         </div>
                                     </div>
                                     <div class="form-group col-md-6">
-                                        <label class="small text-muted font-weight-bold">COMPRESSION_QUALITY</label>
+                                        <label class="small text-muted font-weight-bold">COMPRESSION_QUALITY <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="jpeg_quality"></i></label>
                                         <input type="number" id="setting-jpeg-quality" class="form-control" min="10" max="100" step="5">
                                     </div>
                                     <div class="form-group col-md-6">
-                                        <label class="small text-muted font-weight-bold">LEGACY_TRACKER</label>
+                                        <label class="small text-muted font-weight-bold">LEGACY_TRACKER <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="opencv_tracker"></i></label>
                                         <select id="setting-opencv-tracker" class="form-control custom-select">
                                             {% for tracker in tracker_fns %}<option value="{{ tracker }}">{{ tracker }}</option>{% endfor %}
                                         </select>
                                     </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="card settings-section mb-4">
-                             <div class="card-header text-primary">
-                                <i class="bi bi-palette mr-2"></i> SIGNAL_COLORS (CLASS_MAP)
-                            </div>
-                            <div class="card-body">
-                                 <div id="class-color-manager" class="d-flex flex-wrap custom-scrollbar" style="max-height: 200px; overflow-y: auto; gap: 10px;"></div>
-                            </div>
-                        </div>
-
-                        <div class="card settings-section mb-4" style="border-color: var(--color-danger);">
-                            <div class="card-header text-danger">
-                                <i class="bi bi-tools mr-2"></i> SYSTEM_MAINTENANCE
-                            </div>
-                            <div class="card-body">
-                                <div class="d-flex align-items-center justify-content-between">
-                                    <div class="form-group mb-0 mr-3 flex-grow-1">
-                                        <label class="small text-muted font-weight-bold">CACHE_FLUSH_INTERVAL (SEC)</label>
-                                        <input type="number" class="form-control" id="setting-cache-save-interval" min="10" max="300">
-                                    </div>
-                                    <button type="button" class="btn btn-outline-danger" id="clear-cache-btn">
-                                        <i class="bi bi-eraser-fill mr-1"></i> PURGE_CACHE
-                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -472,6 +566,24 @@
                     </div>
                 </div>
             </form>
+        </div>
+    </div>
+</div>
+
+<div id="sys-manual-panel">
+    <div class="manual-header" id="manual-title">SYSTEM_MANUAL</div>
+    <div class="manual-body">
+        <div class="manual-section">
+            <span class="manual-label text-info"><i class="bi bi-hdd-stack"></i> [ FUNCTION ]</span>
+            <div class="manual-text" id="manual-desc"></div>
+        </div>
+        <div class="manual-section mt-3">
+            <span class="manual-label text-primary"><i class="bi bi-sliders"></i> [ CALIBRATION ]</span>
+            <div class="manual-text highlight-tune" id="manual-tune"></div>
+        </div>
+        <div class="manual-section mt-3">
+            <span class="manual-label text-warning"><i class="bi bi-exclamation-triangle"></i> [ SCENARIO ]</span>
+            <div class="manual-text highlight-when" id="manual-when"></div>
         </div>
     </div>
 </div>
@@ -502,33 +614,19 @@
     <div class="form-group">
         <label class="font-weight-bold small text-muted">SOURCE_STREAMS</label>
         <select multiple class="form-control custom-select" id="dataset-videos" required size="5"></select>
-        <small class="text-muted font-monospace mt-1 d-block">> CMD/CTRL+CLICK TO MULTI-SELECT</small>
     </div>
     <div class="form-row">
-        <div class="form-group col-6">
-            <label class="font-weight-bold small text-muted">VALIDATION %</label>
-            <input type="number" class="form-control" id="eval-percent" value="20">
-        </div>
-        <div class="form-group col-6">
-            <label class="font-weight-bold small text-muted">TESTING %</label>
-            <input type="number" class="form-control" id="test-percent" value="10">
-        </div>
+        <div class="form-group col-6"><label class="font-weight-bold small text-muted">VALIDATION %</label><input type="number" class="form-control" id="eval-percent" value="20"></div>
+        <div class="form-group col-6"><label class="font-weight-bold small text-muted">TESTING %</label><input type="number" class="form-control" id="test-percent" value="10"></div>
     </div>
-
     <div class="card mb-3 border-secondary" style="background: rgba(255,255,255,0.02);">
         <div class="card-body p-3">
             <div class="d-flex justify-content-between align-items-center">
                 <h6 class="mb-0 font-weight-bold text-uppercase text-primary">Data Augmentation</h6>
-                <div class="custom-control custom-switch">
-                    <input type="checkbox" class="custom-control-input" id="aug-enabled">
-                    <label class="custom-control-label" for="aug-enabled"></label>
-                </div>
+                <div class="custom-control custom-switch"><input type="checkbox" class="custom-control-input" id="aug-enabled"><label class="custom-control-label" for="aug-enabled"></label></div>
             </div>
             <div id="augmentation-options-panel" class="mt-3 border-top pt-3 border-secondary" style="display: none;">
-                <div class="form-group">
-                    <label class="small text-muted font-weight-bold">REPLICATION_FACTOR</label>
-                    <input type="number" class="form-control" id="aug-multiply-factor" value="3">
-                </div>
+                <div class="form-group"><label class="small text-muted font-weight-bold">REPLICATION_FACTOR</label><input type="number" class="form-control" id="aug-multiply-factor" value="3"></div>
                 {% include '_augmentation_controls.html' %}
             </div>
         </div>
@@ -539,30 +637,18 @@
 
 {% call render_modal('importModelModal', 'IMPORT_MODEL') %}
 <form id="import-model-form">
-    <div class="form-group">
-        <label class="font-weight-bold small text-muted">DESCRIPTION / IDENTIFIER</label>
-        <input type="text" class="form-control" id="model-description" name="description" required maxlength="{{ limit_data.MAX_DESCRIPTION_LENGTH }}">
-    </div>
+    <div class="form-group"><label class="font-weight-bold small text-muted">DESCRIPTION / IDENTIFIER</label><input type="text" class="form-control" id="model-description" name="description" required maxlength="{{ limit_data.MAX_DESCRIPTION_LENGTH }}"></div>
     <div class="form-group">
         <label class="font-weight-bold small text-muted">MODEL_BINARY (.TFLITE)</label>
-        <div class="custom-file">
-            <input type="file" class="custom-file-input" id="model-file" name="model_file" accept=".tflite" required>
-            <label class="custom-file-label" for="model-file">SELECT_FILE...</label>
-        </div>
+        <div class="custom-file"><input type="file" class="custom-file-input" id="model-file" name="model_file" accept=".tflite" required><label class="custom-file-label" for="model-file">SELECT_FILE...</label></div>
     </div>
     <div class="form-group">
         <label class="font-weight-bold small text-muted">LABEL_MAP (.TXT)</label>
-        <div class="custom-file">
-            <input type="file" class="custom-file-input" id="label-file" name="label_file" accept=".txt,.labels" required>
-            <label class="custom-file-label" for="label-file">SELECT_FILE...</label>
-        </div>
+        <div class="custom-file"><input type="file" class="custom-file-input" id="label-file" name="label_file" accept=".txt,.labels" required><label class="custom-file-label" for="label-file">SELECT_FILE...</label></div>
     </div>
     <div class="form-group">
         <label class="font-weight-bold small text-muted">ARCHITECTURE_TYPE</label>
-        <select class="form-control custom-select" id="model-type" name="model_type" required>
-            <option value="float32">FLOAT32 (STANDARD)</option>
-            <option value="uint8">UINT8 (EDGE_TPU_ACCEL)</option>
-        </select>
+        <select class="form-control custom-select" id="model-type" name="model_type" required><option value="float32">FLOAT32 (STANDARD)</option><option value="uint8">UINT8 (EDGE_TPU_ACCEL)</option></select>
     </div>
     <button type="submit" class="btn btn-primary btn-block tracking-wider font-weight-bold">IMPORT_ENGINE</button>
 </form>
@@ -571,36 +657,19 @@
 {% call render_modal('preAnnotateModal', 'AUTO_LABELING_SEQUENCE') %}
 <form id="pre-annotate-form">
     <input type="hidden" id="pre-annotate-video-uuid" data-frame-count="0" data-labeled-count="0">
-    <div class="form-group">
-        <label class="font-weight-bold small text-muted">INFERENCE_MODEL</label>
-        <select id="pre-annotate-model-select" class="form-control custom-select" required></select>
-    </div>
+    <div class="form-group"><label class="font-weight-bold small text-muted">INFERENCE_MODEL</label><select id="pre-annotate-model-select" class="form-control custom-select" required></select></div>
     <div class="form-row">
-        <div class="form-group col-6">
-            <label class="font-weight-bold small text-muted">START_FRAME</label>
-            <input type="number" id="pre-annotate-start-frame" class="form-control">
-        </div>
-        <div class="form-group col-6">
-            <label class="font-weight-bold small text-muted">END_FRAME</label>
-            <input type="number" id="pre-annotate-end-frame" class="form-control">
-        </div>
+        <div class="form-group col-6"><label class="font-weight-bold small text-muted">START_FRAME</label><input type="number" id="pre-annotate-start-frame" class="form-control"></div>
+        <div class="form-group col-6"><label class="font-weight-bold small text-muted">END_FRAME</label><input type="number" id="pre-annotate-end-frame" class="form-control"></div>
     </div>
     <div class="form-group">
-        <label class="d-flex justify-content-between font-weight-bold small text-muted">
-            <span>CONFIDENCE_THRESHOLD</span> <span id="confidence-value" class="text-primary font-monospace">0.5</span>
-        </label>
+        <label class="d-flex justify-content-between font-weight-bold small text-muted"><span>CONFIDENCE_THRESHOLD</span> <span id="confidence-value" class="text-primary font-monospace">0.5</span></label>
         <input type="range" class="custom-range" id="pre-annotate-confidence" min="0.1" max="0.95" step="0.05" value="0.5">
     </div>
     <div class="form-group">
          <label class="font-weight-bold d-block mb-2 small text-muted">MERGE_STRATEGY</label>
-         <div class="custom-control custom-radio custom-control-inline">
-            <input type="radio" id="strategy-overwrite" name="merge_strategy" value="overwrite" class="custom-control-input" checked>
-            <label class="custom-control-label font-monospace" for="strategy-overwrite">OVERWRITE_EXISTING</label>
-        </div>
-        <div class="custom-control custom-radio custom-control-inline">
-            <input type="radio" id="strategy-skip" name="merge_strategy" value="skip_labeled" class="custom-control-input">
-            <label class="custom-control-label font-monospace" for="strategy-skip">FILL_GAPS_ONLY</label>
-        </div>
+         <div class="custom-control custom-radio custom-control-inline"><input type="radio" id="strategy-overwrite" name="merge_strategy" value="overwrite" class="custom-control-input" checked><label class="custom-control-label font-monospace" for="strategy-overwrite">OVERWRITE_EXISTING</label></div>
+        <div class="custom-control custom-radio custom-control-inline"><input type="radio" id="strategy-skip" name="merge_strategy" value="skip_labeled" class="custom-control-input"><label class="custom-control-label font-monospace" for="strategy-skip">FILL_GAPS_ONLY</label></div>
     </div>
     <button type="submit" class="btn btn-primary btn-block tracking-wider font-weight-bold">ENGAGE_AUTO_LABELER</button>
 </form>
@@ -615,34 +684,16 @@
             </div>
             <div class="modal-body pt-3">
                 <div class="table-responsive mb-4">
-                    <table class="table table-sm table-hover mb-0">
-                        <thead>
-                            <tr>
-                                <th>OPERATOR</th>
-                                <th>RANGE</th>
-                                <th>NOTES</th>
-                                <th class="text-right">ACT</th>
-                            </tr>
-                        </thead>
-                        <tbody id="task-list-in-modal"></tbody>
-                    </table>
+                    <table class="table table-sm table-hover mb-0"><thead><tr><th>OPERATOR</th><th>RANGE</th><th>NOTES</th><th class="text-right">ACT</th></tr></thead><tbody id="task-list-in-modal"></tbody></table>
                 </div>
                 <h6 class="font-weight-bold mb-3 text-uppercase text-primary border-bottom border-secondary pb-1 tracking-wider">Assign New Task</h6>
                 <form id="create-task-form">
                     <input type="hidden" id="task-video-uuid">
                     <div class="form-row">
-                        <div class="form-group col-md-4">
-                            <input type="text" class="form-control form-control-sm" id="task-assigned-to" placeholder="OPERATOR_ID" required>
-                        </div>
-                        <div class="form-group col-md-3">
-                            <input type="number" class="form-control form-control-sm" id="task-start-frame" placeholder="START" required>
-                        </div>
-                        <div class="form-group col-md-3">
-                            <input type="number" class="form-control form-control-sm" id="task-end-frame" placeholder="END" required>
-                        </div>
-                        <div class="form-group col-md-2">
-                            <button type="submit" class="btn btn-sm btn-success btn-block tracking-wider">ASSIGN</button>
-                        </div>
+                        <div class="form-group col-md-4"><input type="text" class="form-control form-control-sm" id="task-assigned-to" placeholder="OPERATOR_ID" required></div>
+                        <div class="form-group col-md-3"><input type="number" class="form-control form-control-sm" id="task-start-frame" placeholder="START" required></div>
+                        <div class="form-group col-md-3"><input type="number" class="form-control form-control-sm" id="task-end-frame" placeholder="END" required></div>
+                        <div class="form-group col-md-2"><button type="submit" class="btn btn-sm btn-success btn-block tracking-wider">ASSIGN</button></div>
                     </div>
                 </form>
             </div>
@@ -656,6 +707,82 @@
     $(document).ready(function() {
         $('.modal').appendTo("body");
         let currentSettings = {};
+
+        // ==================== SYS_MANUAL_DATABASE (System Parameter Encyclopedia) ====================
+        const sysManualDb = {
+            'gpu_device': { title: 'COMPUTATION_NODE', desc: 'Specifies the hardware accelerator for neural network operations.', tune: 'Prioritize NVIDIA_CUDA. Select CPU only if no dedicated GPU is available.', when: 'Switch if console reports CUDA Out-Of-Memory (OOM) errors or to reassign GPU workloads.' },
+            'sam_model': { title: 'SEGMENT_CORE (SAM)', desc: 'Core AI vision engine. Determines precision of point-clicks and tracking.', tune: 'Tiny (Fast, 1.5GB VRAM) -> Large (High Precision, 10GB+ VRAM).', when: 'Upgrade to Base/Large if object edges are poorly segmented. Downgrade to Tiny if system crashes or lags heavily.' },
+            'feature_extractor': { title: 'FEATURE_EXTRACTOR', desc: 'Background neural net generating embedding vectors for Smart Select and AI Consistency Scans.', tune: 'Large (High Accuracy) / Small (High Speed).', when: 'Switch to Large if Smart Select incorrectly groups visually distinct objects.' },
+            'enable_sam': { title: 'SAM_TOGGLE', desc: 'Loads/Unloads the heavy SAM checkpoint into VRAM.', tune: 'Enabled/Disabled.', when: 'Disable on extremely low-end hardware to free VRAM (disables most AI tools).' },
+            'enable_feature': { title: 'FEATURE_TOGGLE', desc: 'Toggles background deep feature extraction.', tune: 'Enabled/Disabled.', when: 'Disable if background processing causes severe thermal throttling or CPU bottleneck.' },
+
+            'max_workers': { title: 'MAX_WORKERS', desc: 'Concurrent threads for frame extraction and background pipeline tasks.', tune: 'Set to half of your total CPU logical cores (e.g., 4 for an 8-core CPU).', when: 'Increase if data ingestion is slow. Decrease if UI freezes during background tasks.' },
+            'max_cache_size': { title: 'MAX_CACHE_SIZE', desc: 'Number of decoded frames retained in ultra-fast RAM to prevent re-decoding.', tune: '10 (Low RAM) -> 100+ (64GB+ Workstations).', when: 'Increase if scrubbing timeline feels laggy. Decrease if browser memory footprint is too large.' },
+            'use_autocast': { title: 'MIXED_PRECISION', desc: 'FP16 acceleration. Halves VRAM usage and doubles inference speed.', tune: 'Highly recommended to keep ENABLED.', when: 'Disable ONLY if using legacy GPUs (pre-GTX 10 series) or encountering black boxes (NaN errors) during inference.' },
+
+            'inference_size': { title: 'INFERENCE_RESOLUTION', desc: 'Internal tensor resolution during AI model forward pass.', tune: '512 (Fast) -> 1024 (Maximum Detail).', when: 'Increase to 1024 if AI fails to detect extremely small, distant objects.' },
+            'default_confidence': { title: 'GLOBAL_CONFIDENCE', desc: 'Baseline threshold for all global AI predictions (e.g., LAM text prompts).', tune: '0.1 (Lenient) -> 0.95 (Strict).', when: 'Increase if AI returns too many false positives. Decrease if AI misses obvious targets.' },
+            'sam_box_padding': { title: 'BBOX_PADDING', desc: 'Expands bounding boxes slightly before feeding them into the SAM core.', tune: '0% -> 20%.', when: 'Increase if SAM generated masks frequently clip the extreme edges of objects (e.g., mirrors, tires).' },
+
+            'zip_compression': { title: 'DATASET_COMPRESSION', desc: 'Archive algorithm level during final YOLO dataset export.', tune: 'Fast (Store only) -> Max (Extreme compression).', when: 'Select Max for limited disk space. Select Fast to eliminate waiting time during export.' },
+            'auto_preprocess': { title: 'AUTO_PREPROCESS', desc: 'Silently pre-computes thumbnails and feature vectors immediately upon video upload.', tune: 'Enabled/Disabled.', when: 'Disable to save battery or reduce fan noise on portable nodes.' },
+            'auto_cleanup': { title: 'ORPHAN_CLEANUP', desc: '[DANGER] Automatically purges completely unlabeled source frames from disk upon dataset compilation.', tune: 'Use with extreme caution.', when: 'Enable to aggressively free up disk space when processing very long feeds with few labeled targets.' },
+
+            'sam_mask_confidence': { title: 'MASK_CONFIDENCE', desc: 'Internal threshold for SAM to classify a pixel as foreground.', tune: '0.1 (Expand) -> 0.9 (Shrink).', when: 'Increase if masks spill into background geometry. Decrease if mask interiors contain holes.' },
+            'nms_iou_threshold': { title: 'NMS_IOU_THRESH', desc: 'Non-Maximum Suppression threshold. Dictates allowable overlap between boxes.', tune: '0.1 (Strict disjoint) -> 1.0 (Infinite overlap).', when: 'Decrease to aggressively cull duplicate boxes on the same object. Increase if labeling naturally overlapping objects.' },
+            'prototype_temperature': { title: 'PROTO_TEMP', desc: 'Softmax temperature for Smart Select embedding space calculations.', tune: '0.01 (Rigid) -> 0.5 (Creative/Loose).', when: 'Decrease to 0.05 if AI selects completely unrelated objects. Increase to 0.2+ to allow selection under different lighting/angles.' },
+
+            'batch_tracking_conf': { title: 'TRACK_CONFIDENCE', desc: 'Confidence drop-off threshold to declare target lost during sequence tracking.', tune: '0.1 (Relentless) -> 0.95 (Fragile).', when: 'Increase to prevent tracker from drifting onto background noise. Decrease if tracker aborts too easily on partial occlusions.' },
+            'preannotation_conf': { title: 'PRE_ANNOTATION_CONF', desc: 'Confidence threshold strictly isolated to the Auto-Labeling modal.', tune: '0.1 -> 0.95.', when: 'Adjust and re-run if auto-labeling sequence generates too much noise or misses targets.' },
+            'batch_tracking_imgsz': { title: 'TRACK_IMG_SIZE', desc: 'Extreme-precision processing resolution dedicated to SAM2 Video Tracking.', tune: '256 -> 2048 (Default 1024).', when: 'Increase to 2048 (if VRAM allows) when targets are moving extremely fast or are microscopic.' },
+            'batch_tracking_chunk': { title: 'CHUNK_SIZE', desc: 'Number of frames batched into VRAM per forward pass during tracking.', tune: '1 -> 100.', when: 'CRITICAL: Decrease immediately if tracking triggers CUDA OOM errors. Increase for faster tracking on high-end GPUs.' },
+            'prototype_limit': { title: 'PROTO_LIMIT', desc: 'Maximum number of positive/negative embedding vectors stored in RAM for Smart Select.', tune: '1 -> 50.', when: 'Leave at default unless system RAM is severely restricted.' },
+
+            'default_annotation_mode': { title: 'DEFAULT_TOOL', desc: 'Primary active tool automatically equipped upon entering the IDE.', tune: 'Select based on workflow preference.', when: 'Change to avoid manually switching to your favorite tool every time you open a frame.' },
+            'autosave_enabled': { title: 'AUTO_SAVE', desc: 'Automatically commits bbox data to disk during timeline scrubbing or navigation.', tune: 'Highly recommended to keep ENABLED.', when: 'Disable only when performing destructive testing and you wish to discard changes.' },
+            'jpeg_quality': { title: 'COMPRESSION_QUALITY', desc: 'JPEG compression ratio used when extracting raw frames from the source .mp4.', tune: '10 (Heavy Artifacts) -> 100 (Lossless).', when: 'Decrease to save disk space if absolute pixel clarity is not strictly required.' },
+            'opencv_tracker': { title: 'LEGACY_TRACKER', desc: 'Fallback mathematical tracking algorithms (OpenCV) requiring zero GPU inference.', tune: 'CSRT (Accurate) / MOSSE (Ultra-fast).', when: 'Use to conserve power or when tracking perfectly rigid, translating objects without AI overhead.' }
+        };
+
+        // UI Hover Panel Logic
+        $(document).on('mouseenter', '.info-trigger', function(e) {
+            const key = $(this).data('key');
+            const data = sysManualDb[key];
+            if(!data) return;
+
+            $('#manual-title').text(data.title);
+            $('#manual-desc').text(data.desc);
+            $('#manual-tune').text(data.tune);
+            $('#manual-when').text(data.when);
+
+            const panel = $('#sys-manual-panel');
+
+            // Show panel invisibly first to calculate true height
+            panel.css({ display: 'block', visibility: 'hidden' });
+            const panelWidth = panel.outerWidth();
+            const panelHeight = panel.outerHeight();
+
+            // Anchor directly to the mouse cursor coordinates + 15px gap
+            let leftPos = e.pageX + 15;
+            let topPos = e.pageY + 15;
+
+            // X-axis collision detection
+            if (leftPos + panelWidth > $(window).width() - 20) {
+                leftPos = e.pageX - panelWidth - 15;
+            }
+
+            // Y-axis collision detection
+            if (topPos + panelHeight > $(window).scrollTop() + $(window).height() - 20) {
+                topPos = e.pageY - panelHeight - 15;
+            }
+
+            // Apply calculated position, set back to hidden for fade animation
+            panel.css({ top: topPos + 'px', left: leftPos + 'px', visibility: 'visible', display: 'none' });
+            panel.stop(true, true).fadeIn(150);
+
+        }).on('mouseleave', '.info-trigger', function() {
+            $('#sys-manual-panel').stop(true, true).fadeOut(150);
+        });
 
         // 存储上一次获取的数据快照，实现无损刷新 (消除DOM闪烁)
         let lastVideosSnapshot = "";
@@ -718,48 +845,57 @@
                 if (!forceRedraw && currentSnapshot === lastVideosSnapshot) return;
                 lastVideosSnapshot = currentSnapshot;
 
-                let newHtml = '';
-                let selectHtml = '';
+                // ===== 空状态检测：Videos =====
+                if (data.all_videos.length === 0) {
+                    $('#video-table-wrapper').hide();
+                    $('#video-empty-state').fadeIn();
+                } else {
+                    $('#video-empty-state').hide();
+                    $('#video-table-wrapper').fadeIn();
 
-                data.all_videos.forEach(video => {
-                    const isReady = video.status === 'READY';
-                    let actions = '';
-                    if (isReady) {
-                        actions += `<button class="btn btn-sm btn-outline-info btn-import-frames mr-1" data-uuid="${video.video_uuid}" title="IMPORT FRAMES"><i class="bi bi-images"></i></button>`;
-                        actions += `<button class="btn btn-sm btn-outline-warning btn-pre-annotate mr-1" data-uuid="${video.video_uuid}" data-frame-count="${video.frame_count}" data-labeled-count="${video.labeled_frame_count}" title="AUTO-LABEL"><i class="bi bi-robot"></i></button>`;
-                        actions += `<button class="btn btn-sm btn-outline-success btn-manage-tasks mr-1" data-uuid="${video.video_uuid}" data-description="${video.description}" data-framecount="${video.frame_count}" title="TASKS"><i class="bi bi-list-check"></i></button>`;
-                    } else {
-                         actions += `<button class="btn btn-sm btn-outline-secondary mr-1" disabled><i class="bi bi-images"></i></button>`;
+                    let newHtml = '';
+                    let selectHtml = '';
+
+                    data.all_videos.forEach(video => {
+                        const isReady = video.status === 'READY';
+                        let actions = '';
+                        if (isReady) {
+                            actions += `<button class="btn btn-sm btn-outline-info btn-import-frames mr-1" data-uuid="${video.video_uuid}" title="IMPORT FRAMES"><i class="bi bi-images"></i></button>`;
+                            actions += `<button class="btn btn-sm btn-outline-warning btn-pre-annotate mr-1" data-uuid="${video.video_uuid}" data-frame-count="${video.frame_count}" data-labeled-count="${video.labeled_frame_count}" title="AUTO-LABEL"><i class="bi bi-robot"></i></button>`;
+                            actions += `<button class="btn btn-sm btn-outline-success btn-manage-tasks mr-1" data-uuid="${video.video_uuid}" data-description="${video.description}" data-framecount="${video.frame_count}" title="TASKS"><i class="bi bi-list-check"></i></button>`;
+                        } else {
+                            actions += `<button class="btn btn-sm btn-outline-secondary mr-1" disabled><i class="bi bi-images"></i></button>`;
+                        }
+
+                        if (['PRE_ANNOTATING', 'APPLYING_PROTOTYPES'].includes(video.status)) {
+                            actions += `<button class="btn btn-sm btn-danger btn-cancel-task mr-1" data-uuid="${video.video_uuid}" title="ABORT"><i class="bi bi-stop-circle"></i></button>`;
+                        }
+
+                        actions += `<button class="btn btn-sm btn-outline-danger btn-delete-video" data-uuid="${video.video_uuid}" title="PURGE"><i class="bi bi-trash"></i></button>`;
+
+                        const progress = video.extracted_frame_count ? `${video.extracted_frame_count} / ${video.frame_count || '?'}` : '-';
+                        const statusHtml = getStatusBadge(video.status, video.status_message);
+                        const statusMsg = video.status_message ? `<div class="small text-muted mt-1 font-monospace">> ${video.status_message}</div>` : '';
+
+                        newHtml += `
+                            <tr>
+                                <td class="align-middle font-weight-bold text-white">${video.description}</td>
+                                <td class="align-middle text-muted small font-monospace">${video.video_filename || ''}</td>
+                                <td class="align-middle">${statusHtml}${statusMsg}</td>
+                                <td class="align-middle font-weight-bold text-primary font-monospace small">${progress}</td>
+                                <td class="align-middle"><span class="badge badge-secondary font-monospace">${video.labeled_frame_count}</span></td>
+                                <td class="align-middle text-right">${actions}</td>
+                            </tr>`;
+                    });
+
+                    data.ready_videos_for_dataset.forEach(video => {
+                        selectHtml += `<option value="${video.video_uuid}">${video.description}[FRAMES: ${video.labeled_frame_count}]</option>`;
+                    });
+
+                    $('#video-list').html(newHtml);
+                    if (forceRedraw || $('#dataset-videos').is(':hidden')) {
+                        $('#dataset-videos').html(selectHtml);
                     }
-
-                    if (['PRE_ANNOTATING', 'APPLYING_PROTOTYPES'].includes(video.status)) {
-                        actions += `<button class="btn btn-sm btn-danger btn-cancel-task mr-1" data-uuid="${video.video_uuid}" title="ABORT"><i class="bi bi-stop-circle"></i></button>`;
-                    }
-
-                    actions += `<button class="btn btn-sm btn-outline-danger btn-delete-video" data-uuid="${video.video_uuid}" title="PURGE"><i class="bi bi-trash"></i></button>`;
-
-                    const progress = video.extracted_frame_count ? `${video.extracted_frame_count} / ${video.frame_count || '?'}` : '-';
-                    const statusHtml = getStatusBadge(video.status, video.status_message);
-                    const statusMsg = video.status_message ? `<div class="small text-muted mt-1 font-monospace">> ${video.status_message}</div>` : '';
-
-                    newHtml += `
-                        <tr>
-                            <td class="align-middle font-weight-bold text-white">${video.description}</td>
-                            <td class="align-middle text-muted small font-monospace">${video.video_filename || ''}</td>
-                            <td class="align-middle">${statusHtml}${statusMsg}</td>
-                            <td class="align-middle font-weight-bold text-primary font-monospace small">${progress}</td>
-                            <td class="align-middle"><span class="badge badge-secondary font-monospace">${video.labeled_frame_count}</span></td>
-                            <td class="align-middle text-right">${actions}</td>
-                        </tr>`;
-                });
-
-                data.ready_videos_for_dataset.forEach(video => {
-                    selectHtml += `<option value="${video.video_uuid}">${video.description}[FRAMES: ${video.labeled_frame_count}]</option>`;
-                });
-
-                $('#video-list').html(newHtml);
-                if (forceRedraw || $('#dataset-videos').is(':hidden')) {
-                    $('#dataset-videos').html(selectHtml);
                 }
             }).fail(() => triggerTelemetryPulse(true));
         }
@@ -770,32 +906,41 @@
                 if (!forceRedraw && currentSnapshot === lastDatasetsSnapshot) return;
                 lastDatasetsSnapshot = currentSnapshot;
 
-                let newHtml = '';
-                data.datasets.forEach(dataset => {
-                    let actions = '';
-                    if (dataset.status === 'READY') {
-                        actions += `<a href="/downloadDataset/${dataset.dataset_uuid}" class="btn btn-sm btn-outline-success mr-1" title="DOWNLOAD"><i class="bi bi-download"></i></a>`;
-                        actions += `<a href="/datasetAnalysis/${dataset.dataset_uuid}" class="btn btn-sm btn-outline-info mr-1" title="ANALYZE"><i class="bi bi-bar-chart-line"></i></a>`;
-                        actions += `<button class="btn btn-sm btn-outline-secondary btn-regenerate-dataset mr-1" data-uuid="${dataset.dataset_uuid}" title="RECOMPILE"><i class="bi bi-arrow-repeat"></i></button>`;
-                    } else if (dataset.status === 'FAILED') {
-                         actions += `<button class="btn btn-sm btn-outline-warning btn-regenerate-dataset mr-1" data-uuid="${dataset.dataset_uuid}" title="RETRY"><i class="bi bi-arrow-repeat"></i></button>`;
-                    }
-                    actions += `<button class="btn btn-sm btn-outline-danger btn-delete-dataset" data-uuid="${dataset.dataset_uuid}" title="DELETE"><i class="bi bi-trash"></i></button>`;
+                // ===== 空状态检测：Datasets =====
+                if (data.datasets.length === 0) {
+                    $('#dataset-table-wrapper').hide();
+                    $('#dataset-empty-state').fadeIn();
+                } else {
+                    $('#dataset-empty-state').hide();
+                    $('#dataset-table-wrapper').fadeIn();
 
-                    const videosCount = JSON.parse(dataset.video_uuids || '[]').length;
-                    const classes = JSON.parse(dataset.sorted_label_list || '[]')
-                        .map(c => `<span class="badge badge-secondary mr-1 mb-1 font-monospace">${c}</span>`).join('');
+                    let newHtml = '';
+                    data.datasets.forEach(dataset => {
+                        let actions = '';
+                        if (dataset.status === 'READY') {
+                            actions += `<a href="/downloadDataset/${dataset.dataset_uuid}" class="btn btn-sm btn-outline-success mr-1" title="DOWNLOAD"><i class="bi bi-download"></i></a>`;
+                            actions += `<a href="/datasetAnalysis/${dataset.dataset_uuid}" class="btn btn-sm btn-outline-info mr-1" title="ANALYZE"><i class="bi bi-bar-chart-line"></i></a>`;
+                            actions += `<button class="btn btn-sm btn-outline-secondary btn-regenerate-dataset mr-1" data-uuid="${dataset.dataset_uuid}" title="RECOMPILE"><i class="bi bi-arrow-repeat"></i></button>`;
+                        } else if (dataset.status === 'FAILED') {
+                            actions += `<button class="btn btn-sm btn-outline-warning btn-regenerate-dataset mr-1" data-uuid="${dataset.dataset_uuid}" title="RETRY"><i class="bi bi-arrow-repeat"></i></button>`;
+                        }
+                        actions += `<button class="btn btn-sm btn-outline-danger btn-delete-dataset" data-uuid="${dataset.dataset_uuid}" title="DELETE"><i class="bi bi-trash"></i></button>`;
 
-                    newHtml += `
-                        <tr>
-                            <td class="align-middle font-weight-bold text-white">${dataset.description}</td>
-                            <td class="align-middle">${getStatusBadge(dataset.status, dataset.status_message)}</td>
-                            <td class="align-middle font-monospace">${videosCount} SOURCES</td>
-                            <td class="align-middle" style="line-height: 1.8;">${classes || '<span class="text-muted small">NO_LABELS</span>'}</td>
-                            <td class="align-middle text-right">${actions}</td>
-                        </tr>`;
-                });
-                $('#dataset-list').html(newHtml);
+                        const videosCount = JSON.parse(dataset.video_uuids || '[]').length;
+                        const classes = JSON.parse(dataset.sorted_label_list || '[]')
+                            .map(c => `<span class="badge badge-secondary mr-1 mb-1 font-monospace">${c}</span>`).join('');
+
+                        newHtml += `
+                            <tr>
+                                <td class="align-middle font-weight-bold text-white">${dataset.description}</td>
+                                <td class="align-middle">${getStatusBadge(dataset.status, dataset.status_message)}</td>
+                                <td class="align-middle font-monospace">${videosCount} SOURCES</td>
+                                <td class="align-middle" style="line-height: 1.8;">${classes || '<span class="text-muted small">NO_LABELS</span>'}</td>
+                                <td class="align-middle text-right">${actions}</td>
+                            </tr>`;
+                    });
+                    $('#dataset-list').html(newHtml);
+                }
             });
         }
 
@@ -805,25 +950,34 @@
                 if (!forceRedraw && currentSnapshot === lastModelsSnapshot) return;
                 lastModelsSnapshot = currentSnapshot;
 
-                let newHtml = '';
-                data.models.forEach(model => {
-                    const createdDate = new Date(model.create_time_ms).toLocaleDateString();
-                    const typeBadge = model.model_type === 'uint8'
-                        ? `<span class="badge badge-info font-monospace">INT8_TPU</span>`
-                        : `<span class="badge badge-primary font-monospace">FP32_STD</span>`;
+                // ===== 空状态检测：Models =====
+                if (data.models.length === 0) {
+                    $('#model-table-wrapper').hide();
+                    $('#model-empty-state').fadeIn();
+                } else {
+                    $('#model-empty-state').hide();
+                    $('#model-table-wrapper').fadeIn();
 
-                    newHtml += `
-                        <tr>
-                            <td class="align-middle font-weight-bold text-white">${model.description}</td>
-                            <td class="align-middle">${typeBadge}</td>
-                            <td class="align-middle text-muted small font-monospace">${model.label_filename || 'N/A'}</td>
-                            <td class="align-middle text-muted small font-monospace">${createdDate}</td>
-                            <td class="align-middle text-right">
-                                <button class="btn btn-sm btn-outline-danger btn-delete-model" data-uuid="${model.model_uuid}"><i class="bi bi-trash"></i></button>
-                            </td>
-                        </tr>`;
-                });
-                $('#model-list').html(newHtml);
+                    let newHtml = '';
+                    data.models.forEach(model => {
+                        const createdDate = new Date(model.create_time_ms).toLocaleDateString();
+                        const typeBadge = model.model_type === 'uint8'
+                            ? `<span class="badge badge-info font-monospace">INT8_TPU</span>`
+                            : `<span class="badge badge-primary font-monospace">FP32_STD</span>`;
+
+                        newHtml += `
+                            <tr>
+                                <td class="align-middle font-weight-bold text-white">${model.description}</td>
+                                <td class="align-middle">${typeBadge}</td>
+                                <td class="align-middle text-muted small font-monospace">${model.label_filename || 'N/A'}</td>
+                                <td class="align-middle text-muted small font-monospace">${createdDate}</td>
+                                <td class="align-middle text-right">
+                                    <button class="btn btn-sm btn-outline-danger btn-delete-model" data-uuid="${model.model_uuid}"><i class="bi bi-trash"></i></button>
+                                </td>
+                            </tr>`;
+                    });
+                    $('#model-list').html(newHtml);
+                }
             });
         }
 
@@ -1032,7 +1186,6 @@
                 nms_iou_threshold: parseFloat($('#setting-nms-iou-threshold').val()),
                 prototype_temperature: parseFloat($('#setting-prototype-temperature').val()),
 
-                // 新增保存字段
                 max_workers: $('#setting-max-workers').val(),
                 max_cache_size: parseInt($('#setting-max-cache-size').val()),
                 use_autocast: $('#setting-use-autocast').is(':checked'),
@@ -1045,11 +1198,9 @@
                 auto_preprocess: $('#setting-auto-preprocess').is(':checked'),
                 auto_cleanup_frames: $('#setting-auto-cleanup').is(':checked'),
 
-                // 保存模型开关
                 enable_sam_model: $('#setting-enable-sam').is(':checked'),
                 enable_feature_extractor: $('#setting-enable-feature-extractor').is(':checked'),
 
-                // RESTORED Settings Extraction
                 batch_tracking_conf: parseFloat($('#setting-batch-tracking-conf').val()),
                 default_preannotation_conf: parseFloat($('#setting-preannotation-conf').val()),
                 batch_tracking_imgsz: parseInt($('#setting-batch-tracking-imgsz').val()),
@@ -1090,7 +1241,6 @@
             });
         });
 
-        // 单独处理 Box Padding (百分比显示)
         $('#setting-sam-box-padding').on('input', function() {
             $('#sam-box-padding-val').text(Math.round(parseFloat($(this).val()) * 100) + '%');
         });

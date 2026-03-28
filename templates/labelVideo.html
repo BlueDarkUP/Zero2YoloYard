@@ -364,6 +364,65 @@
     .custom-scrollbar::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; transition: background 0.3s; }
     .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--color-primary); }
 
+    /* ==================== SYS_MANUAL POPOVER ==================== */
+    .info-trigger {
+        transition: opacity 0.2s, box-shadow 0.2s, text-shadow 0.2s;
+    }
+    .info-trigger:hover:not(:disabled) {
+        box-shadow: 0 0 15px rgba(0, 240, 255, 0.4);
+    }
+
+    #sys-manual-panel {
+        position: absolute;
+        width: 360px;
+        background: rgba(10, 11, 16, 0.98);
+        border: 1px solid var(--color-primary);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8), 0 0 15px rgba(0, 240, 255, 0.15);
+        z-index: 99999;
+        pointer-events: none;
+        display: none;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+
+    #sys-manual-panel::before {
+        content: "";
+        display: block;
+        height: 4px;
+        background: repeating-linear-gradient(90deg, var(--color-primary) 0, var(--color-primary) 10px, transparent 10px, transparent 15px);
+    }
+
+    .manual-header {
+        background: rgba(255,255,255,0.05);
+        padding: 10px 15px;
+        border-bottom: 1px solid var(--border-color);
+        font-family: 'Orbitron', sans-serif;
+        font-size: 0.85rem;
+        color: var(--color-primary);
+        letter-spacing: 0.05em;
+    }
+
+    .manual-body { padding: 15px; }
+
+    .manual-section { margin-bottom: 12px; }
+    .manual-section:last-child { margin-bottom: 0; }
+    .manual-label {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.65rem;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        margin-bottom: 4px;
+        display: block;
+    }
+    .manual-text {
+        font-family: 'Inter', sans-serif;
+        font-size: 0.8rem;
+        color: #e0e0e0;
+        line-height: 1.5;
+    }
+    .manual-text.highlight-tune { color: var(--color-info); }
+    .manual-text.highlight-when { color: var(--color-warning); }
 </style>
 {% endblock %}
 
@@ -448,11 +507,11 @@
             <div class="mt-3">
                 <div class="custom-control custom-switch mb-2">
                     <input type="checkbox" class="custom-control-input" id="dataset-find-use-color">
-                    <label class="custom-control-label small text-muted text-uppercase font-weight-bold" for="dataset-find-use-color">Strict Color Match</label>
+                    <label class="custom-control-label small text-muted text-uppercase font-weight-bold" for="dataset-find-use-color">Strict Color Match <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="color_match"></i></label>
                 </div>
                 <div class="d-flex justify-content-between">
-                    <button id="find-from-dataset-btn" class="btn btn-xs btn-outline-info w-50 mr-1 text-truncate" title="Query Dataset"><i class="bi bi-search"></i> Find Sim</button>
-                    <button id="rebuild-prototypes-btn" class="btn btn-xs btn-outline-warning w-50 ml-1 text-truncate" title="Rebuild Models"><i class="bi bi-cpu"></i> Rebuild AI</button>
+                    <button id="find-from-dataset-btn" class="btn btn-xs btn-outline-info w-50 mr-1 text-truncate info-trigger" data-key="find_sim"><i class="bi bi-search"></i> Find Sim</button>
+                    <button id="rebuild-prototypes-btn" class="btn btn-xs btn-outline-warning w-50 ml-1 text-truncate info-trigger" data-key="rebuild_ai"><i class="bi bi-cpu"></i> Rebuild AI</button>
                 </div>
             </div>
         </div>
@@ -463,16 +522,16 @@
         </div>
         <div class="row no-gutters mb-3">
             <div class="col-6 pr-1 mb-2">
-                <button id="sam-toggle-btn" class="btn btn-sm btn-outline-primary w-100 text-truncate font-weight-bold" title="Segment Anything"><i class="bi bi-magic"></i> SAM Point</button>
+                <button id="sam-toggle-btn" class="btn btn-sm btn-outline-primary w-100 text-truncate font-weight-bold info-trigger" data-key="sam_point"><i class="bi bi-magic"></i> SAM Point</button>
             </div>
             <div class="col-6 pl-1 mb-2">
-                <button id="lam-toggle-btn" class="btn btn-sm btn-outline-primary w-100 text-truncate font-weight-bold" title="Label Anything"><i class="bi bi-fonts"></i> LAM Text</button>
+                <button id="lam-toggle-btn" class="btn btn-sm btn-outline-primary w-100 text-truncate font-weight-bold info-trigger" data-key="lam_text"><i class="bi bi-fonts"></i> LAM Text</button>
             </div>
             <div class="col-12 mb-2">
-                <button id="interactive-mode-toggle" class="btn btn-sm btn-outline-info w-100 font-weight-bold"><i class="bi bi-crosshair"></i> Smart Select</button>
+                <button id="interactive-mode-toggle" class="btn btn-sm btn-outline-info w-100 font-weight-bold info-trigger" data-key="smart_select"><i class="bi bi-crosshair"></i> Smart Select</button>
             </div>
             <div class="col-12">
-                <button id="sam2-track-btn" class="btn btn-sm btn-outline-success w-100 font-weight-bold"><i class="bi bi-activity"></i> Video Tracking</button>
+                <button id="sam2-track-btn" class="btn btn-sm btn-outline-success w-100 font-weight-bold info-trigger" data-key="video_tracking"><i class="bi bi-activity"></i> Video Tracking</button>
             </div>
         </div>
 
@@ -482,7 +541,7 @@
 
             <div class="custom-control custom-switch mb-3 border-bottom border-secondary pb-2">
                 <input type="checkbox" class="custom-control-input" id="smart-select-use-color">
-                <label class="custom-control-label small text-muted text-uppercase" for="smart-select-use-color">Strict Color Match</label>
+                <label class="custom-control-label small text-muted text-uppercase" for="smart-select-use-color">Strict Color Match <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="color_match"></i></label>
             </div>
 
             <button id="find-similar-btn" class="btn btn-sm btn-primary w-100 mb-2 text-uppercase font-weight-bold" style="display: none;"><i class="bi bi-radar"></i> Scan Frame</button>
@@ -535,6 +594,24 @@
     </div>
 </div>
 
+<div id="sys-manual-panel">
+    <div class="manual-header" id="manual-title">SYSTEM_MANUAL</div>
+    <div class="manual-body">
+        <div class="manual-section">
+            <span class="manual-label text-info"><i class="bi bi-hdd-stack"></i> [ FUNCTION ]</span>
+            <div class="manual-text" id="manual-desc"></div>
+        </div>
+        <div class="manual-section mt-3">
+            <span class="manual-label text-primary"><i class="bi bi-sliders"></i> [ CALIBRATION ]</span>
+            <div class="manual-text highlight-tune" id="manual-tune"></div>
+        </div>
+        <div class="manual-section mt-3">
+            <span class="manual-label text-warning"><i class="bi bi-exclamation-triangle"></i> [ SCENARIO ]</span>
+            <div class="manual-text highlight-when" id="manual-when"></div>
+        </div>
+    </div>
+</div>
+
 <div id="toast-notification"></div>
 
 <template id="bbox-item-template">
@@ -545,7 +622,7 @@
             <small class="bbox-id text-muted ml-2 text-monospace" style="font-size: 0.65em; opacity: 0.7;"></small>
         </div>
         <div class="bbox-controls flex-shrink-0">
-            <button class="btn btn-xs btn-link text-info p-0 interpolate-btn mr-2" title="Interpolate" style="transition: transform 0.2s;"><i class="bi bi-bezier2" style="font-size: 1.1rem;"></i></button>
+            <button class="btn btn-xs btn-link text-info p-0 interpolate-btn mr-2 info-trigger" data-key="interpolate" style="transition: transform 0.2s;"><i class="bi bi-bezier2" style="font-size: 1.1rem;"></i></button>
             <button class="btn btn-xs btn-link text-danger p-0 delete-bbox-btn" title="Delete" style="transition: transform 0.2s;"><i class="bi bi-x-lg" style="font-size: 1.1rem;"></i></button>
         </div>
     </li>
@@ -598,6 +675,58 @@
 {% block scripts %}
 <script>
     $(document).ready(function() {
+        // ==================== SYS_MANUAL_DATABASE ====================
+        const sysManualDb = {
+            'sam_point': { title: 'SAM (POINT_CLICK)', desc: 'Segment Anything Model. Core neural network for zero-shot object segmentation.', tune: 'Left-click on the center of your target object.', when: 'Use when manual bounding boxes are too tedious, or when the object has a highly complex/irregular shape.' },
+            'lam_text': { title: 'LAM (TEXT_PROMPT)', desc: 'Label Anything Model. Open-world detection driven by textual prompts.', tune: 'Click anywhere on the canvas to trigger a scan, then select the matching class from the popup.', when: 'Use when encountering completely new, untrained objects that you want the AI to recognize out-of-the-box.' },
+            'smart_select': { title: 'SMART_SELECT', desc: 'Local feature-space similarity retrieval. Scans the current frame for objects matching your designated target.', tune: 'Draw a box around one target. Adjust the confidence threshold to filter results.', when: 'Extremely useful when a frame contains dozens of identical objects (e.g., a pile of screws, a crowd) and you want to label them all at once.' },
+            'video_tracking': { title: 'VIDEO_TRACKING (SAM2)', desc: 'Temporal propagation engine powered by SAM2. Tracks labeled entities across consecutive frames.', tune: 'Ensure targets are perfectly labeled in the start frame, then click to track forward.', when: 'Use when objects move smoothly across dozens or hundreds of frames to completely automate the labeling process.' },
+            'find_sim': { title: 'QUERY_DATASET (FIND SIM)', desc: 'Global feature-space retrieval. Scans the active frame against the entire dataset\'s prototype library.', tune: 'Select an active class from the registry first. Toggle Strict Color Match if needed.', when: 'Use when the background changes drastically and you want to quickly recover previously labeled objects.' },
+            'rebuild_ai': { title: 'REBUILD_AI_PROTOTYPES', desc: 'Recompiles the global prototype feature vectors for all classes. Computationally expensive.', tune: 'Executes silently in the background.', when: 'Run this if you have deleted/modified many labels and feel that Smart Select or Find Sim has become "dumb" or inaccurate.' },
+            'color_match': { title: 'STRICT_COLOR_MATCH', desc: 'Injects HSV color space metrics into the embedding comparison matrix.', tune: 'Toggle ON to prioritize color. Toggle OFF to prioritize shape/geometry.', when: 'Turn ON when you need to distinguish between two identical shapes with different colors (e.g., a red ball vs. a blue ball).' },
+            'interpolate': { title: 'LINEAR_INTERPOLATION', desc: 'Spatiotemporal mathematical interpolation for bounding boxes between two keyframes.', tune: 'Click on Frame A. Move to Frame B, adjust the box, and click again. The system fills the gap.', when: 'Use when an object moves in a straight, predictable line and you want to save GPU resources by bypassing AI tracking.' }
+        };
+
+        // UI Hover Panel Logic
+        $(document).on('mouseenter', '.info-trigger', function(e) {
+            const key = $(this).data('key');
+            const data = sysManualDb[key];
+            if(!data) return;
+
+            $('#manual-title').text(data.title);
+            $('#manual-desc').text(data.desc);
+            $('#manual-tune').text(data.tune);
+            $('#manual-when').text(data.when);
+
+            const panel = $('#sys-manual-panel');
+
+            // Show panel invisibly first to calculate true height
+            panel.css({ display: 'block', visibility: 'hidden' });
+            const panelWidth = panel.outerWidth();
+            const panelHeight = panel.outerHeight();
+
+            // Anchor directly to the mouse cursor coordinates + 15px gap
+            let leftPos = e.pageX + 15;
+            let topPos = e.pageY + 15;
+
+            // X-axis collision detection (Push it to the left of the cursor if too close to right edge)
+            if (leftPos + panelWidth > $(window).width() - 20) {
+                leftPos = e.pageX - panelWidth - 15;
+            }
+
+            // Y-axis collision detection (Push it above the cursor if too close to bottom)
+            if (topPos + panelHeight > $(window).scrollTop() + $(window).height() - 20) {
+                topPos = e.pageY - panelHeight - 15;
+            }
+
+            // Apply calculated position, set back to hidden for fade animation
+            panel.css({ top: topPos + 'px', left: leftPos + 'px', visibility: 'visible', display: 'none' });
+            panel.stop(true, true).fadeIn(150);
+
+        }).on('mouseleave', '.info-trigger', function() {
+            $('#sys-manual-panel').stop(true, true).fadeOut(150);
+        });
+
         // --- 新增：拦截不可用的 AI 工具 ---
         const isSamEnabled = {{ is_sam_enabled | tojson }};
         const isFeatureExtractorEnabled = {{ is_feature_extractor_enabled | tojson }};
@@ -2163,8 +2292,6 @@
                     resizeCanvas();
                     frameSlider.trigger('input');
 
-                    // 【核心修复：强制渲染初始帧】
-                    // 应对图片加载早于 JS 脚本执行，导致 onload 没触发的竞态问题
                     const initialFrame = parseInt(frameSlider.val());
                     loadBboxesForFrame(initialFrame);
                     smartTriggerPreprocess(initialFrame);
