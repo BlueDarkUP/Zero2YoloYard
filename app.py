@@ -1,3 +1,4 @@
+import psutil
 import flask
 from flask import Response, request, jsonify, render_template, send_from_directory, send_file
 import os
@@ -199,11 +200,84 @@ def generate_mosaic_previews(sample_pool, selected_video_uuid, selected_frame_nu
 
 @app.route('/')
 def index():
+    settings = settings_manager.load_settings()
+    if not settings.get('initial_setup_done', False):
+        return flask.redirect(flask.url_for('setup_wizard'))
+
     return render_template('root.html',
                            limit_data=config.get_limit_data_for_render_template(),
                            tracker_fns=config.TRACKER_FNS,
                            server_boot_id=APP_BOOT_ID)
 
+
+@app.route('/setup')
+def setup_wizard():
+    return render_template('setup.html')
+
+
+@app.route('/api/detect_hardware', methods=['GET'])
+def detect_hardware():
+    """检测本机硬件配置并返回"""
+    cpu_cores = os.cpu_count() or 4
+
+    # 检测内存 (如果没有 psutil 则默认返回 0)
+    ram_gb = 0
+    try:
+        import psutil
+        ram_gb = round(psutil.virtual_memory().total / (1024 ** 3), 1)
+    except ImportError:
+        pass
+
+    # 检测显卡与显存
+    has_cuda = torch.cuda.is_available()
+    gpu_name = "None"
+    vram_gb = 0
+
+    if has_cuda:
+        gpu_name = torch.cuda.get_device_name(0)
+        vram_gb = round(torch.cuda.get_device_properties(0).total_memory / (1024 ** 3), 1)
+
+    # 简单的分级策略 (low, mid, high)
+    tier = "low"
+    if has_cuda:
+        if vram_gb >= 8:
+            tier = "high"
+        elif vram_gb >= 4:
+            tier = "mid"
+
+    return jsonify({
+        "cpu_cores": cpu_cores,
+        "ram_gb": ram_gb,
+        "has_cuda": has_cuda,
+        "gpu_name": gpu_name,
+        "vram_gb": vram_gb,
+        "tier": tier
+    })
+
+
+@app.route('/api/complete_setup', methods=['POST'])
+def complete_setup():
+    """保存向导配置并唤醒 AI 模型加载"""
+    data = request.json
+    settings = settings_manager.load_settings()
+
+    # 覆盖所有传过来的设置
+    for key, value in data.items():
+        settings[key] = value
+
+    settings['initial_setup_done'] = True
+
+    if settings_manager.save_settings(settings):
+        # 更新设备状态
+        settings_manager.update_device()
+
+        # 核心：使用独立线程启动 AI 模型加载，防止前端请求超时
+        logging.info("配置完成，正在后台唤醒 AI 模型引擎...")
+        threading.Thread(target=ai_models.startup_ai_models, name="Delayed-AI-Startup").start()
+
+        return jsonify({"success": True})
+    else:
+        return jsonify({"success": False, "message": "Failed to save settings."}), 500
 
 @app.route('/labelVideo')
 def label_video():
@@ -1614,8 +1688,12 @@ def start_server():
     root_logger.addHandler(console_handler)
 
     # 3. AI 模型初始化
-    logging.info("正在初始化AI模型，请稍候...")
-    ai_models.startup_ai_models()
+    settings = settings_manager.load_settings()
+    if settings.get('initial_setup_done', False):
+        logging.info("正在初始化AI模型，请稍候...")
+        ai_models.startup_ai_models()
+    else:
+        logging.warning("=== 处于初始配置向导模式：已拦截 AI 模型加载，等待用户完成环境配置 ===")
 
     # 注册退出钩子
     atexit.register(ai_models.save_preprocessed_cache_to_disk)

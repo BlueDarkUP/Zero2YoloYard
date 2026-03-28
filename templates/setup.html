@@ -1,0 +1,340 @@
+{% extends "layout.html" %}
+
+{% block head %}
+<style>
+    body { background: #000; overflow-y: auto; }
+    .setup-container {
+        max-width: 1000px;
+        margin: 40px auto;
+        color: var(--text-main);
+    }
+    .hardware-card {
+        background: rgba(0, 240, 255, 0.05);
+        border: 1px solid var(--color-primary);
+        padding: 20px;
+        margin-bottom: 25px;
+        font-family: 'JetBrains Mono', monospace;
+        box-shadow: 0 0 15px rgba(0, 240, 255, 0.1);
+    }
+    .spec-item {
+        border-bottom: 1px dashed rgba(255,255,255,0.1);
+        padding: 8px 0;
+        display: flex;
+        justify-content: space-between;
+    }
+    .spec-value { color: var(--color-primary); font-weight: bold; }
+
+    .config-section {
+        background: rgba(10, 11, 16, 0.8);
+        border: 1px solid var(--border-color);
+        margin-bottom: 20px;
+        border-radius: 4px;
+    }
+    .config-header {
+        padding: 15px 20px;
+        font-family: 'Orbitron', sans-serif;
+        font-weight: bold;
+        letter-spacing: 0.1em;
+        background: rgba(255,255,255,0.02);
+        border-bottom: 1px solid var(--border-color);
+    }
+    .config-body { padding: 20px; }
+
+    .over-limit-warning {
+        color: var(--color-danger);
+        font-size: 0.8rem;
+        font-family: 'JetBrains Mono';
+        margin-top: 5px;
+        display: none;
+        text-shadow: 0 0 5px var(--color-danger);
+        animation: pulse-danger 2s infinite;
+    }
+    @keyframes pulse-danger { 0% { opacity: 0.7; } 50% { opacity: 1; } 100% { opacity: 0.7; } }
+
+    /* 调整滑动条样式以适应深色背景 */
+    input[type=range].custom-range::-webkit-slider-thumb { background: var(--color-primary); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container setup-container fade-in">
+    <div class="text-center mb-5">
+        <h2 class="font-weight-bold text-uppercase" style="font-family: 'Orbitron', sans-serif; letter-spacing: 0.1em; color: var(--color-primary);">ZERO 2 YOLO YARD INITIALIZATION</h2>
+        <p class="text-muted font-monospace small">ENVIRONMENT_DETECTION_AND_FULL_CONFIGURATION_PROTOCOL</p>
+    </div>
+
+    <div class="hardware-card">
+        <h6 class="text-uppercase mb-3"><i class="bi bi-cpu mr-2"></i>System Telemetry & Hardware Diagnostics</h6>
+        <div id="hardware-loading" class="text-center py-3">
+            <span class="spinner-border spinner-border-sm text-primary"></span> GATHERING SYSTEM SPECS...
+        </div>
+        <div id="hardware-info" style="display: none;">
+            <div class="spec-item"><span>COMPUTE_DEVICE:</span> <span id="hw-gpu" class="spec-value">-</span></div>
+            <div class="spec-item"><span>VRAM_CAPACITY:</span> <span id="hw-vram" class="spec-value">-</span></div>
+            <div class="spec-item"><span>SYSTEM_RAM:</span> <span id="hw-ram" class="spec-value">-</span></div>
+            <div class="spec-item"><span>CPU_CORES:</span> <span id="hw-cpu" class="spec-value">-</span></div>
+            <div class="mt-3 pt-3 border-top border-primary d-flex justify-content-between align-items-center">
+                <span>ASSIGNED_TIER:</span>
+                <span id="hw-tier" class="badge badge-primary font-monospace p-2" style="font-size:1.1em;">EVALUATING...</span>
+            </div>
+        </div>
+    </div>
+
+    <form id="full-setup-form">
+        <div class="config-section" style="border-color: var(--color-info);">
+            <div class="config-header text-info"><i class="bi bi-magic mr-2"></i>1. AI ENGINE CONFIGURATION</div>
+            <div class="config-body">
+                <div class="form-row">
+                    <div class="form-group col-md-4">
+                        <label class="font-weight-bold small text-muted">COMPUTATION_NODE</label>
+                        <select id="setup-gpu-device" class="form-control custom-select bg-dark text-white border-secondary">
+                            <option value="auto">AUTO_DETECT</option>
+                            <option value="cpu">CPU_ONLY (SAFE)</option>
+                            <option value="cuda:0">NVIDIA_CUDA_0</option>
+                        </select>
+                    </div>
+                    <div class="form-group col-md-4">
+                        <label class="font-weight-bold small text-muted">SAM 2.1 (SEGMENTATION)</label>
+                        <select id="setup-sam-model" class="form-control custom-select bg-dark text-white border-secondary">
+                            <option value="none" data-level="0">DISABLE SAM (NO VRAM)</option>
+                            <option value="sam2.1_t.pt" data-level="1">SAM 2.1 TINY (LOW VRAM)</option>
+                            <option value="sam2.1_s.pt" data-level="2">SAM 2.1 SMALL (BALANCED)</option>
+                            <option value="sam2.1_b.pt" data-level="3">SAM 2.1 BASE (6GB+ VRAM)</option>
+                            <option value="sam2.1_l.pt" data-level="4">SAM 2.1 LARGE (10GB+ VRAM)</option>
+                        </select>
+                        <div class="over-limit-warning" id="warn-sam"><i class="bi bi-exclamation-triangle-fill"></i> EXCEEDS RECOMMENDED VRAM</div>
+                    </div>
+                    <div class="form-group col-md-4">
+                        <label class="font-weight-bold small text-muted">FEATURE EXTRACTOR</label>
+                        <select id="setup-feature-model" class="form-control custom-select bg-dark text-white border-secondary">
+                            <option value="none" data-level="0">DISABLE EXTRACTOR</option>
+                            <option value="mobilenet_v3_small" data-level="1">MOBILENET_V3_SMALL</option>
+                            <option value="mobilenet_v3_large" data-level="2">MOBILENET_V3_LARGE</option>
+                        </select>
+                        <div class="over-limit-warning" id="warn-feature"><i class="bi bi-exclamation-triangle-fill"></i> MAY CAUSE LAG</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="config-section" style="border-color: var(--color-warning);">
+            <div class="config-header text-warning"><i class="bi bi-cpu mr-2"></i>2. SYSTEM RESOURCE SCHEDULING</div>
+            <div class="config-body">
+                <div class="form-row">
+                    <div class="form-group col-md-4">
+                        <label class="font-weight-bold small text-muted">MAX THREAD WORKERS</label>
+                        <select id="setup-workers" class="form-control custom-select bg-dark text-white border-secondary">
+                            <option value="2" data-level="1">2 THREADS (SAFE)</option>
+                            <option value="4" data-level="2">4 THREADS (STANDARD)</option>
+                            <option value="8" data-level="3">8 THREADS (PERFORMANCE)</option>
+                            <option value="16" data-level="4">16 THREADS (EXTREME)</option>
+                        </select>
+                        <div class="over-limit-warning" id="warn-workers"><i class="bi bi-exclamation-triangle-fill"></i> EXCEEDS CPU CAPABILITY</div>
+                    </div>
+                    <div class="form-group col-md-4">
+                        <label class="d-flex justify-content-between small text-muted font-weight-bold">
+                            <span>MAX_CACHE_SIZE (FRAMES)</span> <span id="val-cache-size" class="text-warning">30</span>
+                        </label>
+                        <input type="range" class="custom-range" id="setup-max-cache-size" min="10" max="100" step="10" value="30">
+                    </div>
+                    <div class="form-group col-md-4">
+                        <label class="font-weight-bold small text-muted">MIXED PRECISION</label>
+                        <div class="custom-control custom-switch mt-2">
+                            <input type="checkbox" class="custom-control-input" id="setup-autocast" checked>
+                            <label class="custom-control-label font-monospace" for="setup-autocast">ENABLE FP16/BF16</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-row mt-2">
+                    <div class="form-group col-md-4">
+                        <label class="font-weight-bold small text-muted">INFERENCE RESOLUTION</label>
+                        <select id="setup-inference-size" class="form-control custom-select bg-dark text-white border-secondary">
+                            <option value="512">512x512 (FAST)</option>
+                            <option value="640" selected>640x640 (STANDARD)</option>
+                            <option value="1024">1024x1024 (HIGH RES)</option>
+                        </select>
+                    </div>
+                    <div class="form-group col-md-4">
+                         <label class="font-weight-bold small text-muted">ZIP COMPRESSION</label>
+                         <select id="setup-zip-compression" class="form-control custom-select bg-dark text-white border-secondary">
+                             <option value="fast">FAST (STORE ONLY)</option>
+                             <option value="standard" selected>STANDARD</option>
+                             <option value="max">MAXIMUM (HIGH CPU)</option>
+                         </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="config-section" style="border-color: var(--color-success);">
+            <div class="config-header text-success"><i class="bi bi-sliders mr-2"></i>3. ALGORITHM & TRACKING PARAMETERS</div>
+            <div class="config-body">
+                <div class="form-row">
+                    <div class="form-group col-md-4">
+                        <label class="d-flex justify-content-between small text-muted font-weight-bold"><span>SAM MASK CONFIDENCE</span> <span id="val-sam-conf" class="text-success">0.70</span></label>
+                        <input type="range" class="custom-range" id="setup-sam-mask-confidence" min="0.1" max="0.9" step="0.05" value="0.70">
+                    </div>
+                    <div class="form-group col-md-4">
+                        <label class="d-flex justify-content-between small text-muted font-weight-bold"><span>NMS IOU THRESHOLD</span> <span id="val-nms-iou" class="text-success">0.70</span></label>
+                        <input type="range" class="custom-range" id="setup-nms-iou-threshold" min="0.1" max="1.0" step="0.05" value="0.70">
+                    </div>
+                    <div class="form-group col-md-4">
+                        <label class="d-flex justify-content-between small text-muted font-weight-bold"><span>PROTOTYPE TEMPERATURE</span> <span id="val-proto-temp" class="text-success">0.07</span></label>
+                        <input type="range" class="custom-range" id="setup-prototype-temperature" min="0.01" max="0.5" step="0.01" value="0.07">
+                    </div>
+                </div>
+                <div class="form-row mt-2">
+                    <div class="form-group col-md-4">
+                        <label class="d-flex justify-content-between small text-muted font-weight-bold"><span>GLOBAL DEFAULT CONFIDENCE</span> <span id="val-global-conf" class="text-success">0.50</span></label>
+                        <input type="range" class="custom-range" id="setup-default-confidence" min="0.1" max="0.95" step="0.05" value="0.50">
+                    </div>
+                    <div class="form-group col-md-4">
+                        <label class="d-flex justify-content-between small text-muted font-weight-bold"><span>TRACKING CONFIDENCE</span> <span id="val-track-conf" class="text-success">0.30</span></label>
+                        <input type="range" class="custom-range" id="setup-batch-tracking-conf" min="0.1" max="0.95" step="0.05" value="0.30">
+                    </div>
+                    <div class="form-group col-md-4">
+                        <label class="font-weight-bold small text-muted">TRACKING IMG SIZE / CHUNK</label>
+                        <div class="input-group input-group-sm">
+                            <input type="number" id="setup-batch-tracking-imgsz" class="form-control bg-dark text-white border-secondary" value="1024" title="Image Size">
+                            <input type="number" id="setup-batch-tracking-chunk-size" class="form-control bg-dark text-white border-secondary" value="10" title="Chunk Size">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="text-right mt-4 mb-5 pb-5">
+            <button type="submit" id="btn-complete-setup" class="btn btn-primary btn-lg font-weight-bold px-5 tracking-wider" style="font-family: 'Orbitron'; box-shadow: 0 0 15px rgba(0,240,255,0.4);">
+                SAVE & BOOT YARD CORE <i class="bi bi-rocket ml-2"></i>
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    // 监听所有范围滑块并更新显示的数值
+    $('input[type="range"]').on('input', function() {
+        const targetId = $(this).attr('id').replace('setup-', 'val-');
+        let val = $(this).val();
+        if ($(this).attr('step').includes('.')) val = parseFloat(val).toFixed(2);
+        $('#' + targetId).text(val);
+    });
+
+    let rec = { sam_level: 1, feature_level: 1, worker_level: 2 };
+
+    // 1. 获取硬件信息并计算推荐配置
+    $.get('/api/detect_hardware', function(hw) {
+        $('#hardware-loading').hide();
+        $('#hardware-info').fadeIn();
+
+        $('#hw-gpu').text(hw.has_cuda ? hw.gpu_name : 'CPU ONLY / NO CUDA');
+        $('#hw-vram').text(hw.has_cuda ? hw.vram_gb + ' GB' : 'N/A');
+        $('#hw-ram').text(hw.ram_gb > 0 ? hw.ram_gb + ' GB' : 'UNKNOWN');
+        $('#hw-cpu').text(hw.cpu_cores + ' CORES');
+
+        let tierBadgeClass = 'badge-secondary';
+        let tierLabel = 'LOW-END (RESTRICTED)';
+
+        // 智能推荐算法
+        if (!hw.has_cuda || (hw.vram_gb > 0 && hw.vram_gb < 4)) {
+            rec.sam_level = 0; rec.feature_level = 0; rec.worker_level = 1;
+            tierBadgeClass = 'badge-danger';
+        } else if (hw.tier === 'mid') {
+            rec.sam_level = 2; rec.feature_level = 2; rec.worker_level = 2;
+            tierBadgeClass = 'badge-warning'; tierLabel = 'MID-TIER (BALANCED)';
+        } else if (hw.tier === 'high') {
+            rec.sam_level = 4; rec.feature_level = 2; rec.worker_level = hw.cpu_cores >= 8 ? 3 : 2;
+            tierBadgeClass = 'badge-success'; tierLabel = 'HIGH-END (UNRESTRICTED)';
+        }
+
+        $('#hw-tier').removeClass('badge-primary').addClass(tierBadgeClass).text(tierLabel);
+
+        // 应用推荐配置
+        setSelectByLevel('#setup-sam-model', rec.sam_level);
+        setSelectByLevel('#setup-feature-model', rec.feature_level);
+        setSelectByLevel('#setup-workers', rec.worker_level);
+        $('#setup-autocast').prop('checked', hw.has_cuda);
+    });
+
+    function setSelectByLevel(selector, targetLevel) {
+        $(selector + ` option`).each(function() {
+            if (parseInt($(this).data('level')) === targetLevel) $(this).prop('selected', true);
+        });
+    }
+
+    // 2. 警告触发器
+    $('#setup-sam-model, #setup-feature-model, #setup-workers').on('change', function() {
+        const id = $(this).attr('id');
+        const level = parseInt($(this).find(':selected').data('level'));
+        let target = ''; let rec_level = 0;
+
+        if (id.includes('sam')) { target = '#warn-sam'; rec_level = rec.sam_level; }
+        else if (id.includes('feature')) { target = '#warn-feature'; rec_level = rec.feature_level; }
+        else if (id.includes('workers')) { target = '#warn-workers'; rec_level = rec.worker_level; }
+
+        if (level > rec_level) $(target).slideDown();
+        else $(target).slideUp();
+    });
+
+    // 3. 提交全量配置
+    $('#full-setup-form').on('submit', function(e) {
+        e.preventDefault();
+        const $btn = $('#btn-complete-setup');
+        $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> BOOTING CORE...');
+
+        const samSelection = $('#setup-sam-model').val();
+        const featureSelection = $('#setup-feature-model').val();
+
+        // 收集表单中所有的配置项
+        const configPayload = {
+            gpu_device: $('#setup-gpu-device').val(),
+
+            enable_sam_model: samSelection !== "none",
+            sam_model_checkpoint: samSelection === "none" ? "sam2.1_t.pt" : samSelection,
+
+            enable_feature_extractor: featureSelection !== "none",
+            feature_extractor_model_name: featureSelection === "none" ? "mobilenet_v3_small" : featureSelection,
+
+            max_workers: parseInt($('#setup-workers').val()),
+            max_cache_size: parseInt($('#setup-max-cache-size').val()),
+            use_autocast: $('#setup-autocast').is(':checked'),
+
+            inference_size: parseInt($('#setup-inference-size').val()),
+            zip_compression: $('#setup-zip-compression').val(),
+
+            sam_mask_confidence: parseFloat($('#setup-sam-mask-confidence').val()),
+            nms_iou_threshold: parseFloat($('#setup-nms-iou-threshold').val()),
+            prototype_temperature: parseFloat($('#setup-prototype-temperature').val()),
+            default_confidence: parseFloat($('#setup-default-confidence').val()),
+
+            batch_tracking_conf: parseFloat($('#setup-batch-tracking-conf').val()),
+            batch_tracking_imgsz: parseInt($('#setup-batch-tracking-imgsz').val()),
+            batch_tracking_chunk_size: parseInt($('#setup-batch-tracking-chunk-size').val())
+        };
+
+        $.ajax({
+            url: '/api/complete_setup',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(configPayload),
+            success: function(res) {
+                if (res.success) {
+                    // 等待半秒让后台线程启动模型加载，然后跳转主界面
+                    setTimeout(() => { window.location.href = '/'; }, 500);
+                } else {
+                    alert('Error applying configuration.');
+                    $btn.prop('disabled', false).html('SAVE & BOOT YARD CORE <i class="bi bi-rocket ml-2"></i>');
+                }
+            },
+            error: function() {
+                alert('Server connection failed.');
+                $btn.prop('disabled', false).html('SAVE & BOOT YARD CORE <i class="bi bi-rocket ml-2"></i>');
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

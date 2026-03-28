@@ -6,6 +6,7 @@ import torch
 
 SETTINGS_FILE = os.path.join(config.BASE_DIR, 'settings.json')
 DEFAULT_SETTINGS = {
+    "initial_setup_done": False,
     "sam_model_config": "configs/sam2.1/sam2.1_hiera_t.yaml",
     "sam_model_checkpoint": "sam2.1_t.pt",
     "feature_extractor_model_name": "mobilenet_v3_large",
