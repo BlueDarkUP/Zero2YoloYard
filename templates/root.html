@@ -210,6 +210,134 @@
                             </div>
                         </div>
 
+                        <div class="card settings-section mb-4" style="border-color: var(--color-info);">
+                            <div class="card-header text-info">
+                                <i class="bi bi-toggles2 mr-2"></i> MODEL & FEATURE TOGGLES
+                            </div>
+                            <div class="card-body">
+                                <div class="alert alert-info rounded-0 small font-monospace">
+                                    <i class="bi bi-info-circle mr-1"></i> DISABLING MODELS ON LOW-VRAM DEVICES SIGNIFICANTLY REDUCES RESOURCE USAGE, BUT RELATED FEATURES WILL BE UNAVAILABLE.
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group col-md-6">
+                                        <label class="small text-muted font-weight-bold">SEGMENT ANYTHING MODEL (SAM)</label>
+                                        <div class="custom-control custom-switch mt-2">
+                                            <input type="checkbox" class="custom-control-input" id="setting-enable-sam">
+                                            <label class="custom-control-label font-monospace" for="setting-enable-sam">ENABLE SAM FEATURES</label>
+                                        </div>
+                                        <small class="text-muted font-monospace mt-1 d-block">> INCLUDES: SAM Point, LAM Text, Smart Select, Video Tracking</small>
+                                    </div>
+                                    <div class="form-group col-md-6">
+                                        <label class="small text-muted font-weight-bold">FEATURE EXTRACTOR (MobileNet)</label>
+                                        <div class="custom-control custom-switch mt-2">
+                                            <input type="checkbox" class="custom-control-input" id="setting-enable-feature-extractor">
+                                            <label class="custom-control-label font-monospace" for="setting-enable-feature-extractor">ENABLE DEEP FEATURES</label>
+                                        </div>
+                                        <small class="text-muted font-monospace mt-1 d-block">> INCLUDES: Smart Select, LAM, Find Similar, AI Consistency Check</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card settings-section mb-4" style="border-color: var(--color-warning);">
+                            <div class="card-header text-warning">
+                                <i class="bi bi-cpu mr-2"></i> SYSTEM_RESOURCES
+                            </div>
+                            <div class="card-body">
+                                <div class="form-row">
+                                    <div class="form-group col-md-4">
+                                        <label class="small text-muted font-weight-bold">MAX_WORKERS</label>
+                                        <select id="setting-max-workers" class="form-control custom-select">
+                                            <option value="auto">AUTO_DETECT</option>
+                                            <option value="4">4 THREADS (LOW_POWER)</option>
+                                            <option value="8">8 THREADS (STANDARD)</option>
+                                            <option value="16">16 THREADS (HIGH_PERFORMANCE)</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group col-md-4">
+                                        <label class="d-flex justify-content-between small text-muted font-weight-bold">
+                                            <span>MAX_CACHE_SIZE (FRAMES)</span> <span id="max-cache-size-val" class="text-warning font-monospace">30</span>
+                                        </label>
+                                        <input type="range" class="custom-range" id="setting-max-cache-size" min="10" max="100" step="10">
+                                        <small class="text-muted font-monospace mt-1 d-block">> LOWER FOR LOW VRAM</small>
+                                    </div>
+                                    <div class="form-group col-md-4">
+                                        <label class="small text-muted font-weight-bold">MIXED_PRECISION</label>
+                                        <div class="custom-control custom-switch mt-2">
+                                            <input type="checkbox" class="custom-control-input" id="setting-use-autocast">
+                                            <label class="custom-control-label font-monospace" for="setting-use-autocast">ENABLE_FP16/BF16</label>
+                                        </div>
+                                        <small class="text-muted font-monospace mt-1 d-block">> DISABLE ON OLDER GPUS</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card settings-section mb-4">
+                            <div class="card-header text-primary">
+                                <i class="bi bi-magic mr-2"></i> AI_INFERENCE_TUNING
+                            </div>
+                            <div class="card-body">
+                                <div class="form-row">
+                                    <div class="form-group col-md-4">
+                                        <label class="small text-muted font-weight-bold">INFERENCE_RESOLUTION</label>
+                                        <select id="setting-inference-size" class="form-control custom-select">
+                                            <option value="512">512x512 (FAST/LOW_VRAM)</option>
+                                            <option value="640">640x640 (STANDARD)</option>
+                                            <option value="1024">1024x1024 (HIGH_RES/HIGH_VRAM)</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group col-md-4">
+                                        <label class="d-flex justify-content-between small text-muted font-weight-bold">
+                                            <span>GLOBAL_DEFAULT_CONFIDENCE</span> <span id="default-confidence-val" class="text-primary font-monospace">0.50</span>
+                                        </label>
+                                        <input type="range" class="custom-range" id="setting-default-confidence" min="0.1" max="0.95" step="0.05">
+                                    </div>
+                                    <div class="form-group col-md-4">
+                                        <label class="d-flex justify-content-between small text-muted font-weight-bold">
+                                            <span>BBOX_PADDING</span> <span id="sam-box-padding-val" class="text-primary font-monospace">0%</span>
+                                        </label>
+                                        <input type="range" class="custom-range" id="setting-sam-box-padding" min="0.0" max="0.2" step="0.02">
+                                        <small class="text-muted font-monospace mt-1 d-block">> PREVENT EDGE CLIPPING</small>
+                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card settings-section mb-4">
+                            <div class="card-header text-success">
+                                <i class="bi bi-device-hdd mr-2"></i> STORAGE_&_CLEANUP
+                            </div>
+                            <div class="card-body">
+                                <div class="form-row">
+                                    <div class="form-group col-md-4">
+                                        <label class="small text-muted font-weight-bold">DATASET_COMPRESSION (ZIP)</label>
+                                        <select id="setting-zip-compression" class="form-control custom-select">
+                                            <option value="fast">FAST (STORE_ONLY)</option>
+                                            <option value="standard">STANDARD</option>
+                                            <option value="max">MAXIMUM (HIGH_CPU)</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group col-md-4">
+                                        <label class="small text-muted font-weight-bold">AUTO_PREPROCESS</label>
+                                        <div class="custom-control custom-switch mt-2">
+                                            <input type="checkbox" class="custom-control-input" id="setting-auto-preprocess">
+                                            <label class="custom-control-label font-monospace" for="setting-auto-preprocess">BACKGROUND_SCAN</label>
+                                        </div>
+                                        <small class="text-muted font-monospace mt-1 d-block">> DISABLE FOR LOW_CPU</small>
+                                    </div>
+                                    <div class="form-group col-md-4">
+                                        <label class="small text-muted font-weight-bold text-danger">ORPHAN_FRAME_CLEANUP</label>
+                                        <div class="custom-control custom-switch mt-2">
+                                            <input type="checkbox" class="custom-control-input" id="setting-auto-cleanup">
+                                            <label class="custom-control-label font-monospace text-danger" for="setting-auto-cleanup">DELETE_UNLABELED_ON_EXPORT</label>
+                                        </div>
+                                        <small class="text-danger font-monospace mt-1 d-block">> WARNING: DELETES UNLABELED SOURCE FRAMES</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="card settings-section mb-4">
                             <div class="card-header text-primary">
                                 <i class="bi bi-sliders mr-2"></i> ALGORITHM_PARAMETERS
@@ -218,19 +346,19 @@
                                 <div class="form-row">
                                     <div class="form-group col-md-4">
                                         <label class="d-flex justify-content-between small text-muted font-weight-bold">
-                                            <span>MASK_CONFIDENCE</span> <span id="sam-mask-conf-val" class="text-primary font-monospace">0.35</span>
+                                            <span>MASK_CONFIDENCE</span> <span id="sam-mask-confidence-val" class="text-primary font-monospace">0.35</span>
                                         </label>
                                         <input type="range" class="custom-range" id="setting-sam-mask-confidence" min="0.1" max="0.9" step="0.05">
                                     </div>
                                     <div class="form-group col-md-4">
                                         <label class="d-flex justify-content-between small text-muted font-weight-bold">
-                                            <span>NMS_IOU_THRESH</span> <span id="nms-iou-val" class="text-primary font-monospace">0.70</span>
+                                            <span>NMS_IOU_THRESH</span> <span id="nms-iou-threshold-val" class="text-primary font-monospace">0.70</span>
                                         </label>
                                         <input type="range" class="custom-range" id="setting-nms-iou-threshold" min="0.1" max="1.0" step="0.05">
                                     </div>
                                     <div class="form-group col-md-4">
                                         <label class="d-flex justify-content-between small text-muted font-weight-bold">
-                                            <span>PROTO_TEMP</span> <span id="prototype-temp-val" class="text-primary font-monospace">0.07</span>
+                                            <span>PROTO_TEMP</span> <span id="prototype-temperature-val" class="text-primary font-monospace">0.07</span>
                                         </label>
                                         <input type="range" class="custom-range" id="setting-prototype-temperature" min="0.01" max="0.5" step="0.01">
                                     </div>
@@ -626,7 +754,7 @@
                 });
 
                 data.ready_videos_for_dataset.forEach(video => {
-                    selectHtml += `<option value="${video.video_uuid}">${video.description} [FRAMES: ${video.labeled_frame_count}]</option>`;
+                    selectHtml += `<option value="${video.video_uuid}">${video.description}[FRAMES: ${video.labeled_frame_count}]</option>`;
                 });
 
                 $('#video-list').html(newHtml);
@@ -710,12 +838,34 @@
                     $('#setting-sam-model').val(s.sam_model_checkpoint);
                     $('#setting-feature-extractor-model').val(s.feature_extractor_model_name);
 
+                    // --- 读取新增配置开始 ---
+                    $('#setting-max-workers').val(s.max_workers || '8');
+                    $('#setting-max-cache-size').val(s.max_cache_size || 30).trigger('input');
+                    $('#setting-use-autocast').prop('checked', s.use_autocast !== false);
+
+                    $('#setting-inference-size').val(s.inference_size || 512);
+                    $('#setting-default-confidence').val(s.default_confidence || 0.5).trigger('input');
+                    $('#setting-sam-box-padding').val(s.sam_box_padding || 0.0).trigger('input');
+
+                    $('#setting-zip-compression').val(s.zip_compression || 'standard');
+                    $('#setting-auto-preprocess').prop('checked', s.auto_preprocess !== false);
+                    $('#setting-auto-cleanup').prop('checked', s.auto_cleanup_frames === true);
+
+                    // 模型与功能开关
+                    $('#setting-enable-sam').prop('checked', s.enable_sam_model !== false);
+                    $('#setting-enable-feature-extractor').prop('checked', s.enable_feature_extractor !== false);
+
+                    // 如果需要在创建数据集页面体现默认比例
+                    $('#eval-percent').val(s.default_eval_percent || 20.0);
+                    $('#test-percent').val(s.default_test_percent || 10.0);
+                    // --- 读取新增配置结束 ---
+
                     // 2. Algorithm
                     $('#setting-sam-mask-confidence').val(s.sam_mask_confidence).trigger('input');
                     $('#setting-nms-iou-threshold').val(s.nms_iou_threshold).trigger('input');
                     $('#setting-prototype-temperature').val(s.prototype_temperature).trigger('input');
 
-                    // 3. Batch & Tracking (RESTORED)
+                    // 3. Batch & Tracking
                     $('#setting-batch-tracking-conf').val(s.batch_tracking_conf).trigger('input');
                     $('#setting-preannotation-conf').val(s.default_preannotation_conf).trigger('input');
                     $('#setting-batch-tracking-imgsz').val(s.batch_tracking_imgsz);
@@ -882,6 +1032,23 @@
                 nms_iou_threshold: parseFloat($('#setting-nms-iou-threshold').val()),
                 prototype_temperature: parseFloat($('#setting-prototype-temperature').val()),
 
+                // 新增保存字段
+                max_workers: $('#setting-max-workers').val(),
+                max_cache_size: parseInt($('#setting-max-cache-size').val()),
+                use_autocast: $('#setting-use-autocast').is(':checked'),
+
+                inference_size: parseInt($('#setting-inference-size').val()),
+                default_confidence: parseFloat($('#setting-default-confidence').val()),
+                sam_box_padding: parseFloat($('#setting-sam-box-padding').val()),
+
+                zip_compression: $('#setting-zip-compression').val(),
+                auto_preprocess: $('#setting-auto-preprocess').is(':checked'),
+                auto_cleanup_frames: $('#setting-auto-cleanup').is(':checked'),
+
+                // 保存模型开关
+                enable_sam_model: $('#setting-enable-sam').is(':checked'),
+                enable_feature_extractor: $('#setting-enable-feature-extractor').is(':checked'),
+
                 // RESTORED Settings Extraction
                 batch_tracking_conf: parseFloat($('#setting-batch-tracking-conf').val()),
                 default_preannotation_conf: parseFloat($('#setting-preannotation-conf').val()),
@@ -909,11 +1076,23 @@
             });
         });
 
-        // Add range listeners for ALL sliders
-        ['sam-mask-confidence', 'nms-iou-threshold', 'prototype-temperature', 'batch-tracking-conf', 'preannotation-conf'].forEach(id => {
+        // 绑定普通浮点滑动条
+        ['sam-mask-confidence', 'nms-iou-threshold', 'prototype-temperature', 'batch-tracking-conf', 'preannotation-conf', 'default-confidence'].forEach(id => {
             $(`#setting-${id}`).on('input', function() {
-                $(this).closest('.form-group').find('.text-primary').text(parseFloat($(this).val()).toFixed(2));
+                $(`#${id}-val`).text(parseFloat($(this).val()).toFixed(2));
             });
+        });
+
+        // 绑定整数滑动条
+        ['max-cache-size'].forEach(id => {
+            $(`#setting-${id}`).on('input', function() {
+                $(`#${id}-val`).text(parseInt($(this).val()));
+            });
+        });
+
+        // 单独处理 Box Padding (百分比显示)
+        $('#setting-sam-box-padding').on('input', function() {
+            $('#sam-box-padding-val').text(Math.round(parseFloat($(this).val()) * 100) + '%');
         });
 
         $('#clear-cache-btn').on('click', function() {

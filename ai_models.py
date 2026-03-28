@@ -44,17 +44,21 @@ except ImportError:
 
 class LRUCache(OrderedDict):
     """
-    定长最近最少使用缓存。
-    当缓存超过 maxsize 时，自动剔除最旧的数据，并清理显存。
+    动态大小最近最少使用缓存。
+    当缓存超过 settings 中的 max_cache_size 时，自动剔除最旧的数据，并清理显存。
     """
 
-    def __init__(self, maxsize=30, *args, **kwds):
-        self.maxsize = maxsize
+    def __init__(self, *args, **kwds):
         super().__init__(*args, **kwds)
 
     def __setitem__(self, key, value):
         super().__setitem__(key, value)
-        if len(self) > self.maxsize:
+
+        # 动态获取最大缓存大小，默认 30 帧
+        settings = settings_manager.load_settings()
+        maxsize = int(settings.get('max_cache_size', 30))
+
+        while len(self) > maxsize:
             oldest = next(iter(self))
             del self[oldest]
             # 触发显存清理
@@ -63,8 +67,8 @@ class LRUCache(OrderedDict):
 
 
 models = {}
-# 使用 LRU Cache 替代普通字典，限制最大缓存帧数为 30，防止显存爆炸
-PREPROCESSED_DATA_CACHE = LRUCache(maxsize=30)
+# 使用 LRU Cache 替代普通字典，防止显存爆炸
+PREPROCESSED_DATA_CACHE = LRUCache()
 
 # New structure: {'class_name': {'semantic': Tensor, 'color': np.array}}
 PROTOTYPE_CACHE = {}
@@ -122,7 +126,7 @@ def get_features_for_single_bbox(pil_image, target_rects):
 
         boxes_for_crop = torch.from_numpy(target_rects_np).to(DEVICE)
 
-        # 构建 ROI Align 输入格式: [batch_index, x1, y1, x2, y2]
+        # 构建 ROI Align 输入格式:[batch_index, x1, y1, x2, y2]
         box_indices = torch.zeros(boxes_for_crop.size(0), 1, device=DEVICE)
         boxes_for_roi = torch.cat([box_indices, boxes_for_crop], dim=1)
 
@@ -140,8 +144,9 @@ def get_features_for_single_bbox(pil_image, target_rects):
         IMAGENET_STD = torch.tensor([0.229, 0.224, 0.225], device=DEVICE).view(1, 3, 1, 1)
         batch_tensor = (batch_of_crops - IMAGENET_MEAN) / IMAGENET_STD
 
-        # 混合精度推理
-        with torch.amp.autocast(device_type=DEVICE.type, enabled=(DEVICE.type == 'cuda')):
+        # 混合精度推理 (受设置控制)
+        use_autocast = settings_manager.load_settings().get('use_autocast', True)
+        with torch.amp.autocast(device_type=DEVICE.type, enabled=(DEVICE.type == 'cuda' and use_autocast)):
             features_map = pytorch_model.features(batch_tensor)
             pooled_features = pytorch_model.avgpool(features_map)
             final_features = torch.flatten(pooled_features, 1)
@@ -239,7 +244,7 @@ def load_preprocessed_cache_from_disk():
     """
     global PREPROCESSED_DATA_CACHE
     # 重新初始化 LRU Cache 确保清空
-    PREPROCESSED_DATA_CACHE = LRUCache(maxsize=30)
+    PREPROCESSED_DATA_CACHE = LRUCache()
 
     if os.path.exists(config.PREPROCESSED_CACHE_FILE):
         try:
@@ -259,34 +264,51 @@ def load_preprocessed_cache_from_disk():
         except Exception as e:
             logging.error(f"加载预处理缓存文件失败: {e}")
             # 出错时重置
-            PREPROCESSED_DATA_CACHE = LRUCache(maxsize=30)
+            PREPROCESSED_DATA_CACHE = LRUCache()
     else:
         logging.info("未找到预处理缓存文件。")
 
 
 def startup_ai_models():
     """
-    初始化 AI 模型。
+    初始化 AI 模型，会根据系统设置选择性地加载。
     """
     load_prototypes_from_disk()
     load_preprocessed_cache_from_disk()
 
     global _mobilenet_pytorch_cache
     DEVICE = settings_manager.get_device()
+    settings = settings_manager.load_settings()  # 获取最新设置
 
-    # 1. 检查 SAM
-    if sam_tasks:
-        logging.info("正在初始化 SAM2 环境...")
-        try:
-            sam_tasks.get_sam_model()  # 触发一次 check
-        except Exception as e:
-            logging.error(f"SAM2 初始化检查失败: {e}")
+    # 1. 检查并初始化 SAM 模型（如果用户已启用）
+    if settings.get('enable_sam_model', True):
+        if sam_tasks:
+            logging.info("正在初始化 SAM2 环境 (根据设置已启用)...")
+            try:
+                # 触发一次检查，这可能会预加载模型
+                sam_tasks.get_sam_model()
+            except Exception as e:
+                logging.error(f"SAM2 初始化检查失败: {e}")
+        else:
+            logging.warning("SAM 库未安装，即使已在设置中启用，相关功能也无法使用。")
+    else:
+        logging.warning("SAM 模型已在系统设置中被禁用。将跳过SAM模型加载以节省资源。")
 
-    # 2. 加载 MobileNet 特征提取器
+    # 2. 检查并加载 MobileNet 特征提取器（如果用户已启用）
+    if not settings.get('enable_feature_extractor', True):
+        logging.warning("特征提取器已在系统设置中被禁用。将跳过模型加载以节省资源。")
+        # 确保如果之前加载过模型，现在也被彻底清理掉
+        if 'feature_extractor_pytorch' in models:
+            del models['feature_extractor_pytorch']
+        _mobilenet_pytorch_cache = {"model": None, "name": None}
+        # 如果特征提取器被禁用，直接结束函数，不再继续加载
+        return
+
+    # 只有在特征提取器启用时，才执行以下加载逻辑
     try:
-        settings = settings_manager.load_settings()
         target_model_name = settings.get("feature_extractor_model_name", "mobilenet_v3_large")
 
+        # 检查缓存，如果模型已存在且配置匹配，则跳过
         if (_mobilenet_pytorch_cache.get("model") is not None and
                 _mobilenet_pytorch_cache.get("name") == target_model_name and
                 next(_mobilenet_pytorch_cache["model"].parameters()).device == DEVICE):
@@ -294,28 +316,29 @@ def startup_ai_models():
             logging.info(f"已从缓存加载 PyTorch 特征提取器 '{target_model_name}'。")
             return
 
-        logging.info(f"正在加载 PyTorch 特征提取器 '{target_model_name}' 到设备 '{DEVICE}'...")
+        logging.info(f"正在加载 PyTorch 特征提取器 '{target_model_name}'到设备'{DEVICE}' (根据设置已启用)...")
 
         if target_model_name == "mobilenet_v3_small":
             model = torchvision.models.mobilenet_v3_small(weights=MobileNet_V3_Small_Weights.IMAGENET1K_V1)
         else:
             model = torchvision.models.mobilenet_v3_large(weights=MobileNet_V3_Large_Weights.IMAGENET1K_V1)
 
-        # 移除分类头，只保留特征提取
+        # 移除分类头，我们只需要特征向量
         model.classifier = torch.nn.Identity()
 
         model.eval()
         model.to(DEVICE)
 
+        # 更新缓存
         _mobilenet_pytorch_cache["model"] = model
         _mobilenet_pytorch_cache["name"] = target_model_name
-
         models['feature_extractor_pytorch'] = model
 
         logging.info(f"PyTorch 特征提取器 '{target_model_name}' 加载成功。")
 
     except Exception as e:
         logging.error(f"加载 PyTorch 特征提取器失败: {e}", exc_info=True)
+        # 加载失败时，清空所有相关引用
         if 'feature_extractor_pytorch' in models:
             del models['feature_extractor_pytorch']
         _mobilenet_pytorch_cache = {"model": None, "name": None}
@@ -380,7 +403,9 @@ def get_features_for_all_masks(video_uuid, frame_number):
                 "all_features": data_cpu["all_features"].to(DEVICE)
             }
 
-        with torch.no_grad(), torch.amp.autocast(device_type=DEVICE.type, enabled=(DEVICE.type == 'cuda')):
+        use_autocast = settings_manager.load_settings().get('use_autocast', True)
+        with torch.no_grad(), torch.amp.autocast(device_type=DEVICE.type,
+                                                 enabled=(DEVICE.type == 'cuda' and use_autocast)):
             logging.info(f"正在为 {cache_key} 生成掩码特征 (SAM2 + MobileNet)...")
 
             frame_path = file_storage.get_frame_path(video_uuid, frame_number)
@@ -545,7 +570,8 @@ def predict_from_one_shot(video_uuid, frame_number, positive_prompt_box, use_col
         target_feature = target_feature_tensor[0].unsqueeze(0)
         DEVICE = settings_manager.get_device()
 
-        with torch.no_grad(), autocast(device_type=DEVICE.type, enabled=(DEVICE.type == 'cuda')):
+        use_autocast = settings_manager.load_settings().get('use_autocast', True)
+        with torch.no_grad(), autocast(device_type=DEVICE.type, enabled=(DEVICE.type == 'cuda' and use_autocast)):
             sim_scores = F.cosine_similarity(target_feature, all_features, dim=1)
 
         # 2. Color Similarity (Optional)
@@ -600,11 +626,12 @@ def predict_from_one_shot(video_uuid, frame_number, positive_prompt_box, use_col
 def _calculate_similarity_scores(all_embeddings, positive_prototypes_dict, negative_prototypes=None):
     settings = settings_manager.load_settings()
     score_temperature = settings.get('prototype_temperature', 0.07)
+    use_autocast = settings.get('use_autocast', True)
     DEVICE = settings_manager.get_device()
 
     positive_semantic = positive_prototypes_dict['semantic']
 
-    with torch.no_grad(), autocast(device_type=DEVICE.type, enabled=(DEVICE.type == 'cuda')):
+    with torch.no_grad(), autocast(device_type=DEVICE.type, enabled=(DEVICE.type == 'cuda' and use_autocast)):
         sim_matrix = F.cosine_similarity(all_embeddings.unsqueeze(1), positive_semantic.unsqueeze(0), dim=2)
         positive_scores_sim, _ = torch.max(sim_matrix, dim=1)
 
@@ -849,8 +876,9 @@ def lam_predict(video_uuid, frame_number, point_coords):
 
         scores = []
         DEVICE = settings_manager.get_device()
+        use_autocast = settings_manager.load_settings().get('use_autocast', True)
 
-        with torch.no_grad(), autocast(device_type=DEVICE.type, enabled=(DEVICE.type == 'cuda')):
+        with torch.no_grad(), autocast(device_type=DEVICE.type, enabled=(DEVICE.type == 'cuda' and use_autocast)):
             for class_name, prototype_dict in prototype_library.items():
                 semantic_proto = prototype_dict['semantic']
                 sim_matrix = F.cosine_similarity(feature_vector.unsqueeze(1), semantic_proto.unsqueeze(0), dim=2)

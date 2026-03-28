@@ -26,12 +26,6 @@ import file_storage
 from bbox_writer import convert_text_to_rects_and_labels
 import settings_manager
 
-# ==============================================================================
-# 配置复刻
-# ==============================================================================
-INFERENCE_SIZE = 512  # 建议提高到 512 以获得更好体验
-CHUNK_SIZE = 200
-
 # 全局缓存
 _sam_cache = {
     "video_predictor": None,
@@ -44,6 +38,15 @@ _sam_cache = {
 
 
 def _load_sam2_models(mode="video"):
+    # --- 新增 ---
+    # 在最开始就检查设置，如果禁用，直接返回None
+    settings = settings_manager.load_settings()
+    if not settings.get('enable_sam_model', True):
+        # 记录一次日志，方便调试
+        logging.warning("[SAM2] SAM model is disabled in settings. All SAM-related features are unavailable.")
+        return None
+    # --- 结束 ---
+
     if not HAS_SAM2: return None
 
     settings = settings_manager.load_settings()
@@ -84,7 +87,9 @@ def _load_sam2_models(mode="video"):
         return None
 
     try:
-        inference_dtype = torch.bfloat16 if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else torch.float32
+        settings = settings_manager.load_settings()
+        use_autocast = settings.get('use_autocast', True)
+        inference_dtype = torch.bfloat16 if torch.cuda.is_available() and torch.cuda.is_bf16_supported() and use_autocast else torch.float32
 
         if mode == "video" and _sam_cache["video_predictor"] is None:
             logging.info(f"[SAM2] Building Video Predictor ({inference_dtype})...")
@@ -122,6 +127,21 @@ def _mask_to_bbox(mask):
     if not np.any(rows) or not np.any(cols): return None
     y_min, y_max = np.where(rows)[0][[0, -1]]
     x_min, x_max = np.where(cols)[0][[0, -1]]
+
+    # 新增：从设置中读取 padding 系数并应用
+    settings = settings_manager.load_settings()
+    padding = float(settings.get('sam_box_padding', 0.0))
+    if padding > 0:
+        w = x_max - x_min
+        h = y_max - y_min
+        # 向外扩展
+        x_min_pad = max(0, x_min - w * padding)
+        y_min_pad = max(0, y_min - h * padding)
+        x_max_pad = x_max + w * padding
+        y_max_pad = y_max + h * padding
+        # 将扩展后的值赋回
+        x_min, y_min, x_max, y_max = x_min_pad, y_min_pad, x_max_pad, y_max_pad
+
     return [int(x_min), int(y_min), int(x_max) + 1, int(y_max) + 1]
 
 
@@ -172,6 +192,14 @@ def track_video_ultralytics(video_uuid, start_frame, end_frame, init_bboxes_text
     if predictor is None:
         raise RuntimeError("SAM2 Video Predictor init failed.")
 
+    # 从设置动态加载参数
+    settings = settings_manager.load_settings()
+    inference_size = int(settings.get('inference_size', 512))
+    chunk_size = int(settings.get('batch_tracking_chunk_size', 200))
+    use_autocast = settings.get('use_autocast', True)
+    inference_dtype = torch.bfloat16 if (
+                torch.cuda.is_available() and torch.cuda.is_bf16_supported() and use_autocast) else torch.float32
+
     init_rects, init_labels, init_ids = convert_text_to_rects_and_labels(init_bboxes_text)
 
     active_objects = OrderedDict()
@@ -187,8 +215,6 @@ def track_video_ultralytics(video_uuid, start_frame, end_frame, init_bboxes_text
     session['total'] = (end_frame - start_frame) + 1
     session['progress'] = 0
 
-    inference_dtype = torch.bfloat16 if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else torch.float32
-
     current_start = start_frame
     base_temp_dir = os.path.join(config.STORAGE_DIR, "temp_sam2", str(uuid.uuid4()))
 
@@ -198,14 +224,14 @@ def track_video_ultralytics(video_uuid, start_frame, end_frame, init_bboxes_text
             if session.get('stop_requested', False):
                 break
 
-            chunk_end = min(current_start + CHUNK_SIZE - 1, end_frame)
+            chunk_end = min(current_start + chunk_size - 1, end_frame)
             logging.info(f"[SAM2 Chunk] Processing frames {current_start} to {chunk_end}...")
 
             chunk_dir = os.path.join(base_temp_dir, f"chunk_{current_start}")
 
-            # 2.1 准备数据 (传入 session 进行检查)
+            # 2.1 准备数据 (传入 session 和动态的 inference_size)
             frame_map, orig_w, orig_h = prepare_chunk_images(
-                video_uuid, current_start, chunk_end, chunk_dir, INFERENCE_SIZE, session
+                video_uuid, current_start, chunk_end, chunk_dir, inference_size, session
             )
 
             # 如果 prepare 过程中被打断，frame_map 会是 None
@@ -218,13 +244,13 @@ def track_video_ultralytics(video_uuid, start_frame, end_frame, init_bboxes_text
 
             inference_state = predictor.init_state(video_path=chunk_dir)
 
-            scale_x = orig_w / INFERENCE_SIZE
-            scale_y = orig_h / INFERENCE_SIZE
+            scale_x = orig_w / inference_size
+            scale_y = orig_h / inference_size
 
             # === 高频检查点 4：添加 Prompt 前 ===
             if session.get('stop_requested', False): break
 
-            with torch.autocast("cuda", dtype=inference_dtype):
+            with torch.autocast("cuda", dtype=inference_dtype, enabled=use_autocast):
                 for oid, obj_data in active_objects.items():
                     box_orig = obj_data['last_box']
                     box_resized = np.array([
@@ -244,7 +270,7 @@ def track_video_ultralytics(video_uuid, start_frame, end_frame, init_bboxes_text
             # === 高频检查点 5：开始推理前 ===
             if session.get('stop_requested', False): break
 
-            with torch.inference_mode(), torch.autocast("cuda", dtype=inference_dtype):
+            with torch.inference_mode(), torch.autocast("cuda", dtype=inference_dtype, enabled=use_autocast):
                 for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(inference_state):
 
                     # === 高频检查点 6：每推理一帧都检查 ===
@@ -300,7 +326,7 @@ def track_video_ultralytics(video_uuid, start_frame, end_frame, init_bboxes_text
             gc.collect()
             torch.cuda.empty_cache()
 
-            current_start += CHUNK_SIZE
+            current_start += chunk_size
 
     except Exception as e:
         logging.error(f"Tracking error: {e}", exc_info=True)
@@ -319,7 +345,7 @@ def track_video_ultralytics(video_uuid, start_frame, end_frame, init_bboxes_text
 
 
 # ==============================================================================
-# 2. 自动掩码生成 - 不变
+# 2. 自动掩码生成
 # ==============================================================================
 def generate_masks_for_frame(video_uuid, frame_number):
     generator = _load_sam2_models(mode="auto")
@@ -332,9 +358,12 @@ def generate_masks_for_frame(video_uuid, frame_number):
     if image is None: return None, None
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
-    inference_dtype = torch.bfloat16 if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else torch.float32
+    settings = settings_manager.load_settings()
+    use_autocast = settings.get('use_autocast', True)
+    inference_dtype = torch.bfloat16 if (
+                torch.cuda.is_available() and torch.cuda.is_bf16_supported() and use_autocast) else torch.float32
 
-    with torch.inference_mode(), torch.autocast("cuda", dtype=inference_dtype):
+    with torch.inference_mode(), torch.autocast("cuda", dtype=inference_dtype, enabled=use_autocast):
         masks_data = generator.generate(image)
 
     if not masks_data:
@@ -356,7 +385,7 @@ def generate_masks_for_frame(video_uuid, frame_number):
 
 
 # ==============================================================================
-# 3. 单图预测 - 不变
+# 3. 单图预测
 # ==============================================================================
 def predict_box_from_point_ultralytics(image_path, point_coords):
     predictor = _load_sam2_models(mode="image")
@@ -366,9 +395,12 @@ def predict_box_from_point_ultralytics(image_path, point_coords):
     if image is None: return None
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
-    inference_dtype = torch.bfloat16 if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else torch.float32
+    settings = settings_manager.load_settings()
+    use_autocast = settings.get('use_autocast', True)
+    inference_dtype = torch.bfloat16 if (
+                torch.cuda.is_available() and torch.cuda.is_bf16_supported() and use_autocast) else torch.float32
 
-    with torch.inference_mode(), torch.autocast("cuda", dtype=inference_dtype):
+    with torch.inference_mode(), torch.autocast("cuda", dtype=inference_dtype, enabled=use_autocast):
         predictor.set_image(image)
         input_point = np.array([point_coords])
         input_label = np.array([1])
@@ -377,11 +409,17 @@ def predict_box_from_point_ultralytics(image_path, point_coords):
         )
         if masks is not None and masks.size > 0:
             mask = masks[0]
-            bbox = _mask_to_bbox(mask)
+            bbox = _mask_to_bbox(mask)  # This now includes padding
             if bbox:
                 return {'x1': bbox[0], 'y1': bbox[1], 'x2': bbox[2], 'y2': bbox[3]}
     return None
 
 
 def get_sam_model():
-    return HAS_SAM2
+    # --- 修改 ---
+    if not HAS_SAM2:
+        return False
+    # 现在它不仅检查库是否存在，还检查用户是否在设置中启用了它
+    settings = settings_manager.load_settings()
+    return settings.get('enable_sam_model', True)
+    # --- 结束 ---

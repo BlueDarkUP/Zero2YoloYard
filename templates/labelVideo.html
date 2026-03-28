@@ -598,6 +598,25 @@
 {% block scripts %}
 <script>
     $(document).ready(function() {
+        // --- 新增：拦截不可用的 AI 工具 ---
+        const isSamEnabled = {{ is_sam_enabled | tojson }};
+        const isFeatureExtractorEnabled = {{ is_feature_extractor_enabled | tojson }};
+        const disabledTitle = "This feature is disabled in system settings to save resources.";
+
+        if (!isSamEnabled) {
+            $('#sam-toggle-btn, #sam2-track-btn').prop('disabled', true).attr('title', disabledTitle);
+        }
+
+        if (!isFeatureExtractorEnabled) {
+            $('#find-from-dataset-btn, #rebuild-prototypes-btn').prop('disabled', true).attr('title', disabledTitle);
+        }
+
+        // LAM 和 Smart Select 需要同时依赖 SAM 和特征提取器
+        if (!isSamEnabled || !isFeatureExtractorEnabled) {
+             $('#lam-toggle-btn, #interactive-mode-toggle').prop('disabled', true).attr('title', disabledTitle);
+        }
+        // --- 结束 ---
+
         const settings = {{ settings | tojson }};
         const customClassColors = settings.class_colors || {};
         const videoUuid = "{{ video_entity.video_uuid }}";

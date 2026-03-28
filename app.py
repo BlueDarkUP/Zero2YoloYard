@@ -27,6 +27,8 @@ from concurrent.futures import ThreadPoolExecutor
 from colorama import Fore, Style, init
 import webview
 from threading import Thread
+import multiprocessing
+
 
 class ColoredFormatter(logging.Formatter):
     COLORS = {
@@ -66,15 +68,28 @@ class ColoredFormatter(logging.Formatter):
             colored_message += f"\n{level_colors['message']}{exc_text}{Style.RESET_ALL}"
         return f"{colored_asctime} - {colored_levelname} - {colored_threadname} - {colored_message}"
 
+
 try:
     import yaml
 except ImportError:
     logging.error("PyYAML is not installed! Dataset export will fail. Please run 'pip install pyyaml'.")
     yaml = None
 
+# ----------------- 动态获取线程数 -----------------
+initial_settings = settings_manager.load_settings()
+max_workers_setting = initial_settings.get('max_workers', 8)
+
+if str(max_workers_setting).lower() == 'auto':
+    try:
+        max_workers_setting = multiprocessing.cpu_count()
+    except NotImplementedError:
+        max_workers_setting = 8
+else:
+    max_workers_setting = int(max_workers_setting)
+
 app = flask.Flask(__name__)
 app.secret_key = os.urandom(24)
-prototype_executor = ThreadPoolExecutor(max_workers=8)
+prototype_executor = ThreadPoolExecutor(max_workers=max_workers_setting)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(threadName)s - %(message)s')
 
 with app.app_context():
@@ -214,7 +229,9 @@ def label_video():
                            video_entity=sanitize_dict(video_entity),
                            first_frame_url=first_frame_url,
                            settings=settings,
-                           limit_data=config.get_limit_data_for_render_template())
+                           limit_data=config.get_limit_data_for_render_template(),
+                           is_sam_enabled=settings.get('enable_sam_model', True),
+                           is_feature_extractor_enabled=settings.get('enable_feature_extractor', True))
 
 
 @app.route('/media/<path:path>')
@@ -454,6 +471,13 @@ def list_classes():
 
 @app.route('/api/rebuild_prototypes', methods=['POST'])
 def rebuild_prototypes():
+    settings = settings_manager.load_settings()
+    if not settings.get('enable_feature_extractor', True):
+        return jsonify({
+            'success': False,
+            'message': 'Feature Extractor model is disabled in system settings to save resources.'
+        }), 501
+
     data = request.json
     class_name = data.get('class_name')
 
@@ -560,10 +584,12 @@ def save_settings():
     current_settings = settings_manager.load_settings()
 
     sam_model_changed = current_settings.get('sam_model_checkpoint') != new_settings.get('sam_model_checkpoint')
-    mobilenet_model_changed = current_settings.get('feature_extractor_model_name') != new_settings.get('feature_extractor_model_name')
+    mobilenet_model_changed = current_settings.get('feature_extractor_model_name') != new_settings.get(
+        'feature_extractor_model_name')
     device_changed = current_settings.get('gpu_device') != new_settings.get('gpu_device')
+    max_workers_changed = str(current_settings.get('max_workers')) != str(new_settings.get('max_workers'))
 
-    restart_required = sam_model_changed or mobilenet_model_changed or device_changed
+    restart_required = sam_model_changed or mobilenet_model_changed or device_changed or max_workers_changed
 
     if settings_manager.save_settings(new_settings):
         if sam_model_changed or device_changed:
@@ -608,7 +634,8 @@ def sam_predict():
     try:
         from ultralytics_sam_tasks import predict_box_from_point_ultralytics, get_sam_model
         if not get_sam_model():
-            return jsonify({'success': False, 'message': 'Ultralytics SAM model is not available.'}), 501
+            return jsonify(
+                {'success': False, 'message': 'SAM model is disabled in system settings to save resources.'}), 501
     except ImportError:
         return jsonify({'success': False, 'message': 'SAM features are not installed on server.'}), 501
 
@@ -641,6 +668,13 @@ def sam_predict():
 
 @app.route('/interactive_segment/preprocess', methods=['POST'])
 def interactive_segment_preprocess_route():
+    settings = settings_manager.load_settings()
+    if not settings.get('enable_feature_extractor', True):
+        return jsonify({
+            'success': False,
+            'message': 'Feature Extractor model is disabled in system settings to save resources.'
+        }), 501
+
     data = request.json
     video_uuid = data.get('video_uuid')
     frame_number = int(data.get('frame_number'))
@@ -659,6 +693,13 @@ def interactive_segment_preprocess_route():
 
 @app.route('/interactive_segment/predict', methods=['POST'])
 def interactive_segment_predict_route():
+    settings = settings_manager.load_settings()
+    if not settings.get('enable_feature_extractor', True):
+        return jsonify({
+            'success': False,
+            'message': 'Feature Extractor model is disabled in system settings to save resources.'
+        }), 501
+
     data = request.json
     video_uuid = data.get('video_uuid')
     frame_number = int(data.get('frame_number'))
@@ -682,6 +723,13 @@ def interactive_segment_predict_route():
 
 @app.route('/interactive_segment/predict_from_dataset', methods=['POST'])
 def predict_from_dataset_route():
+    settings = settings_manager.load_settings()
+    if not settings.get('enable_feature_extractor', True):
+        return jsonify({
+            'success': False,
+            'message': 'Feature Extractor model is disabled in system settings to save resources.'
+        }), 501
+
     data = request.json
     video_uuid = data.get('video_uuid')
     frame_number = int(data.get('frame_number'))
@@ -716,6 +764,11 @@ def background_preprocess_frame():
 
     if not video_uuid or frame_number is None:
         return jsonify({'success': False, 'message': 'Missing data.'}), 400
+
+    settings = settings_manager.load_settings()
+    if not settings.get('auto_preprocess', True):
+        return jsonify({'success': True, 'message': 'Auto preprocess disabled in settings.'})
+
     if background_tasks.active_tasks.get(video_uuid):
         return jsonify({'success': False, 'message': 'Another task is active.'})
     cache_key = f"{video_uuid}_{frame_number}"
@@ -728,6 +781,7 @@ def background_preprocess_frame():
     ).start()
 
     return jsonify({'success': True, 'message': 'Preprocessing started in background.'})
+
 
 @app.route('/api/get_random_frames_for_neg_sampling', methods=['POST'])
 def get_random_frames_for_neg_sampling():
@@ -761,6 +815,13 @@ def get_random_frames_for_neg_sampling():
 
 @app.route('/apply_prototypes_to_video', methods=['POST'])
 def apply_prototypes_to_video_route():
+    settings = settings_manager.load_settings()
+    if not settings.get('enable_feature_extractor', True):
+        return jsonify({
+            'success': False,
+            'message': 'Feature Extractor model is disabled in system settings to save resources.'
+        }), 501
+
     data = request.json
     video_uuid = data.get('video_uuid')
     class_name = data.get('class_name')
@@ -787,7 +848,8 @@ def start_sam2_tracking():
     try:
         from ultralytics_sam_tasks import get_sam_model
         if not get_sam_model():
-            return jsonify({'success': False, 'message': 'SAM tracking feature is not available on the server.'}), 501
+            return jsonify(
+                {'success': False, 'message': 'SAM model is disabled in system settings to save resources.'}), 501
     except ImportError:
         return jsonify({'success': False, 'message': 'SAM features are not installed on server.'}), 501
 
@@ -818,7 +880,8 @@ def start_sam2_batch_tracking():
     try:
         from ultralytics_sam_tasks import get_sam_model
         if not get_sam_model():
-            return jsonify({'success': False, 'message': 'SAM tracking feature is not available on the server.'}), 501
+            return jsonify(
+                {'success': False, 'message': 'SAM model is disabled in system settings to save resources.'}), 501
     except ImportError:
         return jsonify({'success': False, 'message': 'SAM features are not installed on server.'}), 501
 
@@ -1124,9 +1187,11 @@ def dataset_analysis(dataset_uuid):
     dataset = database.get_dataset_entity(dataset_uuid)
     if not dataset:
         return "Dataset not found", 404
+    settings = settings_manager.load_settings()
     return render_template('dataset_analysis.html',
                            dataset=sanitize_dict(dataset),
-                           limit_data=config.get_limit_data_for_render_template())
+                           limit_data=config.get_limit_data_for_render_template(),
+                           is_feature_extractor_enabled=settings.get('enable_feature_extractor', True))
 
 
 @app.route('/api/datasetAnalysis/<dataset_uuid>', methods=['GET'])
@@ -1281,6 +1346,13 @@ def calculate_color_histogram(image_path, rect):
 
 @app.route('/api/datasetAnalysis/<dataset_uuid>/consistency_check', methods=['POST'])
 def run_consistency_check(dataset_uuid):
+    settings = settings_manager.load_settings()
+    if not settings.get('enable_feature_extractor', True):
+        return jsonify({
+            'success': False,
+            'message': 'Feature Extractor model is disabled in system settings to save resources.'
+        }), 501
+
     try:
         request_data = request.get_json()
         is_color_check_enabled = request_data.get('enable_color_check', True)
@@ -1412,6 +1484,13 @@ def run_consistency_check(dataset_uuid):
 
 @app.route('/lam_predict', methods=['POST'])
 def lam_predict_route():
+    settings = settings_manager.load_settings()
+    if not settings.get('enable_feature_extractor', True):
+        return jsonify({
+            'success': False,
+            'message': 'Feature Extractor model is disabled in system settings to save resources.'
+        }), 501
+
     data = request.json
     video_uuid = data.get('video_uuid')
     frame_number = data.get('frame_number')
@@ -1563,11 +1642,10 @@ def start_server():
     # 5. 启动 Flask (绑定到本地 127.0.0.1 提高安全性)
     # 使用 waitress 提供 WSGI 服务
     from waitress import serve
-    serve(app, host='127.0.0.1', port=5000, threads=8)
+    serve(app, host='127.0.0.1', port=5000, threads=max_workers_setting)
 
 
 if __name__ == '__main__':
-    import multiprocessing
     multiprocessing.freeze_support()
 
     # A. 启动 Flask 服务器后台线程

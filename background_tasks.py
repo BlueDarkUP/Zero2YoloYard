@@ -4,6 +4,7 @@ import random
 import shutil
 import time
 import traceback
+import zipfile
 
 import cv2
 import numpy as np
@@ -15,6 +16,7 @@ import ai_models
 import config
 import database
 import file_storage
+import settings_manager
 from bbox_writer import extract_labels
 from multiprocessing import Pool, cpu_count
 
@@ -35,7 +37,6 @@ except ImportError:
     logging.warning(
         "albumentations library not found. Data augmentation will be disabled. Run 'pip install albumentations opencv-python-headless'")
     A = None
-
 
 active_tasks = {}
 tracking_sessions = {}
@@ -95,10 +96,9 @@ def apply_prototypes_to_video_task(video_uuid, class_name, negative_samples, con
                     )
 
                     if predictions:
-                        suggested_text = "\n".join(
-                            [
-                                f"{int(p['box'][0])},{int(p['box'][1])},{int(p['box'][2])},{int(p['box'][3])},{class_name},{p['score']:.4f}"
-                                for p in predictions])
+                        suggested_text = "\n".join([
+                            f"{int(p['box'][0])},{int(p['box'][1])},{int(p['box'][2])},{int(p['box'][3])},{class_name},{p['score']:.4f}"
+                            for p in predictions])
                         database.save_frame_suggestions(video_uuid, frame_number, suggested_text)
 
                 except Exception as frame_e:
@@ -260,13 +260,17 @@ def extract_frames_task(video_uuid):
 
         database.update_video_after_extraction_start(video_uuid, width, height, fps, frame_count)
 
+        # 获取压缩配置
+        settings = settings_manager.load_settings()
+        jpeg_quality = int(settings.get('frame_extraction_jpeg_quality', 75))
+
         count = 0
         while True:
             success, frame = vid.read()
             if not success:
                 break
 
-            success, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+            success, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), jpeg_quality])
             if success:
                 file_storage.save_frame_image(video_uuid, count, buffer.tobytes())
                 database.update_extracted_frame_count(video_uuid, count + 1)
@@ -653,7 +657,15 @@ def create_dataset_task(dataset_uuid, video_uuids, eval_percent, test_percent, a
             for frame_info in split_data:
                 all_tasks.append((frame_info, img_dir, lbl_dir, class_map, augmentation_options))
 
-        safe_workers = min(4, max(1, cpu_count() // 2))
+        settings = settings_manager.load_settings()
+
+        # Determine max_workers based on settings
+        max_workers_setting = settings.get('max_workers', 8)
+        if max_workers_setting == 'auto':
+            safe_workers = min(4, max(1, cpu_count() // 2))
+        else:
+            # We constrain it to a reasonable maximum for the pool, e.g., CPU count or configured limit
+            safe_workers = min(int(max_workers_setting), max(1, cpu_count()))
 
         database.update_dataset_status(dataset_uuid, status="PROCESSING",
                                        message=f"Processing {len(all_tasks)} images across {safe_workers} CPU cores...")
@@ -680,8 +692,35 @@ def create_dataset_task(dataset_uuid, video_uuids, eval_percent, test_percent, a
 
         database.update_dataset_status(dataset_uuid, status="PROCESSING", message="Creating ZIP archive...")
         zip_path_base = os.path.join(config.STORAGE_DIR, 'datasets', dataset_uuid)
-        zip_path = shutil.make_archive(zip_path_base, 'zip', dataset_dir)
+        zip_path = f"{zip_path_base}.zip"
+
+        zip_setting = settings.get('zip_compression', 'standard')
+        compress_type = zipfile.ZIP_STORED if zip_setting == 'fast' else zipfile.ZIP_DEFLATED
+        compress_level = 1 if zip_setting == 'fast' else (9 if zip_setting == 'max' else 6)
+
+        with zipfile.ZipFile(zip_path, 'w', compression=compress_type, compresslevel=compress_level) as zipf:
+            for root, _, files in os.walk(dataset_dir):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    arcname = os.path.relpath(file_path, dataset_dir)
+                    zipf.write(file_path, arcname)
+
         shutil.rmtree(dataset_dir)
+
+        # Execute auto-cleanup of orphan frames
+        if settings.get('auto_cleanup_frames', False):
+            database.update_dataset_status(dataset_uuid, status="PROCESSING", message="Cleaning up orphan frames...")
+            cleaned_count = 0
+            for v_uuid in video_uuids:
+                all_v_frames = database.get_video_frames(v_uuid)
+                for f_info in all_v_frames:
+                    if not f_info.get('bboxes_text') or not f_info['bboxes_text'].strip():
+                        # Delete the physical file from disk
+                        f_path = file_storage.get_frame_path(v_uuid, f_info['frame_number'])
+                        if os.path.exists(f_path):
+                            os.remove(f_path)
+                            cleaned_count += 1
+            logging.info(f"Auto-cleanup finished. Deleted {cleaned_count} unlabeled frame files to free up space.")
 
         logging.info(f"ZIP archive created at: {zip_path}")
         database.update_dataset_status(dataset_uuid, status="READY", zip_path=zip_path, sorted_label_list=sorted_labels)
