@@ -767,12 +767,12 @@ $(document).ready(function() {
                     }
                     $btn.hide();
                 } else {
-                    alert('Scan Failed: ' + response.message);
+                    window.sysAlert('Scan Failed: ' + response.message, 'error');
                     $btn.prop('disabled', false).html('<i class="bi bi-search mr-1"></i> Initiate Scan');
                 }
             },
             error: function(xhr) {
-                alert("Server error.");
+                window.sysAlert("Server error.", 'error');
                 $btn.prop('disabled', false).html('<i class="bi bi-search mr-1"></i> Initiate Scan');
             }
         });

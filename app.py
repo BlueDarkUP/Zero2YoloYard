@@ -667,7 +667,11 @@ def save_settings():
 
     restart_required = sam_model_changed or mobilenet_model_changed or device_changed or max_workers_changed
 
-    if settings_manager.save_settings(new_settings):
+    # --- THE FIX: Merge the new settings into the current ones ---
+    current_settings.update(new_settings)
+
+    # --- Pass the merged 'current_settings' instead of 'new_settings' ---
+    if settings_manager.save_settings(current_settings):
         if sam_model_changed or device_changed:
             logging.info("SAM model or device setting changed. Clearing SAM cache.")
             try:

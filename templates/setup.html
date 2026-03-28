@@ -325,12 +325,12 @@ $(document).ready(function() {
                     // 等待半秒让后台线程启动模型加载，然后跳转主界面
                     setTimeout(() => { window.location.href = '/'; }, 500);
                 } else {
-                    alert('Error applying configuration.');
+                    window.sysAlert('Error applying configuration.', 'error');
                     $btn.prop('disabled', false).html('SAVE & BOOT YARD CORE <i class="bi bi-rocket ml-2"></i>');
                 }
             },
             error: function() {
-                alert('Server connection failed.');
+                window.sysAlert('Server connection failed.', 'error');
                 $btn.prop('disabled', false).html('SAVE & BOOT YARD CORE <i class="bi bi-rocket ml-2"></i>');
             }
         });

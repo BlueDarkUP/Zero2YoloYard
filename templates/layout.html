@@ -126,7 +126,6 @@
 </head>
 <body class="d-flex flex-column min-vh-100">
 
-    <!-- ==================== SYSTEM BOOT SPLASH ==================== -->
     <div id="telemetry-splash" class="telemetry-splash-screen">
         <div class="splash-center">
             <div class="splash-title">
@@ -139,8 +138,6 @@
             <div id="splash-logs" class="splash-logs-container"></div>
         </div>
     </div>
-    <!-- ============================================================ -->
-
     <nav class="navbar navbar-expand-lg navbar-dark pt-3 pb-3 px-4 border-bottom" style="background: rgba(10,11,16,0.95); border-color: var(--border-color) !important; z-index: 100;">
         <a class="navbar-brand d-flex align-items-center" href="/">
             <i class="bi bi-bounding-box text-primary mr-3" style="font-size: 1.5rem; opacity: 0.9;"></i>
@@ -296,6 +293,75 @@
             if(sysLatencyEl) sysLatencyEl.innerText = latency + 'ms';
             if(sysMemoryEl) sysMemoryEl.innerText = memory + '%';
         }, 2000);
+    </script>
+
+    <div class="modal fade" id="sysConfirmModal" tabindex="-1" role="dialog" style="z-index: 99999;">
+        <div class="modal-dialog modal-dialog-centered modal-sm" role="document">
+            <div class="modal-content" style="background: rgba(10,11,16,0.95); border: 1px solid var(--color-danger); box-shadow: 0 0 20px rgba(255, 0, 50, 0.2);">
+                <div class="modal-body text-center pt-4 pb-3">
+                    <i class="bi bi-exclamation-triangle-fill text-danger" style="font-size: 2rem;"></i>
+                    <p id="sysConfirmMessage" class="mt-3 font-weight-bold font-monospace text-white small tracking-wider"></p>
+                </div>
+                <div class="modal-footer border-0 justify-content-center pb-4 pt-0">
+                    <button type="button" class="btn btn-sm btn-outline-secondary font-monospace tracking-wider px-3" data-dismiss="modal">ABORT</button>
+                    <button type="button" class="btn btn-sm btn-danger font-monospace tracking-wider px-3" id="sysConfirmBtn">PROCEED</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div aria-live="polite" aria-atomic="true" style="position: fixed; top: 80px; right: 20px; z-index: 99999;">
+        <div id="sys-toast-container"></div>
+    </div>
+
+    <style>
+        .sys-toast {
+            background: rgba(10,11,16,0.95);
+            border-left: 4px solid var(--color-primary);
+            color: white;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.6);
+            backdrop-filter: blur(4px);
+        }
+        .sys-toast.toast-error { border-left-color: var(--color-danger); }
+        .sys-toast.toast-success { border-left-color: var(--color-success); }
+    </style>
+
+    <script>
+        // 全局挂载：系统级提示函数
+        window.sysAlert = function(message, type = 'success') {
+            const toastId = 'toast-' + Date.now() + Math.floor(Math.random() * 1000);
+            const title = type === 'error' ? 'SYS_ERROR' : 'SYS_NOTICE';
+            const icon = type === 'error' ? 'bi-x-octagon-fill text-danger' : 'bi-info-circle-fill text-success';
+            const toastClass = type === 'error' ? 'toast-error' : 'toast-success';
+
+            const toastHtml = `
+                <div id="${toastId}" class="toast sys-toast ${toastClass} mb-2" role="alert" aria-live="assertive" aria-atomic="true" data-delay="${type === 'error' ? '5000' : '3000'}">
+                    <div class="toast-header border-0 bg-transparent text-white pb-0 pt-2 px-3">
+                        <i class="bi ${icon} mr-2"></i>
+                        <strong class="mr-auto font-monospace small tracking-wider">${title}</strong>
+                        <button type="button" class="ml-2 mb-1 close text-white" data-dismiss="toast" style="text-shadow: none; opacity: 0.8; outline: none;">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="toast-body font-monospace small pt-1 pb-2 px-3 text-muted">
+                        > ${message}
+                    </div>
+                </div>`;
+
+            $('#sys-toast-container').append(toastHtml);
+            $('#' + toastId).toast('show');
+            $('#' + toastId).on('hidden.bs.toast', function () { $(this).remove(); });
+        };
+
+        // 全局挂载：系统级确认函数
+        window.sysConfirm = function(message, callback) {
+            $('#sysConfirmMessage').text(message);
+            $('#sysConfirmModal').modal('show');
+            $('#sysConfirmBtn').off('click').on('click', function() {
+                $('#sysConfirmModal').modal('hide');
+                if (callback) callback();
+            });
+        };
     </script>
 
     {% block scripts %}{% endblock %}

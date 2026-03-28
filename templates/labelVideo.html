@@ -780,7 +780,7 @@
                             }
                         }
                     },
-                    error: function() { if (!isSilent) showToast("ERROR: SAVE FAILED.", 3000); }
+                    error: function() { if (!isSilent) window.sysAlert("ERROR: SAVE FAILED.", 'error'); }
                 });
             }
         }
@@ -1235,7 +1235,7 @@
                 $.ajax({
                     url: "/addClass", type: "POST", contentType: "application/json", data: JSON.stringify({ label_name: className }),
                     success: function() { availableClasses.push(className); renderClassList(); },
-                    error: function() { showToast("Error: Failed to add new class.", 3000); }
+                    error: function() { window.sysAlert("Error: Failed to add new class.", 'error'); }
                 });
             }
         }
@@ -1295,7 +1295,7 @@
                     handleTrackingEnd(eventData.event.toUpperCase(), eventData.message);
                     break;
                 case "error":
-                    alert("Tracking Stream Error: " + eventData.message);
+                    window.sysAlert("Tracking Stream Error: " + eventData.message, 'error');
                     handleTrackingEnd("FAILED", eventData.message);
                     break;
             }
@@ -1361,9 +1361,9 @@
                             $('#interactive-results-controls').slideDown();
                             $('#result-threshold').trigger('input');
                             redrawStaticCanvas();
-                        } else { alert('Prediction failed: ' + res.message); }
+                        } else { window.sysAlert('Prediction failed: ' + res.message, 'error'); }
                     },
-                    error: () => alert('Server error during prediction.'),
+                    error: () => window.sysAlert('Server error during prediction.', 'error'),
                     complete: () => $button.prop('disabled', false)
                 });
             };
@@ -1378,9 +1378,9 @@
                             currentCacheKey = res.cache_key;
                             lastProcessedFrame = frameNumber;
                             runPrediction();
-                        } else { alert('Preprocessing failed: ' + res.message); $button.prop('disabled', false); }
+                        } else { window.sysAlert('Preprocessing failed: ' + res.message, 'error'); $button.prop('disabled', false); }
                     },
-                    error: () => { alert('Server error during preprocessing.'); $button.prop('disabled', false); }
+                    error: () => { window.sysAlert('Server error during preprocessing.', 'error'); $button.prop('disabled', false); }
                 });
             } else { runPrediction(); }
         }
@@ -1394,9 +1394,9 @@
                         negSamplingFrames = res.frames; currentNegSampleIndex = 0; negativeSamplesStore = {};
                         loadNegativeSampleFrame();
                         $('#negative-sampling-modal').modal({ backdrop: 'static', keyboard: false });
-                    } else { alert("Failed to fetch random frames: " + (res.message || "No frames returned.")); }
+                    } else { window.sysAlert("Failed to fetch random frames: " + (res.message || "No frames returned."), 'error'); }
                 },
-                error: function() { alert("Server error while fetching random frames."); }
+                error: function() { window.sysAlert("Server error while fetching random frames.", 'error'); }
             });
         }
 
@@ -1433,22 +1433,22 @@
         }
 
         function triggerApplyToVideo(negativeSamples) {
-            if (!lastDatasetClassName) { alert("An error occurred. The class to apply is unknown."); return; }
+            if (!lastDatasetClassName) { window.sysAlert("An error occurred. The class to apply is unknown.", 'error'); return; }
             const msg = negativeSamples && Object.keys(negativeSamples).length > 0
                 ? `Start background task to apply REFINED model for '${lastDatasetClassName}'?`
                 : `Start background task to apply learned features for '${lastDatasetClassName}'?`;
 
-            if (confirm(msg)) {
+            window.sysConfirm(msg, function() {
                 $.ajax({
                     url: '/apply_prototypes_to_video', type: 'POST', contentType: 'application/json',
                     data: JSON.stringify({ video_uuid: videoUuid, class_name: lastDatasetClassName, negative_samples: negativeSamples, confidence_threshold: parseFloat($('#apply-confidence-threshold').val()) }),
                     success: function(res) {
-                        if (res.success) { alert("Task started. Video status will update on dashboard."); window.location.href = "/"; }
-                        else { alert("Failed to start task: " + res.message); }
+                        if (res.success) { window.sysAlert("Task started. Video status will update on dashboard.", 'success'); window.location.href = "/"; }
+                        else { window.sysAlert("Failed to start task: " + res.message, 'error'); }
                     },
-                    error: function() { alert("Server error when trying to start the task."); }
+                    error: function() { window.sysAlert("Server error when trying to start the task.", 'error'); }
                 });
-            }
+            });
         }
 
         function undoNegativeSample() {
@@ -1565,9 +1565,9 @@
                     data: JSON.stringify({ video_uuid: videoUuid, frame_number: frameSlider.val(), point: { x: Math.round(pos.x * scaleX), y: Math.round(pos.y * scaleY) } }),
                     success: function(res) {
                         if (res.success) { showLamSuggestions(res.bbox, res.suggestions, e.clientX, e.clientY); showToast('Select class.', 3000); }
-                        else { showToast(res.message || "LAM failed.", 3000); }
+                        else { window.sysAlert(res.message || "LAM failed.", 'error'); }
                     },
-                    error: function(xhr) { showToast('Server Error: ' + (xhr.responseJSON ? xhr.responseJSON.message : 'Unknown Error'), 4000); },
+                    error: function(xhr) { window.sysAlert('Server Error: ' + (xhr.responseJSON ? xhr.responseJSON.message : 'Unknown Error'), 'error'); },
                     complete: function() { canvasContainer.removeClass('sam-loading'); $('body').css('cursor', 'default'); }
                 });
                 return;
@@ -1583,17 +1583,17 @@
                     url: "/samPredict", type: "POST", contentType: "application/json",
                     data: JSON.stringify({ video_uuid: videoUuid, frame_number: frameSlider.val(), point: { x: Math.round(pos.x * scaleX), y: Math.round(pos.y * scaleY) } }),
                     success: function(res) {
-                        if (!res.success) { showToast(res.message || "SAM failed.", 3000); return; }
+                        if (!res.success) { window.sysAlert(res.message || "SAM failed.", 'error'); return; }
                         if (isInteractiveMode) {
                             positiveExampleBboxes = [res.bbox]; redrawStaticCanvas(); showToast('Sample added. Scanning...', 2000); triggerFindSimilar();
                         } else {
                             if (activeClass) {
                                 bboxes.push({ ...res.bbox, label: activeClass, id: self.crypto.randomUUID() });
                                 saveStateToHistory(); selectedBboxIndex = bboxes.length - 1; renderBboxList(); redrawStaticCanvas(); showToast('SAM object added!', 2000);
-                            } else { showToast('Select class first.', 3000); }
+                            } else { window.sysAlert('Select class first.', 'error'); }
                         }
                     },
-                    error: function(xhr) { showToast('SAM Error: ' + (xhr.responseJSON ? xhr.responseJSON.message : 'Unknown'), 4000); },
+                    error: function(xhr) { window.sysAlert('SAM Error: ' + (xhr.responseJSON ? xhr.responseJSON.message : 'Unknown'), 'error'); },
                     complete: function() { canvasContainer.removeClass('sam-loading'); $('body').css('cursor', 'default'); }
                 });
                 return;
@@ -1628,7 +1628,7 @@
             }
 
             if ((isInteractiveMode || interactivePreviewBboxes.length > 0) && interactivePreviewBboxes.length > 0) {
-                if (!activeClass) { alert("Select a class to assign."); return; }
+                if (!activeClass) { window.sysAlert("Select a class to assign.", 'error'); return; }
                 const threshold = parseFloat($('#result-threshold').val());
                 const scaleX = frameImage.clientWidth / frameImage.naturalWidth, scaleY = frameImage.clientHeight / frameImage.naturalHeight;
                 let targetBoxIndex = -1;
@@ -1842,16 +1842,16 @@
         $("#save-bboxes").on("click", function() { performSave(parseInt(frameSlider.val()), formatBboxesToString(), false); });
 
         $('#rebuild-prototypes-btn').on('click', function() {
-            if (confirm('Rebuild AI prototypes for all classes?')) {
-                const $btn = $(this);
+            window.sysConfirm('Rebuild AI prototypes for all classes?', function() {
+                const $btn = $('#rebuild-prototypes-btn');
                 $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> BUSY');
                 $.ajax({
                     url: '/api/rebuild_prototypes', type: 'POST', contentType: 'application/json', data: JSON.stringify({}),
-                    success: function(res) { if(res.success) { showToast(res.message, 4000); } else { showToast('Error: ' + res.message, 5000); } },
-                    error: function() { showToast('Error: Failed to start task.', 5000); },
+                    success: function(res) { if(res.success) { showToast(res.message, 4000); } else { window.sysAlert('Error: ' + res.message, 'error'); } },
+                    error: function() { window.sysAlert('Error: Failed to start task.', 'error'); },
                     complete: function() { setTimeout(() => { $btn.prop('disabled', false).html('<i class="bi bi-cpu"></i> Rebuild AI'); }, 2000); }
                 });
-            }
+            });
         });
 
         $('#lam-toggle-btn').on('click', function() {
@@ -1883,7 +1883,7 @@
         });
 
         $('#sam2-track-btn').on('click', function() {
-            if (bboxes.length === 0) { alert("Label at least one object first."); return; }
+            if (bboxes.length === 0) { window.sysAlert("Label at least one object first.", 'error'); return; }
 
             const currentFrame = frameSlider.val();
             const currentBboxes = formatBboxesToString();
@@ -1894,11 +1894,11 @@
             });
 
             const startFrame = parseInt(frameSlider.val()), endFrame = parseInt(frameSlider.attr("max"));
-            if (confirm(`Start SAM2 tracking from frame ${startFrame} to ${endFrame}?`)) {
-                $(this).prop("disabled", true); setTrackingUiState(true);
+            window.sysConfirm(`Start SAM2 tracking from frame ${startFrame} to ${endFrame}?`, function() {
+                $('#sam2-track-btn').prop("disabled", true); setTrackingUiState(true);
                 trackedBboxCache = {}; trackedBboxCache[startFrame] = currentBboxes;
                 startTrackingSequence(startFrame, endFrame, currentBboxes);
-            }
+            });
         });
 
         function startTrackingSequence(startFrame, endFrame, initBboxesText) {
@@ -1911,9 +1911,9 @@
                         sam2EventSource = new EventSource(`/streamSam2Tracking/${sam2TrackerUuid}`);
                         sam2EventSource.onmessage = function(event) { handleSseEvent(JSON.parse(event.data)); };
                         sam2EventSource.onerror = function(err) { showToast("Connection lost.", 3000); handleTrackingEnd("FAILED", "Connection lost"); if (sam2EventSource) sam2EventSource.close(); };
-                    } else { alert("Error: " + res.message); exitReviewMode(); }
+                    } else { window.sysAlert("Error: " + res.message, 'error'); exitReviewMode(); }
                 },
-                error: () => { alert("Server error."); exitReviewMode(); }
+                error: () => { window.sysAlert("Server error.", 'error'); exitReviewMode(); }
             });
         }
 
@@ -1928,7 +1928,7 @@
 
         $('#save-all-tracked-btn').on('click', function() {
             const frameCount = Object.keys(trackedBboxCache).length;
-            if (confirm(`Save ${frameCount} reviewed frames?`)) {
+            window.sysConfirm(`Save ${frameCount} reviewed frames?`, function() {
                 const savePromises = Object.entries(trackedBboxCache).map(([frame_number, bboxes_text]) =>
                     $.ajax({
                         url: "/storeVideoFrameBboxesText", type: "POST", contentType: "application/json",
@@ -1936,8 +1936,8 @@
                     })
                 );
                 showToast(`Saving ${savePromises.length} frames...`, 5000);
-                Promise.all(savePromises).then(() => { showToast("Tracking saved!", 3000); window.cachedFrames = null; exitReviewMode(); }).catch(err => { alert("Save error."); });
-            }
+                Promise.all(savePromises).then(() => { showToast("Tracking saved!", 3000); window.cachedFrames = null; exitReviewMode(); }).catch(err => { window.sysAlert("Save error.", 'error'); });
+            });
         });
 
         $('#bbox-list').on('click', '.interpolate-btn', function(e) {
@@ -1959,8 +1959,8 @@
                 $.ajax({
                     url: "/api/interpolateBboxes", type: "POST", contentType: "application/json",
                     data: JSON.stringify({ video_uuid: videoUuid, object_id: interpolationState.objectId, start_frame: interpolationState.startFrameData, end_frame: endFrameData }),
-                    success: function(res) { if (res.success) { showToast(res.message, 4000); window.cachedFrames = null; } else { showToast("Error: " + res.message, 5000); } },
-                    error: function() { showToast("Interpolation error.", 5000); },
+                    success: function(res) { if (res.success) { showToast(res.message, 4000); window.cachedFrames = null; } else { window.sysAlert("Error: " + res.message, 'error'); } },
+                    error: function() { window.sysAlert("Interpolation error.", 'error'); },
                     complete: function() {
                         const nextFrame = Math.min(parseInt(interpolationState.startFrameData.frame_number), parseInt(endFrameData.frame_number)) + 1;
                         resetInterpolationState(false);
@@ -1990,7 +1990,7 @@
         $('#clear-samples-btn').on('click', function() { clearInteractiveSession(); showToast('Signal cleared.', 2000); });
 
         $('#find-from-dataset-btn').on('click', function() {
-            if (!activeClass) { alert('Select class first!'); return; }
+            if (!activeClass) { window.sysAlert('Select class first!', 'error'); return; }
             const frameNumber = parseInt(frameSlider.val()), $button = $(this), useColor = $('#dataset-find-use-color').is(':checked');
 
             $button.prop('disabled', true);
@@ -2005,10 +2005,14 @@
                         interactivePreviewBboxes = res.results;
                         $('#interactive-results-controls').slideDown(); $('#result-threshold').trigger('input'); redrawStaticCanvas();
                         showToast(`Found ${res.results.length} entities.`, 4000);
-                        setTimeout(() => { if (confirm(`Entities detected. Apply '${activeClass}' model to unlabeled frames?`)) { startNegativeSampling(10); } }, 500);
-                    } else { alert('Prediction failed: ' + res.message); }
+                        setTimeout(() => {
+                            window.sysConfirm(`Entities detected. Apply '${activeClass}' model to unlabeled frames?`, function() {
+                                startNegativeSampling(10);
+                            });
+                        }, 500);
+                    } else { window.sysAlert('Prediction failed: ' + res.message, 'error'); }
                 },
-                error: function() { alert('Server error.'); },
+                error: function() { window.sysAlert('Server error.', 'error'); },
                 complete: function() { $button.prop('disabled', false); }
             });
         });
@@ -2075,7 +2079,7 @@
         $('#apply-confidence-threshold').on('input', function() { $('#apply-confidence-value').text(parseFloat($(this).val()).toFixed(2)); });
 
         $('#accept-visible-btn').on('click', function() {
-            if (!activeClass) { alert('Select class first.'); return }
+            if (!activeClass) { window.sysAlert('Select class first.', 'error'); return }
             const threshold = parseFloat($('#result-threshold').val());
             let addedCount = 0; const remainingPreviews = [];
             interactivePreviewBboxes.forEach(res => {

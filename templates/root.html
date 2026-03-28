@@ -708,8 +708,8 @@
             return `<span class="badge badge-${badgeClass} font-monospace d-inline-flex align-items-center">${icon} ${status}</span>`;
         }
 
-        function showSuccess(message) { alert(message); }
-        function showError(message) { alert('SYSTEM ERROR: ' + message); }
+        function showSuccess(message) { window.sysAlert(message, 'success'); }
+        function showError(message) { window.sysAlert('SYSTEM ERROR: ' + message, 'error'); }
 
         function refreshVideos(forceRedraw = false) {
             $.get('/listVideos', function(data) {
@@ -1069,7 +1069,7 @@
                 data: JSON.stringify(settingsData),
                 success: function(response) {
                     if (response.success) {
-                         alert(response.restart_required ? "CONFIG_SAVED. RESTART_REQUIRED_FOR_HARDWARE_CHANGES." : "CONFIG_SAVED.");
+                         window.sysAlert(response.restart_required ? "CONFIG_SAVED. RESTART_REQUIRED_FOR_HARDWARE_CHANGES." : "CONFIG_SAVED.", 'success');
                     } else { showError(response.message); }
                 },
                 error: function(xhr) { showError(xhr.responseJSON ? xhr.responseJSON.message : 'UNKNOWN_ERROR'); }
@@ -1096,15 +1096,15 @@
         });
 
         $('#clear-cache-btn').on('click', function() {
-            if (confirm("CONFIRM: PURGE 'SMART SELECT' CACHE?")) {
-                const $btn = $(this);
+            const $btn = $(this);
+            window.sysConfirm("CONFIRM: PURGE 'SMART SELECT' CACHE?", function() {
                 $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> PURGING...');
                 $.ajax({
                     url: '/api/clear_cache', type: 'POST',
-                    success: function(res) { alert(res.message); },
+                    success: function(res) { window.sysAlert(res.message, 'success'); },
                     complete: function() { $btn.prop('disabled', false).html('<i class="bi bi-eraser-fill"></i> PURGE_CACHE'); }
                 });
-            }
+            });
         });
 
         $(document).on("click", ".btn-manage-tasks", function() {
@@ -1208,26 +1208,27 @@
             if (labeledCount > 0 && $('input[name="merge_strategy"]:checked').val() === 'overwrite') {
                 msg = `WARNING: ${labeledCount} LABELS DETECTED. OVERWRITE PROTOCOL ACTIVE. PROCEED?`;
             }
-            if (!confirm(msg)) return;
 
-            const options = {
-                start_frame: $('#pre-annotate-start-frame').val(),
-                end_frame: $('#pre-annotate-end-frame').val(),
-                confidence: $('#pre-annotate-confidence').val(),
-                merge_strategy: $('input[name="merge_strategy"]:checked').val()
-            };
+            window.sysConfirm(msg, function() {
+                const options = {
+                    start_frame: $('#pre-annotate-start-frame').val(),
+                    end_frame: $('#pre-annotate-end-frame').val(),
+                    confidence: $('#pre-annotate-confidence').val(),
+                    merge_strategy: $('input[name="merge_strategy"]:checked').val()
+                };
 
-            $.ajax({
-                url: '/startPreAnnotation', type: 'POST', contentType: 'application/json',
-                data: JSON.stringify({ video_uuid: videoUuid, model_uuid: modelUuid, options: options }),
-                success: function(response) {
-                    if (response.success) {
-                        showSuccess('SEQUENCE_STARTED.');
-                        $('#preAnnotateModal').modal('hide');
-                        refreshVideos(true);
-                    } else { showError(response.message); }
-                },
-                error: function(xhr) { showError(xhr.responseJSON ? xhr.responseJSON.message : 'UNKNOWN_ERROR'); }
+                $.ajax({
+                    url: '/startPreAnnotation', type: 'POST', contentType: 'application/json',
+                    data: JSON.stringify({ video_uuid: videoUuid, model_uuid: modelUuid, options: options }),
+                    success: function(response) {
+                        if (response.success) {
+                            showSuccess('SEQUENCE_STARTED.');
+                            $('#preAnnotateModal').modal('hide');
+                            refreshVideos(true);
+                        } else { showError(response.message); }
+                    },
+                    error: function(xhr) { showError(xhr.responseJSON ? xhr.responseJSON.message : 'UNKNOWN_ERROR'); }
+                });
             });
         });
 
@@ -1243,7 +1244,7 @@
             formData.append('video_uuid', videoUuidForImport);
             for (let i = 0; i < e.target.files.length; i++) formData.append('frame_files', e.target.files[i]);
 
-            alert(`IMPORTING ${e.target.files.length} FRAMES...`);
+            window.sysAlert(`IMPORTING ${e.target.files.length} FRAMES...`, 'success');
             $.ajax({
                 url: '/importFrames', type: 'POST', data: formData, processData: false, contentType: false,
                 success: function(res) {
@@ -1256,37 +1257,46 @@
         });
 
         $(document).on("click", ".btn-delete-video", function() {
-            if (confirm('CONFIRM PURGE: DELETE VIDEO AND ALL LABELS?')) {
-                $.ajax({ url: '/deleteVideo', type: 'POST', contentType: 'application/json', data: JSON.stringify({ video_uuid: $(this).data('uuid') }), success: () => refreshVideos(true) });
-            }
+            const uuid = $(this).data('uuid');
+            window.sysConfirm('CONFIRM PURGE: DELETE VIDEO AND ALL LABELS?', function() {
+                $.ajax({ url: '/deleteVideo', type: 'POST', contentType: 'application/json', data: JSON.stringify({ video_uuid: uuid }), success: () => refreshVideos(true) });
+            });
         });
+
         $(document).on("click", ".btn-delete-dataset", function() {
-            if (confirm('CONFIRM DELETION: DATASET ARCHIVE?')) {
-                $.ajax({ url: '/deleteDataset', type: 'POST', contentType: 'application/json', data: JSON.stringify({ dataset_uuid: $(this).data('uuid') }), success: () => refreshDatasets(true) });
-            }
+            const uuid = $(this).data('uuid');
+            window.sysConfirm('CONFIRM DELETION: DATASET ARCHIVE?', function() {
+                $.ajax({ url: '/deleteDataset', type: 'POST', contentType: 'application/json', data: JSON.stringify({ dataset_uuid: uuid }), success: () => refreshDatasets(true) });
+            });
         });
-         $(document).on("click", ".btn-delete-model", function() {
-            if (confirm('CONFIRM DELETION: INFERENCE ENGINE?')) {
-                $.ajax({ url: '/deleteModel', type: 'POST', contentType: 'application/json', data: JSON.stringify({ model_uuid: $(this).data('uuid') }), success: () => refreshModels(true) });
-            }
+
+        $(document).on("click", ".btn-delete-model", function() {
+            const uuid = $(this).data('uuid');
+            window.sysConfirm('CONFIRM DELETION: INFERENCE ENGINE?', function() {
+                $.ajax({ url: '/deleteModel', type: 'POST', contentType: 'application/json', data: JSON.stringify({ model_uuid: uuid }), success: () => refreshModels(true) });
+            });
         });
+
         $(document).on("click", ".btn-delete-task", function() {
+            const taskUuid = $(this).data('task-uuid');
             const videoUuid = $(this).data('video-uuid');
-            if (confirm('REVOKE TASK ASSIGNMENT?')) {
-                $.ajax({ url: '/deleteTask', type: 'POST', contentType: 'application/json', data: JSON.stringify({ task_uuid: $(this).data('task-uuid') }), success: function() { refreshTasksInModal(videoUuid); } });
-            }
+            window.sysConfirm('REVOKE TASK ASSIGNMENT?', function() {
+                $.ajax({ url: '/deleteTask', type: 'POST', contentType: 'application/json', data: JSON.stringify({ task_uuid: taskUuid }), success: function() { refreshTasksInModal(videoUuid); } });
+            });
         });
 
         $(document).on("click", ".btn-regenerate-dataset", function() {
-            if (confirm('RECOMPILE DATASET? EXISTING FILES WILL BE OVERWRITTEN.')) {
-                $.ajax({ url: '/regenerateDataset', type: 'POST', contentType: 'application/json', data: JSON.stringify({ dataset_uuid: $(this).data('uuid') }), success: function(res) { if(res.success){ alert('RECOMPILATION_STARTED.'); refreshDatasets(true); } else alert(res.message); } });
-            }
+            const uuid = $(this).data('uuid');
+            window.sysConfirm('RECOMPILE DATASET? EXISTING FILES WILL BE OVERWRITTEN.', function() {
+                $.ajax({ url: '/regenerateDataset', type: 'POST', contentType: 'application/json', data: JSON.stringify({ dataset_uuid: uuid }), success: function(res) { if(res.success){ window.sysAlert('RECOMPILATION_STARTED.', 'success'); refreshDatasets(true); } else window.sysAlert(res.message, 'error'); } });
+            });
         });
 
         $(document).on("click", ".btn-cancel-task", function() {
-            if (confirm('ABORT CURRENT OPERATION?')) {
-                $.ajax({ url: '/cancelTask', type: 'POST', contentType: 'application/json', data: JSON.stringify({ video_uuid: $(this).data('uuid') }), success: function(res) { if(res.success){ alert('ABORT_SIGNAL_SENT.'); refreshVideos(true); } else alert(res.message); } });
-            }
+            const uuid = $(this).data('uuid');
+            window.sysConfirm('ABORT CURRENT OPERATION?', function() {
+                $.ajax({ url: '/cancelTask', type: 'POST', contentType: 'application/json', data: JSON.stringify({ video_uuid: uuid }), success: function(res) { if(res.success){ window.sysAlert('ABORT_SIGNAL_SENT.', 'success'); refreshVideos(true); } else window.sysAlert(res.message, 'error'); } });
+            });
         });
 
         // 初始加载
