@@ -451,7 +451,11 @@ def get_features_for_all_masks(video_uuid, frame_number):
 
             # 5. 触发后台保存 (定时)
             settings = settings_manager.load_settings()
-            cache_save_interval = settings.get('cache_save_interval_seconds', 30)
+            cache_save_interval = settings.get('cache_save_interval_seconds')
+            # 容错：如果 JSON 中存入了 null 或者非法值，强制恢复默认值 30
+            if cache_save_interval is None:
+                cache_save_interval = 30
+
             if time.time() - _last_cache_save_time > cache_save_interval:
                 threading.Thread(target=save_preprocessed_cache_to_disk).start()
 

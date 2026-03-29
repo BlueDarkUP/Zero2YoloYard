@@ -1211,7 +1211,7 @@
                 autosave_enabled: $('#setting-autosave-enabled').is(':checked'),
                 frame_extraction_jpeg_quality: parseInt($('#setting-jpeg-quality').val()),
                 default_opencv_tracker: $('#setting-opencv-tracker').val(),
-                cache_save_interval_seconds: parseInt($('#setting-cache-save-interval').val()),
+                cache_save_interval_seconds: parseInt($('#setting-cache-save-interval').val()) || 30,
                 class_colors: classColors
             };
 
