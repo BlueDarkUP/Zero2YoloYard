@@ -530,7 +530,17 @@
             <div class="col-12 mb-2">
                 <button id="interactive-mode-toggle" class="btn btn-sm btn-outline-info w-100 font-weight-bold info-trigger" data-key="smart_select"><i class="bi bi-crosshair"></i> Smart Select</button>
             </div>
-            <div class="col-12">
+
+            <div class="col-12" id="sam2-track-wrapper">
+                <div class="input-group input-group-sm mb-1">
+                    <div class="input-group-prepend">
+                        <span class="input-group-text border-secondary text-muted text-uppercase" style="background: rgba(0,0,0,0.4); font-size: 0.7rem;">End Frame</span>
+                    </div>
+                    <input type="number" id="sam2-end-frame-input" class="form-control tool-input text-center text-success font-weight-bold" value="{{ task_entity.end_frame }}" min="{{ task_entity.start_frame }}" max="{{ task_entity.end_frame }}">
+                    <div class="input-group-append">
+                        <button class="btn btn-outline-secondary" type="button" onclick="document.getElementById('sam2-end-frame-input').value = '{{ task_entity.end_frame }}'" title="Reset to Max"><i class="bi bi-skip-forward-fill"></i></button>
+                    </div>
+                </div>
                 <button id="sam2-track-btn" class="btn btn-sm btn-outline-success w-100 font-weight-bold info-trigger" data-key="video_tracking"><i class="bi bi-activity"></i> Video Tracking</button>
             </div>
         </div>
@@ -680,7 +690,7 @@
             'sam_point': { title: 'SAM (POINT_CLICK)', desc: 'Segment Anything Model. Core neural network for zero-shot object segmentation.', tune: 'Left-click on the center of your target object.', when: 'Use when manual bounding boxes are too tedious, or when the object has a highly complex/irregular shape.' },
             'lam_text': { title: 'LAM (TEXT_PROMPT)', desc: 'Label Anything Model. Open-world detection driven by textual prompts.', tune: 'Click anywhere on the canvas to trigger a scan, then select the matching class from the popup.', when: 'Use when encountering completely new, untrained objects that you want the AI to recognize out-of-the-box.' },
             'smart_select': { title: 'SMART_SELECT', desc: 'Local feature-space similarity retrieval. Scans the current frame for objects matching your designated target.', tune: 'Draw a box around one target. Adjust the confidence threshold to filter results.', when: 'Extremely useful when a frame contains dozens of identical objects (e.g., a pile of screws, a crowd) and you want to label them all at once.' },
-            'video_tracking': { title: 'VIDEO_TRACKING (SAM2)', desc: 'Temporal propagation engine powered by SAM2. Tracks labeled entities across consecutive frames.', tune: 'Ensure targets are perfectly labeled in the start frame, then click to track forward.', when: 'Use when objects move smoothly across dozens or hundreds of frames to completely automate the labeling process.' },
+            'video_tracking': { title: 'VIDEO_TRACKING (SAM2)', desc: 'Temporal propagation engine powered by SAM2. Tracks labeled entities across consecutive frames.', tune: 'Ensure targets are perfectly labeled in the start frame, set target end frame, then click to track forward.', when: 'Use when objects move smoothly across dozens or hundreds of frames to completely automate the labeling process.' },
             'find_sim': { title: 'QUERY_DATASET (FIND SIM)', desc: 'Global feature-space retrieval. Scans the active frame against the entire dataset\'s prototype library.', tune: 'Select an active class from the registry first. Toggle Strict Color Match if needed.', when: 'Use when the background changes drastically and you want to quickly recover previously labeled objects.' },
             'rebuild_ai': { title: 'REBUILD_AI_PROTOTYPES', desc: 'Recompiles the global prototype feature vectors for all classes. Computationally expensive.', tune: 'Executes silently in the background.', when: 'Run this if you have deleted/modified many labels and feel that Smart Select or Find Sim has become "dumb" or inaccurate.' },
             'color_match': { title: 'STRICT_COLOR_MATCH', desc: 'Injects HSV color space metrics into the embedding comparison matrix.', tune: 'Toggle ON to prioritize color. Toggle OFF to prioritize shape/geometry.', when: 'Turn ON when you need to distinguish between two identical shapes with different colors (e.g., a red ball vs. a blue ball).' },
@@ -727,13 +737,13 @@
             $('#sys-manual-panel').stop(true, true).fadeOut(150);
         });
 
-        // --- 新增：拦截不可用的 AI 工具 ---
+        // --- 拦截不可用的 AI 工具 ---
         const isSamEnabled = {{ is_sam_enabled | tojson }};
         const isFeatureExtractorEnabled = {{ is_feature_extractor_enabled | tojson }};
         const disabledTitle = "This feature is disabled in system settings to save resources.";
 
         if (!isSamEnabled) {
-            $('#sam-toggle-btn, #sam2-track-btn').prop('disabled', true).attr('title', disabledTitle);
+            $('#sam-toggle-btn, #sam2-track-btn, #sam2-end-frame-input').prop('disabled', true).attr('title', disabledTitle);
         }
 
         if (!isFeatureExtractorEnabled) {
@@ -886,13 +896,11 @@
                             if (!isSilent) showToast(`FRAME ${frameNum} SAVED.`);
 
                             // 【核心修复：更新本地前端缓存】
-                            // 保存到后端成功后，必须同步更新内存，防止切回来时读取到空数据
                             if (window.cachedFrames) {
                                 const frameData = window.cachedFrames.find(f => f.frame_number == frameNum);
                                 if (frameData) {
                                     frameData.bboxes_text = bboxesString;
                                 } else {
-                                    // 容错：如果缓存中竟然没有这一帧，就 push 进去
                                     window.cachedFrames.push({
                                         video_uuid: videoUuid,
                                         frame_number: parseInt(frameNum),
@@ -1382,7 +1390,9 @@
         function setTrackingUiState(isReview) {
             isReviewMode = isReview;
             $("#track-controls").slideToggle(isReview);
-            $("#save-bboxes, #sam-toggle-btn, #sam2-track-btn, #interactive-mode-toggle, #lam-toggle-btn").slideToggle(!isReview);
+
+            // 注意这里使用的是 #sam2-track-wrapper，因为现在它被包裹在一个控制块中
+            $("#save-bboxes, #sam-toggle-btn, #sam2-track-wrapper, #interactive-mode-toggle, #lam-toggle-btn").slideToggle(!isReview);
 
             if (!isReview) {
                 $("#track-progress-bar").css("width", "0%").text("0%").removeClass("bg-success bg-danger").addClass("progress-bar-animated");
@@ -1659,6 +1669,14 @@
 
             currentEditingFrame = newFrameNumber;
             $("#frame-number-display").text(newFrameNumber);
+
+            // 友好的自动步进：如果当前滑动已经超过了用户原来设定的终点，动态更新它的下限并把它推到最大帧
+            const endInput = $('#sam2-end-frame-input');
+            endInput.attr('min', newFrameNumber + 1);
+            if (parseInt(endInput.val()) <= newFrameNumber) {
+                endInput.val(parseInt(frameSlider.attr("max")));
+            }
+
             const imageUrl = `/media/frames/${videoUuid}/frame_${String(newFrameNumber).padStart(5, "0")}.jpg`;
 
             if (frameImage.src.endsWith(imageUrl) === false) { frameImage.src = imageUrl; }
@@ -2011,22 +2029,34 @@
             }
         });
 
+        // ==========================================
+        // 核心修改逻辑：自定义 SAM2 追踪终止帧
+        // ==========================================
         $('#sam2-track-btn').on('click', function() {
             if (bboxes.length === 0) { window.sysAlert("Label at least one object first.", 'error'); return; }
 
-            const currentFrame = frameSlider.val();
+            const startFrame = parseInt(frameSlider.val());
+            const userEndFrame = parseInt($('#sam2-end-frame-input').val());
+            const maxTaskFrame = parseInt(frameSlider.attr("max"));
+
+            if (isNaN(userEndFrame) || userEndFrame <= startFrame || userEndFrame > maxTaskFrame) {
+                window.sysAlert(`Invalid end frame. Please select a frame between ${startFrame + 1} and ${maxTaskFrame}.`, 'error');
+                return;
+            }
+
             const currentBboxes = formatBboxesToString();
 
             $.ajax({
                 url: "/storeVideoFrameBboxesText", type: "POST", contentType: "application/json", async: false,
-                data: JSON.stringify({ video_uuid: videoUuid, frame_number: parseInt(currentFrame), bboxes_text: currentBboxes })
+                data: JSON.stringify({ video_uuid: videoUuid, frame_number: startFrame, bboxes_text: currentBboxes })
             });
 
-            const startFrame = parseInt(frameSlider.val()), endFrame = parseInt(frameSlider.attr("max"));
-            window.sysConfirm(`Start SAM2 tracking from frame ${startFrame} to ${endFrame}?`, function() {
-                $('#sam2-track-btn').prop("disabled", true); setTrackingUiState(true);
-                trackedBboxCache = {}; trackedBboxCache[startFrame] = currentBboxes;
-                startTrackingSequence(startFrame, endFrame, currentBboxes);
+            window.sysConfirm(`Start SAM2 tracking from frame ${startFrame} to ${userEndFrame}?`, function() {
+                $('#sam2-track-btn').prop("disabled", true);
+                setTrackingUiState(true);
+                trackedBboxCache = {};
+                trackedBboxCache[startFrame] = currentBboxes;
+                startTrackingSequence(startFrame, userEndFrame, currentBboxes);
             });
         });
 
