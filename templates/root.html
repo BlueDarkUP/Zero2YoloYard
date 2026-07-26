@@ -601,6 +601,12 @@
             <label class="custom-file-label" for="video-file">SELECT_DATA_STREAM...</label>
         </div>
     </div>
+    <div class="form-group">
+        <label class="font-weight-bold small text-muted">
+            SAMPLING FPS (0 = EXTRACT ALL NATIVE FRAMES)
+        </label>
+        <input type="number" class="form-control" id="target-fps" name="target_fps" value="5" min="0" max="120" step="0.1" required>
+    </div>
     <button type="submit" class="btn btn-primary btn-block tracking-wider font-weight-bold">INITIATE_UPLOAD</button>
 </form>
 {% endcall %}

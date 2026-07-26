@@ -228,14 +228,13 @@ def start_sam2_batch_tracking_task(video_uuid, tracker_uuid, start_frame, end_fr
             del active_tasks[video_uuid]
         logging.info(f"Batch tracking task for {tracker_uuid} cleaned up.")
 
-
-def extract_frames_task(video_uuid):
+def extract_frames_task(video_uuid, target_fps=0.0):
     if active_tasks.get(video_uuid) == 'EXTRACTING':
         logging.warning(f"Extraction for {video_uuid} is already running.")
         return
 
     active_tasks[video_uuid] = 'EXTRACTING'
-    logging.info(f"Starting frame extraction for {video_uuid}")
+    logging.info(f"Starting frame extraction for {video_uuid} (Target FPS: {target_fps})")
     video_path = file_storage.get_video_path(video_uuid)
 
     try:
@@ -245,41 +244,56 @@ def extract_frames_task(video_uuid):
 
         width = int(vid.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(vid.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        fps = vid.get(cv2.CAP_PROP_FPS)
 
-        frame_count = int(vid.get(cv2.CAP_PROP_FRAME_COUNT))
-        if frame_count <= 0 or frame_count > config.MAX_FRAMES_PER_VIDEO:
+        native_fps = vid.get(cv2.CAP_PROP_FPS)
+        if native_fps <= 0:
+            native_fps = 30.0
+        total_native_frames = int(vid.get(cv2.CAP_PROP_FRAME_COUNT))
+        if total_native_frames <= 0:
             vid.set(cv2.CAP_PROP_POS_FRAMES, 0)
-            frame_count = 0
+            total_native_frames = 0
             while vid.grab():
-                frame_count += 1
+                total_native_frames += 1
             vid.set(cv2.CAP_PROP_POS_FRAMES, 0)
-
-        if frame_count > config.MAX_FRAMES_PER_VIDEO:
-            raise ValueError(f"Video has more than {config.MAX_FRAMES_PER_VIDEO} frames.")
-
-        database.update_video_after_extraction_start(video_uuid, width, height, fps, frame_count)
-
-        # 获取压缩配置
+        if target_fps > 0 and target_fps < native_fps:
+            skip_interval = native_fps / target_fps
+            actual_fps = target_fps
+        else:
+            skip_interval = 1.0
+            actual_fps = native_fps
+        frames_to_extract_indices = set()
+        next_target = 0.0
+        for i in range(total_native_frames):
+            if i >= next_target:
+                frames_to_extract_indices.add(i)
+                next_target += skip_interval
+        exact_frame_count = len(frames_to_extract_indices)
+        if exact_frame_count > config.MAX_FRAMES_PER_VIDEO:
+            raise ValueError(
+                f"Extracted frames ({exact_frame_count}) exceed limit ({config.MAX_FRAMES_PER_VIDEO}). Please lower the sampling FPS.")
+        database.update_video_after_extraction_start(video_uuid, width, height, actual_fps, exact_frame_count)
         settings = settings_manager.load_settings()
         jpeg_quality = int(settings.get('frame_extraction_jpeg_quality', 75))
 
-        count = 0
+        native_count = 0
+        extracted_index = 0
+
         while True:
             success, frame = vid.read()
             if not success:
                 break
 
-            success, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), jpeg_quality])
-            if success:
-                file_storage.save_frame_image(video_uuid, count, buffer.tobytes())
-                database.update_extracted_frame_count(video_uuid, count + 1)
-
-            count += 1
-
+            if native_count in frames_to_extract_indices:
+                success_enc, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), jpeg_quality])
+                if success_enc:
+                    file_storage.save_frame_image(video_uuid, extracted_index, buffer.tobytes())
+                    database.update_extracted_frame_count(video_uuid, extracted_index + 1)
+                extracted_index += 1
+            native_count += 1
         vid.release()
         database.update_video_status(video_uuid, 'READY')
-        logging.info(f"Frame extraction for {video_uuid} completed successfully.")
+        logging.info(
+            f"Frame extraction for {video_uuid} completed. Kept {exact_frame_count} out of {total_native_frames} frames.")
 
     except Exception as e:
         logging.error(f"Error extracting frames for {video_uuid}: {e}")

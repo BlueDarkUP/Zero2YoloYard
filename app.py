@@ -366,6 +366,10 @@ def list_videos():
 def upload_video():
     desc = request.form.get('description')
     video_file = request.files.get('video_file')
+    try:
+        target_fps = float(request.form.get('target_fps', 0))
+    except ValueError:
+        target_fps = 0.0
 
     is_valid, message = validate_description(desc, [v['description'] for v in database.get_all_video_list()])
     if not is_valid:
@@ -377,7 +381,7 @@ def upload_video():
     video_uuid = database.create_video_entry(desc, video_file.filename, 0, create_time_ms)
     file_storage.save_uploaded_video(video_file, video_uuid)
 
-    threading.Thread(target=background_tasks.extract_frames_task, args=(video_uuid,),
+    threading.Thread(target=background_tasks.extract_frames_task, args=(video_uuid, target_fps),
                      name=f"Extractor-{video_uuid[:6]}").start()
 
     return jsonify({'success': True, 'video_uuid': video_uuid})
