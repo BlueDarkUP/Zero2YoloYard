@@ -337,6 +337,19 @@ def pre_annotate_video_task(video_uuid, model_uuid, options):
         output_details = interpreter.get_output_details()
         height = input_details[0]['shape'][1]
         width = input_details[0]['shape'][2]
+        if len(output_details) < 4:
+            raise ValueError(
+                f"Unsupported TFLite format (Found {len(output_details)} outputs). "
+                "Currently, only standard TF Object Detection API models (4 outputs: boxes, classes, scores, count) are supported for .tflite. "
+                "If this is a YOLO model converted to TFLite, it will not work here. Please use the native YOLO (.pt) import feature instead."
+            )
+
+        idx_scores, idx_boxes, idx_classes = 0, 1, 3
+
+        for i, detail in enumerate(output_details):
+            shape = detail['shape']
+            if len(shape) == 3 and shape[2] == 4:
+                idx_boxes = i
 
         all_frames = database.get_video_frames(video_uuid)
         frames_to_process = []
@@ -377,18 +390,18 @@ def pre_annotate_video_task(video_uuid, model_uuid, options):
             interpreter.set_tensor(input_details[0]['index'], input_data)
             interpreter.invoke()
 
-            scores_raw = interpreter.get_tensor(output_details[0]['index'])[0]
-            boxes_raw = interpreter.get_tensor(output_details[1]['index'])[0]
-            classes_raw = interpreter.get_tensor(output_details[3]['index'])[0]
+            scores_raw = interpreter.get_tensor(output_details[idx_scores]['index'])[0]
+            boxes_raw = interpreter.get_tensor(output_details[idx_boxes]['index'])[0]
+            classes_raw = interpreter.get_tensor(output_details[idx_classes]['index'])[0]
 
-            scores_details = output_details[0]
+            scores_details = output_details[idx_scores]
             if scores_details['dtype'] == np.uint8 and scores_details.get('quantization'):
                 scale, zero_point = scores_details['quantization']
                 scores = (np.float32(scores_raw) - zero_point) * scale
             else:
                 scores = scores_raw
 
-            boxes_details = output_details[1]
+            boxes_details = output_details[idx_boxes]
             if boxes_details['dtype'] == np.uint8 and boxes_details.get('quantization'):
                 scale, zero_point = boxes_details['quantization']
                 boxes = (np.float32(boxes_raw) - zero_point) * scale
@@ -415,6 +428,9 @@ def pre_annotate_video_task(video_uuid, model_uuid, options):
         database.update_video_status(video_uuid, 'READY', "Pre-annotation complete")
         logging.info(f"Pre-annotation for {video_uuid} completed successfully.")
 
+    except ValueError as ve:
+        logging.warning(f"Pre-annotation validation failed: {ve}")
+        database.update_video_status(video_uuid, 'READY', f"FAILED: {str(ve)}")
     except Exception as e:
         logging.error(f"Error during pre-annotation for {video_uuid}: {e}", exc_info=True)
         database.update_video_status(video_uuid, 'READY', f"Pre-annotation failed: {e}")
