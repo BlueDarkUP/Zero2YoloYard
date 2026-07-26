@@ -358,6 +358,69 @@
         border-radius: 4px;
     }
 
+    /* ==================== TRACKING HUD STYLES ==================== */
+    /* 一体化边框容器 */
+    .target-frame-box {
+        background: rgba(0, 0, 0, 0.4);
+        border: 1px solid var(--border-color);
+        border-radius: 2px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 5px 10px;
+        transition: all 0.2s ease;
+    }
+    
+    /* 聚焦时整个容器发光 */
+    .target-frame-box:focus-within {
+        border-color: #28a745;
+        box-shadow: 0 0 10px rgba(40, 167, 69, 0.25);
+    }
+    
+    /* 去除原生输入框边框，融入容器 */
+    .target-frame-input {
+        background: transparent;
+        border: none;
+        color: #28a745;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.85rem;
+        text-align: right;
+        width: 50px;
+        outline: none;
+        padding: 0;
+    }
+    
+    /* 隐藏丑陋的数字上下箭头 */
+    .target-frame-input::-webkit-outer-spin-button,
+    .target-frame-input::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+    .target-frame-input[type=number] {
+        -moz-appearance: textfield;
+    }
+    
+    /* 跳转到最后的按钮修饰 */
+    .target-frame-btn {
+        background: transparent;
+        border: none;
+        color: var(--text-muted);
+        cursor: pointer;
+        padding: 0 0 0 8px;
+        border-left: 1px solid var(--border-color);
+        margin-left: 8px;
+        transition: color 0.2s, transform 0.2s;
+        display: flex;
+        align-items: center;
+        outline: none;
+    }
+    
+    .target-frame-btn:hover {
+        color: #28a745;
+        transform: scale(1.1);
+    }
+    .target-frame-btn:focus { outline: none; }
+
     /* 滚动条 */
     .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
     .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
@@ -532,15 +595,19 @@
             </div>
 
             <div class="col-12" id="sam2-track-wrapper">
-                <div class="input-group input-group-sm mb-1">
-                    <div class="input-group-prepend">
-                        <span class="input-group-text border-secondary text-muted text-uppercase" style="background: rgba(0,0,0,0.4); font-size: 0.7rem;">End Frame</span>
-                    </div>
-                    <input type="number" id="sam2-end-frame-input" class="form-control tool-input text-center text-success font-weight-bold" value="{{ task_entity.end_frame }}" min="{{ task_entity.start_frame }}" max="{{ task_entity.end_frame }}">
-                    <div class="input-group-append">
-                        <button class="btn btn-outline-secondary" type="button" onclick="document.getElementById('sam2-end-frame-input').value = '{{ task_entity.end_frame }}'" title="Reset to Max"><i class="bi bi-skip-forward-fill"></i></button>
+                <!-- 重新设计的一体化输入框容器 -->
+                <div class="target-frame-box mb-2">
+                    <span class="text-muted text-uppercase" style="font-size: 0.7rem; font-family: 'JetBrains Mono'; letter-spacing: 0.05em;">
+                        <i class="bi bi-stop-circle text-success mr-1"></i> End Frame
+                    </span>
+                    <div class="d-flex align-items-center">
+                        <input type="number" id="sam2-end-frame-input" class="target-frame-input text-success font-weight-bold" value="{{ task_entity.end_frame }}" min="{{ task_entity.start_frame }}" max="{{ task_entity.end_frame }}">
+                        <button class="target-frame-btn" type="button" onclick="document.getElementById('sam2-end-frame-input').value = '{{ task_entity.end_frame }}'" title="Reset to Max">
+                            <i class="bi bi-skip-forward-fill"></i>
+                        </button>
                     </div>
                 </div>
+                <!-- 追踪按钮 -->
                 <button id="sam2-track-btn" class="btn btn-sm btn-outline-success w-100 font-weight-bold info-trigger" data-key="video_tracking"><i class="bi bi-activity"></i> Video Tracking</button>
             </div>
         </div>
@@ -715,18 +782,18 @@
             const panelWidth = panel.outerWidth();
             const panelHeight = panel.outerHeight();
 
-            // Anchor directly to the mouse cursor coordinates + 15px gap
-            let leftPos = e.pageX + 15;
-            let topPos = e.pageY + 15;
+            // Anchor directly to the mouse cursor coordinates (缩小间距，更贴近指针)
+            let leftPos = e.pageX + 8;
+            let topPos = e.pageY + 12;
 
-            // X-axis collision detection (Push it to the left of the cursor if too close to right edge)
-            if (leftPos + panelWidth > $(window).width() - 20) {
-                leftPos = e.pageX - panelWidth - 15;
+            // X-axis collision detection (如果是右侧边缘，翻转到左侧时同样保持极小间距)
+            if (leftPos + panelWidth > $(window).width() - 10) {
+                leftPos = e.pageX - panelWidth - 8;
             }
 
-            // Y-axis collision detection (Push it above the cursor if too close to bottom)
-            if (topPos + panelHeight > $(window).scrollTop() + $(window).height() - 20) {
-                topPos = e.pageY - panelHeight - 15;
+            // Y-axis collision detection (如果是底部边缘，翻转到上方)
+            if (topPos + panelHeight > $(window).scrollTop() + $(window).height() - 10) {
+                topPos = e.pageY - panelHeight - 8;
             }
 
             // Apply calculated position, set back to hidden for fade animation
