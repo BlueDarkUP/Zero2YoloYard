@@ -5,6 +5,7 @@ import logging
 import time
 import uuid
 import config
+import file_storage
 from bbox_writer import extract_labels
 
 from sqlalchemy import create_engine, text, event
@@ -307,6 +308,13 @@ def save_frame_bboxes(video_uuid, frame_number, bboxes_text):
             labels_to_insert = [{"fid": frame_id, "ln": label} for label in unique_labels]
             conn.execute(text('INSERT INTO frame_labels (frame_id, label_name) VALUES (:fid, :ln)'), labels_to_insert)
 
+            for label in unique_labels:
+                conn.execute(
+                    text(
+                        'INSERT INTO class_labels (label_name, create_time_ms) VALUES (:ln, :c) ON CONFLICT(label_name) DO NOTHING'),
+                    {"ln": label, "c": int(time.time() * 1000)}
+                )
+
         new_labeled_count = conn.execute(
             text(
                 "SELECT COUNT(*) FROM video_frames WHERE video_uuid = :u AND ((bboxes_text IS NOT NULL AND bboxes_text != '') OR (tags IS NOT NULL AND tags != '[]' AND tags != ''))"),
@@ -568,3 +576,17 @@ def get_frame_bboxes(video_uuid, frame_number):
             {"u": video_uuid, "fn": frame_number}
         ).fetchone()
         return dict(result._mapping) if result else None
+
+def get_class_usage_count(label_name):
+    """统计某个类别在全局多少个帧中被使用了"""
+    try:
+        with engine.connect() as conn:
+            # 查询 frame_labels 表中该类别的出现次数
+            count = conn.execute(
+                text('SELECT COUNT(DISTINCT frame_id) FROM frame_labels WHERE label_name = :ln'),
+                {"ln": label_name}
+            ).scalar()
+            return count or 0
+    except Exception as e:
+        logging.error(f"Error counting class usage for {label_name}: {e}")
+        return 0

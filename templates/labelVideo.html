@@ -249,19 +249,30 @@
         border-bottom: 1px solid var(--border-color);
         border-radius: 0;
         margin-bottom: 0;
-        cursor: pointer;
         font-family: 'JetBrains Mono', monospace;
         font-size: 0.8rem;
         transition: all 0.2s ease-out;
-        padding: 0.6rem 0.75rem;
+        padding: 0.5rem 0.75rem;
         border-left: 3px solid transparent;
     }
+    
+    #class-list .list-group-item { cursor: default; }
+    #bbox-list .list-group-item { cursor: pointer; }
+    
+    .class-item-clickable {
+        cursor: pointer;
+        width: 100%;
+        display: flex;
+        align-items: center;
+    }
+
     #class-list .list-group-item:hover,
     #bbox-list .list-group-item:hover {
         background: rgba(255,255,255,0.05);
         border-left-color: rgba(255,255,255,0.5);
         transform: translateX(2px);
     }
+    
     #class-list .list-group-item.active,
     #bbox-list .list-group-item.selected {
         background: rgba(0, 240, 255, 0.08);
@@ -271,6 +282,21 @@
         color: var(--text-main);
         transform: translateX(4px);
         box-shadow: inset 20px 0 30px -20px var(--color-primary-dim);
+    }
+
+    .delete-class-btn {
+        opacity: 0.3;
+        transition: opacity 0.2s, transform 0.2s;
+    }
+    #class-list .list-group-item:hover .delete-class-btn { opacity: 1; }
+    .delete-class-btn:hover { transform: scale(1.2); color: var(--color-danger) !important; }
+    
+    .class-count-badge {
+        font-size: 0.65rem;
+        padding: 2px 6px;
+        background: rgba(255,255,255,0.1);
+        border-radius: 10px;
+        margin-left: auto;
     }
 
     /* 颜色块 */
@@ -859,6 +885,7 @@
 
         let availableClasses = [];
         let activeClass = null;
+        let hoveredClass = null;
         let bboxes = [];
         let selectedBboxIndex = -1;
 
@@ -945,6 +972,64 @@
                 $('body').css({ 'cursor': '', 'user-select': '' });
                 resizeCanvas();
             }
+        });
+
+        $("#class-list").on("click", ".class-item-clickable", function() {
+            const clickedClass = $(this).closest('li').data("class-name");
+            activeClass = activeClass === clickedClass ? null : clickedClass;
+            renderClassList();
+        });
+
+        $("#class-list").on("mouseenter", ".list-group-item", function() {
+            hoveredClass = $(this).data("class-name");
+            redrawStaticCanvas();
+        }).on("mouseleave", ".list-group-item", function() {
+            hoveredClass = null;
+            redrawStaticCanvas();
+        });
+
+        $("#class-list").on("click", ".delete-class-btn", function(e) {
+            e.stopPropagation();
+            const className = $(this).data("class");
+            const btn = $(this);
+            
+            btn.html('<span class="spinner-border spinner-border-sm"></span>');
+
+            $.ajax({
+                url: '/api/checkClassUsage',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ label_name: className }),
+                success: function(res) {
+                    btn.html('<i class="bi bi-trash"></i>');
+                    
+                    let msg = `CONFIRM DELETE: Remove class [ ${className} ] from the registry?`;
+                    if (res.usage_count > 0) {
+                        msg = `DANGER: Class [ ${className} ] is used in ${res.usage_count} frames globally!\n\nDeleting it will remove it from the sidebar registry, but WILL NOT delete existing bounding boxes in your images. Proceed anyway?`;
+                    }
+
+                    window.sysConfirm(msg, function() {
+                        $.ajax({
+                            url: '/deleteClass',
+                            type: 'POST',
+                            contentType: 'application/json',
+                            data: JSON.stringify({ label_name: className }),
+                            success: function() {
+                                availableClasses = availableClasses.filter(c => c !== className);
+                                if (activeClass === className) activeClass = null;
+                                hoveredClass = null;
+                                renderClassList();
+                                redrawStaticCanvas();
+                                showToast(`Class [ ${className} ] purged from registry.`, 2500);
+                            }
+                        });
+                    });
+                },
+                error: function() {
+                    btn.html('<i class="bi bi-trash"></i>');
+                    window.sysAlert('Error checking class usage.', 'error');
+                }
+            });
         });
 
         // --- 封装通用的保存函数 ---
@@ -1038,16 +1123,21 @@
 
             // 2. Saved BBoxes
             bboxes.forEach((box, index) => {
-                // 如果正在拖拽且是当前选中的框，则跳过静态绘制（交由动态层绘制）
                 if (isDraggingBbox && index === selectedBboxIndex) return;
 
                 const color = stringToColor(box.label);
+                const isHoveredClass = (hoveredClass !== null && box.label === hoveredClass);
 
                 if (index === selectedBboxIndex) {
                     staticCtx.strokeStyle = '#fff';
                     staticCtx.lineWidth = 3 / dpr;
                     staticCtx.shadowColor = getColor('selectionShadow');
                     staticCtx.shadowBlur = 15 / dpr;
+                } else if (isHoveredClass) {
+                    staticCtx.strokeStyle = '#fff';
+                    staticCtx.lineWidth = 3 / dpr;
+                    staticCtx.shadowColor = color;
+                    staticCtx.shadowBlur = 20 / dpr;
                 } else {
                     staticCtx.strokeStyle = color;
                     staticCtx.lineWidth = 2 / dpr;
@@ -1060,6 +1150,13 @@
                 }
 
                 const x = box.x1 * scaleX, y = box.y1 * scaleY, w = (box.x2 - box.x1) * scaleX, h = (box.y2 - box.y1) * scaleY;
+
+                if (isHoveredClass && index !== selectedBboxIndex) {
+                    staticCtx.fillStyle = color;
+                    staticCtx.globalAlpha = 0.15;
+                    staticCtx.fillRect(x, y, w, h);
+                    staticCtx.globalAlpha = 1.0;
+                }
                 staticCtx.strokeRect(x, y, w, h);
                 staticCtx.setLineDash([]);
                 staticCtx.shadowBlur = 0;
@@ -1130,7 +1227,7 @@
                  staticCtx.lineWidth = 2 / dpr;
                  staticCtx.setLineDash([5/dpr, 3/dpr]);
                  positiveExampleBboxes.forEach(box => {
-                      const x = box.x1 * scaleX, y = box.y1 * scaleY, w = (box[2] - box[0]) * scaleX, h = (box[3] - box[1]) * scaleY;
+                      const x = box.x1 * scaleX, y = box[1] * scaleY, w = (box[2] - box[0]) * scaleX, h = (box[3] - box[1]) * scaleY;
                       staticCtx.strokeRect(x,y,w,h);
                  });
                  staticCtx.setLineDash([]);
@@ -1261,14 +1358,30 @@
         function renderClassList() {
             const list = $("#class-list");
             list.empty();
+
+            const classCounts = {};
+            bboxes.forEach(box => {
+                if(box.label) { classCounts[box.label] = (classCounts[box.label] || 0) + 1; }
+            });
+
             availableClasses.forEach(className => {
                 const color = stringToColor(className);
-                const colorSwatch = `<span class="color-swatch" style="background-color: ${color}; border-color: ${color};"></span>`;
-                const listItem = $(`<li class="list-group-item d-flex align-items-center">${colorSwatch}<span>${className}</span></li>`);
-                listItem.attr("data-class-name", className);
-                if (className === activeClass) {
-                    listItem.addClass("active");
-                }
+                const count = classCounts[className] || 0;
+                const countHtml = count > 0 ? `<span class="class-count-badge text-primary" style="box-shadow: 0 0 5px ${color}; border: 1px solid ${color};">${count}</span>` : '';
+                const isActive = className === activeClass ? "active" : "";
+
+                const listItem = $(`
+                    <li class="list-group-item d-flex justify-content-between align-items-center ${isActive}" data-class-name="${className}">
+                        <div class="class-item-clickable text-truncate" title="${className}">
+                            <span class="color-swatch flex-shrink-0" style="background-color: ${color}; border-color: ${color};"></span>
+                            <span class="text-truncate mr-2">${className}</span>
+                            ${countHtml}
+                        </div>
+                        <button class="btn btn-xs btn-link text-muted p-0 ml-1 flex-shrink-0 delete-class-btn" title="Delete Class" data-class="${className}">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </li>
+                `);
                 list.append(listItem);
             });
         }
@@ -1300,6 +1413,7 @@
                 selectedBboxIndex = -1;
                 redrawStaticCanvas();
                 renderBboxList();
+                renderClassList();
             }
         }
 
@@ -1310,6 +1424,7 @@
                 selectedBboxIndex = -1;
                 redrawStaticCanvas();
                 renderBboxList();
+                renderClassList();
             }
         }
 
@@ -1407,6 +1522,16 @@
             bboxes = parseBboxesFromString(frameData ? frameData.bboxes_text : '');
             suggestionBboxes = parseSuggestionsFromString(frameData ? frameData.suggested_bboxes_text : '');
 
+            let needReRenderClassList = false;
+            bboxes.forEach(box => {
+                if (box.label && !availableClasses.includes(box.label)) {
+                    availableClasses.push(box.label);
+                    needReRenderClassList = true;
+                    // 静默推送到后端注册表
+                    $.ajax({url: "/addClass", type: "POST", contentType: "application/json", data: JSON.stringify({ label_name: box.label })});
+                }
+            });
+
             if (suggestionBboxes.length > 0) {
                 $('#suggestion-review-controls').slideDown();
             } else {
@@ -1432,6 +1557,7 @@
             historyIndex = 0;
             redrawStaticCanvas();
             renderBboxList();
+            renderClassList(); 
         }
 
         function addClass(className) {
@@ -1708,7 +1834,7 @@
                 const selectedLabel = $(this).data('label');
                 if (selectedLabel) {
                     bboxes.push({ ...bbox, label: selectedLabel, id: self.crypto.randomUUID() });
-                    saveStateToHistory(); selectedBboxIndex = bboxes.length - 1; renderBboxList();
+                    saveStateToHistory(); selectedBboxIndex = bboxes.length - 1; renderBboxList(); renderClassList();
                 }
                 popup.remove(); redrawStaticCanvas();
             });
@@ -1766,7 +1892,7 @@
                     x2: Math.round((pos.x * scaleX) + halfW), y2: Math.round((pos.y * scaleY) + halfH),
                     label: repeatMode.label, id: self.crypto.randomUUID()
                 });
-                saveStateToHistory(); selectedBboxIndex = bboxes.length - 1; renderBboxList(); redrawStaticCanvas();
+                saveStateToHistory(); selectedBboxIndex = bboxes.length - 1; renderBboxList(); renderClassList(); redrawStaticCanvas();
                 return;
             }
             if (isLamModeActive) {
@@ -1803,7 +1929,7 @@
                         } else {
                             if (activeClass) {
                                 bboxes.push({ ...res.bbox, label: activeClass, id: self.crypto.randomUUID() });
-                                saveStateToHistory(); selectedBboxIndex = bboxes.length - 1; renderBboxList(); redrawStaticCanvas(); showToast('SAM object added!', 2000);
+                                saveStateToHistory(); selectedBboxIndex = bboxes.length - 1; renderBboxList(); renderClassList(); redrawStaticCanvas(); showToast('SAM object added!', 2000);
                             } else { window.sysAlert('Select class first.', 'error'); }
                         }
                     },
@@ -1835,7 +1961,7 @@
                     e.preventDefault();
                     const acc = suggestionBboxes.splice(clickedSugIndex, 1)[0];
                     bboxes.push({ x1: acc.box[0], y1: acc.box[1], x2: acc.box[2], y2: acc.box[3], label: acc.label, id: self.crypto.randomUUID() });
-                    saveStateToHistory(); selectedBboxIndex = bboxes.length - 1; redrawStaticCanvas(); renderBboxList();
+                    saveStateToHistory(); selectedBboxIndex = bboxes.length - 1; redrawStaticCanvas(); renderBboxList(); renderClassList();
                     showToast(`Accepted suggestion.`, 2000);
                     return;
                 }
@@ -1866,7 +1992,7 @@
                     const res = interactivePreviewBboxes[targetBoxIndex]; const b = res.box;
                     bboxes.push({ x1: b[0], y1: b[1], x2: b[2], y2: b[3], label: res.label || activeClass });
                     interactivePreviewBboxes.splice(targetBoxIndex, 1);
-                    saveStateToHistory(); renderBboxList(); hoveredPreviewIndex = -1; redrawStaticCanvas();
+                    saveStateToHistory(); renderBboxList(); renderClassList(); hoveredPreviewIndex = -1; redrawStaticCanvas();
                     return;
                 }
             }
@@ -2009,7 +2135,7 @@
                     redrawStaticCanvas(); triggerFindSimilar();
                 } else if (activeClass) {
                     bboxes.push({ ...newBoxRaw, label: activeClass, id: self.crypto.randomUUID() });
-                    saveStateToHistory(); selectedBboxIndex = bboxes.length - 1; renderBboxList();
+                    saveStateToHistory(); selectedBboxIndex = bboxes.length - 1; renderBboxList(); renderClassList();
                 }
                 redrawStaticCanvas();
 
@@ -2036,12 +2162,6 @@
         });
         $('#new-class-name').on("keydown", function(e) { if (e.key === 'Enter') { e.preventDefault(); $('#add-class-btn').click(); } });
 
-        $("#class-list").on("click", ".list-group-item", function() {
-            const clickedClass = $(this).data("class-name");
-            activeClass = activeClass === clickedClass ? null : clickedClass;
-            renderClassList();
-        });
-
         $('#bbox-list').on("click", ".list-group-item", function() {
             selectedBboxIndex = parseInt($(this).data("index"));
             redrawStaticCanvas(); renderBboxList();
@@ -2050,7 +2170,7 @@
         $("#bbox-list").on("click", ".delete-bbox-btn", function(e) {
             e.stopPropagation();
             bboxes.splice(parseInt($(this).data("index")), 1);
-            saveStateToHistory(); selectedBboxIndex = -1; redrawStaticCanvas(); renderBboxList();
+            saveStateToHistory(); selectedBboxIndex = -1; redrawStaticCanvas(); renderBboxList(); renderClassList();
         });
 
         $("#save-bboxes").on("click", function() { performSave(parseInt(frameSlider.val()), formatBboxesToString(), false); });
@@ -2297,7 +2417,7 @@
             });
             if (acceptedCount > 0) {
                 suggestionBboxes = remainingSuggestions;
-                saveStateToHistory(); selectedBboxIndex = -1; redrawStaticCanvas(); renderBboxList();
+                saveStateToHistory(); selectedBboxIndex = -1; redrawStaticCanvas(); renderBboxList(); renderClassList();
                 showToast(`Accepted ${acceptedCount} suggestions.`, 2000);
             } else { showToast('No suggestions visible.', 2000); }
         });
@@ -2314,7 +2434,7 @@
             });
             if (addedCount > 0) {
                 interactivePreviewBboxes = remainingPreviews;
-                saveStateToHistory(); renderBboxList(); redrawStaticCanvas();
+                saveStateToHistory(); renderBboxList(); renderClassList(); redrawStaticCanvas();
                 showToast(`${addedCount} entities added.`, 2000);
             } else { showToast('No visible entities.', 2000); }
         });
@@ -2336,7 +2456,7 @@
             } else if (e.key === "Delete" || e.key === "Backspace") {
                 e.preventDefault();
                 if (isNegModalVisible) { clearCurrentNegativeSamples(); }
-                else if (selectedBboxIndex !== -1) { bboxes.splice(selectedBboxIndex, 1); saveStateToHistory(); selectedBboxIndex = -1; redrawStaticCanvas(); renderBboxList(); }
+                else if (selectedBboxIndex !== -1) { bboxes.splice(selectedBboxIndex, 1); saveStateToHistory(); selectedBboxIndex = -1; redrawStaticCanvas(); renderBboxList(); renderClassList(); }
             } else if (e.key === "Escape") {
                 e.preventDefault();
                 if (interpolationState.isActive) { resetInterpolationState(true); showToast("Interpolation aborted.", 2000); }

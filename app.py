@@ -649,6 +649,25 @@ def delete_class():
     return jsonify({'success': True})
 
 
+@app.route('/api/checkClassUsage', methods=['POST'])
+
+
+def check_class_usage():
+    label_name = request.json.get('label_name')
+    if not label_name:
+        return jsonify({'success': False, 'usage_count': 0})
+
+    try:
+        with database.engine.connect() as conn:
+            count = conn.execute(
+                database.text('SELECT COUNT(DISTINCT frame_id) FROM frame_labels WHERE label_name = :ln'),
+                {"ln": label_name}
+            ).scalar()
+        return jsonify({'success': True, 'usage_count': count or 0})
+    except Exception as e:
+        logging.error(f"Failed to check class usage: {e}")
+        return jsonify({'success': False, 'usage_count': 0})
+
 @app.route('/api/settings', methods=['GET'])
 def get_settings():
     settings = settings_manager.load_settings()
