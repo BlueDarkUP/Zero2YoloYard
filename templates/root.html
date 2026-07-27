@@ -645,16 +645,20 @@
 <form id="import-model-form">
     <div class="form-group"><label class="font-weight-bold small text-muted">DESCRIPTION / IDENTIFIER</label><input type="text" class="form-control" id="model-description" name="description" required maxlength="{{ limit_data.MAX_DESCRIPTION_LENGTH }}"></div>
     <div class="form-group">
-        <label class="font-weight-bold small text-muted">MODEL_BINARY (.TFLITE)</label>
-        <div class="custom-file"><input type="file" class="custom-file-input" id="model-file" name="model_file" accept=".tflite" required><label class="custom-file-label" for="model-file">SELECT_FILE...</label></div>
+        <label class="font-weight-bold small text-muted">MODEL_BINARY (.TFLITE / .PT)</label>
+        <div class="custom-file"><input type="file" class="custom-file-input" id="model-file" name="model_file" accept=".tflite,.pt" required><label class="custom-file-label" for="model-file">SELECT_FILE...</label></div>
     </div>
     <div class="form-group">
-        <label class="font-weight-bold small text-muted">LABEL_MAP (.TXT)</label>
-        <div class="custom-file"><input type="file" class="custom-file-input" id="label-file" name="label_file" accept=".txt,.labels" required><label class="custom-file-label" for="label-file">SELECT_FILE...</label></div>
+        <label class="font-weight-bold small text-muted">LABEL_MAP (.TXT) [OPTIONAL FOR YOLO .PT]</label>
+        <div class="custom-file"><input type="file" class="custom-file-input" id="label-file" name="label_file" accept=".txt,.labels"><label class="custom-file-label" for="label-file">SELECT_FILE...</label></div>
     </div>
     <div class="form-group">
-        <label class="font-weight-bold small text-muted">ARCHITECTURE_TYPE</label>
-        <select class="form-control custom-select" id="model-type" name="model_type" required><option value="float32">FLOAT32 (STANDARD)</option><option value="uint8">UINT8 (EDGE_TPU_ACCEL)</option></select>
+        <label class="font-weight-bold small text-muted">ARCHITECTURE_PRECISION</label>
+        <select class="form-control custom-select" id="model-type" name="model_type" required>
+            <option value="float32">FLOAT32 (STANDARD)</option>
+            <option value="float16">FLOAT16 (FP16 ACCEL)</option>
+            <option value="int8">INT8 / UINT8 (QUANTIZED)</option>
+        </select>
     </div>
     <button type="submit" class="btn btn-primary btn-block tracking-wider font-weight-bold">IMPORT_ENGINE</button>
 </form>

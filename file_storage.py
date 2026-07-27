@@ -255,7 +255,12 @@ def delete_dataset_files(dataset_uuid):
 
 
 def get_model_path(model_uuid):
-    return os.path.join(config.STORAGE_DIR, 'models', f"{model_uuid}.tflite")
+    base_dir = os.path.join(config.STORAGE_DIR, 'models', model_uuid)
+    for ext in ['.tflite', '.pt']:
+        path = f"{base_dir}{ext}"
+        if os.path.exists(path):
+            return path
+    return f"{base_dir}.tflite"
 
 
 def get_label_file_path(model_uuid):
@@ -263,7 +268,10 @@ def get_label_file_path(model_uuid):
 
 
 def save_imported_model(file_storage_obj, model_uuid):
-    model_path = get_model_path(model_uuid)
+    ext = os.path.splitext(file_storage_obj.filename)[1].lower()
+    if not ext:
+        ext = '.tflite'
+    model_path = os.path.join(config.STORAGE_DIR, 'models', f"{model_uuid}{ext}")
     file_storage_obj.save(model_path)
     return model_path
 
@@ -275,8 +283,10 @@ def save_imported_label_file(file_storage_obj, model_uuid):
 
 
 def delete_model_file(model_uuid):
-    model_path = get_model_path(model_uuid)
-    if os.path.exists(model_path): os.remove(model_path)
+    for ext in ['.tflite', '.pt']:
+        path = os.path.join(config.STORAGE_DIR, 'models', f"{model_uuid}{ext}")
+        if os.path.exists(path):
+            os.remove(path)
 
 
 def delete_label_file(model_uuid):

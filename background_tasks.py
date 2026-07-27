@@ -319,7 +319,7 @@ def pre_annotate_video_task(video_uuid, model_uuid, options):
 
         video = database.get_video_entity(video_uuid)
         model_info = database.get_model_entity(model_uuid)
-        model_type = model_info['model_type']
+        model_type = model_info['model_type']  # float32, float16, int8, uint8 等
 
         database.update_video_status(video_uuid, 'PRE_ANNOTATING', f"Using model: {model_info['description']}")
         database.update_pre_annotation_info(video_uuid, model_uuid, model_info['description'])
@@ -327,29 +327,62 @@ def pre_annotate_video_task(video_uuid, model_uuid, options):
         model_path = file_storage.get_model_path(model_uuid)
         label_path = file_storage.get_label_file_path(model_uuid)
 
-        interpreter = tf.lite.Interpreter(model_path=model_path)
-        interpreter.allocate_tensors()
+        is_pt = model_path.endswith('.pt')
+        is_tflite = model_path.endswith('.tflite')
 
-        with open(label_path, 'r') as f:
-            labels = [line.strip() for line in f.readlines()]
+        if not is_pt and not is_tflite:
+            raise ValueError("Unsupported model file extension. Must be .tflite or .pt")
 
-        input_details = interpreter.get_input_details()
-        output_details = interpreter.get_output_details()
-        height = input_details[0]['shape'][1]
-        width = input_details[0]['shape'][2]
-        if len(output_details) < 4:
-            raise ValueError(
-                f"Unsupported TFLite format (Found {len(output_details)} outputs). "
-                "Currently, only standard TF Object Detection API models (4 outputs: boxes, classes, scores, count) are supported for .tflite. "
-                "If this is a YOLO model converted to TFLite, it will not work here. Please use the native YOLO (.pt) import feature instead."
-            )
+        labels = []
+        if os.path.exists(label_path):
+            with open(label_path, 'r') as f:
+                labels = [line.strip() for line in f.readlines() if line.strip()]
 
-        idx_scores, idx_boxes, idx_classes = 0, 1, 3
+        yolo_model = None
+        interpreter = None
+        input_details = None
+        output_details = None
+        height, width = 640, 640
 
-        for i, detail in enumerate(output_details):
-            shape = detail['shape']
-            if len(shape) == 3 and shape[2] == 4:
-                idx_boxes = i
+        DEVICE = settings_manager.get_device()
+
+        if is_pt:
+            try:
+                from ultralytics import YOLO
+                yolo_model = YOLO(model_path)
+
+                yolo_model.to(DEVICE)
+
+                if model_type == 'float16':
+                    yolo_model.half()
+                    logging.info("YOLO .pt model switched to FP16 (Half Precision) mode.")
+                elif model_type in ['int8', 'uint8']:
+                    logging.info("INT8 precision selected for YOLO .pt model.")
+
+                if not labels and hasattr(yolo_model, 'names'):
+                    labels = list(yolo_model.names.values())
+                    logging.info(f"Auto-extracted {len(labels)} classes from YOLO .pt model metadata.")
+
+            except Exception as e:
+                raise ValueError(
+                    f"Failed to load YOLO .pt model. Ensure it is a valid YOLOv8/v11 weights file. Details: {e}")
+
+        else:
+            interpreter = tf.lite.Interpreter(model_path=model_path)
+            interpreter.allocate_tensors()
+
+            input_details = interpreter.get_input_details()
+            output_details = interpreter.get_output_details()
+            height = input_details[0]['shape'][1]
+            width = input_details[0]['shape'][2]
+            if len(output_details) < 4:
+                raise ValueError(
+                    f"Unsupported TFLite format (Found {len(output_details)} outputs). "
+                    "Standard TF Object Detection API models (4 outputs) are required for .tflite."
+                )
+
+            if model_type == 'float16':
+                logging.info("TFLite model configured for FP16 inference.")
 
         all_frames = database.get_video_frames(video_uuid)
         frames_to_process = []
@@ -381,46 +414,72 @@ def pre_annotate_video_task(video_uuid, model_uuid, options):
             frame_img = cv2.imread(frame_path)
             imH, imW, _ = frame_img.shape
             frame_rgb = cv2.cvtColor(frame_img, cv2.COLOR_BGR2RGB)
-            image_resized = cv2.resize(frame_rgb, (width, height))
-            input_data = np.expand_dims(image_resized, axis=0)
-
-            if model_type == 'float32':
-                input_data = np.float32(input_data) / 255.0
-
-            interpreter.set_tensor(input_details[0]['index'], input_data)
-            interpreter.invoke()
-
-            scores_raw = interpreter.get_tensor(output_details[idx_scores]['index'])[0]
-            boxes_raw = interpreter.get_tensor(output_details[idx_boxes]['index'])[0]
-            classes_raw = interpreter.get_tensor(output_details[idx_classes]['index'])[0]
-
-            scores_details = output_details[idx_scores]
-            if scores_details['dtype'] == np.uint8 and scores_details.get('quantization'):
-                scale, zero_point = scores_details['quantization']
-                scores = (np.float32(scores_raw) - zero_point) * scale
-            else:
-                scores = scores_raw
-
-            boxes_details = output_details[idx_boxes]
-            if boxes_details['dtype'] == np.uint8 and boxes_details.get('quantization'):
-                scale, zero_point = boxes_details['quantization']
-                boxes = (np.float32(boxes_raw) - zero_point) * scale
-            else:
-                boxes = boxes_raw
-            classes = classes_raw
 
             bboxes_text_lines = []
-            for j in range(len(scores)):
-                if scores[j] > confidence_threshold:
-                    ymin = int(max(0, boxes[j][0] * imH))
-                    xmin = int(max(0, boxes[j][1] * imW))
-                    ymax = int(min(imH, boxes[j][2] * imH))
-                    xmax = int(min(imW, boxes[j][3] * imW))
 
-                    object_id = int(classes[j])
-                    if object_id < len(labels):
-                        object_name = labels[object_id]
-                        bboxes_text_lines.append(f"{xmin},{ymin},{xmax},{ymax},{object_name}")
+            if is_pt:
+                results = yolo_model(frame_rgb, conf=confidence_threshold, verbose=False)
+                if results and len(results) > 0:
+                    boxes_data = results[0].boxes
+                    if boxes_data is not None and len(boxes_data) > 0:
+                        xyxy = boxes_data.xyxy.cpu().numpy()  # 像素坐标 [xmin, ymin, xmax, ymax]
+                        conf = boxes_data.conf.cpu().numpy()
+                        cls = boxes_data.cls.cpu().numpy()
+
+                        for j in range(len(xyxy)):
+                            xmin = int(max(0, xyxy[j][0]))
+                            ymin = int(max(0, xyxy[j][1]))
+                            xmax = int(min(imW, xyxy[j][2]))
+                            ymax = int(min(imH, xyxy[j][3]))
+                            score = float(conf[j])
+                            class_id = int(cls[j])
+
+                            if class_id < len(labels):
+                                object_name = labels[class_id]
+                                bboxes_text_lines.append(f"{xmin},{ymin},{xmax},{ymax},{object_name}")
+
+            else:
+                image_resized = cv2.resize(frame_rgb, (width, height))
+                input_data = np.expand_dims(image_resized, axis=0)
+
+                if model_type in ['float32', 'float16']:
+                    input_data = np.float32(input_data) / 255.0
+
+                interpreter.set_tensor(input_details[0]['index'], input_data)
+                interpreter.invoke()
+
+                idx_scores, idx_boxes, idx_classes = 0, 1, 3
+                for idx, detail in enumerate(output_details):
+                    if len(detail['shape']) == 3 and detail['shape'][2] == 4:
+                        idx_boxes = idx
+
+                scores_raw = interpreter.get_tensor(output_details[idx_scores]['index'])[0]
+                boxes_raw = interpreter.get_tensor(output_details[idx_boxes]['index'])[0]
+                classes_raw = interpreter.get_tensor(output_details[idx_classes]['index'])[0]
+
+                scores = (np.float32(scores_raw) - output_details[idx_scores]['quantization'][1]) * \
+                         output_details[idx_scores]['quantization'][0] if output_details[idx_scores][
+                                                                              'dtype'] == np.uint8 and output_details[
+                                                                              idx_scores].get(
+                    'quantization') else scores_raw
+                boxes = (np.float32(boxes_raw) - output_details[idx_boxes]['quantization'][1]) * \
+                        output_details[idx_boxes]['quantization'][0] if output_details[idx_boxes][
+                                                                            'dtype'] == np.uint8 and output_details[
+                                                                            idx_boxes].get(
+                    'quantization') else boxes_raw
+                classes = classes_raw
+
+                for j in range(len(scores)):
+                    if scores[j] > confidence_threshold:
+                        ymin = int(max(0, boxes[j][0] * imH))
+                        xmin = int(max(0, boxes[j][1] * imW))
+                        ymax = int(min(imH, boxes[j][2] * imH))
+                        xmax = int(min(imW, boxes[j][3] * imW))
+
+                        object_id = int(classes[j])
+                        if object_id < len(labels):
+                            object_name = labels[object_id]
+                            bboxes_text_lines.append(f"{xmin},{ymin},{xmax},{ymax},{object_name}")
 
             final_bboxes_text = "\n".join(bboxes_text_lines)
             database.save_frame_bboxes(video_uuid, frame_info['frame_number'], final_bboxes_text)

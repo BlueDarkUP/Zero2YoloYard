@@ -1188,18 +1188,32 @@ def import_model():
     if not is_valid:
         return jsonify({'success': False, 'message': message}), 400
 
-    if not model_file or not model_file.filename.endswith('.tflite'):
-        return jsonify({'success': False, 'message': 'Please provide a .tflite model file.'}), 400
-    if not label_file or not (label_file.filename.endswith('.txt') or label_file.filename.endswith('.labels')):
-        return jsonify({'success': False, 'message': 'Please provide a .txt or .labels file.'}), 400
-    if not model_type in ['float32', 'uint8']:
+    if not model_file:
+        return jsonify({'success': False, 'message': 'No model file provided.'}), 400
+
+    is_tflite = model_file.filename.endswith('.tflite')
+    is_pt = model_file.filename.endswith('.pt')
+
+    if not is_tflite and not is_pt:
+        return jsonify({'success': False, 'message': 'Please provide a .tflite or .pt model file.'}), 400
+
+    if is_tflite and (not label_file or not (label_file.filename.endswith('.txt') or label_file.filename.endswith('.labels'))):
+        return jsonify({'success': False, 'message': 'TFLite models require a .txt or .labels file.'}), 400
+
+    if model_type not in ['float32', 'float16', 'uint8', 'int8']:
         return jsonify({'success': False, 'message': 'Invalid model type selected.'}), 400
 
     create_time = int(time.time() * 1000)
-    model_uuid = database.import_model_metadata(desc, label_file.filename, model_type, create_time)
+    label_filename = label_file.filename if label_file else 'embedded_yolo_classes.txt'
+    model_uuid = database.import_model_metadata(desc, label_filename, model_type, create_time)
 
     file_storage.save_imported_model(model_file, model_uuid)
-    file_storage.save_imported_label_file(label_file, model_uuid)
+    if label_file:
+        file_storage.save_imported_label_file(label_file, model_uuid)
+    else:
+        label_path = file_storage.get_label_file_path(model_uuid)
+        with open(label_path, 'w') as f:
+            f.write("")
 
     return jsonify({'success': True, 'model_uuid': model_uuid})
 
