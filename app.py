@@ -768,6 +768,42 @@ def sam_predict():
         logging.error(f"SAM prediction failed: {e}", exc_info=True)
         return jsonify({'success': False, 'message': str(e)}), 500
 
+@app.route('/api/sam3_text_predict', methods=['POST'])
+def sam3_text_predict():
+    try:
+        from ultralytics_sam_tasks import get_sam_model, predict_boxes_from_text_sam3
+        if not get_sam_model():
+            return jsonify(
+                {'success': False, 'message': 'SAM model is disabled in system settings to save resources.'}), 501
+    except ImportError:
+        return jsonify({'success': False, 'message': 'SAM features are not installed on server.'}), 501
+
+    data = request.json
+    if not data:
+        return jsonify({'success': False, 'message': 'No request payload provided.'}), 400
+
+    video_uuid = data.get('video_uuid')
+    frame_number = data.get('frame_number')
+    text_prompt = data.get('text_prompt')
+
+    confidence = float(data.get('confidence', 0.25))
+
+    if not all([video_uuid, frame_number is not None, text_prompt]):
+        return jsonify(
+            {'success': False, 'message': 'Missing required data (video_uuid, frame_number, text_prompt).'}), 400
+
+    try:
+        image_path = file_storage.get_frame_path(video_uuid, int(frame_number))
+        if not os.path.exists(image_path):
+            return jsonify({'success': False, 'message': 'Frame image not found on server.'}), 404
+
+        results = predict_boxes_from_text_sam3(image_path, text_prompt, confidence)
+
+        return jsonify({'success': True, 'results': results})
+
+    except Exception as e:
+        logging.error(f"SAM 3 Text prediction failed: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 @app.route('/interactive_segment/preprocess', methods=['POST'])
 def interactive_segment_preprocess_route():

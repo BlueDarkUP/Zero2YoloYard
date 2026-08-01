@@ -2,17 +2,12 @@
 
 {% block head %}
 <style>
-    /* ==================== ABYSSAL TELEMETRY IDE STYLES ==================== */
-
-    /* 覆盖默认布局，进入全屏沉浸模式 */
     main {
         padding: 0 !important;
         overflow: hidden;
-        height: calc(100vh - 65px); /* 减去导航栏高度 */
+        height: calc(100vh - 65px);
         background-color: var(--bg-body);
     }
-
-    /* 整体布局容器：修改为 row 以支持 Resizer */
     .ide-layout {
         display: flex;
         flex-direction: row;
@@ -20,8 +15,6 @@
         height: 100%;
         color: var(--text-main);
     }
-
-    /* 左侧：画布主控区 */
     .ide-canvas-area {
         flex: 1;
         display: flex;
@@ -30,8 +23,6 @@
         overflow: hidden;
         background: radial-gradient(circle at center, rgba(0,240,255,0.02) 0%, transparent 70%);
     }
-
-    /* 拖拽分割线 (Resizer) */
     .ide-resizer {
         width: 6px;
         background-color: var(--bg-surface-secondary);
@@ -59,12 +50,10 @@
         background-color: var(--color-primary);
         box-shadow: 0 0 8px var(--color-primary-glow);
     }
-
-    /* 右侧：侧边栏 */
     .ide-sidebar {
         width: 350px;
         min-width: 280px;
-        max-width: 50vw; /* 防止过宽 */
+        max-width: 50vw;
         background-color: var(--bg-surface);
         display: flex;
         flex-direction: column;
@@ -74,8 +63,6 @@
         gap: 1.2rem;
         flex-shrink: 0;
     }
-
-    /* 顶部工具栏 (HUD Header) */
     .ide-toolbar {
         height: 54px;
         background-color: var(--bg-surface-secondary);
@@ -88,8 +75,6 @@
         z-index: 50;
         box-shadow: 0 4px 20px rgba(0,0,0,0.5);
     }
-
-    /* 画布滚动包裹层 */
     .ide-canvas-wrapper {
         flex: 1;
         position: relative;
@@ -103,8 +88,6 @@
         background-size: 40px 40px;
         background-position: center center;
     }
-
-    /* 画布容器 (取景器) */
     #canvas-container {
         position: relative;
         cursor: crosshair;
@@ -114,8 +97,6 @@
         margin: 20px;
         transition: box-shadow 0.3s ease;
     }
-
-    /* HUD Corner Decos */
     #canvas-container::before, #canvas-container::after {
         content: "";
         position: absolute;
@@ -135,8 +116,6 @@
         bottom: -1px; right: -1px;
         border-left: none; border-top: none;
     }
-
-    /* 状态光标 */
     #canvas-container.sam-active,
     #canvas-container.lam-active {
         cursor: crosshair !important;
@@ -146,27 +125,20 @@
         cursor: wait !important;
         opacity: 0.7;
     }
-
-    /* 多层 Canvas 架构设置 */
     #canvas-container canvas {
         position: absolute;
         top: 0; left: 0;
         pointer-events: none;
     }
-
-    #static-canvas { z-index: 5; } /* 底层：静态框 */
-    #dynamic-canvas { pointer-events: auto; z-index: 10; } /* 顶层：交互框、十字线 */
+    #static-canvas { z-index: 5; }
+    #dynamic-canvas { pointer-events: auto; z-index: 10; }
     #frame-image { display: block; user-select: none; }
-
-    /* 底部时间轴区域 */
     .ide-timeline {
         padding: 15px 20px;
         background-color: var(--bg-surface);
         border-top: 1px solid var(--border-color);
         z-index: 30;
     }
-
-    /* 自定义 Range Slider (机械风格) */
     input[type=range].custom-range {
         -webkit-appearance: none;
         width: 100%;
@@ -196,8 +168,6 @@
         border: none;
         border-radius: 2px;
     }
-
-    /* 快捷键提示 */
     .shortcut-keys-container {
         display: flex;
         gap: 0.8rem;
@@ -222,8 +192,6 @@
         border-color: var(--color-primary);
         background: rgba(0, 240, 255, 0.05);
     }
-
-    /* 侧边栏标题 */
     .tool-section-title {
         font-family: 'Orbitron', sans-serif;
         font-size: 0.85rem;
@@ -239,8 +207,6 @@
         align-items: center;
         text-shadow: 0 0 8px rgba(0,240,255,0.3);
     }
-
-    /* 列表项样式 (Class List & Object List) */
     #class-list .list-group-item,
     #bbox-list .list-group-item {
         background: rgba(0,0,0,0.2);
@@ -255,24 +221,20 @@
         padding: 0.5rem 0.75rem;
         border-left: 3px solid transparent;
     }
-    
     #class-list .list-group-item { cursor: default; }
     #bbox-list .list-group-item { cursor: pointer; }
-    
     .class-item-clickable {
         cursor: pointer;
         width: 100%;
         display: flex;
         align-items: center;
     }
-
     #class-list .list-group-item:hover,
     #bbox-list .list-group-item:hover {
         background: rgba(255,255,255,0.05);
         border-left-color: rgba(255,255,255,0.5);
         transform: translateX(2px);
     }
-    
     #class-list .list-group-item.active,
     #bbox-list .list-group-item.selected {
         background: rgba(0, 240, 255, 0.08);
@@ -283,14 +245,12 @@
         transform: translateX(4px);
         box-shadow: inset 20px 0 30px -20px var(--color-primary-dim);
     }
-
     .delete-class-btn {
         opacity: 0.3;
         transition: opacity 0.2s, transform 0.2s;
     }
     #class-list .list-group-item:hover .delete-class-btn { opacity: 1; }
     .delete-class-btn:hover { transform: scale(1.2); color: var(--color-danger) !important; }
-    
     .class-count-badge {
         font-size: 0.65rem;
         padding: 2px 6px;
@@ -298,8 +258,6 @@
         border-radius: 10px;
         margin-left: auto;
     }
-
-    /* 颜色块 */
     .color-swatch {
         display: inline-block;
         width: 12px;
@@ -309,8 +267,6 @@
         border-radius: 2px;
         box-shadow: 0 0 5px currentColor;
     }
-
-    /* 按钮微调 (覆盖 Bootstrap) */
     .btn {
         border-radius: 2px !important;
         transition: all 0.2s ease;
@@ -328,8 +284,6 @@
         font-family: 'JetBrains Mono', monospace;
         text-transform: uppercase;
     }
-
-    /* 工具栏输入框 */
     .tool-input {
         background: rgba(0,0,0,0.4);
         border: 1px solid var(--border-color);
@@ -345,18 +299,13 @@
         color: #fff;
         box-shadow: 0 0 8px var(--color-primary-glow);
     }
-
-    /* 鼠标样式 */
     #dynamic-canvas.cursor-move { cursor: move; }
     #dynamic-canvas.cursor-nwse-resize { cursor: nwse-resize; }
     #dynamic-canvas.cursor-nesw-resize { cursor: nesw-resize; }
     #dynamic-canvas.cursor-ns-resize { cursor: ns-resize; }
     #dynamic-canvas.cursor-ew-resize { cursor: ew-resize; }
-
     .bbox-controls { opacity: 0; transition: opacity 0.2s; }
     #bbox-list .list-group-item:hover .bbox-controls { opacity: 1; }
-
-    /* Interpolation Banner HUD */
     @keyframes pulse-warning {
         0% { box-shadow: 0 0 10px rgba(255, 208, 0, 0.2); }
         50% { box-shadow: 0 0 25px rgba(255, 208, 0, 0.5); }
@@ -372,20 +321,16 @@
         animation: pulse-warning 2s infinite;
         border-radius: 4px;
     }
-
-    /* Hidden Control Panels */
     #interactive-segment-controls,
     #suggestion-review-controls,
-    #track-controls {
+    #track-controls,
+    #sam3-true-lam-controls {
         background: rgba(0, 0, 0, 0.3);
         border: 1px dashed var(--border-color);
         padding: 15px;
         margin-top: 10px;
         border-radius: 4px;
     }
-
-    /* ==================== TRACKING HUD STYLES ==================== */
-    /* 一体化边框容器 */
     .target-frame-box {
         background: rgba(0, 0, 0, 0.4);
         border: 1px solid var(--border-color);
@@ -396,14 +341,10 @@
         padding: 5px 10px;
         transition: all 0.2s ease;
     }
-    
-    /* 聚焦时整个容器发光 */
     .target-frame-box:focus-within {
         border-color: #28a745;
         box-shadow: 0 0 10px rgba(40, 167, 69, 0.25);
     }
-    
-    /* 去除原生输入框边框，融入容器 */
     .target-frame-input {
         background: transparent;
         border: none;
@@ -415,8 +356,6 @@
         outline: none;
         padding: 0;
     }
-    
-    /* 隐藏丑陋的数字上下箭头 */
     .target-frame-input::-webkit-outer-spin-button,
     .target-frame-input::-webkit-inner-spin-button {
         -webkit-appearance: none;
@@ -425,8 +364,6 @@
     .target-frame-input[type=number] {
         -moz-appearance: textfield;
     }
-    
-    /* 跳转到最后的按钮修饰 */
     .target-frame-btn {
         background: transparent;
         border: none;
@@ -440,27 +377,21 @@
         align-items: center;
         outline: none;
     }
-    
     .target-frame-btn:hover {
         color: #28a745;
         transform: scale(1.1);
     }
     .target-frame-btn:focus { outline: none; }
-
-    /* 滚动条 */
     .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
     .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
     .custom-scrollbar::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; transition: background 0.3s; }
     .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--color-primary); }
-
-    /* ==================== SYS_MANUAL POPOVER ==================== */
     .info-trigger {
         transition: opacity 0.2s, box-shadow 0.2s, text-shadow 0.2s;
     }
     .info-trigger:hover:not(:disabled) {
         box-shadow: 0 0 15px rgba(0, 240, 255, 0.4);
     }
-
     #sys-manual-panel {
         position: absolute;
         width: 360px;
@@ -473,14 +404,12 @@
         border-radius: 4px;
         overflow: hidden;
     }
-
     #sys-manual-panel::before {
         content: "";
         display: block;
         height: 4px;
         background: repeating-linear-gradient(90deg, var(--color-primary) 0, var(--color-primary) 10px, transparent 10px, transparent 15px);
     }
-
     .manual-header {
         background: rgba(255,255,255,0.05);
         padding: 10px 15px;
@@ -490,9 +419,7 @@
         color: var(--color-primary);
         letter-spacing: 0.05em;
     }
-
     .manual-body { padding: 15px; }
-
     .manual-section { margin-bottom: 12px; }
     .manual-section:last-child { margin-bottom: 0; }
     .manual-label {
@@ -518,7 +445,6 @@
 {% block content %}
 <div class="ide-layout fade-in">
     <div class="ide-canvas-area">
-
         <div class="ide-toolbar">
             <div class="d-flex align-items-center" style="min-width: 0;">
                 <a href="/" class="btn btn-sm btn-outline-secondary mr-3 text-uppercase font-weight-bold" style="letter-spacing: 0.05em; border-color: transparent;">
@@ -529,7 +455,6 @@
                     <small class="text-muted text-monospace">TASK: <span class="text-primary">{{ task_entity.assigned_to }}</span> // FRAMES: {{ task_entity.start_frame }}-{{ task_entity.end_frame }}</small>
                 </div>
             </div>
-
             <div class="d-flex align-items-center border border-secondary px-3 py-1 mx-2" style="background: rgba(0,0,0,0.6); border-radius: 20px;">
                 <button class="btn btn-sm btn-link text-secondary p-0 mr-2" onclick="document.getElementById('frame-slider').stepDown(); document.getElementById('frame-slider').dispatchEvent(new Event('input'));" style="transition: color 0.2s;"><i class="bi bi-caret-left-fill"></i></button>
                 <span class="font-weight-bold mx-2 text-monospace text-primary" style="min-width: 100px; text-align: center; font-size: 1.1em; text-shadow: 0 0 8px var(--color-primary-glow);">
@@ -537,14 +462,12 @@
                 </span>
                 <button class="btn btn-sm btn-link text-secondary p-0 ml-2" onclick="document.getElementById('frame-slider').stepUp(); document.getElementById('frame-slider').dispatchEvent(new Event('input'));" style="transition: color 0.2s;"><i class="bi bi-caret-right-fill"></i></button>
             </div>
-
             <div>
                 <button id="save-bboxes" class="btn btn-sm btn-primary font-weight-medium px-4" style="box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
                     Save Changes
                 </button>
             </div>
         </div>
-
         <div class="ide-canvas-wrapper custom-scrollbar">
             <div id="interpolation-banner" class="position-absolute" style="top: 20px; z-index: 100; min-width: 320px; display: none;">
                 <div class="d-flex align-items-center">
@@ -555,14 +478,12 @@
                     </div>
                 </div>
             </div>
-
             <div id="canvas-container">
                 <img id="frame-image" src="{{ first_frame_url }}" class="img-fluid" alt="Video Frame" draggable="false" />
                 <canvas id="static-canvas"></canvas>
                 <canvas id="dynamic-canvas"></canvas>
             </div>
         </div>
-
         <div class="ide-timeline">
             <input type="range" class="custom-range" id="frame-slider" min="{{ task_entity.start_frame }}" max="{{ task_entity.end_frame }}" value="{{ task_entity.start_frame }}">
             <div class="shortcut-keys-container">
@@ -575,11 +496,8 @@
             </div>
         </div>
     </div>
-
     <div class="ide-resizer" id="sidebar-resizer"></div>
-
     <div class="ide-sidebar custom-scrollbar" id="ide-sidebar">
-
         <div class="tool-section-title">
             <span>Class Registry</span>
             <i class="bi bi-tag-fill"></i>
@@ -592,7 +510,6 @@
                 </div>
             </div>
             <ul id="class-list" class="list-group list-group-flush border border-secondary" style="max-height: 220px; overflow-y: auto; background: rgba(0,0,0,0.3);"></ul>
-
             <div class="mt-3">
                 <div class="custom-control custom-switch mb-2">
                     <input type="checkbox" class="custom-control-input" id="dataset-find-use-color">
@@ -604,7 +521,6 @@
                 </div>
             </div>
         </div>
-
         <div class="tool-section-title">
             <span>Inference Tools</span>
             <i class="bi bi-lightning-charge-fill"></i>
@@ -619,9 +535,10 @@
             <div class="col-12 mb-2">
                 <button id="interactive-mode-toggle" class="btn btn-sm btn-outline-info w-100 font-weight-bold info-trigger" data-key="smart_select"><i class="bi bi-crosshair"></i> Smart Select</button>
             </div>
-
+            <div class="col-12 mb-2">
+                <button id="sam3-true-lam-toggle" class="btn btn-sm btn-outline-warning w-100 font-weight-bold info-trigger" data-key="sam3_text"><i class="bi bi-chat-square-text-fill"></i> True LAM (Zero-Shot)</button>
+            </div>
             <div class="col-12" id="sam2-track-wrapper">
-                <!-- 重新设计的一体化输入框容器 -->
                 <div class="target-frame-box mb-2">
                     <span class="text-muted text-uppercase" style="font-size: 0.7rem; font-family: 'JetBrains Mono'; letter-spacing: 0.05em;">
                         <i class="bi bi-stop-circle text-success mr-1"></i> End Frame
@@ -633,23 +550,26 @@
                         </button>
                     </div>
                 </div>
-                <!-- 追踪按钮 -->
                 <button id="sam2-track-btn" class="btn btn-sm btn-outline-success w-100 font-weight-bold info-trigger" data-key="video_tracking"><i class="bi bi-activity"></i> Video Tracking</button>
             </div>
+        </div>
+
+        <div id="sam3-true-lam-controls" style="display: none;" class="mb-3 p-3 border border-warning" style="background: rgba(255,208,0,0.05); border-radius: 4px;">
+            <h6 class="small font-weight-bold mb-2 text-warning text-uppercase"><i class="bi bi-magic"></i> Concept Segmentation</h6>
+            <p class="text-muted small mb-2 font-monospace" style="font-size: 0.7rem;">> ENTER OBJECT DESCRIPTION <br>> SYSTEM WILL LOCATE ALL INSTANCES</p>
+            <input type="text" id="sam3-text-prompt-input" class="form-control form-control-sm tool-input mb-2" placeholder="e.g. 'red car', 'person with hat'...">
+            <button id="sam3-text-execute-btn" class="btn btn-sm btn-warning w-100 font-weight-bold text-dark"><i class="bi bi-search"></i> Scan & Segment</button>
         </div>
 
         <div id="interactive-segment-controls" style="display: none;">
             <h6 class="small font-weight-bold mb-2 text-info text-uppercase"><i class="bi bi-crosshair"></i> Smart Select Active</h6>
             <p class="text-muted small mb-3 font-monospace" style="font-size: 0.7rem;">> DESIGNATE TARGET BOX <br>> SYSTEM WILL LOCATE SIMILAR</p>
-
             <div class="custom-control custom-switch mb-3 border-bottom border-secondary pb-2">
                 <input type="checkbox" class="custom-control-input" id="smart-select-use-color">
                 <label class="custom-control-label small text-muted text-uppercase" for="smart-select-use-color">Strict Color Match <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="color_match"></i></label>
             </div>
-
             <button id="find-similar-btn" class="btn btn-sm btn-primary w-100 mb-2 text-uppercase font-weight-bold" style="display: none;"><i class="bi bi-radar"></i> Scan Frame</button>
             <button id="clear-samples-btn" class="btn btn-sm btn-secondary w-100 mb-2 text-uppercase"><i class="bi bi-eraser"></i> Clear Signal</button>
-
             <div id="interactive-results-controls" style="display: none;" class="mt-3 border-top border-secondary pt-3">
                 <div class="form-group mb-3">
                     <label class="small mb-1 d-flex justify-content-between text-muted text-uppercase"><span>Confidence</span> <span id="threshold-value" class="font-weight-bold text-white">0.50</span></label>
@@ -659,7 +579,6 @@
                 <button id="finish-interactive-btn" class="btn btn-sm btn-outline-light w-100 text-uppercase">Terminate</button>
             </div>
         </div>
-
         <div id="suggestion-review-controls" style="display: none;">
             <h6 class="small font-weight-bold mb-3 text-warning text-uppercase"><i class="bi bi-lightbulb"></i> AI Suggestions</h6>
             <div class="form-group mb-3">
@@ -668,7 +587,6 @@
             </div>
             <button id="accept-all-suggestions-btn" class="btn btn-sm btn-warning w-100 text-uppercase font-weight-bold"><i class="bi bi-check-all"></i> Accept Visible</button>
         </div>
-
         <div id="track-controls" style="display: none;">
             <div class="d-flex justify-content-between align-items-center mb-2">
                 <h6 class="small font-weight-bold mb-0 text-success text-uppercase" id="track-status-header">TRACKING_SEQUENCE...</h6>
@@ -677,23 +595,19 @@
                 <div id="track-progress-bar" class="progress-bar bg-success" role="progressbar" style="width: 0%; box-shadow: 0 0 10px var(--color-success);"></div>
             </div>
             <button id="stop-sam2-track-btn" class="btn btn-sm btn-danger w-100 mb-3 text-uppercase font-weight-bold"><i class="bi bi-stop-fill"></i> Abort</button>
-
             <div class="border-top border-secondary pt-3 mt-2">
                 <small class="text-muted d-block mb-2 text-uppercase font-monospace">> Review Mode Active</small>
                 <button id="save-all-tracked-btn" class="btn btn-sm btn-success w-100 mb-2 text-uppercase font-weight-bold" disabled><i class="bi bi-hdd-fill"></i> Commit Results</button>
                 <button id="exit-track-mode-btn" class="btn btn-sm btn-secondary w-100 text-uppercase">Exit</button>
             </div>
         </div>
-
         <div class="tool-section-title mt-3">
             <span>Detected Entities</span>
             <i class="bi bi-layers-fill"></i>
         </div>
         <div class="flex-grow-1 position-relative" style="min-height: 150px;">
-            <ul id="bbox-list" class="list-group list-group-flush h-100 custom-scrollbar border border-secondary" style="position: absolute; width: 100%; overflow-y: auto; background: rgba(0,0,0,0.3);">
-                </ul>
+            <ul id="bbox-list" class="list-group list-group-flush h-100 custom-scrollbar border border-secondary" style="position: absolute; width: 100%; overflow-y: auto; background: rgba(0,0,0,0.3);"></ul>
         </div>
-
     </div>
 </div>
 
@@ -752,14 +666,12 @@
 <div id="neg-sampling-body">
     <h6 class="mt-4 font-weight-bold text-danger text-uppercase">Step 2: Negative Sampling</h6>
     <p class="text-muted small font-monospace"><i class="bi bi-exclamation-triangle mr-1"></i> Draw boxes on areas to IGNORE.</p>
-
     <div class="text-center mb-3 bg-black border border-secondary p-1">
         <div id="neg-canvas-container" style="position: relative; display: inline-block; max-width: 100%; box-shadow: 0 0 15px rgba(255,0,0,0.1);">
             <img id="neg-frame-image" src="" class="img-fluid" alt="Negative Sample Frame" draggable="false" />
             <canvas id="neg-drawing-canvas" style="position: absolute; top: 0; left: 0; cursor: crosshair;"></canvas>
         </div>
     </div>
-
     <div class="d-flex justify-content-between align-items-center mt-3 bg-transparent p-2 border border-secondary">
         <button id="neg-prev-btn" class="btn btn-sm btn-outline-secondary rounded-0"><i class="bi bi-arrow-left"></i></button>
         <strong id="neg-frame-counter" class="small text-monospace text-white">FRAME 1 / 10</strong>
@@ -778,19 +690,18 @@
 {% block scripts %}
 <script>
     $(document).ready(function() {
-        // ==================== SYS_MANUAL_DATABASE ====================
         const sysManualDb = {
             'sam_point': { title: 'SAM (POINT_CLICK)', desc: 'Segment Anything Model. Core neural network for zero-shot object segmentation.', tune: 'Left-click on the center of your target object.', when: 'Use when manual bounding boxes are too tedious, or when the object has a highly complex/irregular shape.' },
             'lam_text': { title: 'LAM (TEXT_PROMPT)', desc: 'Label Anything Model. Open-world detection driven by textual prompts.', tune: 'Click anywhere on the canvas to trigger a scan, then select the matching class from the popup.', when: 'Use when encountering completely new, untrained objects that you want the AI to recognize out-of-the-box.' },
             'smart_select': { title: 'SMART_SELECT', desc: 'Local feature-space similarity retrieval. Scans the current frame for objects matching your designated target.', tune: 'Draw a box around one target. Adjust the confidence threshold to filter results.', when: 'Extremely useful when a frame contains dozens of identical objects (e.g., a pile of screws, a crowd) and you want to label them all at once.' },
-            'video_tracking': { title: 'VIDEO_TRACKING (SAM2)', desc: 'Temporal propagation engine powered by SAM2. Tracks labeled entities across consecutive frames.', tune: 'Ensure targets are perfectly labeled in the start frame, set target end frame, then click to track forward.', when: 'Use when objects move smoothly across dozens or hundreds of frames to completely automate the labeling process.' },
+            'video_tracking': { title: 'VIDEO_TRACKING', desc: 'Temporal propagation engine. Tracks labeled entities across consecutive frames.', tune: 'Ensure targets are perfectly labeled in the start frame, set target end frame, then click to track forward.', when: 'Use when objects move smoothly across dozens or hundreds of frames to completely automate the labeling process.' },
             'find_sim': { title: 'QUERY_DATASET (FIND SIM)', desc: 'Global feature-space retrieval. Scans the active frame against the entire dataset\'s prototype library.', tune: 'Select an active class from the registry first. Toggle Strict Color Match if needed.', when: 'Use when the background changes drastically and you want to quickly recover previously labeled objects.' },
             'rebuild_ai': { title: 'REBUILD_AI_PROTOTYPES', desc: 'Recompiles the global prototype feature vectors for all classes. Computationally expensive.', tune: 'Executes silently in the background.', when: 'Run this if you have deleted/modified many labels and feel that Smart Select or Find Sim has become "dumb" or inaccurate.' },
             'color_match': { title: 'STRICT_COLOR_MATCH', desc: 'Injects HSV color space metrics into the embedding comparison matrix.', tune: 'Toggle ON to prioritize color. Toggle OFF to prioritize shape/geometry.', when: 'Turn ON when you need to distinguish between two identical shapes with different colors (e.g., a red ball vs. a blue ball).' },
-            'interpolate': { title: 'LINEAR_INTERPOLATION', desc: 'Spatiotemporal mathematical interpolation for bounding boxes between two keyframes.', tune: 'Click on Frame A. Move to Frame B, adjust the box, and click again. The system fills the gap.', when: 'Use when an object moves in a straight, predictable line and you want to save GPU resources by bypassing AI tracking.' }
+            'interpolate': { title: 'LINEAR_INTERPOLATION', desc: 'Spatiotemporal mathematical interpolation for bounding boxes between two keyframes.', tune: 'Click on Frame A. Move to Frame B, adjust the box, and click again. The system fills the gap.', when: 'Use when an object moves in a straight, predictable line and you want to save GPU resources by bypassing AI tracking.' },
+            'sam3_text': { title: 'TRUE LAM (ZERO-SHOT)', desc: 'SAM 3.1 Open-vocabulary concept segmentation.', tune: 'Type a descriptive noun phrase (e.g. "red sports car") and hit Enter.', when: 'Use when you want to immediately detect ALL instances of a complex concept without drawing any boxes or providing visual examples.' }
         };
 
-        // UI Hover Panel Logic
         $(document).on('mouseenter', '.info-trigger', function(e) {
             const key = $(this).data('key');
             const data = sysManualDb[key];
@@ -802,27 +713,20 @@
             $('#manual-when').text(data.when);
 
             const panel = $('#sys-manual-panel');
-
-            // Show panel invisibly first to calculate true height
             panel.css({ display: 'block', visibility: 'hidden' });
             const panelWidth = panel.outerWidth();
             const panelHeight = panel.outerHeight();
 
-            // Anchor directly to the mouse cursor coordinates (缩小间距，更贴近指针)
             let leftPos = e.pageX + 8;
             let topPos = e.pageY + 12;
 
-            // X-axis collision detection (如果是右侧边缘，翻转到左侧时同样保持极小间距)
             if (leftPos + panelWidth > $(window).width() - 10) {
                 leftPos = e.pageX - panelWidth - 8;
             }
-
-            // Y-axis collision detection (如果是底部边缘，翻转到上方)
             if (topPos + panelHeight > $(window).scrollTop() + $(window).height() - 10) {
                 topPos = e.pageY - panelHeight - 8;
             }
 
-            // Apply calculated position, set back to hidden for fade animation
             panel.css({ top: topPos + 'px', left: leftPos + 'px', visibility: 'visible', display: 'none' });
             panel.stop(true, true).fadeIn(150);
 
@@ -830,24 +734,21 @@
             $('#sys-manual-panel').stop(true, true).fadeOut(150);
         });
 
-        // --- 拦截不可用的 AI 工具 ---
         const isSamEnabled = {{ is_sam_enabled | tojson }};
         const isFeatureExtractorEnabled = {{ is_feature_extractor_enabled | tojson }};
         const disabledTitle = "This feature is disabled in system settings to save resources.";
 
         if (!isSamEnabled) {
-            $('#sam-toggle-btn, #sam2-track-btn, #sam2-end-frame-input').prop('disabled', true).attr('title', disabledTitle);
+            $('#sam-toggle-btn, #sam2-track-btn, #sam2-end-frame-input, #sam3-true-lam-toggle').prop('disabled', true).attr('title', disabledTitle);
         }
 
         if (!isFeatureExtractorEnabled) {
             $('#find-from-dataset-btn, #rebuild-prototypes-btn').prop('disabled', true).attr('title', disabledTitle);
         }
 
-        // LAM 和 Smart Select 需要同时依赖 SAM 和特征提取器
         if (!isSamEnabled || !isFeatureExtractorEnabled) {
              $('#lam-toggle-btn, #interactive-mode-toggle').prop('disabled', true).attr('title', disabledTitle);
         }
-        // --- 结束 ---
 
         const settings = {{ settings | tojson }};
         const customClassColors = settings.class_colors || {};
@@ -856,11 +757,8 @@
         const frameCount = task.end_frame + 1;
 
         let preprocessTimeout = null;
-
-        // 记录当前正在编辑的帧号
         let currentEditingFrame = parseInt($('#frame-slider').val());
 
-        // --- ABYSSAL TELEMETRY COLOR PALETTE ---
         const themeColors = {
             selectionShadow: 'rgba(0, 240, 255, 0.8)',
             handleFill: '#00F0FF',
@@ -868,15 +766,12 @@
             labelText: '#000000',
             labelBg: '#00F0FF',
             crosshair: 'rgba(0, 240, 255, 0.9)',
-
             interpolationGhost: 'rgba(255, 208, 0, 0.5)',
             interpolationConfirm: '#00FF94',
-
             suggestionStroke: 'rgba(46, 154, 255, 0.8)',
             suggestionFill: 'rgba(46, 154, 255, 0.2)',
             suggestionHoverStroke: '#FFD000',
             suggestionHoverFill: 'rgba(255, 208, 0, 0.3)',
-
             positiveExampleStroke: '#00FF94',
             negativeSampleStroke: '#FF2A2A'
         };
@@ -897,12 +792,14 @@
 
         let isSamModeActive = false;
         let isLamModeActive = false;
+        let isInteractiveMode = false;
+        let isTrueLamModeActive = false;
+        
         let sam2TrackerUuid = null;
         let sam2EventSource = null;
         let isReviewMode = false;
         let trackedBboxCache = {};
 
-        let isInteractiveMode = false;
         let positiveExampleBboxes = [];
         let interactivePreviewBboxes = [];
         let suggestionBboxes = [];
@@ -928,17 +825,13 @@
         let negStartX, negStartY;
 
         let toastTimeout;
-        let isRequestingAnimationFrame = false; // 渲染节流开关
+        let isRequestingAnimationFrame = false;
 
-        // === DOM 元素与 Canvas 双层架构设置 ===
         const canvasContainer = $('#canvas-container');
         const frameImage = document.getElementById('frame-image');
         const frameSlider = $('#frame-slider');
-
-        // 静态层：绘制已确认的 BBox 和建议框
         const staticCanvas = document.getElementById('static-canvas');
         const staticCtx = staticCanvas.getContext('2d');
-        // 动态层：绘制跟随鼠标的交互、拖拽中的框、绘制中的框
         const dynamicCanvas = document.getElementById('dynamic-canvas');
         const dynamicCtx = dynamicCanvas.getContext('2d');
         let lastMousePos = null;
@@ -947,7 +840,6 @@
         const negCtx = negCanvas.getContext('2d');
         const negImage = document.getElementById('neg-frame-image');
 
-        // --- 侧边栏拖拽逻辑 (Resizer) ---
         let isResizingSidebar = false;
         const $sidebar = $('#ide-sidebar');
         $('#sidebar-resizer').on('mousedown', function(e) {
@@ -960,7 +852,6 @@
             if (!isResizingSidebar) return;
             const containerWidth = $('.ide-layout').width();
             const newWidth = containerWidth - e.clientX;
-            // 限制最小 250px，最大为屏幕宽度的 50%
             if (newWidth >= 250 && newWidth <= (containerWidth * 0.5)) {
                 $sidebar.css('width', newWidth + 'px');
                 resizeCanvas();
@@ -992,9 +883,7 @@
             e.stopPropagation();
             const className = $(this).data("class");
             const btn = $(this);
-            
             btn.html('<span class="spinner-border spinner-border-sm"></span>');
-
             $.ajax({
                 url: '/api/checkClassUsage',
                 type: 'POST',
@@ -1002,12 +891,10 @@
                 data: JSON.stringify({ label_name: className }),
                 success: function(res) {
                     btn.html('<i class="bi bi-trash"></i>');
-                    
                     let msg = `CONFIRM DELETE: Remove class [ ${className} ] from the registry?`;
                     if (res.usage_count > 0) {
                         msg = `DANGER: Class [ ${className} ] is used in ${res.usage_count} frames globally!\n\nDeleting it will remove it from the sidebar registry, but WILL NOT delete existing bounding boxes in your images. Proceed anyway?`;
                     }
-
                     window.sysConfirm(msg, function() {
                         $.ajax({
                             url: '/deleteClass',
@@ -1032,7 +919,6 @@
             });
         });
 
-        // --- 封装通用的保存函数 ---
         function performSave(frameNum, bboxesString, isSilent = false) {
             if (isReviewMode) {
                 trackedBboxCache[frameNum] = bboxesString;
@@ -1046,8 +932,6 @@
                     success: function(response) {
                         if (response.success) {
                             if (!isSilent) showToast(`FRAME ${frameNum} SAVED.`);
-
-                            // 【核心修复：更新本地前端缓存】
                             if (window.cachedFrames) {
                                 const frameData = window.cachedFrames.find(f => f.frame_number == frameNum);
                                 if (frameData) {
@@ -1061,7 +945,6 @@
                                     });
                                 }
                             }
-
                             if (parseInt(frameSlider.val()) === frameNum) {
                                 suggestionBboxes =[];
                                 $('#suggestion-review-controls').slideUp();
@@ -1087,7 +970,6 @@
             });
         }
 
-        // --- 画布重绘逻辑 (分离动静两层) ---
         function resizeCanvas() {
             const dpr = window.devicePixelRatio || 1;
             const rect = frameImage.getBoundingClientRect();
@@ -1104,13 +986,11 @@
 
         function redrawStaticCanvas() {
             if (!frameImage.complete || frameImage.naturalWidth === 0) return;
-
             const dpr = window.devicePixelRatio || 1;
             staticCtx.clearRect(0, 0, staticCanvas.width / dpr, staticCanvas.height / dpr);
             const scaleX = frameImage.clientWidth / frameImage.naturalWidth;
             const scaleY = frameImage.clientHeight / frameImage.naturalHeight;
 
-            // 1. Interpolation Ghost
             if (interpolationState.isActive) {
                 const startBox = interpolationState.startFrameData.bbox;
                 const x = startBox.x1 * scaleX, y = startBox.y1 * scaleY, w = (startBox.x2 - startBox.x1) * scaleX, h = (startBox.y2 - startBox.y1) * scaleY;
@@ -1121,13 +1001,10 @@
                 staticCtx.setLineDash([]);
             }
 
-            // 2. Saved BBoxes
             bboxes.forEach((box, index) => {
                 if (isDraggingBbox && index === selectedBboxIndex) return;
-
                 const color = stringToColor(box.label);
                 const isHoveredClass = (hoveredClass !== null && box.label === hoveredClass);
-
                 if (index === selectedBboxIndex) {
                     staticCtx.strokeStyle = '#fff';
                     staticCtx.lineWidth = 3 / dpr;
@@ -1143,14 +1020,11 @@
                     staticCtx.lineWidth = 2 / dpr;
                     staticCtx.shadowBlur = 0;
                 }
-
                 if (interpolationState.isActive && box.id === interpolationState.objectId) {
                     staticCtx.strokeStyle = getColor('interpolationConfirm');
                     staticCtx.setLineDash([5 / dpr, 3 / dpr]);
                 }
-
                 const x = box.x1 * scaleX, y = box.y1 * scaleY, w = (box.x2 - box.x1) * scaleX, h = (box.y2 - box.y1) * scaleY;
-
                 if (isHoveredClass && index !== selectedBboxIndex) {
                     staticCtx.fillStyle = color;
                     staticCtx.globalAlpha = 0.15;
@@ -1160,18 +1034,13 @@
                 staticCtx.strokeRect(x, y, w, h);
                 staticCtx.setLineDash([]);
                 staticCtx.shadowBlur = 0;
-
-                // Label Tag
                 staticCtx.fillStyle = interpolationState.isActive && box.id === interpolationState.objectId ? getColor('interpolationConfirm') : color;
                 staticCtx.font = `bold ${11/dpr}px 'JetBrains Mono', monospace`;
                 const textWidth = staticCtx.measureText(box.label).width;
                 const textHeight = 16 / dpr;
-
                 staticCtx.fillRect(x, y - textHeight, textWidth + (8 / dpr), textHeight);
                 staticCtx.fillStyle = '#000000';
                 staticCtx.fillText(box.label.toUpperCase(), x + (4 / dpr), y - (3 / dpr));
-
-                // Handles (静态层：只在没有交互模式时绘制选中框的锚点)
                 if (index === selectedBboxIndex && !isInteractiveMode) {
                     const handleSize = 8 / dpr;
                     const halfHandle = handleSize / 2;
@@ -1191,7 +1060,6 @@
                 }
             });
 
-            // 3. Suggestions
             if (suggestionBboxes.length > 0) {
                  const threshold = parseFloat($('#suggestion-threshold').val());
                  staticCtx.strokeStyle = getColor('suggestionStroke');
@@ -1207,7 +1075,6 @@
                  });
             }
 
-            // 4. Interactive Previews (底色)
             if (interactivePreviewBboxes.length > 0) {
                 const threshold = parseFloat($('#result-threshold').val());
                 interactivePreviewBboxes.forEach((res, index) => {
@@ -1221,7 +1088,6 @@
                 });
             }
 
-            // 5. Interactive Mode Positive Examples
             if (isInteractiveMode) {
                  staticCtx.strokeStyle = getColor('positiveExampleStroke');
                  staticCtx.lineWidth = 2 / dpr;
@@ -1233,22 +1099,17 @@
                  staticCtx.setLineDash([]);
             }
 
-            // 每次静态层更新后，同步刷新一次动态层
             redrawDynamicCanvas(null);
         }
 
-        // 动态层重绘机制
         function redrawDynamicCanvas(pos) {
             if (pos) lastMousePos = pos;
             const currentPos = pos || lastMousePos;
-
             const dpr = window.devicePixelRatio || 1;
             dynamicCtx.clearRect(0, 0, dynamicCanvas.width / dpr, dynamicCanvas.height / dpr);
-
             const scaleX = frameImage.clientWidth / frameImage.naturalWidth;
             const scaleY = frameImage.clientHeight / frameImage.naturalHeight;
 
-            // 1. Hover effect for Interactive Previews
             if (hoveredPreviewIndex !== -1 && interactivePreviewBboxes.length > 0) {
                 const res = interactivePreviewBboxes[hoveredPreviewIndex];
                 if (res) {
@@ -1262,20 +1123,16 @@
                 }
             }
 
-            // 2. Dragged Box
             if (isDraggingBbox && selectedBboxIndex !== -1 && bboxes[selectedBboxIndex]) {
                 const box = bboxes[selectedBboxIndex];
                 const color = stringToColor(box.label);
-
                 dynamicCtx.strokeStyle = '#fff';
                 dynamicCtx.lineWidth = 3 / dpr;
                 dynamicCtx.shadowColor = getColor('selectionShadow');
                 dynamicCtx.shadowBlur = 15 / dpr;
-
                 const x = box.x1 * scaleX, y = box.y1 * scaleY, w = (box.x2 - box.x1) * scaleX, h = (box.y2 - box.y1) * scaleY;
                 dynamicCtx.strokeRect(x, y, w, h);
                 dynamicCtx.shadowBlur = 0;
-
                 dynamicCtx.fillStyle = color;
                 dynamicCtx.font = `bold ${11/dpr}px 'JetBrains Mono', monospace`;
                 const textWidth = dynamicCtx.measureText(box.label).width;
@@ -1283,7 +1140,6 @@
                 dynamicCtx.fillRect(x, y - textHeight, textWidth + (8 / dpr), textHeight);
                 dynamicCtx.fillStyle = '#000000';
                 dynamicCtx.fillText(box.label.toUpperCase(), x + (4 / dpr), y - (3 / dpr));
-
                 const handleSize = 8 / dpr;
                 const halfHandle = handleSize / 2;
                 const handles = {
@@ -1301,7 +1157,6 @@
                 }
             }
 
-            // 3. Drawing Box
             if (isDrawing && currentPos) {
                 let currentX = Math.max(0, Math.min(currentPos.x, frameImage.clientWidth));
                 let currentY = Math.max(0, Math.min(currentPos.y, frameImage.clientHeight));
@@ -1312,7 +1167,6 @@
                 dynamicCtx.setLineDash([]);
             }
 
-            // 4. Crosshairs
             if (!isDrawing && !isReviewMode && !isDraggingBbox && currentPos) {
                 dynamicCtx.strokeStyle = getColor('crosshair');
                 dynamicCtx.lineWidth = 1 / dpr;
@@ -1330,17 +1184,14 @@
                 const template = document.getElementById("bbox-item-template").content.cloneNode(true);
                 const color = stringToColor(box.label);
                 const listItem = $(template).find("li");
-
                 listItem.attr("data-index", index);
                 if (index === selectedBboxIndex) {
                     listItem.addClass("selected");
                 }
-
                 $(template).find(".color-swatch").css("background-color", color).css("border-color", color);
                 $(template).find(".bbox-label").text(box.label);
                 $(template).find(".bbox-id").text(box.id ? `ID:${box.id.substring(0, 4)}` : 'NULL');
                 $(template).find(".delete-bbox-btn").attr("data-index", index);
-
                 const interpolateBtn = $(template).find(".interpolate-btn");
                 if (interpolationState.isActive) {
                     if (interpolationState.objectId === box.id) {
@@ -1358,18 +1209,15 @@
         function renderClassList() {
             const list = $("#class-list");
             list.empty();
-
             const classCounts = {};
             bboxes.forEach(box => {
                 if(box.label) { classCounts[box.label] = (classCounts[box.label] || 0) + 1; }
             });
-
             availableClasses.forEach(className => {
                 const color = stringToColor(className);
                 const count = classCounts[className] || 0;
                 const countHtml = count > 0 ? `<span class="class-count-badge text-primary" style="box-shadow: 0 0 5px ${color}; border: 1px solid ${color};">${count}</span>` : '';
                 const isActive = className === activeClass ? "active" : "";
-
                 const listItem = $(`
                     <li class="list-group-item d-flex justify-content-between align-items-center ${isActive}" data-class-name="${className}">
                         <div class="class-item-clickable text-truncate" title="${className}">
@@ -1496,7 +1344,6 @@
                 processFrameDataAndUpdateUI({ bboxes_text: bboxesText });
                 return;
             }
-
             if (window.cachedFrames) {
                 const frameData = window.cachedFrames.find(f => f.frame_number == frameNumber);
                 processFrameDataAndUpdateUI(frameData);
@@ -1527,7 +1374,6 @@
                 if (box.label && !availableClasses.includes(box.label)) {
                     availableClasses.push(box.label);
                     needReRenderClassList = true;
-                    // 静默推送到后端注册表
                     $.ajax({url: "/addClass", type: "POST", contentType: "application/json", data: JSON.stringify({ label_name: box.label })});
                 }
             });
@@ -1583,9 +1429,7 @@
         function setTrackingUiState(isReview) {
             isReviewMode = isReview;
             $("#track-controls").slideToggle(isReview);
-
-            // 注意这里使用的是 #sam2_repo-track-wrapper，因为现在它被包裹在一个控制块中
-            $("#save-bboxes, #sam-toggle-btn, #sam2-track-wrapper, #interactive-mode-toggle, #lam-toggle-btn").slideToggle(!isReview);
+            $("#save-bboxes, #sam-toggle-btn, #sam2-track-wrapper, #interactive-mode-toggle, #lam-toggle-btn, #sam3-true-lam-toggle").slideToggle(!isReview);
 
             if (!isReview) {
                 $("#track-progress-bar").css("width", "0%").text("0%").removeClass("bg-success bg-danger").addClass("progress-bar-animated");
@@ -1863,7 +1707,6 @@
             currentEditingFrame = newFrameNumber;
             $("#frame-number-display").text(newFrameNumber);
 
-            // 友好的自动步进：如果当前滑动已经超过了用户原来设定的终点，动态更新它的下限并把它推到最大帧
             const endInput = $('#sam2-end-frame-input');
             endInput.attr('min', newFrameNumber + 1);
             if (parseInt(endInput.val()) <= newFrameNumber) {
@@ -2007,7 +1850,7 @@
             if (draggedHandle) {
                 isDraggingBbox = true; editMode = 'resize';
                 draggedBboxInitialState = JSON.parse(JSON.stringify(bboxes[selectedBboxIndex]));
-                redrawStaticCanvas(); // 从静态层隐藏
+                redrawStaticCanvas();
                 return;
             }
 
@@ -2024,7 +1867,7 @@
                 isDraggingBbox = true; editMode = 'move';
                 draggedBboxInitialState = JSON.parse(JSON.stringify(bboxes[selectedBboxIndex]));
                 startX = pos.x; startY = pos.y;
-                renderBboxList(); redrawStaticCanvas(); // 从静态层隐藏
+                renderBboxList(); redrawStaticCanvas();
             } else {
                 selectedBboxIndex = -1; renderBboxList(); redrawStaticCanvas();
                 if (activeClass) {
@@ -2034,7 +1877,6 @@
             }
         });
 
-        // 【性能优化】使用 requestAnimationFrame 进行渲染节流 + 双层画布交互更新
         $(document).on('mousemove', function(e) {
             if (isRequestingAnimationFrame) return;
             isRequestingAnimationFrame = true;
@@ -2071,7 +1913,6 @@
                     }
                     redrawDynamicCanvas(pos);
                 } else {
-                    // Hover states
                     let newHoveredIndex = -1;
                     if ((isInteractiveMode || interactivePreviewBboxes.length > 0) && interactivePreviewBboxes.length > 0) {
                         const scaleX = frameImage.clientWidth / frameImage.naturalWidth;
@@ -2094,7 +1935,6 @@
 
                     redrawDynamicCanvas(pos);
 
-                    // Cursor styles
                     const handle = getHandleAtPos(pos.x, pos.y);
                     $(dynamicCanvas).removeClass((index, className) => (className.match(/\bcursor-\S+/g) || []).join(' '));
                     if (handle) {
@@ -2147,7 +1987,7 @@
                 if (finalBox.y1 > finalBox.y2) [finalBox.y1, finalBox.y2] = [finalBox.y2, finalBox.y1];
                 saveStateToHistory();
                 isDraggingBbox = false; editMode = null; draggedHandle = null; draggedBboxInitialState = null;
-                redrawStaticCanvas(); // 恢复到静态层绘制
+                redrawStaticCanvas();
             }
         });
 
@@ -2197,6 +2037,7 @@
                 $(this).html('<i class="bi bi-bullseye"></i> LAM ON').addClass('btn-primary').removeClass('btn-outline-primary');
                 if (isSamModeActive) $('#sam-toggle-btn').click();
                 if (isInteractiveMode) $('#interactive-mode-toggle').click();
+                if (isTrueLamModeActive) $('#sam3-true-lam-toggle').click();
                 showToast('LAM ACTIVE: Click object.', 3000);
                 smartTriggerPreprocess(frameSlider.val());
             } else {
@@ -2212,13 +2053,101 @@
             updateSamButtonText();
             if (isSamModeActive) {
                 if(isLamModeActive) $('#lam-toggle-btn').click();
+                if(isTrueLamModeActive) $('#sam3-true-lam-toggle').click();
                 lastMousePos = null; redrawDynamicCanvas(null);
             }
         });
 
-        // ==========================================
-        // 核心修改逻辑：自定义 SAM2 追踪终止帧
-        // ==========================================
+        $('#sam3-true-lam-toggle').on('click', function() {
+            isTrueLamModeActive = !isTrueLamModeActive;
+            $(this).toggleClass('active', isTrueLamModeActive);
+            $('#sam3-true-lam-controls').slideToggle(isTrueLamModeActive);
+            
+            if (isTrueLamModeActive) {
+                $(this).html('<i class="bi bi-chat-square-text-fill"></i> TRUE LAM ON').addClass('btn-warning text-dark').removeClass('btn-outline-warning');
+                if (isSamModeActive) $('#sam-toggle-btn').click();
+                if (isLamModeActive) $('#lam-toggle-btn').click();
+                if (isInteractiveMode) $('#interactive-mode-toggle').click();
+                $('#sam3-text-prompt-input').focus();
+            } else {
+                $(this).html('<i class="bi bi-chat-square-text-fill"></i> True LAM (Zero-Shot)').removeClass('btn-warning text-dark').addClass('btn-outline-warning');
+            }
+        });
+
+        $('#sam3-text-prompt-input').on('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                $('#sam3-text-execute-btn').click();
+            }
+        });
+
+        $('#sam3-text-execute-btn').on('click', function() {
+            const promptText = $('#sam3-text-prompt-input').val().trim();
+            if (!promptText) {
+                window.sysAlert('Please enter a description first.', 'error');
+                return;
+            }
+
+            const frameNumber = parseInt(frameSlider.val());
+            const $btn = $(this);
+            
+            $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> SCANNING...');
+            canvasContainer.addClass('sam-loading'); 
+            $('body').css('cursor', 'wait'); 
+            showToast(`SAM 3.1 scanning for "${promptText}"...`, 5000);
+
+            let currentConf = parseFloat($('#result-threshold').val());
+            if (isNaN(currentConf)) currentConf = 0.25;
+
+            $.ajax({
+                url: '/api/sam3_text_predict',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    video_uuid: videoUuid,
+                    frame_number: frameNumber,
+                    text_prompt: promptText,
+                    confidence: currentConf
+                }),
+                success: function(res) {
+                    if (res.success) {
+                        const detectedCount = res.results.length;
+                        if (detectedCount > 0) {
+                            showToast(`Found ${detectedCount} instances of "${promptText}".`, 3000);
+                            let safeClassName = promptText.replace(/[^a-zA-Z0-9_\-]/g, '_').toUpperCase();
+                            if (!availableClasses.includes(safeClassName)) {
+                                addClass(safeClassName);
+                            }
+                            res.results.forEach(item => {
+                                const b = item.box;
+                                bboxes.push({
+                                    x1: b[0], y1: b[1], x2: b[2], y2: b[3], 
+                                    label: safeClassName, 
+                                    id: self.crypto.randomUUID()
+                                });
+                            });
+                            saveStateToHistory();
+                            renderBboxList();
+                            renderClassList();
+                            redrawStaticCanvas();
+                        } else {
+                            window.sysAlert(`No instances of "${promptText}" found.`, 'warning');
+                        }
+                    } else {
+                        window.sysAlert('True LAM failed: ' + res.message, 'error');
+                    }
+                },
+                error: function(xhr) {
+                    window.sysAlert('Server Error: ' + (xhr.responseJSON ? xhr.responseJSON.message : 'Unknown'), 'error');
+                },
+                complete: function() {
+                    $btn.prop('disabled', false).html('<i class="bi bi-search"></i> Scan & Segment');
+                    canvasContainer.removeClass('sam-loading'); 
+                    $('body').css('cursor', 'default');
+                }
+            });
+        });
+
         $('#sam2-track-btn').on('click', function() {
             if (bboxes.length === 0) { window.sysAlert("Label at least one object first.", 'error'); return; }
 
@@ -2324,6 +2253,7 @@
             if (isInteractiveMode) {
                 $(this).html('<i class="bi bi-crosshair"></i> SMART SELECT ON').addClass('btn-info').removeClass('btn-outline-info');
                 if(isLamModeActive) $('#lam-toggle-btn').click();
+                if(isTrueLamModeActive) $('#sam3-true-lam-toggle').click();
                 lastMousePos = null; redrawDynamicCanvas(null);
                 smartTriggerPreprocess(frameSlider.val());
             } else {
@@ -2497,7 +2427,6 @@
                 if (response.success) {
                     response.labels.forEach(label => { if (!availableClasses.includes(label)) availableClasses.push(label); });
                     renderClassList();
-
                     const frameFromUrl = new URLSearchParams(window.location.search).get('frame');
                     if (frameFromUrl) {
                         const frameNumber = parseInt(frameFromUrl);
@@ -2505,10 +2434,8 @@
                             frameSlider.val(frameNumber);
                         }
                     }
-
                     resizeCanvas();
                     frameSlider.trigger('input');
-
                     const initialFrame = parseInt(frameSlider.val());
                     loadBboxesForFrame(initialFrame);
                     smartTriggerPreprocess(initialFrame);

@@ -95,32 +95,45 @@ def _load_sam2_models(mode="image"):
 
 
 def _load_sam3_models(mode="video"):
-    """加载支持文本理解的 SAM 3.1 高级引擎"""
-    if not HAS_SAM3: return None
+    """智能加载 SAM 3.1 模型：图像LAM和视频追踪双通道分离"""
     settings = settings_manager.load_settings()
+    if not settings.get('enable_sam_model', True):
+        return None
+    if not HAS_SAM3:
+        return None
 
-    checkpoint_name = settings.get('sam_model_checkpoint', '')
-    if "sam2" in checkpoint_name or not checkpoint_name.endswith("sam3.1_multiplex.pt"):
+    # 🛡️ 核心修复：对症下药！
+    # 文本图像分割必须用基础 sam3.pt，视频多目标追踪用 sam3.1_multiplex.pt
+    if mode == "image":
+        checkpoint_name = os.path.join("sam3", "sam3.pt")
+    else:
         checkpoint_name = os.path.join("sam3.1_multiplex", "sam3.1_multiplex.pt")
 
     checkpoint_path = os.path.abspath(os.path.join(config.BASE_DIR, "checkpoints", checkpoint_name))
     device = settings_manager.get_device()
 
+    if (_sam_cache["checkpoint"] != checkpoint_path or str(_sam_cache["device"]) != str(device)):
+        logging.info(f"[SAM3] Loading {mode} engine... Checkpoint: {checkpoint_name}")
+        _sam_cache["multiplex_predictor"] = None
+        _sam_cache["image_model"] = None
+        _sam_cache["image_processor"] = None
+        _sam_cache["checkpoint"] = checkpoint_path
+        _sam_cache["device"] = device
+        gc.collect()
+        if torch.cuda.is_available(): torch.cuda.empty_cache()
+
     try:
-        if mode == "video" and _sam_cache["sam3_multiplex_predictor"] is None:
-            logging.info("[SAM3] Loading Multiplex Video Predictor...")
-            _sam_cache["sam3_multiplex_predictor"] = build_sam3_multiplex_video_predictor(
-                checkpoint_path=checkpoint_path
-            )
-        elif mode == "image" and _sam_cache["sam3_image_processor"] is None:
-            logging.info("[SAM3] Loading Image Processor for LAM...")
-            _sam_cache["sam3_image_model"] = build_sam3_image_model(checkpoint_path=checkpoint_path)
-            _sam_cache["sam3_image_processor"] = Sam3Processor(_sam_cache["sam3_image_model"])
+        if mode == "video" and _sam_cache["multiplex_predictor"] is None:
+            _sam_cache["multiplex_predictor"] = build_sam3_multiplex_video_predictor(checkpoint_path=checkpoint_path)
+
+        elif mode == "image" and _sam_cache["image_processor"] is None:
+            _sam_cache["image_model"] = build_sam3_image_model(checkpoint_path=checkpoint_path)
+            _sam_cache["image_processor"] = Sam3Processor(_sam_cache["image_model"])
     except Exception as e:
-        logging.error(f"[SAM3] Load failed: {e}", exc_info=True)
+        logging.error(f"[SAM3] Error building model ({mode}): {e}")
         return None
 
-    return _sam_cache["sam3_multiplex_predictor"] if mode == "video" else _sam_cache["sam3_image_processor"]
+    return _sam_cache["multiplex_predictor"] if mode == "video" else _sam_cache["image_processor"]
 
 
 # ==============================================================================
@@ -162,17 +175,15 @@ def predict_box_from_point_ultralytics(image_path, point_coords):
     return None
 
 
-def predict_boxes_from_text_sam3(image_path, text_prompt):
+def predict_boxes_from_text_sam3(image_path, text_prompt, confidence_threshold=0.25):
     """
-    文本分割 (LAM Text)：完全走 SAM 3.1 高级引擎。
-    开放词汇，支持自然语言一键分割一切符合概念的物体。
+    真·LAM (开放词汇文本分割) - 加入阈值控制
     """
     processor = _load_sam3_models(mode="image")
     if processor is None:
-        raise RuntimeError("SAM 3.1 Image Processor is offline, True LAM unavailable.")
+        raise RuntimeError("SAM 3.1 Image Processor is not initialized.")
 
     image = Image.open(image_path).convert("RGB")
-
     device_type = "cuda" if torch.cuda.is_available() else "cpu"
     dtype = torch.bfloat16 if device_type == "cuda" else torch.float32
 
@@ -188,13 +199,13 @@ def predict_boxes_from_text_sam3(image_path, text_prompt):
 
     results = []
     for i in range(len(boxes)):
-        box_data = boxes[i]
         score = float(scores[i])
-        if torch.is_tensor(box_data):
-            box_data = box_data.cpu().numpy().tolist()
-
-        x1, y1, x2, y2 = map(int, box_data)
-        results.append({"box": [x1, y1, x2, y2], "score": score})
+        if score >= confidence_threshold:
+            box_data = boxes[i]
+            if torch.is_tensor(box_data):
+                box_data = box_data.cpu().numpy().tolist()
+            x1, y1, x2, y2 = map(int, box_data)
+            results.append({"box": [x1, y1, x2, y2], "score": score})
 
     return results
 
