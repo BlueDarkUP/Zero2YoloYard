@@ -62,19 +62,19 @@ trainer:
   seed_value: 123
 
   model:
-    _target_: training.model.sam2.SAM2Train
+    _target_: training.model.sam2_repo.SAM2Train
     image_encoder:
-      _target_: sam2.modeling.backbones.image_encoder.ImageEncoder
+      _target_: sam2_repo.modeling.backbones.image_encoder.ImageEncoder
       scalp: 1
       trunk:
-        _target_: sam2.modeling.backbones.hieradet.Hiera
+        _target_: sam2_repo.modeling.backbones.hieradet.Hiera
         embed_dim: 112
         num_heads: 2
         drop_path_rate: 0.1
       neck:
-        _target_: sam2.modeling.backbones.image_encoder.FpnNeck
+        _target_: sam2_repo.modeling.backbones.image_encoder.FpnNeck
         position_encoding:
-          _target_: sam2.modeling.position_encoding.PositionEmbeddingSine
+          _target_: sam2_repo.modeling.position_encoding.PositionEmbeddingSine
           num_pos_feats: 256
           normalize: true
           scale: null
@@ -85,17 +85,17 @@ trainer:
         fpn_interp_model: nearest
 
     memory_attention:
-      _target_: sam2.modeling.memory_attention.MemoryAttention
+      _target_: sam2_repo.modeling.memory_attention.MemoryAttention
       d_model: 256
       pos_enc_at_input: true
       layer:
-        _target_: sam2.modeling.memory_attention.MemoryAttentionLayer
+        _target_: sam2_repo.modeling.memory_attention.MemoryAttentionLayer
         activation: relu
         dim_feedforward: 2048
         dropout: 0.1
         pos_enc_at_attn: false
         self_attention:
-          _target_: sam2.modeling.sam.transformer.RoPEAttention
+          _target_: sam2_repo.modeling.sam.transformer.RoPEAttention
           rope_theta: 10000.0
           feat_sizes: [64, 64]
           embedding_dim: 256
@@ -106,7 +106,7 @@ trainer:
         pos_enc_at_cross_attn_keys: true
         pos_enc_at_cross_attn_queries: false
         cross_attention:
-          _target_: sam2.modeling.sam.transformer.RoPEAttention
+          _target_: sam2_repo.modeling.sam.transformer.RoPEAttention
           rope_theta: 10000.0
           feat_sizes: [64, 64]
           rope_k_repeat: True
@@ -118,23 +118,23 @@ trainer:
       num_layers: 4
 
     memory_encoder:
-        _target_: sam2.modeling.memory_encoder.MemoryEncoder
+        _target_: sam2_repo.modeling.memory_encoder.MemoryEncoder
         out_dim: 64
         position_encoding:
-          _target_: sam2.modeling.position_encoding.PositionEmbeddingSine
+          _target_: sam2_repo.modeling.position_encoding.PositionEmbeddingSine
           num_pos_feats: 64
           normalize: true
           scale: null
           temperature: 10000
         mask_downsampler:
-          _target_: sam2.modeling.memory_encoder.MaskDownSampler
+          _target_: sam2_repo.modeling.memory_encoder.MaskDownSampler
           kernel_size: 3
           stride: 2
           padding: 1
         fuser:
-          _target_: sam2.modeling.memory_encoder.Fuser
+          _target_: sam2_repo.modeling.memory_encoder.Fuser
           layer:
-            _target_: sam2.modeling.memory_encoder.CXBlock
+            _target_: sam2_repo.modeling.memory_encoder.CXBlock
             dim: 256
             kernel_size: 7
             padding: 3
@@ -318,7 +318,7 @@ trainer:
 
       state_dict:
         _target_: training.utils.checkpoint_utils.load_checkpoint_and_apply_kernels
-        checkpoint_path: ./checkpoints/sam2.1_hiera_base_plus.pt # PATH to SAM 2.1 checkpoint
+        checkpoint_path: ./checkpoints/sam2_repo.1_hiera_base_plus.pt # PATH to SAM 2.1 checkpoint
         ckpt_state_dict_keys: ['model']
 
 launcher:

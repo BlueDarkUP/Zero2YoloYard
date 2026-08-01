@@ -6,10 +6,13 @@ import cv2
 import shutil
 import gc
 import uuid
-import time
 from collections import OrderedDict
+from PIL import Image
 
-# 引入官方 SAM2
+# ==============================================================================
+# 1. 双引擎自适应导入 (Dual-Engine Import)
+# ==============================================================================
+# 基础引擎 (SAM 2)
 try:
     from sam2.build_sam import build_sam2_video_predictor, build_sam2
     from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
@@ -17,8 +20,18 @@ try:
 
     HAS_SAM2 = True
 except ImportError:
-    logging.critical("FATAL: 'sam2' library not found.")
+    logging.warning("[SAM2] SAM 2 engine not found. Fast point clicks disabled.")
     HAS_SAM2 = False
+
+# 高级引擎 (SAM 3.1)
+try:
+    from sam3.model_builder import build_sam3_multiplex_video_predictor, build_sam3_image_model
+    from sam3.model.sam3_image_processor import Sam3Processor
+
+    HAS_SAM3 = True
+except ImportError:
+    logging.warning("[SAM3] SAM 3.1 engine not found. Text prompt features disabled.")
+    HAS_SAM3 = False
 
 import config
 import database
@@ -26,179 +39,198 @@ import file_storage
 from bbox_writer import convert_text_to_rects_and_labels
 import settings_manager
 
-# 全局缓存
+# 双引擎缓存管理
 _sam_cache = {
-    "video_predictor": None,
-    "image_predictor": None,
-    "auto_mask_generator": None,
-    "config": None,
+    # SAM 2 缓存
+    "sam2_video_predictor": None,
+    "sam2_image_predictor": None,
+    # SAM 3.1 缓存
+    "sam3_multiplex_predictor": None,
+    "sam3_image_model": None,
+    "sam3_image_processor": None,
+    # 公共状态
     "checkpoint": None,
     "device": None
 }
 
 
-def _load_sam2_models(mode="video"):
-    # --- 新增 ---
-    # 在最开始就检查设置，如果禁用，直接返回None
-    settings = settings_manager.load_settings()
-    if not settings.get('enable_sam_model', True):
-        # 记录一次日志，方便调试
-        logging.warning("[SAM2] SAM model is disabled in settings. All SAM-related features are unavailable.")
-        return None
-    # --- 结束 ---
+# ==============================================================================
+# 2. 引擎自适应加载层
+# ==============================================================================
 
+def _load_sam2_models(mode="image"):
+    """加载高精度的 SAM 2 基础引擎"""
     if not HAS_SAM2: return None
-
     settings = settings_manager.load_settings()
 
-    # --- [核心修改区 开始] ---
-    # 获取当前选中的权重文件名
-    checkpoint_name = settings.get('sam_model_checkpoint', 'sam2.1_t.pt')
+    # 默认使用 sam2.1_b.pt 或 sam2.1_t.pt 满足毫秒级点选
+    checkpoint_name = "sam2.1_b.pt"
     checkpoint_path = os.path.join(config.BASE_DIR, "checkpoints", checkpoint_name)
-
-    # 建立权重到配置文件的智能映射，防止前端切换模型时由于架构不匹配导致 PyTorch 崩溃
-    yaml_mapping = {
-        "sam2.1_t.pt": "configs/sam2.1/sam2.1_hiera_t.yaml",
-        "sam2.1_s.pt": "configs/sam2.1/sam2.1_hiera_s.yaml",
-        "sam2.1_b.pt": "configs/sam2.1/sam2.1_hiera_b+.yaml",  # SAM 2.1 Base 官方通常使用 b+ 配置
-        "sam2.1_l.pt": "configs/sam2.1/sam2.1_hiera_l.yaml"
-    }
-
-    # 动态获取对应的 yaml 配置，如果找不到对应关系则回退到 settings 或默认配置
-    fallback_cfg = settings.get('sam_model_config', 'configs/sam2.1/sam2.1_hiera_t.yaml')
-    model_cfg = yaml_mapping.get(checkpoint_name, fallback_cfg)
-    # --- [核心修改区 结束] ---
-
     device = settings_manager.get_device()
 
-    if (_sam_cache["config"] != model_cfg or
-            _sam_cache["checkpoint"] != checkpoint_path or
-            str(_sam_cache["device"]) != str(device)):
-        logging.info(f"[SAM2] Reloading models... CFG: {model_cfg}, Device: {device}")
-        _sam_cache["video_predictor"] = None
-        _sam_cache["image_predictor"] = None
-        _sam_cache["auto_mask_generator"] = None
-        _sam_cache["config"] = model_cfg
-        _sam_cache["checkpoint"] = checkpoint_path
-        _sam_cache["device"] = device
-
     if not os.path.exists(checkpoint_path):
-        logging.error(f"[SAM2] Checkpoint not found: {checkpoint_path}")
-        return None
+        logging.warning(f"[SAM2] Checkpoint not found: {checkpoint_path}, falling back to Tiny")
+        checkpoint_name = "sam2.1_t.pt"
+        checkpoint_path = os.path.join(config.BASE_DIR, "checkpoints", checkpoint_name)
+
+    # 动态确定配置文件
+    model_cfg = "configs/sam2.1/sam2.1_hiera_b+.yaml" if "_b.pt" in checkpoint_name else "configs/sam2.1/sam2.1_hiera_t.yaml"
 
     try:
-        settings = settings_manager.load_settings()
-        use_autocast = settings.get('use_autocast', True)
-        inference_dtype = torch.bfloat16 if torch.cuda.is_available() and torch.cuda.is_bf16_supported() and use_autocast else torch.float32
-
-        if mode == "video" and _sam_cache["video_predictor"] is None:
-            logging.info(f"[SAM2] Building Video Predictor ({inference_dtype})...")
-            _sam_cache["video_predictor"] = build_sam2_video_predictor(
-                model_cfg, checkpoint_path, device=device
-            )
-
-        elif mode == "image" and _sam_cache["image_predictor"] is None:
-            _sam_cache["image_predictor"] = SAM2ImagePredictor(
+        if mode == "image" and _sam_cache["sam2_image_predictor"] is None:
+            logging.info(f"[SAM2] Loading Image Predictor on {device}...")
+            _sam_cache["sam2_image_predictor"] = SAM2ImagePredictor(
                 build_sam2(model_cfg, checkpoint_path, device=device)
             )
-
-        elif mode == "auto" and _sam_cache["auto_mask_generator"] is None:
-            conf = float(settings.get('sam_mask_confidence', 0.7))
-            iou = float(settings.get('nms_iou_threshold', 0.7))
-            _sam_cache["auto_mask_generator"] = SAM2AutomaticMaskGenerator(
-                build_sam2(model_cfg, checkpoint_path, device=device),
-                points_per_side=32, pred_iou_thresh=conf, stability_score_thresh=iou
+        elif mode == "video" and _sam_cache["sam2_video_predictor"] is None:
+            logging.info(f"[SAM2] Loading Video Predictor on {device}...")
+            _sam_cache["sam2_video_predictor"] = build_sam2_video_predictor(
+                model_cfg, checkpoint_path, device=device
             )
-
     except Exception as e:
-        logging.error(f"[SAM2] Error building model ({mode}): {e}", exc_info=True)
+        logging.error(f"[SAM2] Load failed: {e}")
         return None
 
-    if mode == "video": return _sam_cache["video_predictor"]
-    if mode == "image": return _sam_cache["image_predictor"]
-    if mode == "auto": return _sam_cache["auto_mask_generator"]
+    return _sam_cache["sam2_image_predictor"] if mode == "image" else _sam_cache["sam2_video_predictor"]
+
+
+def _load_sam3_models(mode="video"):
+    """加载支持文本理解的 SAM 3.1 高级引擎"""
+    if not HAS_SAM3: return None
+    settings = settings_manager.load_settings()
+
+    checkpoint_name = settings.get('sam_model_checkpoint', '')
+    if "sam2" in checkpoint_name or not checkpoint_name.endswith("sam3.1_multiplex.pt"):
+        checkpoint_name = os.path.join("sam3.1_multiplex", "sam3.1_multiplex.pt")
+
+    checkpoint_path = os.path.abspath(os.path.join(config.BASE_DIR, "checkpoints", checkpoint_name))
+    device = settings_manager.get_device()
+
+    try:
+        if mode == "video" and _sam_cache["sam3_multiplex_predictor"] is None:
+            logging.info("[SAM3] Loading Multiplex Video Predictor...")
+            _sam_cache["sam3_multiplex_predictor"] = build_sam3_multiplex_video_predictor(
+                checkpoint_path=checkpoint_path
+            )
+        elif mode == "image" and _sam_cache["sam3_image_processor"] is None:
+            logging.info("[SAM3] Loading Image Processor for LAM...")
+            _sam_cache["sam3_image_model"] = build_sam3_image_model(checkpoint_path=checkpoint_path)
+            _sam_cache["sam3_image_processor"] = Sam3Processor(_sam_cache["sam3_image_model"])
+    except Exception as e:
+        logging.error(f"[SAM3] Load failed: {e}", exc_info=True)
+        return None
+
+    return _sam_cache["sam3_multiplex_predictor"] if mode == "video" else _sam_cache["sam3_image_processor"]
+
+
+# ==============================================================================
+# 3. 图像交互逻辑的分流 (Core Feature Dispatch)
+# ==============================================================================
+
+def predict_box_from_point_ultralytics(image_path, point_coords):
+    """
+    点选交互 (SAM Point)：完全走 SAM 2 引擎。
+    提供极致的亚毫秒级响应和像素级微小目标边缘咬合。
+    """
+    predictor = _load_sam2_models(mode="image")
+    if predictor is None:
+        logging.error("[Engine Switch] SAM 2 is offline, point click unavailable.")
+        return None
+
+    image = cv2.imread(image_path)
+    if image is None: return None
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+    try:
+        with torch.inference_mode():
+            predictor.set_image(image)
+            input_point = np.array([point_coords])
+            input_label = np.array([1])
+            masks, scores, logits = predictor.predict(
+                point_coords=input_point, point_labels=input_label, multimask_output=False
+            )
+            if masks is not None and masks.size > 0:
+                mask = masks[0]
+                rows = np.any(mask, axis=1)
+                cols = np.any(mask, axis=0)
+                if np.any(rows) and np.any(cols):
+                    y_min, y_max = np.where(rows)[0][[0, -1]]
+                    x_min, x_max = np.where(cols)[0][[0, -1]]
+                    return {'x1': int(x_min), 'y1': int(y_min), 'x2': int(x_max) + 1, 'y2': int(y_max) + 1}
+    except Exception as e:
+        logging.error(f"[SAM2] Point predict failed: {e}")
     return None
 
 
-def _mask_to_bbox(mask):
-    if mask is None: return None
-    rows = np.any(mask, axis=1)
-    cols = np.any(mask, axis=0)
-    if not np.any(rows) or not np.any(cols): return None
-    y_min, y_max = np.where(rows)[0][[0, -1]]
-    x_min, x_max = np.where(cols)[0][[0, -1]]
+def predict_boxes_from_text_sam3(image_path, text_prompt):
+    """
+    文本分割 (LAM Text)：完全走 SAM 3.1 高级引擎。
+    开放词汇，支持自然语言一键分割一切符合概念的物体。
+    """
+    processor = _load_sam3_models(mode="image")
+    if processor is None:
+        raise RuntimeError("SAM 3.1 Image Processor is offline, True LAM unavailable.")
 
-    # 新增：从设置中读取 padding 系数并应用
-    settings = settings_manager.load_settings()
-    padding = float(settings.get('sam_box_padding', 0.0))
-    if padding > 0:
-        w = x_max - x_min
-        h = y_max - y_min
-        # 向外扩展
-        x_min_pad = max(0, x_min - w * padding)
-        y_min_pad = max(0, y_min - h * padding)
-        x_max_pad = x_max + w * padding
-        y_max_pad = y_max + h * padding
-        # 将扩展后的值赋回
-        x_min, y_min, x_max, y_max = x_min_pad, y_min_pad, x_max_pad, y_max_pad
+    image = Image.open(image_path).convert("RGB")
 
-    return [int(x_min), int(y_min), int(x_max) + 1, int(y_max) + 1]
+    device_type = "cuda" if torch.cuda.is_available() else "cpu"
+    dtype = torch.bfloat16 if device_type == "cuda" else torch.float32
+
+    with torch.autocast(device_type=device_type, dtype=dtype):
+        inference_state = processor.set_image(image)
+        output = processor.set_text_prompt(
+            state=inference_state,
+            prompt=text_prompt
+        )
+
+    boxes = output.get("boxes", [])
+    scores = output.get("scores", [])
+
+    results = []
+    for i in range(len(boxes)):
+        box_data = boxes[i]
+        score = float(scores[i])
+        if torch.is_tensor(box_data):
+            box_data = box_data.cpu().numpy().tolist()
+
+        x1, y1, x2, y2 = map(int, box_data)
+        results.append({"box": [x1, y1, x2, y2], "score": score})
+
+    return results
 
 
 # ==============================================================================
-# 1. 核心视频追踪
+# 4. 视频追踪的分流 (目前走稳定且占用极低的 SAM 2 Tracking)
 # ==============================================================================
 
 def prepare_chunk_images(video_uuid, chunk_start, chunk_end, temp_dir, inference_size, session):
-    """
-    修改点：增加了 session 参数，在处理每一张图片时都检查是否停止。
-    """
     if os.path.exists(temp_dir): shutil.rmtree(temp_dir)
     os.makedirs(temp_dir)
-
     frame_files = []
-
     video_info = database.get_video_entity(video_uuid)
-    orig_w = video_info['width']
-    orig_h = video_info['height']
-
+    orig_w, orig_h = video_info['width'], video_info['height']
     for i, frame_num in enumerate(range(chunk_start, chunk_end + 1)):
-        # === 高频检查点 1：每处理一帧图片前都检查 ===
-        if session.get('stop_requested', False):
-            logging.info("[SAM2] Stop detected during image preparation.")
-            return None, None, None
-        # ==========================================
-
+        if session.get('stop_requested', False): return None, None, None
         src_path = file_storage.get_frame_path(video_uuid, frame_num)
-        if not os.path.exists(src_path):
-            continue
-
+        if not os.path.exists(src_path): continue
         img = cv2.imread(src_path)
         if img is None: continue
-
         img_resized = cv2.resize(img, (inference_size, inference_size))
-
-        dst_name = f"{i:05d}.jpg"
-        dst_path = os.path.join(temp_dir, dst_name)
-
-        cv2.imwrite(dst_path, img_resized, [cv2.IMWRITE_JPEG_QUALITY, 50])
+        cv2.imwrite(os.path.join(temp_dir, f"{i:05d}.jpg"), img_resized, [cv2.IMWRITE_JPEG_QUALITY, 80])
         frame_files.append(frame_num)
-
     return frame_files, orig_w, orig_h
 
 
 def track_video_ultralytics(video_uuid, start_frame, end_frame, init_bboxes_text, session):
+    """
+    点选追踪 (SAM Tracking)：采用极度成熟、低延迟且支持分块内存释放的 SAM 2 视频推理器。
+    """
     predictor = _load_sam2_models(mode="video")
-    if predictor is None:
-        raise RuntimeError("SAM2 Video Predictor init failed.")
+    if predictor is None: raise RuntimeError("SAM 2 Video Predictor offline.")
 
-    # 从设置动态加载参数
     settings = settings_manager.load_settings()
-    inference_size = int(settings.get('inference_size', 512))
+    inference_size = 1024  # 采用标准高清分辨率进行追踪
     chunk_size = int(settings.get('batch_tracking_chunk_size', 200))
-    use_autocast = settings.get('use_autocast', True)
-    inference_dtype = torch.bfloat16 if (
-                torch.cuda.is_available() and torch.cuda.is_bf16_supported() and use_autocast) else torch.float32
 
     init_rects, init_labels, init_ids = convert_text_to_rects_and_labels(init_bboxes_text)
 
@@ -216,111 +248,71 @@ def track_video_ultralytics(video_uuid, start_frame, end_frame, init_bboxes_text
     session['progress'] = 0
 
     current_start = start_frame
-    base_temp_dir = os.path.join(config.STORAGE_DIR, "temp_sam2", str(uuid.uuid4()))
+    base_temp_dir = os.path.join(config.STORAGE_DIR, "temp_sam2_tracking", str(uuid.uuid4()))
 
     try:
         while current_start <= end_frame:
-            # === 高频检查点 2：Chunk 开始前 ===
-            if session.get('stop_requested', False):
-                break
+            if session.get('stop_requested', False): break
 
             chunk_end = min(current_start + chunk_size - 1, end_frame)
-            logging.info(f"[SAM2 Chunk] Processing frames {current_start} to {chunk_end}...")
-
             chunk_dir = os.path.join(base_temp_dir, f"chunk_{current_start}")
 
-            # 2.1 准备数据 (传入 session 和动态的 inference_size)
-            frame_map, orig_w, orig_h = prepare_chunk_images(
-                video_uuid, current_start, chunk_end, chunk_dir, inference_size, session
-            )
-
-            # 如果 prepare 过程中被打断，frame_map 会是 None
-            if not frame_map or session.get('stop_requested', False):
-                logging.info("[SAM2] Stop detected after prepare_chunk_images.")
-                break
-
-            # === 高频检查点 3：初始化状态前 ===
-            if session.get('stop_requested', False): break
+            frame_map, orig_w, orig_h = prepare_chunk_images(video_uuid, current_start, chunk_end, chunk_dir,
+                                                             inference_size, session)
+            if not frame_map or session.get('stop_requested', False): break
 
             inference_state = predictor.init_state(video_path=chunk_dir)
 
             scale_x = orig_w / inference_size
             scale_y = orig_h / inference_size
 
-            # === 高频检查点 4：添加 Prompt 前 ===
-            if session.get('stop_requested', False): break
+            for oid, obj_data in active_objects.items():
+                box_orig = obj_data['last_box']
+                box_resized = np.array([
+                    box_orig[0] / scale_x,
+                    box_orig[1] / scale_y,
+                    box_orig[2] / scale_x,
+                    box_orig[3] / scale_y
+                ], dtype=np.float32)
 
-            with torch.autocast("cuda", dtype=inference_dtype, enabled=use_autocast):
-                for oid, obj_data in active_objects.items():
-                    box_orig = obj_data['last_box']
-                    box_resized = np.array([
-                        box_orig[0] / scale_x,
-                        box_orig[1] / scale_y,
-                        box_orig[2] / scale_x,
-                        box_orig[3] / scale_y
-                    ], dtype=np.float32)
+                predictor.add_new_points_or_box(
+                    inference_state=inference_state,
+                    frame_idx=0,
+                    obj_id=obj_data['internal_id'],
+                    box=box_resized
+                )
 
-                    predictor.add_new_points_or_box(
-                        inference_state=inference_state,
-                        frame_idx=0,
-                        obj_id=obj_data['internal_id'],
-                        box=box_resized
-                    )
+            for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(inference_state):
+                if session.get('stop_requested', False): break
+                if out_frame_idx >= len(frame_map): continue
+                global_frame_num = frame_map[out_frame_idx]
+                if global_frame_num == start_frame: continue
 
-            # === 高频检查点 5：开始推理前 ===
-            if session.get('stop_requested', False): break
+                current_frame_lines = []
+                for i, out_obj_id in enumerate(out_obj_ids):
+                    internal_id = int(out_obj_id)
+                    target_oid = None
+                    for oid, data in active_objects.items():
+                        if data['internal_id'] == internal_id:
+                            target_oid = oid
+                            break
+                    if not target_oid: continue
 
-            with torch.inference_mode(), torch.autocast("cuda", dtype=inference_dtype, enabled=use_autocast):
-                for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(inference_state):
+                    mask_np = (out_mask_logits[i] > 0.0).squeeze().cpu().numpy().astype(np.uint8)
+                    cnts, _ = cv2.findContours(mask_np, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                    if cnts:
+                        c = max(cnts, key=cv2.contourArea)
+                        x, y, w, h = cv2.boundingRect(c)
+                        x1, y1 = int(x * scale_x), int(y * scale_y)
+                        x2, y2 = int((x + w) * scale_x), int((y + h) * scale_y)
 
-                    # === 高频检查点 6：每推理一帧都检查 ===
-                    if session.get('stop_requested', False):
-                        logging.info("[SAM2] Stop requested inside propagation loop.")
-                        break
+                        active_objects[target_oid]['last_box'] = [x1, y1, x2, y2]
+                        label = active_objects[target_oid]['label']
+                        current_frame_lines.append(f"{x1},{y1},{x2},{y2},{label},{target_oid}")
 
-                    if out_frame_idx >= len(frame_map): continue
-                    global_frame_num = frame_map[out_frame_idx]
+                session['results'][global_frame_num] = "\n".join(current_frame_lines)
+                session['progress'] = global_frame_num - start_frame
 
-                    if global_frame_num == start_frame:
-                        continue
-
-                    current_frame_lines = []
-                    for i, out_obj_id in enumerate(out_obj_ids):
-                        internal_id = int(out_obj_id)
-                        target_oid = None
-                        for oid, data in active_objects.items():
-                            if data['internal_id'] == internal_id:
-                                target_oid = oid
-                                break
-
-                        if not target_oid: continue
-
-                        mask_tensor = (out_mask_logits[i] > 0.0)
-                        mask_np = mask_tensor.squeeze().cpu().numpy().astype(np.uint8)
-
-                        cnts, _ = cv2.findContours(mask_np, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-                        if cnts:
-                            c = max(cnts, key=cv2.contourArea)
-                            x, y, w, h = cv2.boundingRect(c)
-
-                            x1 = int(x * scale_x)
-                            y1 = int(y * scale_y)
-                            x2 = int((x + w) * scale_x)
-                            y2 = int((y + h) * scale_y)
-
-                            active_objects[target_oid]['last_box'] = [x1, y1, x2, y2]
-                            label = active_objects[target_oid]['label']
-                            current_frame_lines.append(f"{x1},{y1},{x2},{y2},{label},{target_oid}")
-
-                    if current_frame_lines:
-                        session['results'][global_frame_num] = "\n".join(current_frame_lines)
-                    else:
-                        session['results'][global_frame_num] = ""
-
-                    session['progress'] = global_frame_num - start_frame
-
-            # 清理当前块
             predictor.reset_state(inference_state)
             if os.path.exists(chunk_dir): shutil.rmtree(chunk_dir)
             gc.collect()
@@ -329,97 +321,19 @@ def track_video_ultralytics(video_uuid, start_frame, end_frame, init_bboxes_text
             current_start += chunk_size
 
     except Exception as e:
-        logging.error(f"Tracking error: {e}", exc_info=True)
+        logging.error(f"[SAM2] Video tracking failed: {e}", exc_info=True)
         session['status'] = 'FAILED'
         session['message'] = str(e)
     finally:
         if os.path.exists(base_temp_dir):
             shutil.rmtree(base_temp_dir, ignore_errors=True)
-
         if session.get('stop_requested', False):
             session['status'] = 'STOPPED'
-        elif session['status'] == 'PROCESSING':
+        elif session['status'] in ['PROCESSING', 'BATCH_PROCESSING']:
             session['status'] = 'COMPLETED'
-
-        logging.info(f"[SAM2] Tracking process ended with status: {session['status']}")
-
-
-# ==============================================================================
-# 2. 自动掩码生成
-# ==============================================================================
-def generate_masks_for_frame(video_uuid, frame_number):
-    generator = _load_sam2_models(mode="auto")
-    if generator is None: return None, None
-
-    frame_path = file_storage.get_frame_path(video_uuid, frame_number)
-    if not os.path.exists(frame_path): return None, None
-
-    image = cv2.imread(frame_path)
-    if image is None: return None, None
-    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-
-    settings = settings_manager.load_settings()
-    use_autocast = settings.get('use_autocast', True)
-    inference_dtype = torch.bfloat16 if (
-                torch.cuda.is_available() and torch.cuda.is_bf16_supported() and use_autocast) else torch.float32
-
-    with torch.inference_mode(), torch.autocast("cuda", dtype=inference_dtype, enabled=use_autocast):
-        masks_data = generator.generate(image)
-
-    if not masks_data:
-        dev = settings_manager.get_device()
-        return torch.empty(0, 4, device=dev), torch.empty(0, 0, 0, device=dev)
-
-    boxes = []
-    masks_list = []
-    for m in masks_data:
-        x, y, w, h = m['bbox']
-        boxes.append([x, y, x + w, y + h])
-        masks_list.append(m['segmentation'])
-
-    dev = settings_manager.get_device()
-    boxes_t = torch.tensor(boxes, dtype=torch.float32, device=dev)
-    masks_np = np.array(masks_list, dtype=np.bool_)
-    masks_t = torch.tensor(masks_np, dtype=torch.float32, device=dev).unsqueeze(1)
-    return boxes_t, masks_t
-
-
-# ==============================================================================
-# 3. 单图预测
-# ==============================================================================
-def predict_box_from_point_ultralytics(image_path, point_coords):
-    predictor = _load_sam2_models(mode="image")
-    if predictor is None: return None
-
-    image = cv2.imread(image_path)
-    if image is None: return None
-    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-
-    settings = settings_manager.load_settings()
-    use_autocast = settings.get('use_autocast', True)
-    inference_dtype = torch.bfloat16 if (
-                torch.cuda.is_available() and torch.cuda.is_bf16_supported() and use_autocast) else torch.float32
-
-    with torch.inference_mode(), torch.autocast("cuda", dtype=inference_dtype, enabled=use_autocast):
-        predictor.set_image(image)
-        input_point = np.array([point_coords])
-        input_label = np.array([1])
-        masks, scores, logits = predictor.predict(
-            point_coords=input_point, point_labels=input_label, multimask_output=False
-        )
-        if masks is not None and masks.size > 0:
-            mask = masks[0]
-            bbox = _mask_to_bbox(mask)  # This now includes padding
-            if bbox:
-                return {'x1': bbox[0], 'y1': bbox[1], 'x2': bbox[2], 'y2': bbox[3]}
-    return None
 
 
 def get_sam_model():
-    # --- 修改 ---
-    if not HAS_SAM2:
-        return False
-    # 现在它不仅检查库是否存在，还检查用户是否在设置中启用了它
     settings = settings_manager.load_settings()
-    return settings.get('enable_sam_model', True)
-    # --- 结束 ---
+    # 只要拥有其中一个引擎，SAM 核心就视为可用
+    return settings.get('enable_sam_model', True) and (HAS_SAM2 or HAS_SAM3)
