@@ -1710,13 +1710,7 @@ def preview_augmentations():
 
 
 def start_server():
-    """
-    此函数在后台线程运行，负责所有的初始化和 Flask 服务器启动
-    """
-    # 1. 初始化 Colorama (保留终端颜色支持)
     init(autoreset=True)
-
-    # 2. 配置日志格式 (完全保留你原有的 ColoredFormatter)
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.INFO)
 
@@ -1728,7 +1722,6 @@ def start_server():
     console_handler.setFormatter(formatter)
     root_logger.addHandler(console_handler)
 
-    # 3. AI 模型初始化
     settings = settings_manager.load_settings()
     if settings.get('initial_setup_done', False):
         logging.info("正在初始化AI模型，请稍候...")
@@ -1736,13 +1729,11 @@ def start_server():
     else:
         logging.warning("=== 处于初始配置向导模式：已拦截 AI 模型加载，等待用户完成环境配置 ===")
 
-    # 注册退出钩子
     atexit.register(ai_models.save_preprocessed_cache_to_disk)
     atexit.register(ai_models.save_prototypes_to_disk)
 
     time.sleep(0.01)
 
-    # 4. 打印 ASCII 艺术字到终端
     logging.info("=" * 121)
     logging.info(
         "███████╗ ███████╗ ██████╗   ██████╗  ██████╗  ██╗   ██╗  ██████╗  ██╗       ██████╗  ██╗   ██╗  █████╗  ██████╗  ██████╗")
@@ -1760,8 +1751,6 @@ def start_server():
         "Developed by BlueDarkUP from FIRST Tech Challenge team 27570           Be based on -- FIRST Machine Learning Toolchain --")
     logging.info("=" * 121)
 
-    # 5. 启动 Flask (绑定到本地 127.0.0.1 提高安全性)
-    # 使用 waitress 提供 WSGI 服务
     from waitress import serve
     serve(app, host='127.0.0.1', port=5000, threads=max_workers_setting)
 
@@ -1769,16 +1758,11 @@ def start_server():
 if __name__ == '__main__':
     multiprocessing.freeze_support()
 
-    # A. 启动 Flask 服务器后台线程
-    # 设置 daemon=True 确保关闭窗口进程时，后台线程能跟随主进程一起退出
     server_thread = Thread(target=start_server, daemon=True)
     server_thread.start()
 
-    # B. 等待服务器预热（根据 AI 模型加载速度可适当调整）
-    # 给一点时间让端口监听起来，避免窗口打开时显示“无法连接”
     time.sleep(2)
 
-    # C. 创建 pywebview 窗口
     window = webview.create_window(
         title='Zero2YoloYard | Developed by BlueDarkUP from FIRST Tech Challenge team 27570 | Be based on -- FIRST Machine Learning Toolchain --',
         url='http://127.0.0.1:5000',

@@ -157,9 +157,7 @@ def get_features_for_single_bbox(pil_image, target_rects):
 def save_prototypes_to_disk():
     try:
         with _get_class_lock("__global_save__"):
-            # Deep copy and move tensors to CPU for saving
             cpu_cache = {}
-            # Use list(...) to snapshot to avoid RuntimeError during iteration
             current_items = list(PROTOTYPE_CACHE.items())
 
             for k, v in current_items:
