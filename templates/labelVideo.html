@@ -511,13 +511,9 @@
             </div>
             <ul id="class-list" class="list-group list-group-flush border border-secondary" style="max-height: 220px; overflow-y: auto; background: rgba(0,0,0,0.3);"></ul>
             <div class="mt-3">
-                <div class="custom-control custom-switch mb-2">
-                    <input type="checkbox" class="custom-control-input" id="dataset-find-use-color">
-                    <label class="custom-control-label small text-muted text-uppercase font-weight-bold" for="dataset-find-use-color">Strict Color Match <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="color_match"></i></label>
-                </div>
                 <div class="d-flex justify-content-between">
                     <button id="find-from-dataset-btn" class="btn btn-xs btn-outline-info w-50 mr-1 text-truncate info-trigger" data-key="find_sim"><i class="bi bi-search"></i> Find Sim</button>
-                    <button id="rebuild-prototypes-btn" class="btn btn-xs btn-outline-warning w-50 ml-1 text-truncate info-trigger" data-key="rebuild_ai"><i class="bi bi-cpu"></i> Rebuild AI</button>
+                    <button id="edit-class-prompt-btn" class="btn btn-xs btn-outline-warning w-50 ml-1 text-truncate info-trigger" data-key="edit_prompt"><i class="bi bi-cpu"></i> Edit Prompt</button>
                 </div>
             </div>
         </div>
@@ -558,16 +554,13 @@
             <h6 class="small font-weight-bold mb-2 text-warning text-uppercase"><i class="bi bi-magic"></i> Concept Segmentation</h6>
             <p class="text-muted small mb-2 font-monospace" style="font-size: 0.7rem;">> ENTER OBJECT DESCRIPTION <br>> SYSTEM WILL LOCATE ALL INSTANCES</p>
             <input type="text" id="sam3-text-prompt-input" class="form-control form-control-sm tool-input mb-2" placeholder="e.g. 'red car', 'person with hat'...">
-            <button id="sam3-text-execute-btn" class="btn btn-sm btn-warning w-100 font-weight-bold text-dark"><i class="bi bi-search"></i> Scan & Segment</button>
+            <button id="sam3-text-execute-btn" class="btn btn-sm btn-warning w-100 font-weight-bold text-dark mb-2"><i class="bi bi-search"></i> Scan & Segment</button>
+            <button id="sam3-text-apply-dataset-btn" class="btn btn-sm btn-outline-warning w-100 font-weight-bold text-uppercase"><i class="bi bi-globe"></i> Apply Prompt to Dataset...</button>
         </div>
 
         <div id="interactive-segment-controls" style="display: none;">
             <h6 class="small font-weight-bold mb-2 text-info text-uppercase"><i class="bi bi-crosshair"></i> Smart Select Active</h6>
             <p class="text-muted small mb-3 font-monospace" style="font-size: 0.7rem;">> DESIGNATE TARGET BOX <br>> SYSTEM WILL LOCATE SIMILAR</p>
-            <div class="custom-control custom-switch mb-3 border-bottom border-secondary pb-2">
-                <input type="checkbox" class="custom-control-input" id="smart-select-use-color">
-                <label class="custom-control-label small text-muted text-uppercase" for="smart-select-use-color">Strict Color Match <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="color_match"></i></label>
-            </div>
             <button id="find-similar-btn" class="btn btn-sm btn-primary w-100 mb-2 text-uppercase font-weight-bold" style="display: none;"><i class="bi bi-radar"></i> Scan Frame</button>
             <button id="clear-samples-btn" class="btn btn-sm btn-secondary w-100 mb-2 text-uppercase"><i class="bi bi-eraser"></i> Clear Signal</button>
             <div id="interactive-results-controls" style="display: none;" class="mt-3 border-top border-secondary pt-3">
@@ -576,6 +569,7 @@
                     <input type="range" class="custom-range" id="result-threshold" min="0.1" max="0.99" step="0.01" value="0.50">
                 </div>
                 <button id="accept-visible-btn" class="btn btn-sm btn-success w-100 mb-2 text-uppercase font-weight-bold"><i class="bi bi-check2-square"></i> Confirm All</button>
+                <button id="apply-dataset-scope-btn" class="btn btn-sm btn-outline-info w-100 mb-2 text-uppercase font-weight-bold"><i class="bi bi-globe"></i> Apply Model to Dataset...</button>
                 <button id="finish-interactive-btn" class="btn btn-sm btn-outline-light w-100 text-uppercase">Terminate</button>
             </div>
         </div>
@@ -652,7 +646,7 @@
 </template>
 
 {% from "_macros.html" import render_modal %}
-{% call render_modal('negative-sampling-modal', 'MODEL_REFINEMENT_PROTOCOL') %}
+{% call render_modal('apply-scope-modal', 'APPLY_SAM3_MODEL') %}
 <div class="mb-3 p-3 border border-secondary" style="background: rgba(255,255,255,0.02);">
     <h6 class="font-weight-bold text-primary text-uppercase">Step 1: Confidence Threshold</h6>
     <p class="text-muted small mb-2 font-monospace">Set minimum score for label generation.</p>
@@ -663,25 +657,28 @@
     <input type="range" class="custom-range" id="apply-confidence-threshold" min="0.1" max="0.99" step="0.01" value="0.50">
 </div>
 
-<div id="neg-sampling-body">
-    <h6 class="mt-4 font-weight-bold text-danger text-uppercase">Step 2: Negative Sampling</h6>
-    <p class="text-muted small font-monospace"><i class="bi bi-exclamation-triangle mr-1"></i> Draw boxes on areas to IGNORE.</p>
-    <div class="text-center mb-3 bg-black border border-secondary p-1">
-        <div id="neg-canvas-container" style="position: relative; display: inline-block; max-width: 100%; box-shadow: 0 0 15px rgba(255,0,0,0.1);">
-            <img id="neg-frame-image" src="" class="img-fluid" alt="Negative Sample Frame" draggable="false" />
-            <canvas id="neg-drawing-canvas" style="position: absolute; top: 0; left: 0; cursor: crosshair;"></canvas>
+<div id="apply-scope-body">
+    <h6 class="mt-4 font-weight-bold text-primary text-uppercase">Step 2: Apply Scope</h6>
+    <p class="text-muted small font-monospace">
+        <i class="bi bi-info-circle mr-1"></i>
+        SAM3 will scan every unlabeled frame in the selected scope using the class's retrieval text (<code id="apply-scope-class-name">-</code>),
+        and write the results as review-able suggestions.
+    </p>
+    <div id="apply-scope-options" class="border border-secondary p-2" style="max-height: 240px; overflow-y: auto;">
+        <div class="form-check py-1">
+            <input class="form-check-input" type="radio" name="apply-scope" id="apply-scope-this-video" value="this_video" checked>
+            <label class="form-check-label small text-white" for="apply-scope-this-video">
+                Only this video
+            </label>
+        </div>
+        <div id="apply-scope-dataset-options">
+            <p class="text-muted small font-monospace mb-0 mt-2">Loading datasets that include this video...</p>
         </div>
     </div>
-    <div class="d-flex justify-content-between align-items-center mt-3 bg-transparent p-2 border border-secondary">
-        <button id="neg-prev-btn" class="btn btn-sm btn-outline-secondary rounded-0"><i class="bi bi-arrow-left"></i></button>
-        <strong id="neg-frame-counter" class="small text-monospace text-white">FRAME 1 / 10</strong>
-        <button id="neg-next-btn" class="btn btn-sm btn-outline-secondary rounded-0"><i class="bi bi-arrow-right"></i></button>
-    </div>
-    <p class="text-muted small mt-2 text-center font-monospace">CTRL+Z: UNDO | DEL: CLEAR</p>
 </div>
 <div class="modal-footer border-secondary bg-transparent pt-3 mt-2 border-top">
     <button type="button" class="btn btn-secondary rounded-0 text-uppercase" data-dismiss="modal">Cancel</button>
-    <button type="button" id="finish-neg-sampling-btn" class="btn btn-primary rounded-0 text-uppercase font-weight-bold"><i class="bi bi-check2-circle"></i> Execute Protocol</button>
+    <button type="button" id="confirm-apply-scope-btn" class="btn btn-primary rounded-0 text-uppercase font-weight-bold"><i class="bi bi-check2-circle"></i> Apply</button>
 </div>
 {% endcall %}
 
@@ -693,11 +690,11 @@
         const sysManualDb = {
             'sam_point': { title: 'SAM (POINT_CLICK)', desc: 'Segment Anything Model. Core neural network for zero-shot object segmentation.', tune: 'Left-click on the center of your target object.', when: 'Use when manual bounding boxes are too tedious, or when the object has a highly complex/irregular shape.' },
             'lam_text': { title: 'LAM (TEXT_PROMPT)', desc: 'Label Anything Model. Open-world detection driven by textual prompts.', tune: 'Click anywhere on the canvas to trigger a scan, then select the matching class from the popup.', when: 'Use when encountering completely new, untrained objects that you want the AI to recognize out-of-the-box.' },
-            'smart_select': { title: 'SMART_SELECT', desc: 'Local feature-space similarity retrieval. Scans the current frame for objects matching your designated target.', tune: 'Draw a box around one target. Adjust the confidence threshold to filter results.', when: 'Extremely useful when a frame contains dozens of identical objects (e.g., a pile of screws, a crowd) and you want to label them all at once.' },
+            'smart_select': { title: 'SMART_SELECT', desc: 'SAM 3.1 visual exemplar retrieval. Uses your drawn box as a geometric prompt to find similar-looking objects elsewhere in the current frame.', tune: 'Draw a box around one target (optionally add negative boxes on things it should NOT match). Adjust the confidence threshold to filter results.', when: 'Extremely useful when a frame contains dozens of identical objects (e.g., a pile of screws, a crowd) and you want to label them all at once.' },
             'video_tracking': { title: 'VIDEO_TRACKING', desc: 'Temporal propagation engine. Tracks labeled entities across consecutive frames.', tune: 'Ensure targets are perfectly labeled in the start frame, set target end frame, then click to track forward.', when: 'Use when objects move smoothly across dozens or hundreds of frames to completely automate the labeling process.' },
-            'find_sim': { title: 'QUERY_DATASET (FIND SIM)', desc: 'Global feature-space retrieval. Scans the active frame against the entire dataset\'s prototype library.', tune: 'Select an active class from the registry first. Toggle Strict Color Match if needed.', when: 'Use when the background changes drastically and you want to quickly recover previously labeled objects.' },
-            'rebuild_ai': { title: 'REBUILD_AI_PROTOTYPES', desc: 'Recompiles the global prototype feature vectors for all classes. Computationally expensive.', tune: 'Executes silently in the background.', when: 'Run this if you have deleted/modified many labels and feel that Smart Select or Find Sim has become "dumb" or inaccurate.' },
-            'color_match': { title: 'STRICT_COLOR_MATCH', desc: 'Injects HSV color space metrics into the embedding comparison matrix.', tune: 'Toggle ON to prioritize color. Toggle OFF to prioritize shape/geometry.', when: 'Turn ON when you need to distinguish between two identical shapes with different colors (e.g., a red ball vs. a blue ball).' },
+            'find_sim': { title: 'QUERY_DATASET (FIND SIM)', desc: 'SAM 3.1 open-vocabulary text retrieval. Scans the active frame using the selected class\'s SAM3 retrieval text (or its class name if none is set).', tune: 'Select an active class from the registry first. Toggle Strict Color Match if needed. Use "Edit Prompt" to write a more descriptive retrieval text for the class.', when: 'Use when the background changes drastically and you want to quickly recover previously labeled objects, or to bulk-detect a class across many frames/videos.' },
+            'edit_prompt': { title: 'EDIT_SAM3_PROMPT', desc: 'Sets the text description SAM3 uses to look for this class (independent of the class\'s label name).', tune: 'A short, descriptive noun phrase works best, e.g. "a red plastic cube" rather than a short code like "obj1".', when: 'Do this once per class before relying on Find Sim / Apply-to-Dataset for that class, especially if the class name itself is not a good visual description.' },
+            'color_match': { title: 'STRICT_COLOR_MATCH', desc: 'Adds an HSV color-histogram veto on top of SAM3\'s results.', tune: 'Toggle ON to filter out color mismatches. Toggle OFF to rely purely on SAM3.', when: 'Turn ON when you need to distinguish between two visually-similar objects that mainly differ by color (e.g., a red ball vs. a blue ball).' },
             'interpolate': { title: 'LINEAR_INTERPOLATION', desc: 'Spatiotemporal mathematical interpolation for bounding boxes between two keyframes.', tune: 'Click on Frame A. Move to Frame B, adjust the box, and click again. The system fills the gap.', when: 'Use when an object moves in a straight, predictable line and you want to save GPU resources by bypassing AI tracking.' },
             'sam3_text': { title: 'TRUE LAM (ZERO-SHOT)', desc: 'SAM 3.1 Open-vocabulary concept segmentation.', tune: 'Type a descriptive noun phrase (e.g. "red sports car") and hit Enter.', when: 'Use when you want to immediately detect ALL instances of a complex concept without drawing any boxes or providing visual examples.' }
         };
@@ -743,7 +740,7 @@
         }
 
         if (!isFeatureExtractorEnabled) {
-            $('#find-from-dataset-btn, #rebuild-prototypes-btn').prop('disabled', true).attr('title', disabledTitle);
+            $('#find-from-dataset-btn, #edit-class-prompt-btn').prop('disabled', true).attr('title', disabledTitle);
         }
 
         if (!isSamEnabled || !isFeatureExtractorEnabled) {
@@ -806,6 +803,7 @@
         let currentCacheKey = null;
         let lastProcessedFrame = -1;
         let lastDatasetClassName = null;
+        let pendingApplyClassName = null;
         let hoveredPreviewIndex = -1;
         let overlappingCycleIndex = 0;
         let lastClickPosForCycle = null;
@@ -818,11 +816,10 @@
         let draggedBboxInitialState = null;
         let isDraggingBbox = false;
 
-        let negSamplingFrames = [];
-        let currentNegSampleIndex = 0;
-        let negativeSamplesStore = {};
-        let isDrawingNeg = false;
-        let negStartX, negStartY;
+        // 注: 这里原来还有 negSamplingFrames/currentNegSampleIndex/negativeSamplesStore/
+        // isDrawingNeg/negStartX/negStartY 六个变量，是"负样本采样"UI专用的。SAM3
+        // 迁移后批量应用改成纯文本检索驱动，不再需要用户额外画反例框，这套状态和对应
+        // 的 UI（下面原来的 neg-canvas 相关代码）一并移除。
 
         let toastTimeout;
         let isRequestingAnimationFrame = false;
@@ -835,10 +832,6 @@
         const dynamicCanvas = document.getElementById('dynamic-canvas');
         const dynamicCtx = dynamicCanvas.getContext('2d');
         let lastMousePos = null;
-
-        const negCanvas = document.getElementById('neg-drawing-canvas');
-        const negCtx = negCanvas.getContext('2d');
-        const negImage = document.getElementById('neg-frame-image');
 
         let isResizingSidebar = false;
         const $sidebar = $('#ide-sidebar');
@@ -936,6 +929,7 @@
                                 const frameData = window.cachedFrames.find(f => f.frame_number == frameNum);
                                 if (frameData) {
                                     frameData.bboxes_text = bboxesString;
+                                    frameData.suggested_bboxes_text = "";  // 清除建议，防止切帧后重现
                                 } else {
                                     window.cachedFrames.push({
                                         video_uuid: videoUuid,
@@ -1515,6 +1509,7 @@
             overlappingCycleIndex = 0;
             lastClickPosForCycle = null;
             $('#interactive-results-controls').slideUp();
+            $('#apply-scope-modal').modal('hide');
             if (shouldRedraw) redrawStaticCanvas();
         }
 
@@ -1523,12 +1518,11 @@
             lastDatasetClassName = null;
             const frameNumber = parseInt(frameSlider.val());
             const $button = $('#find-similar-btn');
-            const useColor = $('#smart-select-use-color').is(':checked');
 
             $button.prop('disabled', true);
             const runPrediction = () => {
-                showToast(useColor ? 'Scanning (Color + Shape)...' : 'Scanning...', 4000);
-                const payload = { video_uuid: videoUuid, frame_number: frameNumber, prompt_boxes: positiveExampleBboxes, use_color: useColor };
+                showToast('Scanning...', 4000);
+                const payload = { video_uuid: videoUuid, frame_number: frameNumber, prompt_boxes: positiveExampleBboxes, use_color: false };
                 $.ajax({
                     url: '/interactive_segment/predict', type: 'POST', contentType: 'application/json', data: JSON.stringify(payload),
                     success: res => {
@@ -1561,86 +1555,57 @@
             } else { runPrediction(); }
         }
 
-        function startNegativeSampling(count) {
+        function openApplyScopeModal(className) {
+            pendingApplyClassName = className;
+            $('#apply-scope-class-name').text(className);
+            const $datasetOptions = $('#apply-scope-dataset-options');
+            $datasetOptions.html('<p class="text-muted small font-monospace mb-0 mt-2">Loading datasets that include this video...</p>');
+            $('#apply-scope-this-video').prop('checked', true);
+
             $.ajax({
-                url: '/api/get_random_frames_for_neg_sampling', type: 'POST', contentType: 'application/json',
-                data: JSON.stringify({ video_uuid: videoUuid, count: count }),
+                url: `/api/datasetsContainingVideo/${videoUuid}`, type: 'GET',
                 success: function(res) {
-                    if (res.success && res.frames.length > 0) {
-                        negSamplingFrames = res.frames; currentNegSampleIndex = 0; negativeSamplesStore = {};
-                        loadNegativeSampleFrame();
-                        $('#negative-sampling-modal').modal({ backdrop: 'static', keyboard: false });
-                    } else { window.sysAlert("Failed to fetch random frames: " + (res.message || "No frames returned."), 'error'); }
+                    if (res.success && res.datasets.length > 0) {
+                        $datasetOptions.empty();
+                        res.datasets.forEach((ds, idx) => {
+                            const radioId = `apply-scope-dataset-${idx}`;
+                            $datasetOptions.append(`
+                                <div class="form-check py-1 mt-1 border-top border-secondary pt-2">
+                                    <input class="form-check-input" type="radio" name="apply-scope" id="${radioId}" value="dataset" data-dataset-uuid="${ds.dataset_uuid}">
+                                    <label class="form-check-label small text-white" for="${radioId}">
+                                        Entire dataset: <strong>${ds.description}</strong> <span class="text-muted">(${ds.video_uuids.length} videos)</span>
+                                    </label>
+                                </div>
+                            `);
+                        });
+                    } else {
+                        $datasetOptions.html('<p class="text-muted small font-monospace mb-0 mt-2">This video is not part of any saved dataset yet. Create one from the dashboard to enable dataset-wide apply.</p>');
+                    }
                 },
-                error: function() { window.sysAlert("Server error while fetching random frames.", 'error'); }
+                error: function() {
+                    $datasetOptions.html('<p class="text-danger small font-monospace mb-0 mt-2">Failed to load datasets. You can still apply to this video only.</p>');
+                }
             });
+
+            $('#apply-scope-modal').modal({ backdrop: false, keyboard: false, show: true });
         }
 
-        function resizeNegCanvas() {
-            if (!negImage.complete || negImage.naturalWidth === 0 || !$('#negative-sampling-modal').is(':visible')) return;
-            const dpr = window.devicePixelRatio || 1;
-            const rect = negImage.getBoundingClientRect();
-            negCanvas.style.width = `${rect.width}px`; negCanvas.style.height = `${rect.height}px`;
-            negCanvas.width = Math.round(rect.width * dpr); negCanvas.height = Math.round(rect.height * dpr);
-            negCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-            redrawNegCanvas();
-        }
-
-        function loadNegativeSampleFrame() {
-            if (currentNegSampleIndex < 0 || currentNegSampleIndex >= negSamplingFrames.length) return;
-            $('#neg-frame-counter').text(`FRAME ${currentNegSampleIndex + 1} / ${negSamplingFrames.length}`);
-            negImage.onload = () => { resizeNegCanvas(); };
-            negImage.src = negSamplingFrames[currentNegSampleIndex].image_url;
-        }
-
-        function redrawNegCanvas() {
-            const dpr = window.devicePixelRatio || 1;
-            negCtx.clearRect(0, 0, negCanvas.width / dpr, negCanvas.height / dpr);
-            if (negSamplingFrames.length === 0 || !negImage.naturalWidth) return;
-            const frameKey = `${negSamplingFrames[currentNegSampleIndex].video_uuid};${negSamplingFrames[currentNegSampleIndex].frame_number}`;
-            const boxes = negativeSamplesStore[frameKey] || [];
-            const scaleX = negImage.clientWidth / negImage.naturalWidth, scaleY = negImage.clientHeight / negImage.naturalHeight;
-            boxes.forEach(box => {
-                negCtx.strokeStyle = getColor('negativeSampleStroke');
-                negCtx.lineWidth = 2 / dpr; negCtx.setLineDash([5 / dpr, 3 / dpr]);
-                negCtx.strokeRect(box[0] * scaleX, box[1] * scaleY, (box[2] - box[0]) * scaleX, (box[3] - box[1]) * scaleY);
-                negCtx.setLineDash([]);
-            });
-        }
-
-        function triggerApplyToVideo(negativeSamples) {
-            if (!lastDatasetClassName) { window.sysAlert("An error occurred. The class to apply is unknown.", 'error'); return; }
-            const msg = negativeSamples && Object.keys(negativeSamples).length > 0
-                ? `Start background task to apply REFINED model for '${lastDatasetClassName}'?`
-                : `Start background task to apply learned features for '${lastDatasetClassName}'?`;
-
-            window.sysConfirm(msg, function() {
+        function triggerApplyToVideos(videoUuids, className, confidenceThreshold) {
+            const scopeDesc = videoUuids.length > 1 ? `${videoUuids.length} videos (dataset)` : "this video";
+            window.sysConfirm(`Start background task to apply SAM3 retrieval for '${className}' across ${scopeDesc}?`, function() {
                 $.ajax({
-                    url: '/apply_prototypes_to_video', type: 'POST', contentType: 'application/json',
-                    data: JSON.stringify({ video_uuid: videoUuid, class_name: lastDatasetClassName, negative_samples: negativeSamples, confidence_threshold: parseFloat($('#apply-confidence-threshold').val()) }),
+                    url: '/api/apply_class_to_videos', type: 'POST', contentType: 'application/json',
+                    data: JSON.stringify({ video_uuids: videoUuids, class_name: className, confidence_threshold: confidenceThreshold }),
                     success: function(res) {
                         if (res.success) { window.sysAlert("Task started. Video status will update on dashboard.", 'success'); window.location.href = "/"; }
                         else { window.sysAlert("Failed to start task: " + res.message, 'error'); }
                     },
-                    error: function() { window.sysAlert("Server error when trying to start the task.", 'error'); }
+                    error: function(xhr) {
+                        const msg = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : "Server error when trying to start the task.";
+                        window.sysAlert(msg, 'error');
+                    }
                 });
             });
-        }
-
-        function undoNegativeSample() {
-            if (currentNegSampleIndex < 0 || currentNegSampleIndex >= negSamplingFrames.length) return;
-            const frameKey = `${negSamplingFrames[currentNegSampleIndex].video_uuid};${negSamplingFrames[currentNegSampleIndex].frame_number}`;
-            if (negativeSamplesStore[frameKey] && negativeSamplesStore[frameKey].length > 0) {
-                negativeSamplesStore[frameKey].pop(); redrawNegCanvas(); showToast('Sample removed.', 1500);
-            } else { showToast('Nothing to undo.', 1500); }
-        }
-
-        function clearCurrentNegativeSamples() {
-            if (currentNegSampleIndex < 0 || currentNegSampleIndex >= negSamplingFrames.length) return;
-            const frameKey = `${negSamplingFrames[currentNegSampleIndex].video_uuid};${negSamplingFrames[currentNegSampleIndex].frame_number}`;
-            if (negativeSamplesStore[frameKey] && negativeSamplesStore[frameKey].length > 0) {
-                negativeSamplesStore[frameKey] = []; redrawNegCanvas(); showToast('Frame cleared.', 1500);
-            }
         }
 
         function resetInterpolationState(reloadFrame = false) {
@@ -2015,16 +1980,40 @@
 
         $("#save-bboxes").on("click", function() { performSave(parseInt(frameSlider.val()), formatBboxesToString(), false); });
 
-        $('#rebuild-prototypes-btn').on('click', function() {
-            window.sysConfirm('Rebuild AI prototypes for all classes?', function() {
-                const $btn = $('#rebuild-prototypes-btn');
-                $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> BUSY');
-                $.ajax({
-                    url: '/api/rebuild_prototypes', type: 'POST', contentType: 'application/json', data: JSON.stringify({}),
-                    success: function(res) { if(res.success) { showToast(res.message, 4000); } else { window.sysAlert('Error: ' + res.message, 'error'); } },
-                    error: function() { window.sysAlert('Error: Failed to start task.', 'error'); },
-                    complete: function() { setTimeout(() => { $btn.prop('disabled', false).html('<i class="bi bi-cpu"></i> Rebuild AI'); }, 2000); }
-                });
+        $('#edit-class-prompt-btn').on('click', function() {
+            if (!activeClass) { window.sysAlert('Select a class first.', 'error'); return; }
+            const $btn = $(this);
+            $btn.prop('disabled', true);
+            $.ajax({
+                url: '/api/setClassSam3Prompt', type: 'POST', contentType: 'application/json',
+                data: JSON.stringify({ class_name: activeClass }),
+                success: function(res) {
+                    $btn.prop('disabled', false);
+                    if (!res.success) { window.sysAlert('Error: ' + res.message, 'error'); return; }
+                    const current = res.sam3_prompt || '';
+
+                    window.sysPrompt({
+                        title: `EDIT SAM3 PROMPT - [${activeClass}]`,
+                        message: `Set description for class "${activeClass}" (leave empty to use class name):`,
+                        defaultValue: current
+                    }, function(next) {
+                        if (next === null || next === undefined) return;
+                        $.ajax({
+                            url: '/api/setClassSam3Prompt', type: 'POST', contentType: 'application/json',
+                            data: JSON.stringify({ class_name: activeClass, sam3_prompt: next }),
+                            success: function(res2) {
+                                if (res2.success) {
+                                    showToast(`Retrieval text for '${activeClass}' updated.`, 3000);
+                                    if (!res2.has_labeled_examples) {
+                                        showToast(`Note: '${activeClass}' has no labeled examples yet in this project.`, 4000);
+                                    }
+                                } else { window.sysAlert('Error: ' + res2.message, 'error'); }
+                            },
+                            error: function() { window.sysAlert('Error: Failed to save retrieval text.', 'error'); }
+                        });
+                    });
+                },
+                error: function() { $btn.prop('disabled', false); window.sysAlert('Error: Failed to load current retrieval text.', 'error'); }
             });
         });
 
@@ -2148,6 +2137,54 @@
             });
         });
 
+        $('#sam3-text-apply-dataset-btn').on('click', function() {
+            const promptText = $('#sam3-text-prompt-input').val().trim();
+            if (!promptText) {
+                window.sysAlert('Please enter an object description first.', 'error');
+                return;
+            }
+
+            let safeClassName = promptText.replace(/[^a-zA-Z0-9_\-]/g, '_').toUpperCase();
+            if (!availableClasses.includes(safeClassName)) {
+                addClass(safeClassName);
+            }
+            activeClass = safeClassName;
+            renderClassList();
+
+            if (bboxes.length > 0) {
+                const startFrame = parseInt(frameSlider.val());
+                const currentBboxes = formatBboxesToString();
+                $.ajax({
+                    url: "/storeVideoFrameBboxesText", type: "POST", contentType: "application/json", async: false,
+                    data: JSON.stringify({ video_uuid: videoUuid, frame_number: startFrame, bboxes_text: currentBboxes })
+                });
+            }
+
+            const $btn = $(this);
+            $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> Setting prompt...');
+
+            $.ajax({
+                url: '/api/setClassSam3Prompt',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ class_name: safeClassName, sam3_prompt: promptText }),
+                success: function(res) {
+                    if (res.success) {
+                        openApplyScopeModal(safeClassName);
+                    } else {
+                        window.sysAlert('Failed to set SAM3 prompt: ' + res.message, 'error');
+                    }
+                },
+                error: function(xhr) {
+                    const msg = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Server error';
+                    window.sysAlert('Error setting SAM3 prompt: ' + msg, 'error');
+                },
+                complete: function() {
+                    $btn.prop('disabled', false).html('<i class="bi bi-globe"></i> Apply Prompt to Dataset...');
+                }
+            });
+        });
+
         $('#sam2-track-btn').on('click', function() {
             if (bboxes.length === 0) { window.sysAlert("Label at least one object first.", 'error'); return; }
 
@@ -2267,25 +2304,21 @@
 
         $('#find-from-dataset-btn').on('click', function() {
             if (!activeClass) { window.sysAlert('Select class first!', 'error'); return; }
-            const frameNumber = parseInt(frameSlider.val()), $button = $(this), useColor = $('#dataset-find-use-color').is(':checked');
+            const frameNumber = parseInt(frameSlider.val()), $button = $(this);
 
             $button.prop('disabled', true);
-            showToast(useColor ? `Querying '${activeClass}' (Color+Shape)...` : `Querying '${activeClass}'...`, 10000);
+            showToast(`Querying '${activeClass}'...`, 10000);
             lastDatasetClassName = activeClass;
 
             $.ajax({
                 url: '/interactive_segment/predict_from_dataset', type: 'POST', contentType: 'application/json',
-                data: JSON.stringify({ video_uuid: videoUuid, frame_number: frameNumber, class_name: activeClass, use_color: useColor }),
+                data: JSON.stringify({ video_uuid: videoUuid, frame_number: frameNumber, class_name: activeClass, use_color: false }),
                 success: function(res) {
                     if (res.success) {
                         interactivePreviewBboxes = res.results;
                         $('#interactive-results-controls').slideDown(); $('#result-threshold').trigger('input'); redrawStaticCanvas();
                         showToast(`Found ${res.results.length} entities.`, 4000);
-                        setTimeout(() => {
-                            window.sysConfirm(`Entities detected. Apply '${activeClass}' model to unlabeled frames?`, function() {
-                                startNegativeSampling(10);
-                            });
-                        }, 500);
+                        if (res.warning) { showToast(res.warning, 6000); }
                     } else { window.sysAlert('Prediction failed: ' + res.message, 'error'); }
                 },
                 error: function() { window.sysAlert('Server error.', 'error'); },
@@ -2293,36 +2326,28 @@
             });
         });
 
-        $('#neg-canvas-container').on('mousedown', function(e) {
-            isDrawingNeg = true; const pos = getMousePos(negCanvas, e);
-            negStartX = pos.x; negStartY = pos.y;
-        }).on('mousemove', function(e) {
-            if (!isDrawingNeg) return;
-            redrawNegCanvas();
-            const pos = getMousePos(negCanvas, e), dpr = window.devicePixelRatio || 1;
-            negCtx.strokeStyle = getColor('negativeSampleStroke'); negCtx.lineWidth = 2 / dpr; negCtx.setLineDash([5 / dpr, 3 / dpr]);
-            negCtx.strokeRect(negStartX, negStartY, pos.x - negStartX, pos.y - negStartY); negCtx.setLineDash([]);
-        }).on('mouseup', function(e) {
-            if (!isDrawingNeg) return;
-            isDrawingNeg = false;
-            const pos = getMousePos(negCanvas, e), scaleX = negImage.naturalWidth / negImage.clientWidth, scaleY = negImage.naturalHeight / negImage.clientHeight;
-            const x1 = Math.round(Math.min(negStartX, pos.x) * scaleX), y1 = Math.round(Math.min(negStartY, pos.y) * scaleY);
-            const x2 = Math.round(Math.max(negStartX, pos.x) * scaleX), y2 = Math.round(Math.max(negStartY, pos.y) * scaleY);
+        $('#confirm-apply-scope-btn').on('click', function() {
+            if (!pendingApplyClassName) { window.sysAlert("An error occurred. The class to apply is unknown.", 'error'); return; }
+            $('#apply-scope-modal').modal('hide');
 
-            if (Math.abs(x1 - x2) < 5 || Math.abs(y1 - y2) < 5) { redrawNegCanvas(); return; }
-            const frameKey = `${negSamplingFrames[currentNegSampleIndex].video_uuid};${negSamplingFrames[currentNegSampleIndex].frame_number}`;
-            if (!negativeSamplesStore[frameKey]) negativeSamplesStore[frameKey] = [];
-            negativeSamplesStore[frameKey].push([x1, y1, x2, y2]); redrawNegCanvas();
-        });
+            const $checked = $('input[name="apply-scope"]:checked');
+            const confidenceThreshold = parseFloat($('#apply-confidence-threshold').val());
+            let targetVideoUuids;
 
-        $('#neg-prev-btn').on('click', function() { if (currentNegSampleIndex > 0) { currentNegSampleIndex--; loadNegativeSampleFrame(); } });
-        $('#neg-next-btn').on('click', function() { if (currentNegSampleIndex < negSamplingFrames.length - 1) { currentNegSampleIndex++; loadNegativeSampleFrame(); } });
-
-        $('#finish-neg-sampling-btn').on('click', function() {
-            $('#negative-sampling-modal').modal('hide');
-            const finalNegativeSamples = Object.fromEntries(Object.entries(negativeSamplesStore).filter(([key, value]) => value.length > 0));
-            showToast(Object.keys(finalNegativeSamples).length > 0 ? `Refining with ${Object.keys(finalNegativeSamples).length} negative samples.` : "No negative samples. Using base model.");
-            triggerApplyToVideo(finalNegativeSamples);
+            if ($checked.val() === 'dataset') {
+                const datasetUuid = $checked.data('dataset-uuid');
+                $.ajax({
+                    url: `/api/datasetsContainingVideo/${videoUuid}`, type: 'GET',
+                    success: function(res) {
+                        const ds = (res.datasets || []).find(d => d.dataset_uuid === datasetUuid);
+                        targetVideoUuids = ds ? ds.video_uuids : [videoUuid];
+                        triggerApplyToVideos(targetVideoUuids, pendingApplyClassName, confidenceThreshold);
+                    },
+                    error: function() { triggerApplyToVideos([videoUuid], pendingApplyClassName, confidenceThreshold); }
+                });
+            } else {
+                triggerApplyToVideos([videoUuid], pendingApplyClassName, confidenceThreshold);
+            }
         });
 
         $('#result-threshold').on('input', function() {
@@ -2369,24 +2394,32 @@
             } else { showToast('No visible entities.', 2000); }
         });
 
+        $('#apply-dataset-scope-btn').on('click', function() {
+            if (!activeClass) { window.sysAlert('Select class first.', 'error'); return; }
+            openApplyScopeModal(activeClass);
+        });
+
         $('#finish-interactive-btn').on('click', clearInteractiveSession);
 
         $(document).on("keydown", function(e) {
             if ($(e.target).is("input, textarea")) return;
-            const isNegModalVisible = $('#negative-sampling-modal').is(':visible');
+            // apply-scope-modal 只是一个确认弹窗(置信度阈值 + 范围单选)，不再像旧版
+            // negative-sampling-modal 那样需要画框/翻页快捷键，这里只需要在它打开时
+            // 别让标注区的快捷键(撤销/删除/保存等)误触发。
+            const isApplyModalVisible = $('#apply-scope-modal').is(':visible');
+            if (isApplyModalVisible) return;
             const key = e.key.toLowerCase();
 
             if (key === 'c') { e.preventDefault(); isCKeyPressed = true; }
 
             if (e.ctrlKey && key === "z") {
                 e.preventDefault();
-                if (isNegModalVisible) { undoNegativeSample(); } else { undo(); }
+                undo();
             } else if (e.ctrlKey && (key === "y" || (e.shiftKey && key === "z"))) {
-                if (!isNegModalVisible) { e.preventDefault(); redo(); }
+                e.preventDefault(); redo();
             } else if (e.key === "Delete" || e.key === "Backspace") {
                 e.preventDefault();
-                if (isNegModalVisible) { clearCurrentNegativeSamples(); }
-                else if (selectedBboxIndex !== -1) { bboxes.splice(selectedBboxIndex, 1); saveStateToHistory(); selectedBboxIndex = -1; redrawStaticCanvas(); renderBboxList(); renderClassList(); }
+                if (selectedBboxIndex !== -1) { bboxes.splice(selectedBboxIndex, 1); saveStateToHistory(); selectedBboxIndex = -1; redrawStaticCanvas(); renderBboxList(); renderClassList(); }
             } else if (e.key === "Escape") {
                 e.preventDefault();
                 if (interpolationState.isActive) { resetInterpolationState(true); showToast("Interpolation aborted.", 2000); }
@@ -2407,16 +2440,14 @@
                             showToast(`Repeat mode (last): ${repeatMode.label}`, 3000); canvasContainer.css('cursor', 'copy');
                         } else { showToast("Select box to repeat.", 3000); }
                         break;
-                    case "s": if (!isNegModalVisible) { e.preventDefault(); $("#save-bboxes").click(); } break;
+                    case "s": e.preventDefault(); $("#save-bboxes").click(); break;
                     case "a":
                         e.preventDefault();
-                        if (isNegModalVisible) { $('#neg-prev-btn').click(); }
-                        else { let prevFrame = parseInt(frameSlider.val()) - 1; if (prevFrame >= task.start_frame) frameSlider.val(prevFrame).trigger("input"); }
+                        { let prevFrame = parseInt(frameSlider.val()) - 1; if (prevFrame >= task.start_frame) frameSlider.val(prevFrame).trigger("input"); }
                         break;
                     case "d":
                         e.preventDefault();
-                        if (isNegModalVisible) { $('#neg-next-btn').click(); }
-                        else { let nextFrame = parseInt(frameSlider.val()) + 1; if (nextFrame < frameCount) frameSlider.val(nextFrame).trigger("input"); }
+                        { let nextFrame = parseInt(frameSlider.val()) + 1; if (nextFrame < frameCount) frameSlider.val(nextFrame).trigger("input"); }
                         break;
                 }
             }
@@ -2445,8 +2476,9 @@
             });
         }
         
-        $('#negative-sampling-modal').on('shown.bs.modal', function () { resizeNegCanvas(); });
-        $(window).on('resize', function() { if ($('#negative-sampling-modal').is(':visible')) resizeNegCanvas(); });
+        // 注: 这里原来还有 negative-sampling-modal 的 shown.bs.modal / window resize
+        // 处理，是给负样本画框 canvas 做尺寸自适应用的。apply-scope-modal 是纯表单
+        // (阈值滑条 + 单选范围)，不需要 canvas，随负样本采样 UI 一并移除。
 
         if (window.cachedFrames) delete window.cachedFrames;
         if (frameImage.complete && frameImage.naturalWidth > 0) { performInitialLoad(); } else { $(frameImage).one('load', performInitialLoad); }

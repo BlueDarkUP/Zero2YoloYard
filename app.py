@@ -11,6 +11,7 @@ import cv2
 import numpy as np
 import base64
 from collections import Counter, defaultdict
+from functools import lru_cache
 from skimage import io as skio
 import itertools
 import random
@@ -76,7 +77,6 @@ except ImportError:
     logging.error("PyYAML is not installed! Dataset export will fail. Please run 'pip install pyyaml'.")
     yaml = None
 
-# ----------------- 动态获取线程数 -----------------
 initial_settings = settings_manager.load_settings()
 max_workers_setting = initial_settings.get('max_workers', 8)
 
@@ -91,7 +91,6 @@ else:
 app = flask.Flask(__name__)
 app.secret_key = os.urandom(24)
 APP_BOOT_ID = uuid.uuid4().hex
-prototype_executor = ThreadPoolExecutor(max_workers=max_workers_setting)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(threadName)s - %(message)s')
 
 with app.app_context():
@@ -112,6 +111,7 @@ def sanitize_dict(d):
     return d
 
 
+@lru_cache(maxsize=256)
 def string_to_color_bgr(s):
     hash_val = 0
     for char in s:
@@ -135,7 +135,11 @@ def calculate_iou(boxA, boxB):
     boxAArea = (boxA[2] - boxA[0]) * (boxA[3] - boxA[1])
     boxBArea = (boxB[2] - boxB[0]) * (boxB[3] - boxB[1])
 
-    iou = interArea / float(boxAArea + boxBArea - interArea)
+    union = float(boxAArea + boxBArea - interArea)
+    if union <= 0:
+        return 0.0
+
+    iou = interArea / union
     return iou
 
 
@@ -149,7 +153,6 @@ def generate_mosaic_previews(sample_pool, selected_video_uuid, selected_frame_nu
     image_infos = []
     for sample in sample_pool:
         video_info = database.get_video_entity(sample['video_uuid'])
-        # 替换为使用新的通用查询方法
         frame_info = database.get_frame_bboxes(sample['video_uuid'], sample['frame_number'])
 
         if video_info and frame_info and frame_info['bboxes_text']:
@@ -162,8 +165,7 @@ def generate_mosaic_previews(sample_pool, selected_video_uuid, selected_frame_nu
             })
 
     if len(image_infos) < 4:
-        return jsonify({'success': False,
-                        'message': 'Not enough labeled images in the sample pool to generate a mosaic preview.'}), 400
+        return None, 'Not enough labeled images in the sample pool to generate a mosaic preview.'
 
     previews = []
     selected_image_info = next((info for info in image_infos if info['video_uuid'] == selected_video_uuid and info[
@@ -195,7 +197,7 @@ def generate_mosaic_previews(sample_pool, selected_video_uuid, selected_frame_nu
         img_base64 = base64.b64encode(buffer).decode('utf-8')
         previews.append(f"data:image/jpeg;base64,{img_base64}")
 
-    return previews
+    return previews, None
 
 
 @app.route('/')
@@ -434,9 +436,12 @@ def import_frames():
             elif filename.endswith(('.jpg', '.jpeg', '.png', '.bmp', '.webp')):
                 image_bytes_list.append(file.read())
 
-        # 3. 统一写入数据库 (使用 database.py 中新写的安全函数)
+        # 3. 统一分批写入数据库 (避免超大列表内存压力)
         if image_bytes_list:
-            total_imported = database.add_frames_to_video(video_uuid, image_bytes_list)
+            CHUNK_SIZE = 100
+            for i in range(0, len(image_bytes_list), CHUNK_SIZE):
+                chunk = image_bytes_list[i:i + CHUNK_SIZE]
+                total_imported += database.add_frames_to_video(video_uuid, chunk)
 
         return jsonify({'success': True, 'imported_count': total_imported})
 
@@ -549,30 +554,32 @@ def list_classes():
     return jsonify({'success': True, 'labels': labels})
 
 
-@app.route('/api/rebuild_prototypes', methods=['POST'])
-def rebuild_prototypes():
-    settings = settings_manager.load_settings()
-    if not settings.get('enable_feature_extractor', True):
-        return jsonify({
-            'success': False,
-            'message': 'Feature Extractor model is disabled in system settings to save resources.'
-        }), 501
-
+@app.route('/api/setClassSam3Prompt', methods=['POST'])
+def set_class_sam3_prompt_route():
+    """
+    设置/查看某个类别用于 SAM3 检索的描述文本。取代旧的 /api/rebuild_prototypes。
+    旧接口是"用已标注样本训练/重建一个 embedding 原型"（需要后台异步任务），
+    新架构下这只是一次 DB 文本写入，同步返回即可，不再需要 prototype_executor。
+    """
     data = request.json
     class_name = data.get('class_name')
+    if not class_name:
+        return jsonify({'success': False, 'message': 'class_name is required.'}), 400
 
-    if class_name:
-        logging.info(f"Manual prototype rebuild requested for class: {class_name}")
-        prototype_executor.submit(ai_models.update_prototype_for_class, class_name)
-        message = f"Started rebuilding prototype for '{class_name}'."
-    else:
-        logging.info("Manual prototype rebuild requested for ALL classes.")
-        all_labels = database.get_all_class_labels()
-        for label in all_labels:
-            prototype_executor.submit(ai_models.update_prototype_for_class, label)
-        message = f"Started rebuilding prototypes for all {len(all_labels)} classes in the background."
+    if 'sam3_prompt' in data:
+        database.set_class_sam3_prompt(class_name, data.get('sam3_prompt'))
 
-    return jsonify({'success': True, 'message': message})
+    return jsonify({
+        'success': True,
+        'class_name': class_name,
+        'sam3_prompt': database.get_class_sam3_prompt(class_name),
+        'has_labeled_examples': ai_models.class_has_labeled_examples(class_name),
+    })
+
+
+@app.route('/api/listClassSam3Prompts', methods=['GET'])
+def list_class_sam3_prompts_route():
+    return jsonify({'success': True, 'classes': database.get_all_class_labels_with_prompts()})
 
 
 @app.route('/api/interpolateBboxes', methods=['POST'])
@@ -683,33 +690,30 @@ def save_settings():
     current_settings = settings_manager.load_settings()
 
     sam_model_changed = current_settings.get('sam_model_checkpoint') != new_settings.get('sam_model_checkpoint')
-    mobilenet_model_changed = current_settings.get('feature_extractor_model_name') != new_settings.get(
-        'feature_extractor_model_name')
     device_changed = current_settings.get('gpu_device') != new_settings.get('gpu_device')
     max_workers_changed = str(current_settings.get('max_workers')) != str(new_settings.get('max_workers'))
 
-    restart_required = sam_model_changed or mobilenet_model_changed or device_changed or max_workers_changed
+    restart_required = sam_model_changed or device_changed or max_workers_changed
 
-    # --- THE FIX: Merge the new settings into the current ones ---
     current_settings.update(new_settings)
 
-    # --- Pass the merged 'current_settings' instead of 'new_settings' ---
     if settings_manager.save_settings(current_settings):
         if sam_model_changed or device_changed:
-            logging.info("SAM model or device setting changed. Clearing SAM cache.")
+            logging.info("SAM model or device setting changed. Clearing SAM2/SAM3 cache.")
             try:
-                from ultralytics_sam_tasks import _sam_model_cache
-                _sam_model_cache["model"] = None
-                _sam_model_cache["path"] = None
-            except (ImportError, AttributeError):
-                logging.warning("Could not clear SAM model cache.")
-
-        if mobilenet_model_changed or device_changed:
-            logging.info("Feature extractor model or device setting changed. Clearing MobileNet cache.")
-            ai_models.clear_feature_extractor_cache()
+                import ultralytics_sam_tasks as sam_tasks_module
+                sam_tasks_module._sam_cache["sam2_image_predictor"] = None
+                sam_tasks_module._sam_cache["sam2_video_predictor"] = None
+                sam_tasks_module._sam_cache["image_model"] = None
+                sam_tasks_module._sam_cache["image_processor"] = None
+                sam_tasks_module._sam_cache["multiplex_predictor"] = None
+                sam_tasks_module.clear_sam3_frame_state_cache()
+            except Exception as e:
+                logging.warning(f"Could not clear SAM model cache: {e}")
 
         if device_changed:
             settings_manager.update_device()
+            ai_models.clear_retrieval_engine_cache()
 
         return jsonify({
             'success': True,
@@ -723,9 +727,9 @@ def save_settings():
 @app.route('/api/clear_cache', methods=['POST'])
 def clear_cache():
     try:
-        count = len(ai_models.PREPROCESSED_DATA_CACHE)
-        ai_models.PREPROCESSED_DATA_CACHE.clear()
-        logging.info(f"Cleared {count} items from PREPROCESSED_DATA_CACHE.")
+        count = ai_models.sam_tasks.frame_cache_size() if ai_models.sam_tasks else 0
+        ai_models.clear_retrieval_engine_cache()
+        logging.info(f"Cleared {count} items from SAM3 frame-state cache.")
         return jsonify({'success': True, 'message': f'Successfully cleared {count} cached items.'})
     except Exception as e:
         logging.error(f"Failed to clear cache: {e}")
@@ -771,7 +775,7 @@ def sam_predict():
 @app.route('/api/sam3_text_predict', methods=['POST'])
 def sam3_text_predict():
     try:
-        from ultralytics_sam_tasks import get_sam_model, predict_boxes_from_text_sam3
+        from ultralytics_sam_tasks import get_sam_model, sam3_query_frame
         if not get_sam_model():
             return jsonify(
                 {'success': False, 'message': 'SAM model is disabled in system settings to save resources.'}), 501
@@ -793,11 +797,7 @@ def sam3_text_predict():
             {'success': False, 'message': 'Missing required data (video_uuid, frame_number, text_prompt).'}), 400
 
     try:
-        image_path = file_storage.get_frame_path(video_uuid, int(frame_number))
-        if not os.path.exists(image_path):
-            return jsonify({'success': False, 'message': 'Frame image not found on server.'}), 404
-
-        results = predict_boxes_from_text_sam3(image_path, text_prompt, confidence)
+        results = sam3_query_frame(video_uuid, int(frame_number), text_prompt=text_prompt, confidence=confidence)
 
         return jsonify({'success': True, 'results': results})
 
@@ -811,18 +811,18 @@ def interactive_segment_preprocess_route():
     if not settings.get('enable_feature_extractor', True):
         return jsonify({
             'success': False,
-            'message': 'Feature Extractor model is disabled in system settings to save resources.'
+            'message': 'SAM3 retrieval features are disabled in system settings to save resources.'
         }), 501
 
     data = request.json
     video_uuid = data.get('video_uuid')
-    frame_number = int(data.get('frame_number'))
+    frame_number = data.get('frame_number')
 
     if video_uuid is None or frame_number is None:
         return jsonify({'success': False, 'message': 'Missing video_uuid or frame_number.'}), 400
 
     try:
-        ai_models.get_features_for_all_masks(video_uuid, frame_number)
+        ai_models.warm_frame_cache(video_uuid, int(frame_number))
         cache_key = f"{video_uuid}_{frame_number}"
         return jsonify({'success': True, 'message': 'Preprocessing successful', 'cache_key': cache_key})
     except Exception as e:
@@ -836,13 +836,14 @@ def interactive_segment_predict_route():
     if not settings.get('enable_feature_extractor', True):
         return jsonify({
             'success': False,
-            'message': 'Feature Extractor model is disabled in system settings to save resources.'
+            'message': 'SAM3 retrieval features are disabled in system settings to save resources.'
         }), 501
 
     data = request.json
     video_uuid = data.get('video_uuid')
     frame_number = int(data.get('frame_number'))
     prompt_boxes = data.get('prompt_boxes', [])
+    negative_prompt_boxes = data.get('negative_prompt_boxes', [])
     use_color = data.get('use_color', False)
 
     if not all([video_uuid, frame_number is not None, prompt_boxes]):
@@ -852,7 +853,10 @@ def interactive_segment_predict_route():
 
     try:
         positive_prompt_box = prompt_boxes[0]
-        results = ai_models.predict_from_one_shot(video_uuid, frame_number, positive_prompt_box, use_color=use_color)
+        results = ai_models.predict_from_one_shot(
+            video_uuid, frame_number, positive_prompt_box,
+            negative_prompt_boxes=negative_prompt_boxes, use_color=use_color
+        )
         return jsonify({'success': True, 'results': results})
 
     except Exception as e:
@@ -866,29 +870,27 @@ def predict_from_dataset_route():
     if not settings.get('enable_feature_extractor', True):
         return jsonify({
             'success': False,
-            'message': 'Feature Extractor model is disabled in system settings to save resources.'
+            'message': 'SAM3 retrieval features are disabled in system settings to save resources.'
         }), 501
 
     data = request.json
     video_uuid = data.get('video_uuid')
     frame_number = int(data.get('frame_number'))
     class_name = data.get('class_name')
-    # NEW: Get parameter
-    use_color = data.get('use_color', False)
+    confidence_threshold = float(data.get('confidence', settings.get('default_preannotation_conf', 0.5)))
 
     if not all([video_uuid, frame_number is not None, class_name]):
         return jsonify({'success': False, 'message': 'Missing required data.'}), 400
 
     try:
-        # Pass use_color to build_prototypes (to ensure color data exists) and predict
-        positive_prototypes = ai_models.build_prototypes_for_class(class_name)
-
-        if positive_prototypes is None:
-            return jsonify({'success': False, 'message': f"No examples found for class '{class_name}'."})
-
-        # NEW: Pass use_color
-        results = ai_models.predict_with_prototypes(video_uuid, frame_number, positive_prototypes, use_color=use_color)
-        return jsonify({'success': True, 'results': results})
+        results = ai_models.predict_by_class_text(video_uuid, frame_number, class_name, confidence_threshold)
+        response = {'success': True, 'results': results}
+        if not ai_models.class_has_labeled_examples(class_name):
+            response['warning'] = (
+                f"类别 '{class_name}' 目前还没有任何标注样本，检索完全依赖 SAM3 描述文本，"
+                f"建议先手动标注几个样本或在类别设置里完善检索描述以提升准确率。"
+            )
+        return jsonify(response)
 
     except Exception as e:
         logging.error(f"Dataset-driven prediction failed: {e}", exc_info=True)
@@ -910,76 +912,97 @@ def background_preprocess_frame():
 
     if background_tasks.active_tasks.get(video_uuid):
         return jsonify({'success': False, 'message': 'Another task is active.'})
-    cache_key = f"{video_uuid}_{frame_number}"
-    if cache_key in ai_models.PREPROCESSED_DATA_CACHE:
+    if ai_models.is_frame_cached(video_uuid, int(frame_number)):
         return jsonify({'success': True, 'message': 'Already cached.'})
 
     threading.Thread(
-        target=lambda: ai_models.get_features_for_all_masks(video_uuid, frame_number),
+        target=lambda: ai_models.warm_frame_cache(video_uuid, int(frame_number)),
         name=f"Preprocess-{video_uuid[:6]}-{frame_number}"
     ).start()
 
     return jsonify({'success': True, 'message': 'Preprocessing started in background.'})
 
 
-@app.route('/api/get_random_frames_for_neg_sampling', methods=['POST'])
-def get_random_frames_for_neg_sampling():
-    data = request.json
-    video_uuid = data.get('video_uuid')
-    count = int(data.get('count', 10))
 
-    if not video_uuid:
-        return jsonify({'success': False, 'message': 'Video UUID is required.'}), 400
+@app.route('/api/apply_class_to_videos', methods=['POST'])
+def apply_class_to_videos_route():
+    """
+    把某个类别的 SAM3 检索文本批量应用到一批视频的所有未标注帧上。取代旧的
+    /apply_prototypes_to_video（原来只能作用于单个视频、依赖 MobileNet 原型）。
 
-    try:
-        all_frame_numbers = database.get_frame_numbers_for_video(video_uuid)
-        if len(all_frame_numbers) < count:
-            sampled_numbers = all_frame_numbers
-        else:
-            sampled_numbers = random.sample(all_frame_numbers, count)
+    这是"SAM3 标注完一帧后应用到整个数据集"和"智能选择结果应用到整个数据集"两个
+    入口共用的同一个后端接口——两者最终都归结为"给定一个类别名 + 一批视频，用这个
+    类别的 SAM3 检索文本逐帧检测"，区别只在前端用什么方式收集到这个 class_name。
 
-        frames_data = []
-        for fn in sorted(sampled_numbers):
-            frames_data.append({
-                'video_uuid': video_uuid,
-                'frame_number': fn,
-                'image_url': f"/media/frames/{video_uuid}/frame_{fn:05d}.jpg"
-            })
-
-        return jsonify({'success': True, 'frames': frames_data})
-    except Exception as e:
-        logging.error(f"Error getting random frames: {e}", exc_info=True)
-        return jsonify({'success': False, 'message': str(e)}), 500
-
-
-@app.route('/apply_prototypes_to_video', methods=['POST'])
-def apply_prototypes_to_video_route():
+    请求体:
+      video_uuids: [str, ...]  必填，要处理的视频列表（可以只有当前这一个视频，
+                                也可以是某个数据集包含的全部视频）
+      class_name: str          必填
+      confidence_threshold: float  可选，默认读取全局 default_preannotation_conf
+    """
     settings = settings_manager.load_settings()
     if not settings.get('enable_feature_extractor', True):
         return jsonify({
             'success': False,
-            'message': 'Feature Extractor model is disabled in system settings to save resources.'
+            'message': 'SAM3 retrieval features are disabled in system settings to save resources.'
         }), 501
 
-    data = request.json
-    video_uuid = data.get('video_uuid')
+    data = request.json or {}
+    video_uuids = data.get('video_uuids')
     class_name = data.get('class_name')
-    negative_samples = data.get('negative_samples', None)
-    confidence_threshold = float(data.get('confidence_threshold', 0.5))
+    confidence_threshold = float(data.get('confidence_threshold', settings.get('default_preannotation_conf', 0.5)))
 
-    if not video_uuid or not class_name:
-        return jsonify({'success': False, 'message': 'Video UUID and Class Name are required.'}), 400
+    if not video_uuids or not isinstance(video_uuids, list):
+        return jsonify({'success': False, 'message': 'video_uuids (non-empty list) is required.'}), 400
+    if not class_name:
+        return jsonify({'success': False, 'message': 'class_name is required.'}), 400
 
-    if background_tasks.active_tasks.get(video_uuid):
-        return jsonify({'success': False, 'message': 'Another task is already running for this video.'}), 409
+    busy = [vu for vu in video_uuids if background_tasks.active_tasks.get(vu)]
+    if busy:
+        return jsonify({
+            'success': False,
+            'message': f"以下视频当前有其它任务在运行: {', '.join(v[:8] for v in busy)}"
+        }), 409
 
+    task_uuid = str(uuid.uuid4())
     threading.Thread(
-        target=background_tasks.apply_prototypes_to_video_task,
-        args=(video_uuid, class_name, negative_samples, confidence_threshold, app.app_context()),
-        name=f"ApplyPrototypes-{video_uuid[:6]}"
+        target=background_tasks.apply_class_to_videos_task,
+        args=(task_uuid, video_uuids, class_name, confidence_threshold, app.app_context()),
+        name=f"ApplyClass-{task_uuid[:8]}"
     ).start()
 
-    return jsonify({'success': True, 'message': 'Task to apply suggestions has started.'})
+    return jsonify({'success': True, 'task_uuid': task_uuid, 'message': 'Task to apply suggestions has started.'})
+
+
+@app.route('/api/batchApplyStatus/<task_uuid>', methods=['GET'])
+def batch_apply_status_route(task_uuid):
+    session = background_tasks.batch_apply_sessions.get(task_uuid)
+    if not session:
+        return jsonify({'success': False, 'message': 'Task not found.'}), 404
+    return jsonify({'success': True, **session})
+
+
+@app.route('/api/datasetsContainingVideo/<video_uuid>', methods=['GET'])
+def datasets_containing_video_route(video_uuid):
+    """
+    给"应用到数据集"的前端选择器用: 找出哪些已创建的数据集包含这个视频。一个视频可能
+    属于 0 个、1 个或多个数据集（数据集是"选一批已标注视频打包导出"的快照，和视频不是
+    一对一关系）。前端可以用这个列表给用户一个选择器；如果返回空列表，前端应该退化成
+    "只应用到当前视频"或者提示用户先创建/选择数据集。
+    """
+    matching = []
+    for ds in database.get_dataset_list():
+        try:
+            ds_video_uuids = json.loads(ds.get('video_uuids') or '[]')
+        except (TypeError, ValueError):
+            ds_video_uuids = []
+        if video_uuid in ds_video_uuids:
+            matching.append({
+                'dataset_uuid': ds['dataset_uuid'],
+                'description': ds.get('description'),
+                'video_uuids': ds_video_uuids,
+            })
+    return jsonify({'success': True, 'datasets': matching})
 
 
 @app.route('/startSam2Tracking', methods=['POST'])
@@ -1363,12 +1386,18 @@ def get_dataset_analysis_data(dataset_uuid):
                 return task['task_uuid']
         return None
 
-    all_frames = [
-        {**dict(frame), 'video_uuid': vu, 'video_description': video_info_cache[vu].get('description')}
-        for vu in video_uuids
-        for frame in database.get_video_frames(vu)
-        if frame.get('bboxes_text', '').strip()
-    ]
+    all_frames = []
+    for vu in video_uuids:
+        v_info = video_info_cache.get(vu)
+        if not v_info:
+            continue
+        v_desc = v_info.get('description', 'Unknown')
+        for frame in database.get_annotated_video_frames(vu):
+            all_frames.append({
+                **dict(frame),
+                'video_uuid': vu,
+                'video_description': v_desc
+            })
 
     class_counts = Counter()
     aspect_ratios, objects_per_image, center_points, brightness_levels = [], [], [], []
@@ -1391,11 +1420,6 @@ def get_dataset_analysis_data(dataset_uuid):
                         'image_index': i, 'iou': iou,
                         'box1_label': labels[idx1], 'box2_label': labels[idx2]
                     })
-        try:
-            image_gray = skio.imread(file_storage.get_frame_path(video_uuid, frame_number), as_gray=True)
-            brightness_levels.append(np.mean(image_gray) * 255)
-        except Exception:
-            pass
 
         for j, rect in enumerate(rects):
             class_counts[labels[j]] += 1
@@ -1403,7 +1427,7 @@ def get_dataset_analysis_data(dataset_uuid):
 
             if width > 0 and height > 0:
                 aspect_ratios.append(width / height)
-                video_info = video_info_cache[video_uuid]
+                video_info = video_info_cache.get(video_uuid)
                 if video_info and video_info['width'] > 0 and video_info['height'] > 0:
                     center_x = (float(rect[0]) + float(rect[2])) / 2.0 / float(video_info['width'])
                     center_y = (float(rect[1]) + float(rect[3])) / 2.0 / float(video_info['height'])
@@ -1411,6 +1435,20 @@ def get_dataset_analysis_data(dataset_uuid):
                 all_bboxes_for_outliers.append(
                     {'id': f'{video_uuid}_{frame_number}_{j}', 'image_index': i, 'area': width * height,
                      'aspect_ratio': width / height})
+
+    # Fast sampled brightness calculation (max 200 frames)
+    if all_frames:
+        sample_size = min(len(all_frames), 200)
+        sampled_frames = random.sample(all_frames, sample_size)
+        for frame in sampled_frames:
+            try:
+                frame_path = file_storage.get_frame_path(frame['video_uuid'], frame['frame_number'])
+                img_gray = cv2.imread(frame_path, cv2.IMREAD_GRAYSCALE)
+                if img_gray is not None:
+                    small = cv2.resize(img_gray, (64, 64), interpolation=cv2.INTER_NEAREST)
+                    brightness_levels.append(float(np.mean(small)))
+            except Exception:
+                pass
 
     annotator_stats = {}
     all_tasks = [task for vid_tasks in tasks_by_video.values() for task in vid_tasks]
@@ -1421,12 +1459,15 @@ def get_dataset_analysis_data(dataset_uuid):
 
     user_frame_sets = {user: set() for user in annotator_stats.keys()}
     for frame in all_frames:
+        processed_users = set()
         for task in all_tasks:
-            if task['video_uuid'] == frame['video_uuid'] and task['start_frame'] <= frame['frame_number'] <= task[
-                'end_frame']:
+            if task['video_uuid'] == frame['video_uuid'] and task['start_frame'] <= frame['frame_number'] <= task['end_frame']:
                 user = task['assigned_to']
                 user_frame_sets[user].add(f"{frame['video_uuid']}_{frame['frame_number']}")
-                annotator_stats[user]['class_counts'].update(extract_labels(frame['bboxes_text']))
+                if user not in processed_users:
+                    annotator_stats[user]['class_counts'].update(extract_labels(frame['bboxes_text']))
+                    processed_users.add(user)
+
     for user, frame_set in user_frame_sets.items():
         annotator_stats[user]['image_count'] = len(frame_set)
 
@@ -1475,154 +1516,31 @@ def get_dataset_analysis_data(dataset_uuid):
     })
 
 
-def calculate_color_histogram(image_path, rect):
-    try:
-        image = cv2.imread(image_path)
-        if image is None:
-            return None
-
-        x1, y1, x2, y2 = map(int, rect)
-        roi = image[y1:y2, x1:x2]
-
-        if roi.size == 0:
-            return None
-
-        hsv_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
-        hist = cv2.calcHist([hsv_roi], [0, 1], None, [16, 16], [0, 180, 0, 256])
-        cv2.normalize(hist, hist, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX)
-
-        return hist.flatten()
-    except Exception as e:
-        logging.warning(f"计算颜色直方图失败: {e} for path {image_path}")
-        return None
-
-
 @app.route('/api/datasetAnalysis/<dataset_uuid>/consistency_check', methods=['POST'])
 def run_consistency_check(dataset_uuid):
     settings = settings_manager.load_settings()
     if not settings.get('enable_feature_extractor', True):
         return jsonify({
             'success': False,
-            'message': 'Feature Extractor model is disabled in system settings to save resources.'
+            'message': 'SAM3 retrieval features are disabled in system settings to save resources.'
         }), 501
 
     try:
-        request_data = request.get_json()
+        request_data = request.get_json() or {}
         is_color_check_enabled = request_data.get('enable_color_check', True)
+        semantic_threshold = request_data.get('semantic_threshold')
 
         if is_color_check_enabled:
-            logging.info("Starting AI Quality Control with SEMANTIC and COLOR checks.")
+            logging.info(f"Starting AI Quality Control with SEMANTIC (SAM3, thresh={semantic_threshold}) and COLOR checks.")
         else:
-            logging.info("Starting AI Quality Control with SEMANTIC check ONLY.")
+            logging.info(f"Starting AI Quality Control with SEMANTIC (SAM3, thresh={semantic_threshold}) check ONLY.")
 
-        dataset = database.get_dataset_entity(dataset_uuid)
-        if not dataset:
-            return jsonify({'success': False, 'message': 'Dataset not found.'}), 404
+        outlier_image_indices, all_bboxes_info, message = ai_models.check_dataset_consistency(
+            dataset_uuid, enable_color_check=is_color_check_enabled, semantic_threshold=semantic_threshold
+        )
 
-        video_uuids = json.loads(dataset.get('video_uuids', '[]'))
-        all_frames = [
-            dict(frame) for vu in video_uuids for frame in database.get_video_frames(vu)
-            if frame.get('bboxes_text', '').strip()
-        ]
-
-        all_bboxes_info = []
-        frames_to_process = defaultdict(list)
-        for i, frame in enumerate(all_frames):
-            rects, labels, _ = convert_text_to_rects_and_labels(frame['bboxes_text'])
-            for j, rect in enumerate(rects):
-                box_info = {'image_index': i, 'rect': rect, 'label': labels[j], 'video_uuid': frame['video_uuid'],
-                            'frame_number': frame['frame_number'], 'embedding': None, 'color_hist': None}
-                frames_to_process[f"{frame['video_uuid']};{frame['frame_number']}"].append((len(all_bboxes_info), rect))
-                all_bboxes_info.append(box_info)
-
-        for frame_key, rect_data in frames_to_process.items():
-            video_uuid, frame_number_str = frame_key.split(';')
-            frame_number = int(frame_number_str)
-            image_path = file_storage.get_frame_path(video_uuid, frame_number)
-            rects_in_frame = [r for _, r in rect_data]
-            embeddings = ai_models.get_features_for_specific_bboxes(video_uuid, frame_number, rects_in_frame)
-            for i, (global_idx, rect) in enumerate(rect_data):
-                if embeddings is not None and i < len(embeddings):
-                    all_bboxes_info[global_idx]['embedding'] = embeddings[i]
-                color_hist = calculate_color_histogram(image_path, rect)
-                if color_hist is not None:
-                    all_bboxes_info[global_idx]['color_hist'] = color_hist
-
-        all_features_by_class = defaultdict(list)
-        for info in all_bboxes_info:
-            if info['embedding'] is not None and (not is_color_check_enabled or info['color_hist'] is not None):
-                all_features_by_class[info['label']].append(info)
-
-        prototype_library = {}
-        for class_name, infos in all_features_by_class.items():
-            if len(infos) > 0:
-                prototype_library[class_name] = {}
-                embeddings_tensor = torch.stack([info['embedding'] for info in infos])
-                prototype_library[class_name]['semantic'] = torch.mean(embeddings_tensor, dim=0)
-                if is_color_check_enabled:
-                    color_hists = [info['color_hist'] for info in infos if info['color_hist'] is not None]
-                    if color_hists:
-                        prototype_library[class_name]['color'] = np.mean(np.array(color_hists), axis=0)
-
-        outlier_image_indices = set()
-
-        COLOR_CONFUSION_FACTOR = 2.0
-
-        for class_name, infos in all_features_by_class.items():
-            if len(infos) < 5 or class_name not in prototype_library:
-                continue
-
-            for info in infos:
-                is_outlier = False
-
-                candidate_embedding = info['embedding']
-                own_semantic_sim = F.cosine_similarity(candidate_embedding, prototype_library[class_name]['semantic'],
-                                                       dim=0).item()
-                for other_class, other_prototypes in prototype_library.items():
-                    if other_class == class_name: continue
-                    other_semantic_sim = F.cosine_similarity(candidate_embedding, other_prototypes['semantic'],
-                                                             dim=0).item()
-                    if other_semantic_sim > own_semantic_sim + 0.2:
-                        logging.info(
-                            f"SEMANTIC outlier: A '{class_name}' (sim: {own_semantic_sim:.2f}) looks more like a '{other_class}' (sim: {other_semantic_sim:.2f}). Image index: {info['image_index']}")
-                        is_outlier = True
-                        break
-                if is_outlier:
-                    outlier_image_indices.add(info['image_index'])
-                    continue
-
-                if is_color_check_enabled:
-                    if 'color' not in prototype_library[class_name] or info['color_hist'] is None:
-                        continue
-
-                    if len(prototype_library) < 2: continue
-
-                    candidate_color_hist = info['color_hist']
-                    dist_to_own_color = np.sum(np.abs(candidate_color_hist - prototype_library[class_name]['color']))
-
-                    min_dist_to_other_color = float('inf')
-                    closest_other_class = None
-
-                    for other_class, other_prototypes in prototype_library.items():
-                        if other_class == class_name or 'color' not in other_prototypes: continue
-                        dist = np.sum(np.abs(candidate_color_hist - other_prototypes['color']))
-                        if dist < min_dist_to_other_color:
-                            min_dist_to_other_color = dist
-                            closest_other_class = other_class
-
-                    if closest_other_class and min_dist_to_other_color * COLOR_CONFUSION_FACTOR < dist_to_own_color:
-                        logging.info(
-                            f"COLOR outlier: A '{class_name}' (color dist: {dist_to_own_color:.2f}) has a color profile much closer to '{closest_other_class}' (color dist: {min_dist_to_other_color:.2f}). Image index: {info['image_index']}")
-                        is_outlier = True
-
-                    if is_outlier:
-                        outlier_image_indices.add(info['image_index'])
-
-        message_keyword = "**Category or color**" if is_color_check_enabled else "**category**"
-        if len(outlier_image_indices) == 1 or len(outlier_image_indices) == 0:
-            message = f"AI review complete. Found {len(outlier_image_indices)} image with potential instances of {message_keyword} confusion." if outlier_image_indices else "AI review completed. No obvious labeling confusion issues were found."
-        else:
-            message = f"AI review complete. Found {len(outlier_image_indices)} images with potential instances of {message_keyword} confusion." if outlier_image_indices else "AI review completed. No obvious labeling confusion issues were found."
+        if outlier_image_indices is None:
+            return jsonify({'success': False, 'message': message}), 404
 
         return jsonify({
             'success': True,
@@ -1641,7 +1559,7 @@ def lam_predict_route():
     if not settings.get('enable_feature_extractor', True):
         return jsonify({
             'success': False,
-            'message': 'Feature Extractor model is disabled in system settings to save resources.'
+            'message': 'SAM3 retrieval features are disabled in system settings to save resources.'
         }), 501
 
     data = request.json
@@ -1685,7 +1603,9 @@ def preview_augmentations():
             if not sample_pool:
                 return jsonify({'success': False, 'message': 'Sample pool is required for Mosaic preview.'}), 400
             if random.random() < augmentation_options['mosaic'].get('p', 1.0):
-                previews = generate_mosaic_previews(sample_pool, video_uuid, frame_number)
+                previews, err_msg = generate_mosaic_previews(sample_pool, video_uuid, frame_number)
+                if err_msg:
+                    return jsonify({'success': False, 'message': err_msg}), 400
                 return jsonify({'success': True, 'previews': previews})
 
         frame_path = file_storage.get_frame_path(video_uuid, frame_number)
@@ -1713,6 +1633,22 @@ def preview_augmentations():
                                                                   video_info['height'], class_map)
         if not yolo_bboxes:
             return jsonify({'success': False, 'message': 'Could not parse labels into YOLO format.'}), 500
+
+        # 防御性 clamp：标注框坐标因浮点误差可能略微超出 [0,1]，
+        # albumentations 对此零容忍，这里统一截断。
+        def _clamp_yolo(bbox):
+            cx, cy, bw, bh = bbox
+            x1, y1 = cx - bw / 2, cy - bh / 2
+            x2, y2 = cx + bw / 2, cy + bh / 2
+            EPS = 1e-6
+            x1, y1 = max(0.0, x1), max(0.0, y1)
+            x2, y2 = min(1.0 - EPS, x2), min(1.0 - EPS, y2)
+            nw, nh = x2 - x1, y2 - y1
+            return [x1 + nw / 2, y1 + nh / 2, nw, nh]
+        yolo_bboxes = [_clamp_yolo(b) for b in yolo_bboxes]
+        yolo_bboxes = [b for b in yolo_bboxes if b[2] > 0 and b[3] > 0]
+        if not yolo_bboxes:
+            return jsonify({'success': False, 'message': 'All bboxes became invalid after clamping.'}), 500
 
         previews = []
         for _ in range(6):
@@ -1764,9 +1700,6 @@ def start_server():
         ai_models.startup_ai_models()
     else:
         logging.warning("=== 处于初始配置向导模式：已拦截 AI 模型加载，等待用户完成环境配置 ===")
-
-    atexit.register(ai_models.save_preprocessed_cache_to_disk)
-    atexit.register(ai_models.save_prototypes_to_disk)
 
     time.sleep(0.01)
 

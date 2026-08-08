@@ -563,8 +563,8 @@ def _load_checkpoint(model, checkpoint_path):
 
 def _setup_device_and_mode(model, device, eval_mode):
     """Setup model device and evaluation mode."""
-    if device == "cuda":
-        model = model.cuda()
+    if device:
+        model = model.to(device=device)
     if eval_mode:
         model.eval()
     return model
@@ -1070,6 +1070,7 @@ def build_sam3_multiplex_video_model(
 def build_sam3_multiplex_video_predictor(
     checkpoint_path: Optional[str] = None,
     bpe_path: Optional[str] = None,
+    device: Optional[str] = None,
     max_num_objects: int = 16,
     multiplex_count: int = 16,
     use_fa3: bool = True,
@@ -1228,7 +1229,8 @@ def build_sam3_multiplex_video_predictor(
                 f"Unexpected keys ({len(unexpected_keys)}): {unexpected_keys[:10]}..."
             )
 
-    demo_model.cuda().eval()
+    target_device = device if device is not None else ("cuda" if torch.cuda.is_available() else "cpu")
+    demo_model.to(device=target_device).eval()
 
     # Wrap in predictor
     predictor = Sam3MultiplexVideoPredictor(

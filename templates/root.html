@@ -325,13 +325,7 @@
                                             <option value="sam2.1_b.pt" data-name="SAM 2.1 Base">SAM 2.1 BASE (STANDARD)</option>
                                             <option value="sam2.1_l.pt" data-name="SAM 2.1 Large">SAM 2.1 LARGE (HIGH_PRECISION)</option>
                                         </select>
-                                    </div>
-                                    <div class="form-group col-md-6">
-                                        <label class="small text-muted font-weight-bold">FEATURE_EXTRACTOR <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="feature_extractor"></i></label>
-                                        <select id="setting-feature-extractor-model" class="form-control custom-select">
-                                            <option value="mobilenet_v3_large">MOBILENET_V3_LARGE</option>
-                                            <option value="mobilenet_v3_small">MOBILENET_V3_SMALL</option>
-                                        </select>
+                                        <small class="text-muted font-monospace">Controls SAM2 (point-click / tracking). SAM 3.1 (retrieval features below) uses a fixed checkpoint.</small>
                                     </div>
                                 </div>
                             </div>
@@ -347,17 +341,17 @@
                                 </div>
                                 <div class="form-row">
                                     <div class="form-group col-md-6">
-                                        <label class="small text-muted font-weight-bold">SEGMENT ANYTHING MODEL (SAM) <i class="bi bi-info-square-fill ml-1 text-info info-trigger" data-key="enable_sam"></i></label>
+                                        <label class="small text-muted font-weight-bold">SEGMENT ANYTHING MODEL (SAM2) <i class="bi bi-info-square-fill ml-1 text-info info-trigger" data-key="enable_sam"></i></label>
                                         <div class="custom-control custom-switch mt-2">
                                             <input type="checkbox" class="custom-control-input" id="setting-enable-sam">
                                             <label class="custom-control-label font-monospace" for="setting-enable-sam">ENABLE SAM FEATURES</label>
                                         </div>
                                     </div>
                                     <div class="form-group col-md-6">
-                                        <label class="small text-muted font-weight-bold">FEATURE EXTRACTOR (MobileNet) <i class="bi bi-info-square-fill ml-1 text-info info-trigger" data-key="enable_feature"></i></label>
+                                        <label class="small text-muted font-weight-bold">SAM 3.1 RETRIEVAL FEATURES <i class="bi bi-info-square-fill ml-1 text-info info-trigger" data-key="enable_feature"></i></label>
                                         <div class="custom-control custom-switch mt-2">
                                             <input type="checkbox" class="custom-control-input" id="setting-enable-feature-extractor">
-                                            <label class="custom-control-label font-monospace" for="setting-enable-feature-extractor">ENABLE DEEP FEATURES</label>
+                                            <label class="custom-control-label font-monospace" for="setting-enable-feature-extractor">ENABLE SMART SELECT / LAM / BULK APPLY / QC</label>
                                         </div>
                                     </div>
                                 </div>
@@ -478,9 +472,9 @@
                                     </div>
                                     <div class="form-group col-md-4">
                                         <label class="d-flex justify-content-between small text-muted font-weight-bold">
-                                            <span>PROTO_TEMP <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="prototype_temperature"></i></span> <span id="prototype-temperature-val" class="text-primary font-monospace">0.07</span>
+                                            <span>QC_SEMANTIC_THRESHOLD <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="consistency_semantic_threshold"></i></span> <span id="consistency-semantic-threshold-val" class="text-primary font-monospace">0.30</span>
                                         </label>
-                                        <input type="range" class="custom-range" id="setting-prototype-temperature" min="0.01" max="0.5" step="0.01">
+                                        <input type="range" class="custom-range" id="setting-consistency-semantic-threshold" min="0.05" max="0.9" step="0.05">
                                     </div>
                                 </div>
                             </div>
@@ -515,8 +509,8 @@
                                         <input type="number" id="setting-batch-tracking-chunk-size" class="form-control" min="1" max="100">
                                     </div>
                                     <div class="form-group col-md-4">
-                                        <label class="small text-muted font-weight-bold">PROTO_LIMIT <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="prototype_limit"></i></label>
-                                        <input type="number" id="setting-prototype-sample-limit" class="form-control" min="1" max="50">
+                                        <label class="small text-muted font-weight-bold">QC_CONFUSION_MARGIN <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="consistency_confusion_margin"></i></label>
+                                        <input type="number" id="setting-consistency-confusion-margin" class="form-control" min="0" max="0.9" step="0.05">
                                     </div>
                                 </div>
                             </div>
@@ -722,12 +716,12 @@
         const sysManualDb = {
             'gpu_device': { title: 'COMPUTATION_NODE', desc: 'Specifies the hardware accelerator for neural network operations.', tune: 'Prioritize NVIDIA_CUDA. Select CPU only if no dedicated GPU is available.', when: 'Switch if console reports CUDA Out-Of-Memory (OOM) errors or to reassign GPU workloads.' },
             'sam_model': { title: 'SEGMENT_CORE (SAM)', desc: 'Core AI vision engine. Determines precision of point-clicks and tracking.', tune: 'Tiny (Fast, 1.5GB VRAM) -> Large (High Precision, 10GB+ VRAM).', when: 'Upgrade to Base/Large if object edges are poorly segmented. Downgrade to Tiny if system crashes or lags heavily.' },
-            'feature_extractor': { title: 'FEATURE_EXTRACTOR', desc: 'Background neural net generating embedding vectors for Smart Select and AI Consistency Scans.', tune: 'Large (High Accuracy) / Small (High Speed).', when: 'Switch to Large if Smart Select incorrectly groups visually distinct objects.' },
+            'feature_extractor': { title: 'SAM3_RETRIEVAL', desc: 'SAM 3.1 open-vocabulary / visual-exemplar engine powering Smart Select, LAM, bulk apply, and AI Consistency QC.', tune: 'Enable/disable via the toggle below.', when: 'Keep enabled unless you are on very low VRAM and only need SAM2 point-click/tracking.' },
             'enable_sam': { title: 'SAM_TOGGLE', desc: 'Loads/Unloads the heavy SAM checkpoint into VRAM.', tune: 'Enabled/Disabled.', when: 'Disable on extremely low-end hardware to free VRAM (disables most AI tools).' },
-            'enable_feature': { title: 'FEATURE_TOGGLE', desc: 'Toggles background deep feature extraction.', tune: 'Enabled/Disabled.', when: 'Disable if background processing causes severe thermal throttling or CPU bottleneck.' },
+            'enable_feature': { title: 'FEATURE_TOGGLE', desc: 'Toggles SAM 3.1 retrieval features (Smart Select / LAM / bulk apply / Consistency QC).', tune: 'Enabled/Disabled.', when: 'Disable if VRAM is limited and you only need SAM2 point-click/tracking.' },
 
             'max_workers': { title: 'MAX_WORKERS', desc: 'Concurrent threads for frame extraction and background pipeline tasks.', tune: 'Set to half of your total CPU logical cores (e.g., 4 for an 8-core CPU).', when: 'Increase if data ingestion is slow. Decrease if UI freezes during background tasks.' },
-            'max_cache_size': { title: 'MAX_CACHE_SIZE', desc: 'Number of decoded frames retained in ultra-fast RAM to prevent re-decoding.', tune: '10 (Low RAM) -> 100+ (64GB+ Workstations).', when: 'Increase if scrubbing timeline feels laggy. Decrease if browser memory footprint is too large.' },
+            'max_cache_size': { title: 'MAX_CACHE_SIZE', desc: 'Number of frames whose SAM3 backbone features are kept cached in memory to avoid recomputation.', tune: '10 (Low RAM) -> 100+ (64GB+ Workstations).', when: 'Increase if switching between frames during Smart Select/Find Sim feels slow. Decrease if memory footprint is too large.' },
             'use_autocast': { title: 'MIXED_PRECISION', desc: 'FP16 acceleration. Halves VRAM usage and doubles inference speed.', tune: 'Highly recommended to keep ENABLED.', when: 'Disable ONLY if using legacy GPUs (pre-GTX 10 series) or encountering black boxes (NaN errors) during inference.' },
 
             'inference_size': { title: 'INFERENCE_RESOLUTION', desc: 'Internal tensor resolution during AI model forward pass.', tune: '512 (Fast) -> 1024 (Maximum Detail).', when: 'Increase to 1024 if AI fails to detect extremely small, distant objects.' },
@@ -735,18 +729,18 @@
             'sam_box_padding': { title: 'BBOX_PADDING', desc: 'Expands bounding boxes slightly before feeding them into the SAM core.', tune: '0% -> 20%.', when: 'Increase if SAM generated masks frequently clip the extreme edges of objects (e.g., mirrors, tires).' },
 
             'zip_compression': { title: 'DATASET_COMPRESSION', desc: 'Archive algorithm level during final YOLO dataset export.', tune: 'Fast (Store only) -> Max (Extreme compression).', when: 'Select Max for limited disk space. Select Fast to eliminate waiting time during export.' },
-            'auto_preprocess': { title: 'AUTO_PREPROCESS', desc: 'Silently pre-computes thumbnails and feature vectors immediately upon video upload.', tune: 'Enabled/Disabled.', when: 'Disable to save battery or reduce fan noise on portable nodes.' },
+            'auto_preprocess': { title: 'AUTO_PREPROCESS', desc: 'Silently pre-warms the SAM3 backbone cache for a frame immediately upon opening it.', tune: 'Enabled/Disabled.', when: 'Disable to save battery or reduce fan noise on portable nodes.' },
             'auto_cleanup': { title: 'ORPHAN_CLEANUP', desc: '[DANGER] Automatically purges completely unlabeled source frames from disk upon dataset compilation.', tune: 'Use with extreme caution.', when: 'Enable to aggressively free up disk space when processing very long feeds with few labeled targets.' },
 
             'sam_mask_confidence': { title: 'MASK_CONFIDENCE', desc: 'Internal threshold for SAM to classify a pixel as foreground.', tune: '0.1 (Expand) -> 0.9 (Shrink).', when: 'Increase if masks spill into background geometry. Decrease if mask interiors contain holes.' },
             'nms_iou_threshold': { title: 'NMS_IOU_THRESH', desc: 'Non-Maximum Suppression threshold. Dictates allowable overlap between boxes.', tune: '0.1 (Strict disjoint) -> 1.0 (Infinite overlap).', when: 'Decrease to aggressively cull duplicate boxes on the same object. Increase if labeling naturally overlapping objects.' },
-            'prototype_temperature': { title: 'PROTO_TEMP', desc: 'Softmax temperature for Smart Select embedding space calculations.', tune: '0.01 (Rigid) -> 0.5 (Creative/Loose).', when: 'Decrease to 0.05 if AI selects completely unrelated objects. Increase to 0.2+ to allow selection under different lighting/angles.' },
+            'consistency_semantic_threshold': { title: 'QC_SEMANTIC_THRESHOLD', desc: 'AI Consistency Scan: minimum SAM3 confidence a labeled box must score against its own class\'s retrieval text before being flagged as a possible mislabel.', tune: '0.05 (Lenient) -> 0.9 (Strict).', when: 'Increase if the QC scan misses obvious mislabels. Decrease if it flags too many correctly-labeled boxes.' },
 
             'batch_tracking_conf': { title: 'TRACK_CONFIDENCE', desc: 'Confidence drop-off threshold to declare target lost during sequence tracking.', tune: '0.1 (Relentless) -> 0.95 (Fragile).', when: 'Increase to prevent tracker from drifting onto background noise. Decrease if tracker aborts too easily on partial occlusions.' },
-            'preannotation_conf': { title: 'PRE_ANNOTATION_CONF', desc: 'Confidence threshold strictly isolated to the Auto-Labeling modal.', tune: '0.1 -> 0.95.', when: 'Adjust and re-run if auto-labeling sequence generates too much noise or misses targets.' },
+            'preannotation_conf': { title: 'PRE_ANNOTATION_CONF', desc: 'Default confidence threshold for SAM3 retrieval queries (Smart Select / Find Sim / bulk apply).', tune: '0.1 -> 0.95.', when: 'Adjust and re-run if auto-labeling sequence generates too much noise or misses targets.' },
             'batch_tracking_imgsz': { title: 'TRACK_IMG_SIZE', desc: 'Extreme-precision processing resolution dedicated to SAM2 Video Tracking.', tune: '256 -> 2048 (Default 1024).', when: 'Increase to 2048 (if VRAM allows) when targets are moving extremely fast or are microscopic.' },
             'batch_tracking_chunk': { title: 'CHUNK_SIZE', desc: 'Number of frames batched into VRAM per forward pass during tracking.', tune: '1 -> 100.', when: 'CRITICAL: Decrease immediately if tracking triggers CUDA OOM errors. Increase for faster tracking on high-end GPUs.' },
-            'prototype_limit': { title: 'PROTO_LIMIT', desc: 'Maximum number of positive/negative embedding vectors stored in RAM for Smart Select.', tune: '1 -> 50.', when: 'Leave at default unless system RAM is severely restricted.' },
+            'consistency_confusion_margin': { title: 'QC_CONFUSION_MARGIN', desc: 'AI Consistency Scan: how much higher another class\'s SAM3 score must be (versus the box\'s own class) before it is flagged as "looks more like class Y".', tune: '0 (Sensitive) -> 0.9 (Conservative).', when: 'Decrease if the QC scan misses obvious class confusions. Increase if it flags too many boxes that are actually fine.' },
 
             'default_annotation_mode': { title: 'DEFAULT_TOOL', desc: 'Primary active tool automatically equipped upon entering the IDE.', tune: 'Select based on workflow preference.', when: 'Change to avoid manually switching to your favorite tool every time you open a frame.' },
             'autosave_enabled': { title: 'AUTO_SAVE', desc: 'Automatically commits bbox data to disk during timeline scrubbing or navigation.', tune: 'Highly recommended to keep ENABLED.', when: 'Disable only when performing destructive testing and you wish to discard changes.' },
@@ -1000,7 +994,6 @@
                     // 1. Hardware
                     $('#setting-gpu-device').val(s.gpu_device);
                     $('#setting-sam-model').val(s.sam_model_checkpoint);
-                    $('#setting-feature-extractor-model').val(s.feature_extractor_model_name);
 
                     // --- 读取新增配置开始 ---
                     $('#setting-max-workers').val(s.max_workers || '8');
@@ -1027,14 +1020,14 @@
                     // 2. Algorithm
                     $('#setting-sam-mask-confidence').val(s.sam_mask_confidence).trigger('input');
                     $('#setting-nms-iou-threshold').val(s.nms_iou_threshold).trigger('input');
-                    $('#setting-prototype-temperature').val(s.prototype_temperature).trigger('input');
+                    $('#setting-consistency-semantic-threshold').val(s.consistency_semantic_threshold ?? 0.3).trigger('input');
 
                     // 3. Batch & Tracking
                     $('#setting-batch-tracking-conf').val(s.batch_tracking_conf).trigger('input');
                     $('#setting-preannotation-conf').val(s.default_preannotation_conf).trigger('input');
                     $('#setting-batch-tracking-imgsz').val(s.batch_tracking_imgsz);
                     $('#setting-batch-tracking-chunk-size').val(s.batch_tracking_chunk_size);
-                    $('#setting-prototype-sample-limit').val(s.prototype_sample_limit);
+                    $('#setting-consistency-confusion-margin').val(s.consistency_confusion_margin ?? 0.15);
 
                     // 4. Workflow
                     $('#setting-default-annotation-mode').val(s.default_annotation_mode);
@@ -1191,10 +1184,9 @@
                 gpu_device: $('#setting-gpu-device').val(),
                 sam_model_checkpoint: selectedSamOption.val(),
                 sam_model_name: selectedSamOption.data('name'),
-                feature_extractor_model_name: $('#setting-feature-extractor-model').val(),
                 sam_mask_confidence: parseFloat($('#setting-sam-mask-confidence').val()),
                 nms_iou_threshold: parseFloat($('#setting-nms-iou-threshold').val()),
-                prototype_temperature: parseFloat($('#setting-prototype-temperature').val()),
+                consistency_semantic_threshold: parseFloat($('#setting-consistency-semantic-threshold').val()),
 
                 max_workers: $('#setting-max-workers').val(),
                 max_cache_size: parseInt($('#setting-max-cache-size').val()),
@@ -1215,7 +1207,7 @@
                 default_preannotation_conf: parseFloat($('#setting-preannotation-conf').val()),
                 batch_tracking_imgsz: parseInt($('#setting-batch-tracking-imgsz').val()),
                 batch_tracking_chunk_size: parseInt($('#setting-batch-tracking-chunk-size').val()),
-                prototype_sample_limit: parseInt($('#setting-prototype-sample-limit').val()),
+                consistency_confusion_margin: parseFloat($('#setting-consistency-confusion-margin').val()),
 
                 default_annotation_mode: $('#setting-default-annotation-mode').val(),
                 autosave_enabled: $('#setting-autosave-enabled').is(':checked'),
@@ -1238,7 +1230,7 @@
         });
 
         // 绑定普通浮点滑动条
-        ['sam-mask-confidence', 'nms-iou-threshold', 'prototype-temperature', 'batch-tracking-conf', 'preannotation-conf', 'default-confidence'].forEach(id => {
+        ['sam-mask-confidence', 'nms-iou-threshold', 'consistency-semantic-threshold', 'batch-tracking-conf', 'preannotation-conf', 'default-confidence'].forEach(id => {
             $(`#setting-${id}`).on('input', function() {
                 $(`#${id}-val`).text(parseFloat($(this).val()).toFixed(2));
             });

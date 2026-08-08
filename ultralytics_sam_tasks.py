@@ -1,5 +1,6 @@
 import logging
 import os
+import threading
 import torch
 import numpy as np
 import cv2
@@ -39,18 +40,20 @@ import file_storage
 from bbox_writer import convert_text_to_rects_and_labels
 import settings_manager
 
-# 双引擎缓存管理
+# 模型缓存管理
 _sam_cache = {
     # SAM 2 缓存
     "sam2_video_predictor": None,
     "sam2_image_predictor": None,
     # SAM 3.1 缓存
-    "sam3_multiplex_predictor": None,
-    "sam3_image_model": None,
-    "sam3_image_processor": None,
-    # 公共状态
-    "checkpoint": None,
-    "device": None
+    "multiplex_predictor": None,
+    "image_model": None,
+    "image_processor": None,
+    # 按模式分别记录 checkpoint/device
+    "image_checkpoint": None,
+    "image_device": None,
+    "video_checkpoint": None,
+    "video_device": None,
 }
 
 
@@ -102,8 +105,6 @@ def _load_sam3_models(mode="video"):
     if not HAS_SAM3:
         return None
 
-    # 🛡️ 核心修复：对症下药！
-    # 文本图像分割必须用基础 sam3.pt，视频多目标追踪用 sam3.1_multiplex.pt
     if mode == "image":
         checkpoint_name = os.path.join("sam3", "sam3.pt")
     else:
@@ -112,28 +113,187 @@ def _load_sam3_models(mode="video"):
     checkpoint_path = os.path.abspath(os.path.join(config.BASE_DIR, "checkpoints", checkpoint_name))
     device = settings_manager.get_device()
 
-    if (_sam_cache["checkpoint"] != checkpoint_path or str(_sam_cache["device"]) != str(device)):
+    ckpt_key = f"{mode}_checkpoint"
+    dev_key = f"{mode}_device"
+    if (_sam_cache.get(ckpt_key) != checkpoint_path or str(_sam_cache.get(dev_key)) != str(device)):
         logging.info(f"[SAM3] Loading {mode} engine... Checkpoint: {checkpoint_name}")
-        _sam_cache["multiplex_predictor"] = None
-        _sam_cache["image_model"] = None
-        _sam_cache["image_processor"] = None
-        _sam_cache["checkpoint"] = checkpoint_path
-        _sam_cache["device"] = device
+        if mode == "video":
+            _sam_cache["multiplex_predictor"] = None
+        else:
+            _sam_cache["image_model"] = None
+            _sam_cache["image_processor"] = None
+            clear_sam3_frame_state_cache()
+        _sam_cache[ckpt_key] = checkpoint_path
+        _sam_cache[dev_key] = device
         gc.collect()
         if torch.cuda.is_available(): torch.cuda.empty_cache()
 
     try:
         if mode == "video" and _sam_cache["multiplex_predictor"] is None:
-            _sam_cache["multiplex_predictor"] = build_sam3_multiplex_video_predictor(checkpoint_path=checkpoint_path)
+            _sam_cache["multiplex_predictor"] = build_sam3_multiplex_video_predictor(checkpoint_path=checkpoint_path, device=str(device))
 
         elif mode == "image" and _sam_cache["image_processor"] is None:
-            _sam_cache["image_model"] = build_sam3_image_model(checkpoint_path=checkpoint_path)
-            _sam_cache["image_processor"] = Sam3Processor(_sam_cache["image_model"])
+            _sam_cache["image_model"] = build_sam3_image_model(checkpoint_path=checkpoint_path, device=str(device))
+            _sam_cache["image_processor"] = Sam3Processor(_sam_cache["image_model"], device=str(device))
     except Exception as e:
         logging.error(f"[SAM3] Error building model ({mode}): {e}")
         return None
 
     return _sam_cache["multiplex_predictor"] if mode == "video" else _sam_cache["image_processor"]
+
+
+# --- SAM3 帧级 backbone 缓存与统一查询 ---
+
+_sam3_frame_state_cache = OrderedDict()
+_SAM3_QUERY_LOCK = threading.Lock()
+
+
+def _sam3_frame_cache_put(key, value):
+    _sam3_frame_state_cache[key] = value
+    try:
+        maxsize = int(settings_manager.load_settings().get('max_cache_size', 30))
+    except Exception:
+        maxsize = 30
+    while len(_sam3_frame_state_cache) > maxsize:
+        _sam3_frame_state_cache.popitem(last=False)
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+
+def clear_sam3_frame_state_cache():
+    """在 SAM3 checkpoint / 设备变更时调用，避免复用到用旧模型算出来的 backbone 特征。"""
+    _sam3_frame_state_cache.clear()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+
+def _pixel_box_to_norm_cxcywh(box, img_w, img_h):
+    """[x1,y1,x2,y2] 像素坐标 -> SAM3 geometric prompt 需要的 [cx,cy,w,h] 归一化坐标。"""
+    x1, y1, x2, y2 = box
+    return [
+        (x1 + x2) / 2.0 / img_w,
+        (y1 + y2) / 2.0 / img_h,
+        max(1e-6, (x2 - x1) / img_w),
+        max(1e-6, (y2 - y1) / img_h),
+    ]
+
+
+def _get_sam3_frame_state(processor, video_uuid, frame_number, image_path=None):
+    """获取（或懒加载并缓存）某一帧的 SAM3 backbone state。命中缓存不会重跑 backbone。"""
+    cache_key = f"{video_uuid}_{frame_number}"
+    if cache_key in _sam3_frame_state_cache:
+        state = _sam3_frame_state_cache.pop(cache_key)
+        _sam3_frame_state_cache[cache_key] = state  # 移到 LRU 末尾
+        return state
+
+    if image_path is None:
+        image_path = file_storage.get_frame_path(video_uuid, frame_number)
+    if not os.path.exists(image_path):
+        raise FileNotFoundError(f"Frame image not found: {image_path}")
+
+    image = Image.open(image_path).convert("RGB")
+    device_type = "cuda" if torch.cuda.is_available() else "cpu"
+    dtype = torch.bfloat16 if (device_type == "cuda" and torch.cuda.is_bf16_supported()) else (torch.float16 if device_type == "cuda" else torch.float32)
+    with torch.autocast(device_type=device_type, dtype=dtype):
+        state = processor.set_image(image)
+
+    _sam3_frame_cache_put(cache_key, state)
+    return state
+
+
+def sam3_query_frame(video_uuid, frame_number, text_prompt=None, positive_boxes=None,
+                      negative_boxes=None, confidence=0.25, image_path=None):
+    """
+    SAM3 统一查询入口：取代旧的"MobileNet 特征 + 候选框匹配"范式，是本次重构里
+    智能选择(单样例/类别库)、LAM、批量应用、一致性检查共用的核心原语。
+
+    - text_prompt: 开放词汇文本 query（比如某个类别的 SAM3 检索描述）
+    - positive_boxes / negative_boxes: 像素坐标 [x1,y1,x2,y2] 的列表，框样例 query
+      （对应官方 SAM3 的 exemplar/box-prompted 检索能力，即 add_geometric_prompt，
+      本仓库在这次重构之前完全没有用到）
+    - text_prompt 和 positive_boxes 可以同时提供（文本 + 框样例联合约束），至少要
+      提供其中一个
+    - 同一帧（同一个 video_uuid+frame_number）多次调用本函数只会跑一次图像 backbone
+
+    返回: [{"box": [x1,y1,x2,y2], "score": float}, ...]，按 score 降序排列
+    """
+    if not text_prompt and not positive_boxes:
+        raise ValueError("sam3_query_frame 至少需要 text_prompt 或 positive_boxes 中的一个。")
+
+    processor = _load_sam3_models(mode="image")
+    if processor is None:
+        raise RuntimeError("SAM 3.1 Image Processor is not initialized (checkpoint 未加载或已被设置禁用)。")
+
+    with _SAM3_QUERY_LOCK:
+        state = _get_sam3_frame_state(processor, video_uuid, frame_number, image_path=image_path)
+
+        # 每次独立查询前清空上一次查询残留的文本/框 prompt 和检测结果，避免不同查询
+        # 之间互相串味；图像本身的 backbone_out（vision features）不受影响，继续复用。
+        processor.reset_all_prompts(state)
+
+        img_w = state["original_width"]
+        img_h = state["original_height"]
+
+        device_type = "cuda" if torch.cuda.is_available() else "cpu"
+        dtype = torch.bfloat16 if (device_type == "cuda" and torch.cuda.is_bf16_supported()) else (torch.float16 if device_type == "cuda" else torch.float32)
+
+        # confidence_threshold 是共享 processor 实例上的属性，查询期间临时改写，
+        # 结束后还原，并且整个过程持有 _SAM3_QUERY_LOCK，避免并发请求互相冲突阈值。
+        old_threshold = processor.confidence_threshold
+        processor.confidence_threshold = confidence
+        try:
+            with torch.autocast(device_type=device_type, dtype=dtype):
+                if text_prompt:
+                    state = processor.set_text_prompt(prompt=text_prompt, state=state)
+                if positive_boxes:
+                    for box in positive_boxes:
+                        norm_box = _pixel_box_to_norm_cxcywh(box, img_w, img_h)
+                        state = processor.add_geometric_prompt(box=norm_box, label=True, state=state)
+                if negative_boxes:
+                    for box in negative_boxes:
+                        norm_box = _pixel_box_to_norm_cxcywh(box, img_w, img_h)
+                        state = processor.add_geometric_prompt(box=norm_box, label=False, state=state)
+        finally:
+            processor.confidence_threshold = old_threshold
+
+        _sam3_frame_cache_put(f"{video_uuid}_{frame_number}", state)
+
+        boxes = state.get("boxes", [])
+        scores = state.get("scores", [])
+
+    results = []
+    for i in range(len(boxes)):
+        box_data = boxes[i]
+        score = float(scores[i])
+        if torch.is_tensor(box_data):
+            box_data = box_data.detach().cpu().numpy().tolist()
+        x1, y1, x2, y2 = map(int, box_data)
+        results.append({"box": [x1, y1, x2, y2], "score": score})
+
+    results.sort(key=lambda r: r["score"], reverse=True)
+    return results
+
+
+def warm_frame_cache(video_uuid, frame_number, image_path=None):
+    """
+    预热某一帧的 SAM3 backbone 缓存（跑一次 set_image，不做任何查询）。
+    对应旧的 "/interactive_segment/preprocess" 语义：在用户真正画框/点击之前，
+    提前把最贵的 backbone 前向跑掉，之后的查询就只需要跑轻量的检测头。
+    """
+    processor = _load_sam3_models(mode="image")
+    if processor is None:
+        raise RuntimeError("SAM 3.1 Image Processor is not initialized.")
+    with _SAM3_QUERY_LOCK:
+        _get_sam3_frame_state(processor, video_uuid, frame_number, image_path=image_path)
+    return True
+
+
+def is_frame_cached(video_uuid, frame_number):
+    return f"{video_uuid}_{frame_number}" in _sam3_frame_state_cache
+
+
+def frame_cache_size():
+    return len(_sam3_frame_state_cache)
 
 
 # ==============================================================================
@@ -175,39 +335,11 @@ def predict_box_from_point_ultralytics(image_path, point_coords):
     return None
 
 
-def predict_boxes_from_text_sam3(image_path, text_prompt, confidence_threshold=0.25):
-    """
-    真·LAM (开放词汇文本分割) - 加入阈值控制
-    """
-    processor = _load_sam3_models(mode="image")
-    if processor is None:
-        raise RuntimeError("SAM 3.1 Image Processor is not initialized.")
-
-    image = Image.open(image_path).convert("RGB")
-    device_type = "cuda" if torch.cuda.is_available() else "cpu"
-    dtype = torch.bfloat16 if device_type == "cuda" else torch.float32
-
-    with torch.autocast(device_type=device_type, dtype=dtype):
-        inference_state = processor.set_image(image)
-        output = processor.set_text_prompt(
-            state=inference_state,
-            prompt=text_prompt
-        )
-
-    boxes = output.get("boxes", [])
-    scores = output.get("scores", [])
-
-    results = []
-    for i in range(len(boxes)):
-        score = float(scores[i])
-        if score >= confidence_threshold:
-            box_data = boxes[i]
-            if torch.is_tensor(box_data):
-                box_data = box_data.cpu().numpy().tolist()
-            x1, y1, x2, y2 = map(int, box_data)
-            results.append({"box": [x1, y1, x2, y2], "score": score})
-
-    return results
+# 注：原来这里有一个独立的 predict_boxes_from_text_sam3(image_path, text_prompt, ...)
+# 实现，逻辑和上面 §2b 的 sam3_query_frame 高度重复（都是 set_image + set_text_prompt），
+# 且不参与帧级 backbone 缓存。这次重构统一收敛到 sam3_query_frame，唯一的调用方
+# app.py 的 /api/sam3_text_predict 路由已同步改为直接调用 sam3_query_frame（它本来
+# 就有 video_uuid/frame_number，可以正常吃到缓存收益）。
 
 
 # ==============================================================================

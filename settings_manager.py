@@ -9,13 +9,10 @@ DEFAULT_SETTINGS = {
     "initial_setup_done": False,
     "sam_model_config": "configs/sam2.1/sam2.1_hiera_t.yaml",
     "sam_model_checkpoint": "sam2.1_t.pt",
-    "feature_extractor_model_name": "mobilenet_v3_large",
     "gpu_device": "auto",
 
     "sam_mask_confidence": 0.70,
     "nms_iou_threshold": 0.7,
-    "prototype_temperature": 0.07,
-    "prototype_sample_limit": 50,
     "default_preannotation_conf": 0.5,
     "default_opencv_tracker": "CSRT",
     "frame_extraction_jpeg_quality": 75,
@@ -24,33 +21,30 @@ DEFAULT_SETTINGS = {
     "cache_save_interval_seconds": 30,
     "class_colors": {},
 
-    # ================= 新增配置 =================
-    # 1. AI 与推理进阶参数
-    "inference_size": 512,  # 图像推理分辨率 (512, 640, 1024)
-    "default_confidence": 0.5,  # 全局默认置信度
-    "sam_box_padding": 0.0,  # SAM 提示框扩展系数 (0.0 - 0.2)
+    "inference_size": 512,
+    "default_confidence": 0.5,
+    "sam_box_padding": 0.0,
 
-    # 2. 系统资源与并发调度
-    "max_workers": 8,  # 最大工作线程数
-    "max_cache_size": 30,  # 内存/显存特征缓存最大帧数
-    "use_autocast": True,  # 混合精度推理开关 (FP16/BF16)
+    "max_workers": 8,
+    "max_cache_size": 30,
+    "use_autocast": True,
 
-    # 3. 自动化工作流默认值
-    "default_eval_percent": 20.0,  # 默认验证集比例
-    "default_test_percent": 10.0,  # 默认测试集比例
-    "default_color_check": True,  # 默认是否开启色彩检查
-    "color_confusion_factor": 2.0,  # 色彩偏离的警告系数
-    "auto_preprocess": True,  # 自动后台预处理特征提取
+    "default_eval_percent": 20.0,
+    "default_test_percent": 10.0,
+    "color_confusion_factor": 2.0,
+    "consistency_semantic_threshold": 0.05,
+    "consistency_confusion_margin": 0.15,
+    "auto_preprocess": True,
 
-    # 4. 存储与自动清理
     "auto_cleanup_frames": False,
     "zip_compression": "standard",
 
-    # 5. 模型与功能开关 (Model & Feature Toggles)
-    "enable_sam_model": True,  # 总开关：启用SAM系列功能 (点选、追踪、智能选择)
-    "enable_feature_extractor": True  # 总开关：启用特征提取功能 (智能选择、LAM、一致性检查)
+    "enable_sam_model": True,
+    "enable_feature_extractor": True
 }
 _device = None
+_cached_settings = None
+_cached_mtime = 0
 
 
 def get_device():
@@ -96,11 +90,16 @@ def update_device():
 
 
 def load_settings():
+    global _cached_settings, _cached_mtime
     if not os.path.exists(SETTINGS_FILE):
         logging.info(f"Settings file not found. Creating a new one at {SETTINGS_FILE}")
         save_settings(DEFAULT_SETTINGS)
-        return DEFAULT_SETTINGS
+        return DEFAULT_SETTINGS.copy()
     try:
+        current_mtime = os.path.getmtime(SETTINGS_FILE)
+        if _cached_settings is not None and _cached_mtime == current_mtime:
+            return dict(_cached_settings)
+
         with open(SETTINGS_FILE, 'r') as f:
             settings = json.load(f)
 
@@ -124,17 +123,22 @@ def load_settings():
             elif ckpt == "sam2.1_l.pt":
                 settings["sam_model_config"] = "configs/sam2.1/sam2.1_hiera_l.yaml"
 
-            return settings
+            _cached_settings = settings
+            _cached_mtime = current_mtime
+            return dict(settings)
 
     except (json.JSONDecodeError, IOError) as e:
         logging.error(f"Failed to load settings file: {e}. Returning default settings.")
-        return DEFAULT_SETTINGS
+        return DEFAULT_SETTINGS.copy()
 
 
 def save_settings(settings_data):
+    global _cached_settings, _cached_mtime
     try:
         with open(SETTINGS_FILE, 'w') as f:
             json.dump(settings_data, f, indent=4)
+        _cached_mtime = os.path.getmtime(SETTINGS_FILE) if os.path.exists(SETTINGS_FILE) else 0
+        _cached_settings = dict(settings_data)
         return True
     except IOError as e:
         logging.error(f"Failed to save settings file: {e}")

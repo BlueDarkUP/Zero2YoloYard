@@ -24,14 +24,15 @@ def __convert_bbox_to_text(bbox, scale, x_max, y_max):
 
 def __convert_bboxes_and_labels_to_text(bboxes, scale, max_x, max_y, labels):
     assert (len(bboxes) == len(labels))
-    bboxes_text = ""
+    lines = []
     for i in range(len(bboxes)):
         bbox = bboxes[i]
         label = labels[i]
         if bbox is None or label is None:
             continue
-        bboxes_text += "%s,%s\n" % (__convert_bbox_to_text(bbox, scale, max_x, max_y), label)
-    return bboxes_text
+        lines.append("%s,%s" % (__convert_bbox_to_text(bbox, scale, max_x, max_y), label))
+    return "\n".join(lines) + ("\n" if lines else "")
+
 
 
 def __convert_rects_to_bboxes(rects):

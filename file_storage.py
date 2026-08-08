@@ -66,6 +66,26 @@ def get_dataset_zip_path(dataset_uuid):
     return os.path.join(config.STORAGE_DIR, 'datasets', f"{dataset_uuid}.zip")
 
 
+def _clip_yolo_bbox(x_center, y_center, box_w, box_h):
+    """将 YOLO 格式 bbox 严格 clamp 到 [0,1] 内，避免浮点误差导致 albumentations 报错。"""
+    x_min = x_center - box_w / 2
+    y_min = y_center - box_h / 2
+    x_max = x_center + box_w / 2
+    y_max = y_center + box_h / 2
+
+    EPS = 1e-6
+    x_min = max(0.0, min(1.0 - EPS, x_min))
+    y_min = max(0.0, min(1.0 - EPS, y_min))
+    x_max = max(EPS, min(1.0, x_max))
+    y_max = max(EPS, min(1.0, y_max))
+
+    new_w = x_max - x_min
+    new_h = y_max - y_min
+    new_cx = x_min + new_w / 2
+    new_cy = y_min + new_h / 2
+    return new_cx, new_cy, new_w, new_h
+
+
 def get_yolo_bboxes(bboxes_text, width, height, class_map):
     rects, labels, _ = convert_text_to_rects_and_labels(bboxes_text)
     if not rects: return [], []
@@ -80,15 +100,10 @@ def get_yolo_bboxes(bboxes_text, width, height, class_map):
         if y_min > y_max:
             y_min, y_max = y_max, y_min
 
-        norm_x1 = x_min / width
-        norm_y1 = y_min / height
-        norm_x2 = x_max / width
-        norm_y2 = y_max / height
-
-        norm_x1 = max(0.0, min(1.0, norm_x1))
-        norm_y1 = max(0.0, min(1.0, norm_y1))
-        norm_x2 = max(0.0, min(1.0, norm_x2))
-        norm_y2 = max(0.0, min(1.0, norm_y2))
+        norm_x1 = max(0.0, min(1.0, x_min / width))
+        norm_y1 = max(0.0, min(1.0, y_min / height))
+        norm_x2 = max(0.0, min(1.0, x_max / width))
+        norm_y2 = max(0.0, min(1.0, y_max / height))
 
         box_w = norm_x2 - norm_x1
         box_h = norm_y2 - norm_y1
@@ -96,6 +111,7 @@ def get_yolo_bboxes(bboxes_text, width, height, class_map):
         y_center = norm_y1 + box_h / 2
 
         if box_w > 0 and box_h > 0:
+            x_center, y_center, box_w, box_h = _clip_yolo_bbox(x_center, y_center, box_w, box_h)
             yolo_bboxes.append([x_center, y_center, box_w, box_h])
             class_indices.append(class_map[labels[i]])
 
@@ -179,22 +195,26 @@ def create_yolo_dataset_zip(dataset_uuid, frames_data, all_labels, eval_percent,
     dataset_parts = [(train_data, img_train_dir, lbl_train_dir), (val_data, img_val_dir, lbl_val_dir),
                      (test_data, img_test_dir, lbl_test_dir)]
 
+    from collections import deque
     for part_data, target_img_dir, target_lbl_dir in dataset_parts:
         is_training_set = (target_img_dir == img_train_dir)
+        part_deque = deque(part_data)
 
-        while part_data:
-            use_mosaic = is_training_set and mosaic_options.get('enabled') and random.random() < mosaic_options.get('p',
-                                                                                                                    0) and len(
-                part_data) >= 4
+        while part_deque:
+            use_mosaic = is_training_set and mosaic_options and mosaic_options.get('enabled') and random.random() < mosaic_options.get('p', 0) and len(part_deque) >= 4
 
             if use_mosaic:
-                mosaic_infos = [part_data.pop(random.randrange(len(part_data))) for _ in range(4)]
+                indices = sorted(random.sample(range(len(part_deque)), 4), reverse=True)
+                mosaic_infos = [part_deque[idx] for idx in indices]
+                for idx in indices:
+                    del part_deque[idx]
                 base_filename = f"mosaic_{mosaic_infos[0]['video_uuid']}_{mosaic_infos[0]['frame_number']}"
                 image_aug, bboxes_aug_yolo = create_mosaic_image(mosaic_infos, class_map)
                 final_image_bgr = image_aug
             else:
-                frame_info = part_data.pop(0)
+                frame_info = part_deque.popleft()
                 is_augmented = frame_info.get("type") == "augmented"
+
                 if is_augmented:
                     base_filename = frame_info["augmented_id"]
                 else:

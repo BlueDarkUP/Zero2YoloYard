@@ -205,7 +205,7 @@
                 "net: pywebview uplink established.",
                 "mem: allocating vram blocks (40.5%)",
                 "sam: loading deep learning core...",
-                "mobilenet: feature extractor ready.",
+                "sam3: retrieval engine ready.",
                 "data: verifying dataset schema...",
                 "auth: override accepted.",
                 "ui: initializing workspace..."
@@ -295,7 +295,7 @@
         }, 2000);
     </script>
 
-    <div class="modal fade" id="sysConfirmModal" tabindex="-1" role="dialog" style="z-index: 99999;">
+    <div class="modal fade" id="sysConfirmModal" tabindex="-1" role="dialog">
         <div class="modal-dialog modal-dialog-centered modal-sm" role="document">
             <div class="modal-content" style="background: rgba(10,11,16,0.95); border: 1px solid var(--color-danger); box-shadow: 0 0 20px rgba(255, 0, 50, 0.2);">
                 <div class="modal-body text-center pt-4 pb-3">
@@ -305,6 +305,31 @@
                 <div class="modal-footer border-0 justify-content-center pb-4 pt-0">
                     <button type="button" class="btn btn-sm btn-outline-secondary font-monospace tracking-wider px-3" data-dismiss="modal">ABORT</button>
                     <button type="button" class="btn btn-sm btn-danger font-monospace tracking-wider px-3" id="sysConfirmBtn">PROCEED</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="sysPromptModal" tabindex="-1" role="dialog">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content" style="background: rgba(10,11,16,0.95); border: 1px solid var(--color-warning); box-shadow: 0 0 20px rgba(255, 208, 0, 0.2);">
+                <div class="modal-header border-0 pb-0 pt-3 px-4">
+                    <h6 id="sysPromptTitle" class="modal-title font-weight-bold font-monospace text-warning text-uppercase tracking-wider">
+                        <i class="bi bi-cpu mr-2"></i> EDIT SAM3 PROMPT
+                    </h6>
+                    <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close" style="text-shadow: none; opacity: 0.8; outline: none;">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body text-left py-2 px-4">
+                    <p id="sysPromptMessage" class="text-muted small font-monospace mb-2" style="font-size: 0.8rem;">
+                        > Set object description for SAM3 retrieval:
+                    </p>
+                    <input type="text" id="sysPromptInput" class="form-control form-control-sm tool-input font-monospace text-warning mb-2" placeholder="e.g. 'a red plastic ball'...">
+                </div>
+                <div class="modal-footer border-0 justify-content-end pb-3 pt-2 px-4">
+                    <button type="button" class="btn btn-sm btn-outline-secondary font-monospace tracking-wider px-3" data-dismiss="modal">CANCEL</button>
+                    <button type="button" class="btn btn-sm btn-warning text-dark font-weight-bold font-monospace tracking-wider px-3" id="sysPromptBtn">SAVE</button>
                 </div>
             </div>
         </div>
@@ -358,10 +383,85 @@
             $('#sysConfirmMessage').text(message);
             $('#sysConfirmModal').modal('show');
             $('#sysConfirmBtn').off('click').on('click', function() {
+                if (callback) {
+                    $('#sysConfirmModal').one('hidden.bs.modal', function() {
+                        // 确保旧 backdrop 已被 Bootstrap 清除后再执行回调，
+                        // 避免 sysConfirmModal 的 backdrop 还在 DOM 里时又触发
+                        // apply-scope-modal 产生第二个 backdrop 造成灰色遮罩叠加。
+                        callback();
+                    });
+                }
                 $('#sysConfirmModal').modal('hide');
-                if (callback) callback();
             });
         };
+
+        // 全局挂载：系统级输入提示函数 (替代原生的 window.prompt)
+        window.sysPrompt = function(options, callback) {
+            let title = "EDIT PROMPT";
+            let message = "Enter text description:";
+            let defaultValue = "";
+
+            if (typeof options === 'object') {
+                title = options.title || title;
+                message = options.message || message;
+                defaultValue = options.defaultValue || "";
+            } else if (typeof options === 'string') {
+                title = options;
+                if (typeof arguments[1] === 'function') {
+                    callback = arguments[1];
+                } else {
+                    defaultValue = arguments[1] || "";
+                    callback = arguments[2];
+                }
+            }
+
+            $('#sysPromptTitle').html(`<i class="bi bi-cpu mr-2"></i> ${title}`);
+            $('#sysPromptMessage').text('> ' + message);
+            $('#sysPromptInput').val(defaultValue);
+
+            $('#sysPromptModal').modal('show');
+            $('#sysPromptModal').one('shown.bs.modal', function() {
+                $('#sysPromptInput').focus().select();
+            });
+
+            $('#sysPromptBtn').off('click').on('click', function() {
+                const val = $('#sysPromptInput').val();
+                if (callback) {
+                    $('#sysPromptModal').one('hidden.bs.modal', function() {
+                        callback(val);
+                    });
+                }
+                $('#sysPromptModal').modal('hide');
+            });
+
+            $('#sysPromptInput').off('keyup').on('keyup', function(e) {
+                if (e.key === 'Enter') {
+                    $('#sysPromptBtn').click();
+                }
+            });
+        };
+
+        // 多弹窗堆叠：保证最新显示的 modal 和其 backdrop 的 z-index 始终最高
+        $(document).on('show.bs.modal', '.modal', function () {
+            // 当前已有多少弹窗可见（不含将要显示的这个）
+            const openCount = $('.modal.show').length;
+            // 新弹窗的 z-index 递进（基准 1050，Bootstrap 默认值）
+            const newZ = 1050 + openCount * 20;
+            $(this).css('z-index', newZ);
+            // backdrop 在 show 之后才会由 Bootstrap 插入 DOM，稍后再设置
+            setTimeout(function () {
+                // 取最后一个（最新的）backdrop
+                const $backdrop = $('.modal-backdrop').last();
+                $backdrop.css('z-index', newZ - 10);
+            }, 10);
+        });
+
+        // 弹窗关闭时若仍有其他弹窗开着，保持 body.modal-open
+        $(document).on('hidden.bs.modal', '.modal', function () {
+            if ($('.modal.show').length > 0) {
+                $('body').addClass('modal-open');
+            }
+        });
     </script>
 
     {% block scripts %}{% endblock %}

@@ -1,19 +1,4 @@
-# --- START OF FILE database.py ---
-
-import json
-import logging
-import time
-import uuid
-import config
-import file_storage
-from bbox_writer import extract_labels
-
-from sqlalchemy import create_engine, text, event
-from sqlalchemy.pool import QueuePool
-
-# ==============================================================================
-# 数据库引擎与连接池配置
-# ==============================================================================
+# --- 数据库配置 ---
 db_url = f"sqlite:///{config.DATABASE_FILE}"
 
 # 创建带连接池的 SQLAlchemy 引擎
@@ -49,9 +34,7 @@ def _to_dict(result_proxy):
     return [dict(row._mapping) for row in result_proxy]
 
 
-# ==============================================================================
-# 数据库迁移与初始化
-# ==============================================================================
+# --- 数据库初始化与迁移 ---
 
 def migrate_db():
     with engine.begin() as conn:
@@ -72,6 +55,7 @@ def migrate_db():
         add_column('videos', 'last_pre_annotation_info', 'TEXT')
         add_column('video_frames', 'tags', 'TEXT')
         add_column('video_frames', 'suggested_bboxes_text', 'TEXT')
+        add_column('class_labels', 'sam3_prompt', 'TEXT')
 
         conn.execute(text('''
                           CREATE TABLE IF NOT EXISTS frame_labels
@@ -82,6 +66,9 @@ def migrate_db():
                           )
                           '''))
         conn.execute(text('CREATE INDEX IF NOT EXISTS idx_frame_labels_name ON frame_labels (label_name)'))
+        conn.execute(text('CREATE INDEX IF NOT EXISTS idx_frame_labels_frame_id ON frame_labels (frame_id)'))
+        conn.execute(text('CREATE INDEX IF NOT EXISTS idx_video_frames_uuid_frame ON video_frames (video_uuid, frame_number)'))
+        conn.execute(text('CREATE INDEX IF NOT EXISTS idx_video_frames_uuid ON video_frames (video_uuid)'))
 
         conn.execute(text('''
                           CREATE TABLE IF NOT EXISTS class_tags
@@ -91,6 +78,7 @@ def migrate_db():
                               create_time_ms INTEGER
                           )
                           '''))
+
 
 
 def init_db():
@@ -199,11 +187,13 @@ def init_db():
                           )
                           '''))
         conn.execute(text('CREATE INDEX IF NOT EXISTS idx_frame_labels_name ON frame_labels (label_name)'))
+        conn.execute(text('CREATE INDEX IF NOT EXISTS idx_frame_labels_frame_id ON frame_labels (frame_id)'))
+        conn.execute(text('CREATE INDEX IF NOT EXISTS idx_video_frames_uuid_frame ON video_frames (video_uuid, frame_number)'))
+        conn.execute(text('CREATE INDEX IF NOT EXISTS idx_video_frames_uuid ON video_frames (video_uuid)'))
 
 
-# ==============================================================================
-# 数据操作 (CRUD) - 完美兼容原返回格式
-# ==============================================================================
+
+# --- 数据操作 (CRUD) ---
 
 def create_video_entry(description, video_filename, file_size, create_time_ms):
     video_uuid = str(uuid.uuid4().hex)
@@ -282,6 +272,15 @@ def get_video_frames(video_uuid):
     with engine.connect() as conn:
         result = conn.execute(text('SELECT * FROM video_frames WHERE video_uuid = :u ORDER BY frame_number ASC'),
                               {"u": video_uuid})
+        return _to_dict(result)
+
+
+def get_annotated_video_frames(video_uuid):
+    with engine.connect() as conn:
+        result = conn.execute(
+            text("SELECT * FROM video_frames WHERE video_uuid = :u AND bboxes_text IS NOT NULL AND TRIM(bboxes_text) != '' ORDER BY frame_number ASC"),
+            {"u": video_uuid}
+        )
         return _to_dict(result)
 
 
@@ -452,6 +451,40 @@ def get_all_class_labels():
         return [row[0] for row in result]
 
 
+def get_all_class_labels_with_prompts():
+    """
+    给 SAM3 检索类功能（智能选择/LAM/批量应用/一致性检查）专用。
+    返回 [{'label_name': ..., 'sam3_prompt': ...}]，sam3_prompt 可能为 None/空字符串
+    （调用方需要自行 fallback 到 label_name，详见 ai_models.get_retrieval_text_for_class）。
+    """
+    with engine.connect() as conn:
+        result = conn.execute(
+            text('SELECT label_name, sam3_prompt FROM class_labels ORDER BY label_name ASC'))
+        return [{'label_name': row[0], 'sam3_prompt': row[1]} for row in result]
+
+
+def get_class_sam3_prompt(label_name):
+    with engine.connect() as conn:
+        result = conn.execute(
+            text('SELECT sam3_prompt FROM class_labels WHERE label_name = :ln'), {"ln": label_name})
+        row = result.fetchone()
+        return row[0] if row else None
+
+
+def set_class_sam3_prompt(label_name, sam3_prompt):
+    """
+    设置/更新某个类别用于 SAM3 检索的描述文本。传入空字符串或 None 会清空（即回退到用 label_name 本身）。
+    """
+    cleaned = (sam3_prompt or '').strip() or None
+    now_ms = int(time.time() * 1000)
+    with engine.begin() as conn:
+        conn.execute(
+            text('INSERT INTO class_labels (label_name, sam3_prompt, create_time_ms) VALUES (:ln, :sp, :c) '
+                 'ON CONFLICT(label_name) DO UPDATE SET sam3_prompt = :sp'),
+            {"sp": cleaned, "ln": label_name, "c": now_ms}
+        )
+
+
 def delete_class_label(label_name):
     with engine.begin() as conn:
         conn.execute(text('DELETE FROM class_labels WHERE label_name = :ln'), {"ln": label_name})
@@ -520,6 +553,9 @@ def get_dataset_list():
     with engine.connect() as conn:
         result = conn.execute(text('SELECT * FROM datasets ORDER BY create_time_ms DESC'))
         return _to_dict(result)
+
+
+get_all_datasets = get_dataset_list
 
 
 def get_dataset_entity(dataset_uuid):

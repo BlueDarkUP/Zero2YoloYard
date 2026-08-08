@@ -40,86 +40,104 @@ except ImportError:
 
 active_tasks = {}
 tracking_sessions = {}
+# 批量应用任务进度表（按 task_uuid 索引）
+batch_apply_sessions = {}
 
 
-def apply_prototypes_to_video_task(video_uuid, class_name, negative_samples, confidence_threshold, app_context):
-    if active_tasks.get(video_uuid):
-        logging.warning(f"Cannot start applying prototypes for {video_uuid}, another task is active.")
+def apply_class_to_videos_task(task_uuid, video_uuids, class_name, confidence_threshold, app_context):
+    """把某个类别的 SAM3 检索文本应用到一批视频未标注的帧上，生成建议框。"""
+    session = {
+        'status': 'RUNNING',
+        'video_uuids': video_uuids,
+        'total_videos': len(video_uuids),
+        'videos_done': 0,
+        'current_video_uuid': None,
+        'class_name': class_name,
+        'message': f"Preparing to apply '{class_name}' across {len(video_uuids)} video(s)...",
+        'error': None,
+    }
+    batch_apply_sessions[task_uuid] = session
+
+    busy_videos = [vu for vu in video_uuids if active_tasks.get(vu)]
+    if busy_videos:
+        session['status'] = 'FAILED'
+        session['message'] = f"以下视频当前有其它任务在运行，无法开始: {', '.join(v[:8] for v in busy_videos)}"
         return
 
-    active_tasks[video_uuid] = 'APPLYING_PROTOTYPES'
-    logging.info(
-        f"Starting to apply suggestions for class '{class_name}' to video {video_uuid} with threshold {confidence_threshold}")
+    for vu in video_uuids:
+        active_tasks[vu] = task_uuid
+
+    logging.info(f"[{task_uuid}] Starting to apply '{class_name}' across {len(video_uuids)} video(s), "
+                 f"threshold={confidence_threshold}")
 
     try:
         with app_context:
-            database.update_video_status(video_uuid, 'APPLYING_PROTOTYPES', f"Initializing for '{class_name}'...")
+            for v_idx, video_uuid in enumerate(video_uuids):
+                session['current_video_uuid'] = video_uuid
+                database.update_video_status(video_uuid, 'APPLYING_CLASS',
+                                             f"Applying '{class_name}' ({v_idx + 1}/{len(video_uuids)} videos)...")
 
-            database.update_video_status(video_uuid, 'APPLYING_PROTOTYPES',
-                                         f"Building positive prototypes for '{class_name}'...")
-            positive_prototypes = ai_models.build_prototypes_for_class(class_name)
-            if positive_prototypes is None or len(positive_prototypes) == 0:
-                raise ValueError(f"Could not build positive prototypes for class '{class_name}'.")
-            logging.info(f"Successfully built {len(positive_prototypes)} positive prototypes for '{class_name}'.")
+                all_frames = database.get_video_frames(video_uuid)
+                unlabeled_frames = [f for f in all_frames if not (f.get('bboxes_text') or '').strip()]
+                total_frames = len(unlabeled_frames)
+                logging.info(f"[{task_uuid}] Video {video_uuid}: {total_frames} unlabeled frames to process.")
 
-            negative_prototypes = None
-            if negative_samples:
-                database.update_video_status(video_uuid, 'APPLYING_PROTOTYPES', "Building negative prototypes...")
-                negative_prototypes = ai_models.get_prototypes_from_drawn_boxes(negative_samples)
-                if negative_prototypes is not None and len(negative_prototypes) > 0:
-                    logging.info(
-                        f"Successfully built {len(negative_prototypes)} negative prototypes from user samples.")
-                else:
-                    logging.warning("User provided negative samples, but failed to build prototypes from them.")
+                for i, frame_info in enumerate(unlabeled_frames):
+                    frame_number = frame_info['frame_number']
 
-            all_frames = database.get_video_frames(video_uuid)
-            unlabeled_frames = [f for f in all_frames if not f['bboxes_text'].strip()]
-            total_frames = len(unlabeled_frames)
-            logging.info(f"Found {total_frames} unlabeled frames to process in video {video_uuid}.")
+                    current_video_status = database.get_video_entity(video_uuid)['status']
+                    if current_video_status == 'CANCELLING':
+                        logging.info(f"[{task_uuid}] Cancelled by user while processing video {video_uuid}.")
+                        database.update_video_status(video_uuid, 'READY', 'Task was cancelled.')
+                        session['status'] = 'CANCELLED'
+                        session['message'] = f"Cancelled while processing video {video_uuid[:8]}."
+                        return
 
-            for i, frame_info in enumerate(unlabeled_frames):
-                frame_number = frame_info['frame_number']
-                current_status = database.get_video_entity(video_uuid)['status']
-                if current_status == 'CANCELLING':
-                    logging.info(f"Task for {video_uuid} cancelled by user.")
-                    database.update_video_status(video_uuid, 'READY', 'Task was cancelled.')
-                    return
+                    session['message'] = (
+                        f"[{v_idx + 1}/{len(video_uuids)}] video {video_uuid[:8]}: frame {i + 1}/{total_frames}")
+                    if i % 10 == 0 or i == total_frames - 1:
+                        database.update_video_status(video_uuid, 'APPLYING_CLASS', session['message'])
 
-                database.update_video_status(video_uuid, 'APPLYING_PROTOTYPES',
-                                             f"Processing frame {i + 1}/{total_frames}")
 
-                try:
-                    predictions = ai_models.predict_with_prototypes(
-                        video_uuid, frame_number, positive_prototypes,
-                        negative_prototypes=negative_prototypes,
-                        confidence_threshold=confidence_threshold
-                    )
+                    try:
+                        predictions = ai_models.predict_by_class_text(
+                            video_uuid, frame_number, class_name, confidence_threshold=confidence_threshold
+                        )
+                        if predictions:
+                            suggested_text = "\n".join([
+                                f"{int(p['box'][0])},{int(p['box'][1])},{int(p['box'][2])},{int(p['box'][3])},"
+                                f"{class_name},{p['score']:.4f}"
+                                for p in predictions])
+                            database.save_frame_suggestions(video_uuid, frame_number, suggested_text)
+                    except Exception as frame_e:
+                        logging.error(f"[{task_uuid}] Failed to process frame {frame_number} of {video_uuid}: {frame_e}")
 
-                    if predictions:
-                        suggested_text = "\n".join([
-                            f"{int(p['box'][0])},{int(p['box'][1])},{int(p['box'][2])},{int(p['box'][3])},{class_name},{p['score']:.4f}"
-                            for p in predictions])
-                        database.save_frame_suggestions(video_uuid, frame_number, suggested_text)
+                database.update_video_status(video_uuid, 'READY',
+                                             f"Finished applying '{class_name}' suggestions. Review suggestions.")
+                if active_tasks.get(video_uuid) == task_uuid:
+                    del active_tasks[video_uuid]
+                session['videos_done'] += 1
 
-                except Exception as frame_e:
-                    logging.error(f"Failed to process frame {frame_number} for {video_uuid}: {frame_e}")
-
-                cache_key = f"{video_uuid}_{frame_number}"
-                if cache_key in ai_models.PREPROCESSED_DATA_CACHE:
-                    del ai_models.PREPROCESSED_DATA_CACHE[cache_key]
-
-            database.update_video_status(video_uuid, 'READY',
-                                         f"Finished applying '{class_name}' suggestions. Review suggestions.")
-            logging.info(f"Task for {video_uuid} completed successfully.")
+            session['status'] = 'COMPLETED'
+            session['message'] = f"Finished applying '{class_name}' across {len(video_uuids)} video(s)."
+            logging.info(f"[{task_uuid}] Completed successfully.")
 
     except Exception as e:
-        error_message = f"Failed to apply prototypes to video {video_uuid}"
-        logging.error(f"{error_message}: {e}")
+        error_message = f"Failed to apply class '{class_name}' to videos"
+        logging.error(f"[{task_uuid}] {error_message}: {e}")
         logging.error(traceback.format_exc())
-        database.update_video_status(video_uuid, status="FAILED", message=str(e))
+        session['status'] = 'FAILED'
+        session['error'] = str(e)
+        session['message'] = str(e)
+        for vu in video_uuids:
+            try:
+                database.update_video_status(vu, status="FAILED", message=str(e))
+            except Exception:
+                pass
     finally:
-        if active_tasks.get(video_uuid) == 'APPLYING_PROTOTYPES':
-            del active_tasks[video_uuid]
+        for vu in video_uuids:
+            if active_tasks.get(vu) == task_uuid:
+                del active_tasks[vu]
 
 
 def start_sam2_tracking_task(video_uuid, tracker_uuid, start_frame, end_frame, init_bboxes_text):
@@ -287,7 +305,9 @@ def extract_frames_task(video_uuid, target_fps=0.0):
                 success_enc, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), jpeg_quality])
                 if success_enc:
                     file_storage.save_frame_image(video_uuid, extracted_index, buffer.tobytes())
-                    database.update_extracted_frame_count(video_uuid, extracted_index + 1)
+                    if (extracted_index + 1) % 20 == 0 or (extracted_index + 1) == exact_frame_count:
+                        database.update_extracted_frame_count(video_uuid, extracted_index + 1)
+
                 extracted_index += 1
             native_count += 1
         vid.release()

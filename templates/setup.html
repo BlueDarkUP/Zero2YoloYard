@@ -105,11 +105,10 @@
                         <div class="over-limit-warning" id="warn-sam"><i class="bi bi-exclamation-triangle-fill"></i> EXCEEDS RECOMMENDED VRAM</div>
                     </div>
                     <div class="form-group col-md-4">
-                        <label class="font-weight-bold small text-muted">FEATURE EXTRACTOR</label>
-                        <select id="setup-feature-model" class="form-control custom-select bg-dark text-white border-secondary">
-                            <option value="none" data-level="0">DISABLE EXTRACTOR</option>
-                            <option value="mobilenet_v3_small" data-level="1">MOBILENET_V3_SMALL</option>
-                            <option value="mobilenet_v3_large" data-level="2">MOBILENET_V3_LARGE</option>
+                        <label class="font-weight-bold small text-muted">SAM 3.1 RETRIEVAL FEATURES</label>
+                        <select id="setup-feature-extractor" class="form-control custom-select bg-dark text-white border-secondary">
+                            <option value="off" data-level="0">DISABLE (SAVES VRAM)</option>
+                            <option value="on" data-level="1">ENABLE (SMART SELECT / LAM / BULK APPLY / QC)</option>
                         </select>
                         <div class="over-limit-warning" id="warn-feature"><i class="bi bi-exclamation-triangle-fill"></i> MAY CAUSE LAG</div>
                     </div>
@@ -179,8 +178,8 @@
                         <input type="range" class="custom-range" id="setup-nms-iou-threshold" min="0.1" max="1.0" step="0.05" value="0.70">
                     </div>
                     <div class="form-group col-md-4">
-                        <label class="d-flex justify-content-between small text-muted font-weight-bold"><span>PROTOTYPE TEMPERATURE</span> <span id="val-proto-temp" class="text-success">0.07</span></label>
-                        <input type="range" class="custom-range" id="setup-prototype-temperature" min="0.01" max="0.5" step="0.01" value="0.07">
+                        <label class="d-flex justify-content-between small text-muted font-weight-bold"><span>SAM3 RETRIEVAL CONFIDENCE</span> <span id="val-preannotation-conf" class="text-success">0.50</span></label>
+                        <input type="range" class="custom-range" id="setup-preannotation-conf" min="0.05" max="0.95" step="0.05" value="0.50">
                     </div>
                 </div>
                 <div class="form-row mt-2">
@@ -254,7 +253,7 @@ $(document).ready(function() {
 
         // 应用推荐配置
         setSelectByLevel('#setup-sam-model', rec.sam_level);
-        setSelectByLevel('#setup-feature-model', rec.feature_level);
+        $('#setup-feature-extractor').val(rec.feature_level > 0 ? 'on' : 'off');
         setSelectByLevel('#setup-workers', rec.worker_level);
         $('#setup-autocast').prop('checked', hw.has_cuda);
     });
@@ -266,17 +265,21 @@ $(document).ready(function() {
     }
 
     // 2. 警告触发器
-    $('#setup-sam-model, #setup-feature-model, #setup-workers').on('change', function() {
+    $('#setup-sam-model, #setup-workers').on('change', function() {
         const id = $(this).attr('id');
         const level = parseInt($(this).find(':selected').data('level'));
         let target = ''; let rec_level = 0;
 
         if (id.includes('sam')) { target = '#warn-sam'; rec_level = rec.sam_level; }
-        else if (id.includes('feature')) { target = '#warn-feature'; rec_level = rec.feature_level; }
         else if (id.includes('workers')) { target = '#warn-workers'; rec_level = rec.worker_level; }
 
         if (level > rec_level) $(target).slideDown();
         else $(target).slideUp();
+    });
+    $('#setup-feature-extractor').on('change', function() {
+        const isOn = $(this).val() === 'on';
+        if (isOn && rec.feature_level === 0) $('#warn-feature').slideDown();
+        else $('#warn-feature').slideUp();
     });
 
     // 3. 提交全量配置
@@ -286,7 +289,6 @@ $(document).ready(function() {
         $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> BOOTING CORE...');
 
         const samSelection = $('#setup-sam-model').val();
-        const featureSelection = $('#setup-feature-model').val();
 
         // 收集表单中所有的配置项
         const configPayload = {
@@ -295,8 +297,10 @@ $(document).ready(function() {
             enable_sam_model: samSelection !== "none",
             sam_model_checkpoint: samSelection === "none" ? "sam2.1_t.pt" : samSelection,
 
-            enable_feature_extractor: featureSelection !== "none",
-            feature_extractor_model_name: featureSelection === "none" ? "mobilenet_v3_small" : featureSelection,
+            // SAM3 迁移: 不再有"选哪个 MobileNet 变体"这个概念，enable_feature_extractor
+            // 现在是一个纯粹的开关，控制智能选择/LAM/批量应用/一致性检查这几个 SAM3
+            // 检索类功能是否启用。
+            enable_feature_extractor: $('#setup-feature-extractor').val() === 'on',
 
             max_workers: parseInt($('#setup-workers').val()),
             max_cache_size: parseInt($('#setup-max-cache-size').val()),
@@ -307,7 +311,7 @@ $(document).ready(function() {
 
             sam_mask_confidence: parseFloat($('#setup-sam-mask-confidence').val()),
             nms_iou_threshold: parseFloat($('#setup-nms-iou-threshold').val()),
-            prototype_temperature: parseFloat($('#setup-prototype-temperature').val()),
+            default_preannotation_conf: parseFloat($('#setup-preannotation-conf').val()),
             default_confidence: parseFloat($('#setup-default-confidence').val()),
 
             batch_tracking_conf: parseFloat($('#setup-batch-tracking-conf').val()),

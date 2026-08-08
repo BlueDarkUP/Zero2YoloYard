@@ -1,49 +1,35 @@
-/* ==========================================================================
-   MODERN UI SPEC v2.3 (Ultra-Minimalist & Typography Refactor)
-   Core Philosophy: High-End Productivity, Zero Visual Clutter, Data First.
-   Includes Bootstrap active-tab fixes and IDE Toolbar typography overhaul.
-   ========================================================================== */
+/* Modern UI Styles */
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
 
 :root {
-    /* --- 1. 极致黑白灰系统 (Pure & Zinc) --- */
-    --bg-body: #000000;              /* 纯黑背景，极致深邃，凸显内容 */
-    --bg-surface: #0a0a0b;           /* 极深的卡片底色 */
-    --bg-surface-secondary: #141415; /* 悬浮/次级交互色 */
+    --bg-body: #000000;
+    --bg-surface: #0a0a0b;
+    --bg-surface-secondary: #141415;
     --bg-input: #000000;
     --bg-hover: rgba(255, 255, 255, 0.04);
 
-    /* --- 2. 核心主色：放弃彩色，使用最高对比度的“纯净白” --- */
-    --color-primary: #ededed;        /* 柔和的纯白 */
+    --color-primary: #ededed;
     --color-primary-dim: rgba(255, 255, 255, 0.08);
-    --text-on-primary: #000000;      /* 主按钮上的黑字，极具现代感 */
+    --text-on-primary: #000000;
 
-    /* --- 3. 状态色降噪 (Muted Pastels)：降低饱和度，避免喧宾夺主 --- */
-    --color-success: #6ee7b7;        /* 柔和薄荷绿 */
-    --color-warning: #fcd34d;        /* 柔和沙黄 */
-    --color-danger:  #fca5a5;        /* 柔和脏粉/红 */
-    --color-info:    #7dd3fc;        /* 柔和冰蓝 */
+    --color-success: #6ee7b7;
+    --color-warning: #fcd34d;
+    --color-danger:  #fca5a5;
+    --color-info:    #7dd3fc;
 
-    /* --- 4. 极弱边框 --- */
-    --border-color: rgba(255, 255, 255, 0.08); /* 非常微弱的分割线 */
+    --border-color: rgba(255, 255, 255, 0.08);
     --border-active: rgba(255, 255, 255, 0.8);
 
-    /* --- 5. 文本层级结构 (严谨的灰度过渡) --- */
-    --text-main: rgba(255, 255, 255, 0.95);  /* 一级标题/关键数字 */
-    --text-body: #a1a1aa;                    /* 二级正文 (Zinc 400) */
-    --text-secondary: #71717a;               /* 三级辅助 (Zinc 500) */
-    --text-muted: #52525b;                   /* 四级微弱 (Zinc 600) */
+    --text-main: rgba(255, 255, 255, 0.95);
+    --text-body: #a1a1aa;
+    --text-secondary: #71717a;
+    --text-muted: #52525b;
 
-    /* --- 6. 空间与结构 --- */
     --radius-sm: 6px;
-    --radius-base: 10px; /* 稍微加大一点圆角，更显精致 */
+    --radius-base: 10px;
     --transition-smooth: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
-
-/* ==========================================================================
-   全局设置
-   ========================================================================== */
 
 body {
     background-color: var(--bg-body);
@@ -52,7 +38,6 @@ body {
     -webkit-font-smoothing: antialiased;
     line-height: 1.5;
     overflow-x: hidden;
-    /* 极致干净的背景，移除网格，让图片和视频标注区成为唯一的视觉焦点 */
     background-image: none;
 }
 
@@ -65,10 +50,6 @@ body::after, body::before { display: none !important; }
 
 a { color: var(--text-main); text-decoration: none; transition: var(--transition-smooth); }
 a:hover { color: var(--text-body); }
-
-/* ==========================================================================
-   排版与卡片
-   ========================================================================== */
 
 h1, h2, h3, h4, h5, h6, .navbar-brand, .card-title, .page-title {
     font-family: 'Inter', sans-serif;
@@ -90,7 +71,7 @@ code, pre { font-family: 'JetBrains Mono', monospace; color: var(--text-main); }
     background-color: var(--bg-surface);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-base);
-    box-shadow: none; /* 彻底扁平化，靠线条和背景色差区分 */
+    box-shadow: none;
     margin-bottom: 1.5rem;
 }
 .card::before, .card::after { display: none !important; }
@@ -106,10 +87,6 @@ code, pre { font-family: 'JetBrains Mono', monospace; color: var(--text-main); }
 .card-body { padding: 1.5rem; }
 .card-footer { background-color: var(--bg-surface-secondary); border-top: 1px solid var(--border-color); }
 
-/* ==========================================================================
-   组件：按钮 (高质感黑白灰)
-   ========================================================================== */
-
 .btn {
     border-radius: var(--radius-sm) !important;
     font-family: 'Inter', sans-serif;
@@ -122,7 +99,6 @@ code, pre { font-family: 'JetBrains Mono', monospace; color: var(--text-main); }
 }
 .btn:active { transform: scale(0.97); }
 
-/* 主按钮：白底黑字，极致抓眼 */
 .btn-primary {
     background-color: var(--color-primary) !important;
     border-color: var(--color-primary) !important;
@@ -130,7 +106,6 @@ code, pre { font-family: 'JetBrains Mono', monospace; color: var(--text-main); }
 }
 .btn-primary:hover { background-color: #ffffff !important; }
 
-/* 次级/描边按钮：暗灰色，悬停变白 */
 .btn-outline-primary, .btn-outline-secondary, .btn-outline-info, .btn-outline-success, .btn-outline-warning {
     background-color: transparent;
     border-color: var(--border-color);
@@ -148,10 +123,6 @@ code, pre { font-family: 'JetBrains Mono', monospace; color: var(--text-main); }
 .btn-danger { background-color: rgba(239, 68, 68, 0.1); color: var(--color-danger); border-color: rgba(239, 68, 68, 0.2); }
 .btn-danger:hover { background-color: rgba(239, 68, 68, 0.2); color: #fca5a5; }
 
-/* ==========================================================================
-   组件：表单与导航
-   ========================================================================== */
-
 .form-control, .custom-select, .custom-file-label {
     background-color: var(--bg-input) !important;
     border: 1px solid var(--border-color) !important;
@@ -165,7 +136,6 @@ code, pre { font-family: 'JetBrains Mono', monospace; color: var(--text-main); }
 }
 .form-control::placeholder { color: var(--text-muted); }
 
-/* Range Slider 现代化 */
 input[type=range] { -webkit-appearance: none; background: transparent; }
 input[type=range]::-webkit-slider-thumb {
     -webkit-appearance: none;
@@ -192,7 +162,6 @@ input[type=range]::-webkit-slider-runnable-track {
     -webkit-backdrop-filter: blur(12px);
 }
 
-/* --- Bootstrap Nav Tabs 现代化重构 --- */
 .nav-tabs {
     border-bottom: 1px solid var(--border-color);
 }
@@ -232,10 +201,6 @@ input[type=range]::-webkit-slider-runnable-track {
     opacity: 1;
 }
 
-/* ==========================================================================
-   组件：表格与列表 (Table & List)
-   ========================================================================== */
-
 .table { color: var(--text-body); font-size: 0.875rem; }
 .table th {
     border-top: none;
@@ -254,10 +219,6 @@ input[type=range]::-webkit-slider-runnable-track {
     color: var(--text-main);
     border-left: 2px solid var(--text-main);
 }
-
-/* ==========================================================================
-   【核心优化】徽章降噪 & 强行覆写 Bootstrap 文字色 (Clean Badges)
-   ========================================================================== */
 
 .badge {
     background: var(--bg-surface-secondary) !important;
@@ -288,15 +249,10 @@ input[type=range]::-webkit-slider-runnable-track {
     letter-spacing: 0.05em;
 }
 
-/* ==========================================================================
-   特定的 IDE LAYOUT 区域 & 画布 (IDE Layout & Canvas)
-   ========================================================================= */
-
 .ide-layout { background-color: var(--bg-body); }
 .ide-sidebar { background-color: var(--bg-surface); border-left: 1px solid var(--border-color); }
 .ide-toolbar { background-color: var(--bg-surface); border-bottom: 1px solid var(--border-color); padding: 0.5rem; display: flex; align-items: center; gap: 4px;}
 
-/* 针对工具栏内的按钮和类似元素强行覆写字体，做成精细标签感 */
 .ide-toolbar .btn, .nav.nav-tabs .nav-item {
     font-family: 'Inter', sans-serif !important;
     font-size: 0.8rem !important;
@@ -326,10 +282,6 @@ input[type=range]::-webkit-slider-runnable-track {
 .ide-canvas-wrapper { background-color: #000; background-image: none; }
 #canvas-container { border: 1px solid var(--border-color); border-radius: var(--radius-sm); overflow: hidden; }
 #canvas-container::before, #canvas-container::after { display: none !important; }
-
-/* ==========================================================================
-   特定组件：Modal, Toast & Animations
-   ========================================================================== */
 
 .modal-content {
     background-color: var(--bg-surface);
