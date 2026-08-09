@@ -1155,6 +1155,7 @@ def cluster_classification_images_route():
 
     # 1. 收集目标图片
     frames_to_cluster = []
+    all_valid_frames = []
     for vu in video_uuids:
         frames = database.get_video_frames(vu)
         for f in frames:
@@ -1173,21 +1174,24 @@ def cluster_classification_images_route():
             if not has_label and (f.get('bboxes_text') or '').strip():
                 has_label = True
             
-            if unlabeled_only and has_label:
-                continue
-
-            frames_to_cluster.append({
+            f_item = {
                 'video_uuid': vu,
                 'frame_number': f['frame_number'],
                 'tags': tags,
                 'has_label': has_label
-            })
+            }
+            all_valid_frames.append(f_item)
+            if not (unlabeled_only and has_label):
+                frames_to_cluster.append(f_item)
 
-    if len(frames_to_cluster) < 2:
-        return jsonify({'success': False, 'message': 'Not enough images to perform visual clustering.'}), 400
+    # 如果开启了"仅未标注"但未找到未标注图片，自动降级为全量图片聚类
+    if not frames_to_cluster and all_valid_frames:
+        frames_to_cluster = all_valid_frames
 
-    if len(frames_to_cluster) < num_clusters:
-        num_clusters = max(2, len(frames_to_cluster))
+    if not frames_to_cluster:
+        return jsonify({'success': False, 'message': '未找到可用于聚类的图片。'}), 400
+
+    num_clusters = max(1, min(len(frames_to_cluster), num_clusters))
 
     # 2. 提取特征向量
     feature_matrix = []
