@@ -1085,6 +1085,199 @@ def batch_apply_status_route(task_uuid):
     return jsonify({'success': True, **session})
 
 
+def extract_visual_feature_vector(image_bgr):
+    """
+    提取图像的高维视觉特征向量（HSV颜色直方图+空间2x2网格布局+灰度边缘纹理+长宽比）。
+    毫秒级高效运行。
+    """
+    if image_bgr is None:
+        return np.zeros(72, dtype=np.float32)
+    
+    h, w, _ = image_bgr.shape
+    aspect_ratio = float(w) / float(h) if h > 0 else 1.0
+    
+    # 1. 转换 HSV 空间颜色分布 (32维)
+    hsv = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2HSV)
+    hist_h = cv2.calcHist([hsv], [0], None, [16], [0, 180]).flatten()
+    hist_s = cv2.calcHist([hsv], [1], None, [8], [0, 256]).flatten()
+    hist_v = cv2.calcHist([hsv], [2], None, [8], [0, 256]).flatten()
+
+    cv2.normalize(hist_h, hist_h)
+    cv2.normalize(hist_s, hist_s)
+    cv2.normalize(hist_v, hist_v)
+
+    # 2. 空间 2x2 网格局部颜色布局 (32维)
+    half_h, half_w = max(1, h // 2), max(1, w // 2)
+    quad_hists = []
+    for r in [0, half_h]:
+        for c in [0, half_w]:
+            sub_hsv = hsv[r:min(h, r+half_h), c:min(w, c+half_w)]
+            if sub_hsv.size > 0:
+                q_h = cv2.calcHist([sub_hsv], [0], None, [8], [0, 180]).flatten()
+                cv2.normalize(q_h, q_h)
+                quad_hists.append(q_h)
+            else:
+                quad_hists.append(np.zeros(8, dtype=np.float32))
+
+    quad_feat = np.concatenate(quad_hists)
+
+    # 3. 灰度边缘/纹理特征 + 宽高比 (4维)
+    gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
+    edges = cv2.Canny(gray, 50, 150)
+    edge_density = np.float32([np.mean(edges) / 255.0])
+    mean_val = np.float32([np.mean(gray) / 255.0])
+    std_val = np.float32([np.std(gray) / 255.0])
+    ar_feat = np.float32([np.log10(aspect_ratio)])
+
+    return np.concatenate([hist_h, hist_s, hist_v, quad_feat, edge_density, mean_val, std_val, ar_feat])
+
+
+@app.route('/api/clusterClassificationImages', methods=['POST'])
+def cluster_classification_images_route():
+    """
+    提取图像视觉特征向量，使用 K-Means 进行无监督视觉聚类。
+    """
+    data = request.json or {}
+    dataset_uuid = data.get('dataset_uuid')
+    video_uuids = data.get('video_uuids')
+    num_clusters = int(data.get('num_clusters', 6))
+    unlabeled_only = bool(data.get('unlabeled_only', False))
+
+    if dataset_uuid and not video_uuids:
+        ds = database.get_dataset_entity(dataset_uuid)
+        if ds:
+            video_uuids = ds.get('video_uuids', [])
+
+    if not video_uuids:
+        return jsonify({'success': False, 'message': 'No video UUIDs provided.'}), 400
+
+    num_clusters = max(2, min(20, num_clusters))
+
+    # 1. 收集目标图片
+    frames_to_cluster = []
+    for vu in video_uuids:
+        frames = database.get_video_frames(vu)
+        for f in frames:
+            ann_json = (f.get('annotations_json') or '').strip()
+            has_label = False
+            tags = []
+            if ann_json:
+                try:
+                    from annotation_model import AnnotationData
+                    ann_data = AnnotationData.from_json(ann_json)
+                    tags = ann_data.classifications or []
+                    if ann_data.objects or ann_data.classifications:
+                        has_label = True
+                except Exception:
+                    pass
+            if not has_label and (f.get('bboxes_text') or '').strip():
+                has_label = True
+            
+            if unlabeled_only and has_label:
+                continue
+
+            frames_to_cluster.append({
+                'video_uuid': vu,
+                'frame_number': f['frame_number'],
+                'tags': tags,
+                'has_label': has_label
+            })
+
+    if len(frames_to_cluster) < 2:
+        return jsonify({'success': False, 'message': 'Not enough images to perform visual clustering.'}), 400
+
+    if len(frames_to_cluster) < num_clusters:
+        num_clusters = max(2, len(frames_to_cluster))
+
+    # 2. 提取特征向量
+    feature_matrix = []
+    valid_frames = []
+
+    for f_item in frames_to_cluster:
+        frame_path = file_storage.get_frame_path(f_item['video_uuid'], f_item['frame_number'])
+        if os.path.exists(frame_path):
+            img = cv2.imread(frame_path)
+            if img is not None:
+                feat = extract_visual_feature_vector(img)
+                feature_matrix.append(feat)
+                f_item['original_url'] = f"/media/annotated_frame/{f_item['video_uuid']}/{f_item['frame_number']}.jpg"
+                valid_frames.append(f_item)
+
+    if not feature_matrix:
+        return jsonify({'success': False, 'message': 'Failed to load frame images for feature extraction.'}), 404
+
+    feature_matrix = np.array(feature_matrix, dtype=np.float32)
+
+    # 3. K-Means 聚类
+    from sklearn.cluster import KMeans
+    kmeans = KMeans(n_clusters=num_clusters, random_state=42, n_init=5)
+    cluster_labels = kmeans.fit_predict(feature_matrix)
+
+    # 4. 组装聚类簇
+    clusters_dict = {c_idx: [] for c_idx in range(num_clusters)}
+    for idx, c_idx in enumerate(cluster_labels):
+        clusters_dict[int(c_idx)].append(valid_frames[idx])
+
+    result_clusters = []
+    for c_idx in range(num_clusters):
+        items = clusters_dict[c_idx]
+        if items:
+            result_clusters.append({
+                'cluster_id': c_idx,
+                'count': len(items),
+                'images': items
+            })
+
+    result_clusters.sort(key=lambda c: c['count'], reverse=True)
+
+    return jsonify({
+        'success': True,
+        'total_images': len(valid_frames),
+        'num_clusters': len(result_clusters),
+        'clusters': result_clusters
+    })
+
+
+@app.route('/api/batchTagClusterImages', methods=['POST'])
+def batch_tag_cluster_images_route():
+    """
+    一键批量给指定图片列表打上 Classification Tag
+    """
+    data = request.json or {}
+    target_images = data.get('target_images', [])
+    tag_name = (data.get('tag_name') or '').strip()
+
+    if not target_images or not isinstance(target_images, list):
+        return jsonify({'success': False, 'message': 'target_images must be a non-empty list.'}), 400
+    if not tag_name:
+        return jsonify({'success': False, 'message': 'tag_name is required.'}), 400
+
+    from annotation_model import AnnotationData
+
+    updated_count = 0
+    for item in target_images:
+        vu = item.get('video_uuid')
+        fn = item.get('frame_number')
+        if vu and fn is not None:
+            existing_ann_dict = database.get_frame_annotations(vu, fn)
+            if existing_ann_dict:
+                ann_data = AnnotationData.from_dict(existing_ann_dict)
+            else:
+                ann_data = AnnotationData()
+
+            if tag_name not in ann_data.classifications:
+                ann_data.classifications.append(tag_name)
+                database.save_frame_annotations(vu, fn, ann_data.to_json())
+                updated_count += 1
+
+    return jsonify({
+        'success': True,
+        'updated_count': updated_count,
+        'tag_name': tag_name,
+        'message': f"Successfully tagged {updated_count} images as '{tag_name}'."
+    })
+
+
 @app.route('/api/datasetsContainingVideo/<video_uuid>', methods=['GET'])
 def datasets_containing_video_route(video_uuid):
     """

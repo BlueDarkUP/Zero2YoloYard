@@ -596,6 +596,11 @@
                 <button id="btn-toggle-speedrun" class="btn btn-sm btn-warning text-dark font-weight-bold ml-2 px-3 font-monospace" style="box-shadow: 0 2px 4px rgba(0,0,0,0.2);" title="Toggle Speedrun Auto-Advance Mode (Global Setting)">
                     <i class="bi bi-lightning-charge-fill"></i> <span id="speedrun-status-text">SPEEDRUN: ON</span>
                 </button>
+                {% if video_entity.annotation_type == 'classification' %}
+                <button id="btn-open-cls-clustering" class="btn btn-sm btn-info text-dark font-weight-bold ml-2 px-3 font-monospace" style="box-shadow: 0 2px 4px rgba(0,0,0,0.2);" title="Open Visual Vector Clustering & Batch Tagging">
+                    <i class="bi bi-diagram-3-fill"></i> 聚类批量打标
+                </button>
+                {% endif %}
             </div>
         </div>
         <div class="ide-canvas-wrapper custom-scrollbar">
@@ -740,6 +745,48 @@
 <div class="modal-footer border-secondary bg-transparent pt-3 mt-2 border-top">
     <button type="button" class="btn btn-secondary rounded-0 text-uppercase" data-dismiss="modal">Cancel</button>
     <button type="button" id="confirm-apply-scope-btn" class="btn btn-primary rounded-0 text-uppercase font-weight-bold"><i class="bi bi-check2-circle"></i> Apply</button>
+</div>
+{% endcall %}
+
+<!-- Visual Clustering Modal for labelVideo.html -->
+<div class="modal fade" id="labelVideoClusteringModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable" role="document">
+        <div class="modal-content bg-dark text-white border-secondary">
+            <div class="modal-header border-secondary bg-black">
+                <h5 class="modal-title font-monospace text-primary"><i class="bi bi-diagram-3-fill mr-2"></i> 视觉向量聚类与一键批量打标</h5>
+                <button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <div class="modal-body bg-dark">
+                <div class="d-flex align-items-center justify-content-between mb-3 p-3 bg-black border border-secondary flex-wrap">
+                    <div class="d-flex align-items-center flex-wrap mb-2 mb-md-0">
+                        <label class="mr-2 mb-0 small text-muted font-weight-bold font-monospace">聚类簇数量 (K):</label>
+                        <select id="lv-cluster-k-select" class="form-control form-control-sm mr-3 bg-dark text-white border-secondary font-monospace" style="width: 110px;">
+                            <option value="4">4 簇</option>
+                            <option value="6" selected>6 簇</option>
+                            <option value="8">8 簇</option>
+                            <option value="12">12 簇</option>
+                        </select>
+                        <div class="custom-control custom-checkbox mr-3">
+                            <input type="checkbox" class="custom-control-input" id="lv-cluster-unlabeled-only" checked>
+                            <label class="custom-control-label small font-monospace text-warning" for="lv-cluster-unlabeled-only">仅扫描未标注帧</label>
+                        </div>
+                    </div>
+                    <button id="lv-run-clustering-btn" class="btn btn-sm btn-primary font-monospace font-weight-bold">
+                        <i class="bi bi-play-fill mr-1"></i> 执行视觉聚类扫描
+                    </button>
+                </div>
+
+                <div id="lv-clustering-loader" class="text-center my-5" style="display: none;">
+                    <div class="spinner-border text-primary" role="status"></div>
+                    <p class="mt-2 text-primary font-monospace small">正在提取高维视觉特征向量并进行 K-Means 聚类...</p>
+                </div>
+
+                <div id="lv-clustering-results-container" class="custom-scrollbar" style="max-height: 600px; overflow-y: auto;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Glassmorphism Keybinding Customization Modal -->
 <div id="keybind-modal" class="keybind-modal-backdrop" style="display: none;">
     <div class="keybind-modal-card">
@@ -862,6 +909,157 @@
         }
 
         updateSpeedrunBtnUI();
+
+        $('#btn-open-cls-clustering').on('click', function() {
+            $('#labelVideoClusteringModal').modal('show');
+            if ($('#lv-clustering-results-container').is(':empty')) {
+                fetchLvVisualClusters();
+            }
+        });
+
+        $('#lv-run-clustering-btn').on('click', function() {
+            fetchLvVisualClusters();
+        });
+
+        function fetchLvVisualClusters() {
+            const numClusters = parseInt($('#lv-cluster-k-select').val() || 6);
+            const unlabeledOnly = $('#lv-cluster-unlabeled-only').is(':checked');
+
+            $('#lv-clustering-loader').show();
+            $('#lv-clustering-results-container').empty();
+            $('#lv-run-clustering-btn').prop('disabled', true);
+
+            $.ajax({
+                url: '/api/clusterClassificationImages',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    video_uuids: ["{{ video_uuid }}"],
+                    num_clusters: numClusters,
+                    unlabeled_only: unlabeledOnly
+                }),
+                success: function(res) {
+                    $('#lv-clustering-loader').hide();
+                    $('#lv-run-clustering-btn').prop('disabled', false);
+
+                    if (res.success) {
+                        renderLvClusters(res.clusters);
+                    } else {
+                        $('#lv-clustering-results-container').html(`<div class="alert alert-warning font-monospace small m-3">${res.message}</div>`);
+                    }
+                },
+                error: function(xhr) {
+                    $('#lv-clustering-loader').hide();
+                    $('#lv-run-clustering-btn').prop('disabled', false);
+                    const msg = xhr.responseJSON ? xhr.responseJSON.message : "视觉聚类分析失败。";
+                    $('#lv-clustering-results-container').html(`<div class="alert alert-danger font-monospace small m-3">${msg}</div>`);
+                }
+            });
+        }
+
+        function renderLvClusters(clusters) {
+            const container = $('#lv-clustering-results-container').empty();
+
+            if (!clusters || clusters.length === 0) {
+                container.html('<div class="alert alert-info font-monospace small m-3">未发现可聚类的图片。</div>');
+                return;
+            }
+
+            let classOptionsHtml = '<option value="">-- 选择已有类名 --</option>';
+            if (window.availableClassifications && window.availableClassifications.length > 0) {
+                window.availableClassifications.forEach(c => {
+                    classOptionsHtml += `<option value="${c}">${c}</option>`;
+                });
+            }
+
+            clusters.forEach((cluster, idx) => {
+                const card = $(`
+                    <div class="card mb-4 border-secondary bg-black">
+                        <div class="card-header bg-dark d-flex justify-content-between align-items-center flex-wrap p-2 border-secondary">
+                            <div class="font-monospace text-primary font-weight-bold">
+                                <i class="bi bi-collection-fill mr-1"></i> 聚类簇 #${cluster.cluster_id + 1} (${cluster.count} 张图片)
+                            </div>
+                            <div class="d-flex align-items-center flex-wrap mt-2 mt-md-0">
+                                <select class="form-control form-control-sm mr-2 bg-dark text-white border-secondary font-monospace cluster-tag-select" style="width: 150px;">
+                                    ${classOptionsHtml}
+                                </select>
+                                <input type="text" class="form-control form-control-sm mr-2 bg-dark text-white border-secondary font-monospace cluster-custom-tag" placeholder="或输入新标签..." style="width: 140px;">
+                                <button class="btn btn-sm btn-success font-monospace font-weight-bold batch-tag-cluster-btn">
+                                    <i class="bi bi-tag-fill mr-1"></i> 🏷️ 一键打标全簇 (${cluster.count}张)
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-body p-2">
+                            <div class="row no-gutters cluster-grid-${idx}"></div>
+                        </div>
+                    </div>
+                `);
+
+                const grid = card.find(`.cluster-grid-${idx}`);
+                cluster.images.forEach(img => {
+                    const hasTag = img.tags && img.tags.length > 0;
+                    const tagBadge = hasTag ? `<span class="badge badge-info font-monospace position-absolute" style="top: 4px; left: 4px; z-index: 5;">${img.tags.join(', ')}</span>` : '';
+                    const thumbCol = $(`
+                        <div class="col-4 col-sm-3 col-md-2 p-1 position-relative">
+                            ${tagBadge}
+                            <img src="${img.original_url}" class="img-fluid border border-secondary rounded" style="height: 90px; width: 100%; object-fit: cover;">
+                        </div>
+                    `);
+                    grid.append(thumbCol);
+                });
+
+                card.find('.batch-tag-cluster-btn').on('click', function() {
+                    const $btn = $(this);
+                    const selectVal = card.find('.cluster-tag-select').val();
+                    const customVal = card.find('.cluster-custom-tag').val().trim();
+                    const tagName = customVal || selectVal;
+
+                    if (!tagName) {
+                        window.sysAlert('请先选择或输入要打上的标签名称！', 'warning');
+                        return;
+                    }
+
+                    $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> 打标中...');
+
+                    $.ajax({
+                        url: '/api/batchTagClusterImages',
+                        type: 'POST',
+                        contentType: 'application/json',
+                        data: JSON.stringify({
+                            target_images: cluster.images,
+                            tag_name: tagName
+                        }),
+                        success: function(tagRes) {
+                            if (tagRes.success) {
+                                window.sysAlert(`成功为聚类簇 #${cluster.cluster_id + 1} 的 ${tagRes.updated_count} 张图片打上标签 '${tagName}'！`, 'success');
+                                $btn.removeClass('btn-success').addClass('btn-secondary').html(`<i class="bi bi-check-lg mr-1"></i> 已标记为 '${tagName}'`);
+                                
+                                cluster.images.forEach(img => {
+                                    if (!img.tags.includes(tagName)) img.tags.push(tagName);
+                                });
+                                grid.find('.col-4, .col-sm-3, .col-md-2').each(function() {
+                                    if ($(this).find('.badge-info').length === 0) {
+                                        $(this).prepend(`<span class="badge badge-info font-monospace position-absolute" style="top: 4px; left: 4px; z-index: 5;">${tagName}</span>`);
+                                    } else {
+                                        $(this).find('.badge-info').text(tagName);
+                                    }
+                                });
+                                if (typeof window.reloadClassifications === 'function') window.reloadClassifications();
+                            } else {
+                                window.sysAlert('打标失败: ' + tagRes.message, 'error');
+                                $btn.prop('disabled', false).html('<i class="bi bi-tag-fill mr-1"></i> 🏷️ 一键打标全簇');
+                            }
+                        },
+                        error: function() {
+                            window.sysAlert('服务器打标失败。', 'error');
+                            $btn.prop('disabled', false).html('<i class="bi bi-tag-fill mr-1"></i> 🏷️ 一键打标全簇');
+                        }
+                    });
+                });
+
+                container.append(card);
+            });
+        }
 
         $('#btn-toggle-speedrun').on('click', function() {
             if (!window.currentSettings) window.currentSettings = {};
