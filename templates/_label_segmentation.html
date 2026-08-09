@@ -13,7 +13,29 @@
 
     <div class="alert alert-dark p-2 small mb-3 border-secondary text-muted" style="font-size: 0.75rem;">
         <i class="bi bi-info-circle mr-1"></i><b>Manual</b>: Click to add vertices. Right-click / Enter to close. Esc to cancel.<br>
-        <i class="bi bi-info-circle mr-1"></i><b>SAM Point / LAM</b>: Toggle tools above, then click canvas to auto-segment.
+        <i class="bi bi-info-circle mr-1"></i><b>Brush/Eraser</b>: Paint pixels freehand; auto-converts to Polygon.
+    </div>
+
+    <!-- Phase 2: Brush / Eraser Tool Controls -->
+    <div class="brush-tools-panel p-2 mb-3 border border-secondary rounded" style="background: rgba(255,255,255,0.03);">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="small font-weight-bold text-uppercase text-light"><i class="bi bi-paint-bucket mr-1"></i> Paint Tools</span>
+            <div>
+                <button id="btn-brush-tool" class="btn btn-xs btn-outline-info mr-1" title="Brush (Freehand Paint)">
+                    <i class="bi bi-brush"></i> Brush
+                </button>
+                <button id="btn-eraser-tool" class="btn btn-xs btn-outline-danger" title="Eraser (Subtract Area)">
+                    <i class="bi bi-eraser"></i> Eraser
+                </button>
+            </div>
+        </div>
+        <div id="brush-size-controls" class="mt-2" style="display:none;">
+            <div class="d-flex justify-content-between small text-muted mb-1">
+                <span>Brush Size</span>
+                <span id="brush-size-val" class="font-weight-bold text-info">15px</span>
+            </div>
+            <input type="range" class="custom-range" id="brush-size-slider" min="3" max="60" value="15">
+        </div>
     </div>
 
     <div id="segmentation-object-list" class="annotation-object-list">

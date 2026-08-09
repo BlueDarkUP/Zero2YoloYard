@@ -10,6 +10,30 @@ class SegmentationAnnotator {
         this.draggedVertexIndex = null;
         this.hoveredPolygonId = null;
 
+        this.activeTool = 'manual'; // 'manual', 'brush', 'eraser'
+        this.brushRadius = 15;
+        this.isPainting = false;
+        this.brushStrokePoints = [];
+
+        // DOM listeners for Paint Tools
+        $(document).on('click', '#btn-brush-tool', (e) => {
+            e.stopPropagation();
+            this.activeTool = (this.activeTool === 'brush') ? 'manual' : 'brush';
+            this.updateToolUI();
+            this.core.render();
+        });
+        $(document).on('click', '#btn-eraser-tool', (e) => {
+            e.stopPropagation();
+            this.activeTool = (this.activeTool === 'eraser') ? 'manual' : 'eraser';
+            this.updateToolUI();
+            this.core.render();
+        });
+        $(document).on('input', '#brush-size-slider', (e) => {
+            this.brushRadius = parseInt($(e.target).val());
+            $('#brush-size-val').text(this.brushRadius + 'px');
+            this.core.render();
+        });
+
         // Key listeners for closing, canceling, or deleting polygon
         window.addEventListener('keydown', (e) => {
             if ($(e.target).is('input, textarea')) return;
@@ -17,7 +41,11 @@ class SegmentationAnnotator {
             if (e.key === 'Enter') {
                 this.closePolygon();
             } else if (e.key === 'Escape') {
-                if (this.currentPolygonPoints.length > 0) {
+                if (this.isPainting) {
+                    this.isPainting = false;
+                    this.brushStrokePoints = [];
+                    this.core.render();
+                } else if (this.currentPolygonPoints.length > 0) {
                     this.currentPolygonPoints = [];
                     this.core.render();
                 } else if (this.core.selectedObjectId) {
@@ -39,6 +67,16 @@ class SegmentationAnnotator {
         });
     }
 
+    updateToolUI() {
+        $('#btn-brush-tool').toggleClass('active btn-info text-white', this.activeTool === 'brush');
+        $('#btn-eraser-tool').toggleClass('active btn-danger text-white', this.activeTool === 'eraser');
+        if (this.activeTool === 'brush' || this.activeTool === 'eraser') {
+            $('#brush-size-controls').slideDown(150);
+        } else {
+            $('#brush-size-controls').slideUp(150);
+        }
+    }
+
     getSelectedClass() {
         if (this.core.selectedClass) return this.core.selectedClass;
         if (typeof window.activeClass !== 'undefined' && window.activeClass) return window.activeClass;
@@ -56,6 +94,21 @@ class SegmentationAnnotator {
     onMouseDown(pt, e) {
         // If middle mouse or space panning, ignore
         if (e.button === 1 || this.core.isSpacePressed) return;
+
+        // Active Paint Brush / Eraser Tool
+        if (this.activeTool === 'brush' || this.activeTool === 'eraser') {
+            const currentClass = this.getSelectedClass();
+            if (!currentClass && this.activeTool === 'brush') {
+                if (typeof window.showToast === 'function') {
+                    window.showToast("⚠️ Please select a Class from the right sidebar first!", 3000);
+                }
+                return;
+            }
+            this.isPainting = true;
+            this.brushStrokePoints = [[pt.x, pt.y]];
+            this.core.render();
+            return;
+        }
 
         // Double Click to finish current polygon
         if (e.detail === 2) {
@@ -130,6 +183,12 @@ class SegmentationAnnotator {
     onMouseMove(pt, e) {
         this.hoverPoint = pt;
 
+        if (this.isPainting) {
+            this.brushStrokePoints.push([pt.x, pt.y]);
+            this.core.render();
+            return;
+        }
+
         // Handle vertex dragging
         if (this.draggedVertexIndex !== null && this.core.selectedObjectId) {
             const selectedObj = this.core.annotations.objects.find(o => o.id === this.core.selectedObjectId);
@@ -147,11 +206,81 @@ class SegmentationAnnotator {
     }
 
     onMouseUp(pt, e) {
+        if (this.isPainting) {
+            this.isPainting = false;
+            this.finishBrushStroke();
+            this.brushStrokePoints = [];
+            this.core.saveAnnotations();
+            this.core.render();
+            return;
+        }
+
         if (this.draggedVertexIndex !== null) {
             this.draggedVertexIndex = null;
             this.core.saveAnnotations();
             this.core.render();
         }
+    }
+
+    finishBrushStroke() {
+        if (!this.brushStrokePoints || this.brushStrokePoints.length === 0) return;
+
+        const currentClass = this.getSelectedClass() || 'object';
+        const r = this.brushRadius;
+        let boundary = [];
+
+        if (this.brushStrokePoints.length === 1) {
+            const center = this.brushStrokePoints[0];
+            const steps = 16;
+            for (let i = 0; i < steps; i++) {
+                const angle = (i / steps) * Math.PI * 2;
+                boundary.push([center[0] + r * Math.cos(angle), center[1] + r * Math.sin(angle)]);
+            }
+        } else {
+            const leftPts = [];
+            const rightPts = [];
+            for (let i = 0; i < this.brushStrokePoints.length; i++) {
+                const p = this.brushStrokePoints[i];
+                let dx = 0, dy = 0;
+                if (i < this.brushStrokePoints.length - 1) {
+                    dx = this.brushStrokePoints[i + 1][0] - p[0];
+                    dy = this.brushStrokePoints[i + 1][1] - p[1];
+                } else if (i > 0) {
+                    dx = p[0] - this.brushStrokePoints[i - 1][0];
+                    dy = p[1] - this.brushStrokePoints[i - 1][1];
+                }
+                const len = Math.hypot(dx, dy) || 1;
+                const nx = -dy / len;
+                const ny = dx / len;
+                leftPts.push([p[0] + nx * r, p[1] + ny * r]);
+                rightPts.unshift([p[0] - nx * r, p[1] - ny * r]);
+            }
+            boundary = leftPts.concat(rightPts);
+        }
+
+        boundary = this.simplifyPolygon(boundary);
+        if (boundary.length < 3) return;
+
+        if (this.activeTool === 'brush') {
+            const polyObj = {
+                id: 'poly_' + Date.now(),
+                type: 'polygon',
+                label: currentClass,
+                polygon: boundary
+            };
+            this.core.annotations.objects.push(polyObj);
+            this.core.selectedObjectId = polyObj.id;
+        }
+    }
+
+    simplifyPolygon(points) {
+        if (points.length <= 6) return points;
+        const result = [];
+        const step = Math.max(1, Math.floor(points.length / 32));
+        for (let i = 0; i < points.length; i += step) {
+            result.push(points[i]);
+        }
+        return result;
     }
 
     onContextMenu(pt, e) {
@@ -201,6 +330,36 @@ class SegmentationAnnotator {
 
     render(ctx, annotations, selectedId) {
         const objects = annotations.objects || [];
+
+        // Render Brush / Eraser Active Hover Cursor
+        if ((this.activeTool === 'brush' || this.activeTool === 'eraser') && this.hoverPoint) {
+            const radiusOnScreen = this.brushRadius;
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(this.hoverPoint.x, this.hoverPoint.y, radiusOnScreen, 0, 2 * Math.PI);
+            ctx.strokeStyle = (this.activeTool === 'brush') ? '#00f0ff' : '#ff3366';
+            ctx.lineWidth = 1.5 / this.core.zoom;
+            ctx.fillStyle = (this.activeTool === 'brush') ? 'rgba(0, 240, 255, 0.15)' : 'rgba(255, 51, 102, 0.15)';
+            ctx.fill();
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        // Render Active Painting Stroke
+        if (this.isPainting && this.brushStrokePoints.length > 0) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.lineWidth = (this.brushRadius * 2);
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.strokeStyle = (this.activeTool === 'brush') ? 'rgba(0, 255, 136, 0.4)' : 'rgba(255, 0, 85, 0.4)';
+            ctx.moveTo(this.brushStrokePoints[0][0], this.brushStrokePoints[0][1]);
+            for (let i = 1; i < this.brushStrokePoints.length; i++) {
+                ctx.lineTo(this.brushStrokePoints[i][0], this.brushStrokePoints[i][1]);
+            }
+            ctx.stroke();
+            ctx.restore();
+        }
 
         // 1. Render Existing Polygons
         for (let obj of objects) {
