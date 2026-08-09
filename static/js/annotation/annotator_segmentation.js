@@ -224,44 +224,92 @@ class SegmentationAnnotator {
 
     finishBrushStroke() {
         if (!this.brushStrokePoints || this.brushStrokePoints.length === 0) return;
+        if (!this.core.image) return;
 
+        const imgW = this.core.image.width;
+        const imgH = this.core.image.height;
         const currentClass = this.getSelectedClass() || 'object';
         const r = this.brushRadius;
-        let boundary = [];
 
-        if (this.brushStrokePoints.length === 1) {
-            const center = this.brushStrokePoints[0];
-            const steps = 16;
-            for (let i = 0; i < steps; i++) {
-                const angle = (i / steps) * Math.PI * 2;
-                boundary.push([center[0] + r * Math.cos(angle), center[1] + r * Math.sin(angle)]);
+        // Create offscreen canvas for rasterizing the stroke mask
+        const offCanvas = document.createElement('canvas');
+        offCanvas.width = imgW;
+        offCanvas.height = imgH;
+        const ctx = offCanvas.getContext('2d');
+
+        // Calculate bounding box of stroke + padding
+        let minX = imgW, minY = imgH, maxX = 0, maxY = 0;
+        for (let p of this.brushStrokePoints) {
+            minX = Math.min(minX, Math.floor(p[0] - r - 5));
+            minY = Math.min(minY, Math.floor(p[1] - r - 5));
+            maxX = Math.max(maxX, Math.ceil(p[0] + r + 5));
+            maxY = Math.max(maxY, Math.ceil(p[1] + r + 5));
+        }
+        minX = Math.max(0, minX); minY = Math.max(0, minY);
+        maxX = Math.min(imgW - 1, maxX); maxY = Math.min(imgH - 1, maxY);
+
+        // Draw existing selected polygon if editing/adding with brush/eraser
+        let selectedObj = this.core.selectedObjectId ? this.core.annotations.objects.find(o => o.id === this.core.selectedObjectId) : null;
+        if (selectedObj && selectedObj.polygon && selectedObj.polygon.length >= 3) {
+            ctx.beginPath();
+            ctx.moveTo(selectedObj.polygon[0][0], selectedObj.polygon[0][1]);
+            for (let i = 1; i < selectedObj.polygon.length; i++) {
+                ctx.lineTo(selectedObj.polygon[i][0], selectedObj.polygon[i][1]);
             }
-        } else {
-            const leftPts = [];
-            const rightPts = [];
-            for (let i = 0; i < this.brushStrokePoints.length; i++) {
-                const p = this.brushStrokePoints[i];
-                let dx = 0, dy = 0;
-                if (i < this.brushStrokePoints.length - 1) {
-                    dx = this.brushStrokePoints[i + 1][0] - p[0];
-                    dy = this.brushStrokePoints[i + 1][1] - p[1];
-                } else if (i > 0) {
-                    dx = p[0] - this.brushStrokePoints[i - 1][0];
-                    dy = p[1] - this.brushStrokePoints[i - 1][1];
-                }
-                const len = Math.hypot(dx, dy) || 1;
-                const nx = -dy / len;
-                const ny = dx / len;
-                leftPts.push([p[0] + nx * r, p[1] + ny * r]);
-                rightPts.unshift([p[0] - nx * r, p[1] - ny * r]);
-            }
-            boundary = leftPts.concat(rightPts);
+            ctx.closePath();
+            ctx.fillStyle = '#ffffff';
+            ctx.fill();
         }
 
-        boundary = this.simplifyPolygon(boundary);
+        // Rasterize new brush stroke onto offscreen canvas
+        ctx.save();
+        if (this.activeTool === 'eraser') {
+            ctx.globalCompositeOperation = 'destination-out';
+        } else {
+            ctx.fillStyle = '#ffffff';
+            ctx.strokeStyle = '#ffffff';
+        }
+
+        ctx.beginPath();
+        for (let p of this.brushStrokePoints) {
+            ctx.moveTo(p[0] + r, p[1]);
+            ctx.arc(p[0], p[1], r, 0, 2 * Math.PI);
+        }
+        ctx.fill();
+
+        if (this.brushStrokePoints.length > 1) {
+            ctx.lineWidth = r * 2;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.beginPath();
+            ctx.moveTo(this.brushStrokePoints[0][0], this.brushStrokePoints[0][1]);
+            for (let i = 1; i < this.brushStrokePoints.length; i++) {
+                ctx.lineTo(this.brushStrokePoints[i][0], this.brushStrokePoints[i][1]);
+            }
+            ctx.stroke();
+        }
+        ctx.restore();
+
+        // Extract 100% true outer boundary contour using Moore-Neighbor Tracing
+        let boundary = this.traceOuterBoundary(ctx, minX, minY, maxX, maxY, imgW, imgH);
+        if (boundary.length < 3) {
+            if (this.activeTool === 'eraser' && selectedObj) {
+                const idx = this.core.annotations.objects.findIndex(o => o.id === selectedObj.id);
+                if (idx >= 0) this.core.annotations.objects.splice(idx, 1);
+                this.core.selectedObjectId = null;
+            }
+            return;
+        }
+
+        // Simplify boundary contour using Ramer-Douglas-Peucker algorithm
+        boundary = this.simplifyPolygonRDP(boundary, 1.8);
         if (boundary.length < 3) return;
 
-        if (this.activeTool === 'brush') {
+        if (selectedObj && (this.activeTool === 'brush' || this.activeTool === 'eraser')) {
+            // Update existing polygon with new outer boundary
+            selectedObj.polygon = boundary;
+        } else if (this.activeTool === 'brush') {
+            // Add new polygon object
             const polyObj = {
                 id: 'poly_' + Date.now(),
                 type: 'polygon',
@@ -273,14 +321,85 @@ class SegmentationAnnotator {
         }
     }
 
-    simplifyPolygon(points) {
-        if (points.length <= 6) return points;
-        const result = [];
-        const step = Math.max(1, Math.floor(points.length / 32));
-        for (let i = 0; i < points.length; i += step) {
-            result.push(points[i]);
+    traceOuterBoundary(ctx, minX, minY, maxX, maxY, w, h) {
+        const imgData = ctx.getImageData(0, 0, w, h);
+        const data = imgData.data;
+        const isSolid = (x, y) => {
+            if (x < 0 || y < 0 || x >= w || y >= h) return false;
+            return data[(y * w + x) * 4 + 3] > 128;
+        };
+
+        // Find starting top-left boundary pixel
+        let startX = -1, startY = -1;
+        outerLoop: for (let y = minY; y <= maxY; y++) {
+            for (let x = minX; x <= maxX; x++) {
+                if (isSolid(x, y)) {
+                    startX = x; startY = y;
+                    break outerLoop;
+                }
+            }
         }
-        return result;
+        if (startX === -1) return [];
+
+        // Moore-Neighbor Tracing Algorithm
+        const boundary = [];
+        let currX = startX, currY = startY;
+        const dirs = [
+            [0, -1], [1, -1], [1, 0], [1, 1],
+            [0, 1], [-1, 1], [-1, 0], [-1, -1]
+        ];
+        let backDir = 6;
+        let stepCount = 0;
+        const maxSteps = (w + h) * 4;
+
+        do {
+            boundary.push([currX, currY]);
+            let foundNext = false;
+            for (let i = 0; i < 8; i++) {
+                const dirIdx = (backDir + i) % 8;
+                const nx = currX + dirs[dirIdx][0];
+                const ny = currY + dirs[dirIdx][1];
+                if (isSolid(nx, ny)) {
+                    currX = nx;
+                    currY = ny;
+                    backDir = (dirIdx + 5) % 8;
+                    foundNext = true;
+                    break;
+                }
+            }
+            if (!foundNext) break;
+            stepCount++;
+        } while ((currX !== startX || currY !== startY) && stepCount < maxSteps);
+
+        return boundary;
+    }
+
+    perpendicularDistance(p, lineStart, lineEnd) {
+        const dx = lineEnd[0] - lineStart[0];
+        const dy = lineEnd[1] - lineStart[1];
+        if (dx === 0 && dy === 0) {
+            return Math.hypot(p[0] - lineStart[0], p[1] - lineStart[1]);
+        }
+        const num = Math.abs(dy * p[0] - dx * p[1] + lineEnd[0] * lineStart[1] - lineEnd[1] * lineStart[0]);
+        const den = Math.hypot(dx, dy);
+        return num / den;
+    }
+
+    simplifyPolygonRDP(points, epsilon) {
+        if (points.length <= 4) return points;
+        let dmax = 0, index = 0;
+        const end = points.length - 1;
+        for (let i = 1; i < end; i++) {
+            const d = this.perpendicularDistance(points[i], points[0], points[end]);
+            if (d > dmax) { index = i; dmax = d; }
+        }
+        if (dmax > epsilon) {
+            const rec1 = this.simplifyPolygonRDP(points.slice(0, index + 1), epsilon);
+            const rec2 = this.simplifyPolygonRDP(points.slice(index), epsilon);
+            return rec1.slice(0, rec1.length - 1).concat(rec2);
+        } else {
+            return [points[0], points[end]];
+        }
     }
 
     onContextMenu(pt, e) {
