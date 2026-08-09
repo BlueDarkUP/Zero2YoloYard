@@ -23,8 +23,19 @@ class ClassificationAnnotator {
             });
         });
 
+        // Click Keybind Badge on Chip -> Open Keybind Prompt
+        $(document).off('click', '#classification-tag-container .keybind-chip-btn').on('click', '#classification-tag-container .keybind-chip-btn', function(e) {
+            e.stopPropagation();
+            e.preventDefault();
+            const className = $(this).data('class-name');
+            if (typeof window.triggerKeybindPrompt === 'function') {
+                window.triggerKeybindPrompt(className);
+            }
+        });
+
         // Click Tag Chip -> Assign Classification
-        $(document).off('click', '#classification-tag-container .class-chip').on('click', '#classification-tag-container .class-chip', function() {
+        $(document).off('click', '#classification-tag-container .class-chip').on('click', '#classification-tag-container .class-chip', function(e) {
+            if ($(e.target).hasClass('keybind-chip-btn')) return;
             const className = $(this).data('class-name');
             self.setClassification(className);
         });
@@ -37,17 +48,7 @@ class ClassificationAnnotator {
         const self = this;
         window.addEventListener('keydown', (e) => {
             if ($(e.target).is('input, textarea')) return;
-
-            // Number keys 1-9 for quick classification
-            const num = parseInt(e.key);
-            if (!isNaN(num) && num >= 1 && num <= 9) {
-                const availableClasses = self.getAvailableClasses();
-                if (num <= availableClasses.length) {
-                    const targetClass = availableClasses[num - 1];
-                    e.preventDefault();
-                    self.setClassification(targetClass);
-                }
-            } else if (e.key === 'c' || e.key === 'C') {
+            if (e.key === 'c' || e.key === 'C') {
                 // 'C' to clear classification
                 self.clearClassification();
             }
@@ -88,6 +89,9 @@ class ClassificationAnnotator {
         this.renderSidebarTags();
         this.core.render();
 
+        if (typeof window.triggerSpeedrunAutoNext === 'function') {
+            window.triggerSpeedrunAutoNext();
+        }
     }
 
     clearClassification() {
@@ -116,12 +120,15 @@ class ClassificationAnnotator {
 
         classes.forEach((cls, idx) => {
             const isAssigned = currentClasses.includes(cls);
-            const shortcutNum = (idx < 9) ? `[${idx + 1}] ` : '';
+            let keyStr = (window.customKeybindings && window.customKeybindings[cls]) 
+                ? window.customKeybindings[cls].toUpperCase() 
+                : ((idx < 9) ? String(idx + 1) : '');
+            const shortcutNum = keyStr ? `[${keyStr}] ` : '';
             const chip = $(`
                 <div class="class-chip px-3 py-2 border rounded text-truncate font-weight-bold ${isAssigned ? 'bg-warning text-dark border-warning' : 'bg-dark text-light border-secondary'}" 
                      data-class-name="${cls}" 
                      style="cursor: pointer; transition: all 0.2s ease; font-size: 0.85rem; user-select: none;">
-                    <span class="opacity-75 mr-1 font-monospace" style="font-size: 0.75rem;">${shortcutNum}</span>
+                    <span class="opacity-75 mr-1 font-monospace keybind-chip-btn" data-class-name="${cls}" style="font-size: 0.75rem; cursor: pointer;" title="Click to bind shortcut">${shortcutNum}</span>
                     <span>${cls}</span>
                     ${isAssigned ? '<i class="bi bi-check-circle-fill ml-2 text-dark"></i>' : ''}
                 </div>

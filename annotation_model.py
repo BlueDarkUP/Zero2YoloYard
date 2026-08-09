@@ -69,19 +69,25 @@ class AnnotationData:
         self.classifications = classifications if classifications is not None else []
 
     @staticmethod
+    def from_dict(data: Dict[str, Any]) -> 'AnnotationData':
+        if not data or not isinstance(data, dict):
+            return AnnotationData.empty()
+        objects = [AnnotationObject.from_dict(obj) for obj in data.get("objects", [])]
+        return AnnotationData(
+            version=data.get("version", 1),
+            objects=objects,
+            classifications=data.get("classifications", [])
+        )
+
+    @staticmethod
     def from_json(json_str: str) -> 'AnnotationData':
         if not json_str or json_str.strip() == "":
             return AnnotationData.empty()
         
         try:
             data = json.loads(json_str)
-            objects = [AnnotationObject.from_dict(obj) for obj in data.get("objects", [])]
-            return AnnotationData(
-                version=data.get("version", 1),
-                objects=objects,
-                classifications=data.get("classifications", [])
-            )
-        except json.JSONDecodeError:
+            return AnnotationData.from_dict(data)
+        except (json.JSONDecodeError, TypeError):
             return AnnotationData.empty()
 
     @staticmethod

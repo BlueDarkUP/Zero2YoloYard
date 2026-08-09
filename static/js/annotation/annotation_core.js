@@ -20,11 +20,13 @@ class AnnotationCore {
         this.startPanY = 0;
         this.isSpacePressed = false;
 
-        // Unified Annotation Data
+        // Unified Annotation Data & Undo History
         this.annotations = {
             objects: [],
             classifications: []
         };
+        this.history = [];
+        this.historyIndex = -1;
 
         this.selectedObjectId = null;
         this.selectedClass = null;
@@ -34,6 +36,43 @@ class AnnotationCore {
 
         this.initEvents();
         this.bindClassRegistry();
+    }
+
+    saveStateToHistory() {
+        this.history = this.history.slice(0, this.historyIndex + 1);
+        this.history.push(JSON.parse(JSON.stringify(this.annotations)));
+        if (this.history.length > 50) {
+            this.history.shift();
+        }
+        this.historyIndex = this.history.length - 1;
+    }
+
+    undo() {
+        if (this.historyIndex > 0) {
+            this.historyIndex--;
+            this.annotations = JSON.parse(JSON.stringify(this.history[this.historyIndex]));
+            this.selectedObjectId = null;
+            this.saveAnnotations(false);
+            this.updateSidebarList();
+            this.render();
+            if (typeof window.showToast === 'function') {
+                window.showToast('↩️ Undone', 1000);
+            }
+        }
+    }
+
+    redo() {
+        if (this.historyIndex < this.history.length - 1) {
+            this.historyIndex++;
+            this.annotations = JSON.parse(JSON.stringify(this.history[this.historyIndex]));
+            this.selectedObjectId = null;
+            this.saveAnnotations(false);
+            this.updateSidebarList();
+            this.render();
+            if (typeof window.showToast === 'function') {
+                window.showToast('↪️ Redone', 1000);
+            }
+        }
     }
 
     setAnnotator(annotatorInstance) {
@@ -189,12 +228,19 @@ class AnnotationCore {
                 } else {
                     this.annotations = { objects: [], classifications: [] };
                 }
+                // Reset history stack for this frame
+                this.history = [JSON.parse(JSON.stringify(this.annotations))];
+                this.historyIndex = 0;
+
                 this.updateSidebarList();
                 this.render();
             });
     }
 
-    saveAnnotations() {
+    saveAnnotations(recordHistory = true) {
+        if (recordHistory) {
+            this.saveStateToHistory();
+        }
         fetch('/saveFrameAnnotations', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

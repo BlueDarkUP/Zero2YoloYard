@@ -205,15 +205,15 @@
         <div class="row">
             <div class="col-lg-4 mb-4">
                 <div class="card h-100">
-                    <div class="card-header">INSTANCE DISTRIBUTION</div>
+                    <div class="card-header" id="card1-header">INSTANCE DISTRIBUTION</div>
                     <div class="card-body p-0">
                         <div class="chart-container border-0"><canvas id="class-counts-chart"></canvas></div>
                     </div>
                 </div>
             </div>
-            <div class="col-lg-4 mb-4">
+            <div class="col-lg-4 mb-4" id="card2-container">
                 <div class="card h-100">
-                    <div class="card-header">OBJECT DENSITY</div>
+                    <div class="card-header" id="card2-header">OBJECT DENSITY</div>
                     <div class="card-body p-0">
                         <div class="chart-container border-0"><canvas id="objects-per-image-chart"></canvas></div>
                     </div>
@@ -221,7 +221,7 @@
             </div>
             <div class="col-lg-4 mb-4">
                 <div class="card h-100">
-                    <div class="card-header">LUMINOSITY SPECTRUM</div>
+                    <div class="card-header" id="card3-header">LUMINOSITY SPECTRUM</div>
                     <div class="card-body p-0">
                         <div class="chart-container border-0"><canvas id="brightness-chart"></canvas></div>
                     </div>
@@ -232,15 +232,15 @@
         <div class="row">
              <div class="col-lg-4 mb-4">
                  <div class="card h-100">
-                     <div class="card-header">ASPECT RATIO</div>
+                     <div class="card-header" id="card4-header">ASPECT RATIO</div>
                      <div class="card-body p-0">
                          <div class="chart-container border-0"><canvas id="aspect-ratio-chart"></canvas></div>
                      </div>
                  </div>
              </div>
-            <div class="col-lg-8 mb-4">
+            <div class="col-lg-8 mb-4" id="spatial-heatmap-card-col">
                 <div class="card h-100">
-                    <div class="card-header">SPATIAL HEATMAP</div>
+                    <div class="card-header" id="card5-header">SPATIAL HEATMAP</div>
                     <div class="card-body p-0">
                         <div id="bbox-heatmap-container" class="chart-container border-0">
                             <canvas id="bbox-center-scatter-plot"></canvas>
@@ -250,7 +250,7 @@
             </div>
         </div>
 
-        <div class="row">
+        <div class="row" id="aug-simulation-row">
             <div class="col-12 mb-4">
                 <div class="card">
                     <div class="card-header">
@@ -309,7 +309,7 @@
 
                         <div class="d-flex align-items-center mt-2 mt-md-0">
                             <label class="mr-2 mb-0 small font-weight-bold text-muted text-uppercase">FILTER:</label>
-                            <select id="outlier-filter" class="form-control form-control-sm mr-2 rounded-0 bg-black text-white border-secondary" style="width: auto; max-width: 250px;">
+                            <select id="outlier-filter" class="form-control form-control-sm mr-2 rounded-0 bg-black text-white border-secondary" style="width: auto; max-width: 280px;">
                                 <option value="none">SHOW_ALL</option>
                                 <option value="area_smallest">SMALLEST_OBJECTS (TOP 10)</option>
                                 <option value="area_largest">LARGEST_OBJECTS (TOP 10)</option>
@@ -483,7 +483,10 @@ $(document).ready(function() {
                     response.previews.forEach(imgData => { gallery.append(`<div><img src="${imgData}" alt="Augmented Preview"></div>`); });
                 } else { gallery.html(`<div class="alert alert-danger w-100 rounded-0">${response.message}</div>`); }
             },
-            error: function() { gallery.html('<div class="alert alert-danger w-100 rounded-0">Server error.</div>'); },
+            error: function(xhr) { 
+                const msg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : 'Server communication error.';
+                gallery.html(`<div class="alert alert-warning w-100 rounded-0">${msg}</div>`); 
+            },
             complete: function() { loader.hide(); }
         });
     }
@@ -556,6 +559,34 @@ $(document).ready(function() {
         charts.classCounts = new Chart(ctx, { type: 'bar', data: chartData, options: options });
     }
 
+    function renderLabelsPerImage(labelsPerImage) {
+        const labels = Object.keys(labelsPerImage).map(k => `${k} Tag(s)`);
+        const chartData = { labels: labels, datasets: [{ label: 'Images', data: Object.values(labelsPerImage), backgroundColor: getColor('success') }] };
+        if(charts.objectsPerImage) charts.objectsPerImage.destroy();
+        const options = getChartThemeOptions();
+        options.scales.x.title.text = 'Tags / Image';
+        charts.objectsPerImage = new Chart($('#objects-per-image-chart'), { type: 'bar', data: chartData, options: options });
+    }
+
+    function renderCoOccurrence(coOccurrence) {
+        const keys = Object.keys(coOccurrence).slice(0, 10);
+        const values = Object.values(coOccurrence).slice(0, 10);
+        if (keys.length === 0) {
+            $('#bbox-heatmap-container').html('<p class="text-muted text-center pt-5 font-monospace">NO MULTI-LABEL CO-OCCURRENCE PAIRS FOUND</p>');
+            return;
+        }
+        const chartData = { labels: keys, datasets: [{ label: 'Co-occurrences', data: values, backgroundColor: getColor('primary') }] };
+        if(charts.centerScatter) charts.centerScatter.destroy();
+        const options = getChartThemeOptions();
+        options.indexAxis = 'y';
+        options.plugins.legend.display = false;
+        charts.centerScatter = new Chart(document.getElementById('bbox-center-scatter-plot').getContext('2d'), {
+            type: 'bar',
+            data: chartData,
+            options: options
+        });
+    }
+
     function renderObjectsPerImage(data) {
         const counts = data.reduce((acc, val) => { acc[val] = (acc[val] || 0) + 1; return acc; }, {});
         const chartData = { labels: Object.keys(counts), datasets: [{ label: 'Images', data: Object.values(counts), backgroundColor: getColor('success') }] };
@@ -572,7 +603,7 @@ $(document).ready(function() {
         charts.brightness = new Chart($('#brightness-chart'), { type: 'bar', data: chartData, options: getChartThemeOptions() });
     }
 
-    function renderAspectRatio(data) {
+    function renderAspectRatio(data, isClassification = false) {
         const logData = data.map(d => d > 0 ? Math.log10(d) : 0);
         const minLog = logData.length > 0 ? Math.min(...logData) : 0;
         const maxLog = logData.length > 0 ? Math.max(...logData) : 1;
@@ -586,10 +617,10 @@ $(document).ready(function() {
             }
             return l;
         });
-        const chartData = { labels: histData.labels, datasets: [{ label: 'BBoxes', data: histData.counts, backgroundColor: getColor('info') }] };
+        const chartData = { labels: histData.labels, datasets: [{ label: isClassification ? 'Images' : 'BBoxes', data: histData.counts, backgroundColor: getColor('info') }] };
         if(charts.aspectRatio) charts.aspectRatio.destroy();
         const options = getChartThemeOptions();
-        options.scales.x.title.text = 'W/H Ratio';
+        options.scales.x.title.text = isClassification ? 'Image W/H Ratio' : 'BBox W/H Ratio';
         charts.aspectRatio = new Chart($('#aspect-ratio-chart'), { type: 'bar', data: chartData, options: options });
     }
 
@@ -631,14 +662,22 @@ $(document).ready(function() {
             const goToLabelUrl = image.task_uuid ? `/labelVideo?task_uuid=${image.task_uuid}&frame=${image.frame}` : `/labelVideo?video_uuid=${image.video_uuid}&frame=${image.frame}`;
             const buttonDisabled = '';
 
+            let tagsHtml = '';
+            if (image.tags && image.tags.length > 0) {
+                tagsHtml = '<div class="mt-1 d-flex flex-wrap" style="gap: 2px;">' +
+                    image.tags.map(t => `<span class="badge badge-info" style="font-size: 0.65rem; background: rgba(0, 240, 255, 0.15); border: 1px solid rgba(0, 240, 255, 0.4); color: #00f0ff; font-family: monospace;">${t}</span>`).join('') +
+                    '</div>';
+            }
+
             const item = document.createElement('div');
             item.className = 'gallery-item fade-in';
-            item.setAttribute('data-index', i); // Keep index for reference
+            item.setAttribute('data-index', i);
             item.innerHTML = `
                 <img src="${annotatedUrl}" alt="Frame ${image.frame}" loading="lazy">
                 <div class="caption">
                     <span class="caption-text text-truncate w-100" title="${image.video}">FILE: ${image.video}</span>
                     <span class="text-muted small">SEQ: ${image.frame}</span>
+                    ${tagsHtml}
                     <a href="${goToLabelUrl}" class="btn btn-sm btn-outline-primary rounded-0 mt-2 ${buttonDisabled}">
                         <i class="bi bi-pencil-square"></i> EDIT
                     </a>
@@ -661,7 +700,7 @@ $(document).ready(function() {
         }
     });
 
-    // --- Array Filtering System (Instead of DOM hiding) ---
+    // --- Array Filtering System ---
     function filterGalleryByClass(className) {
         const classImageIndices = [];
         for (const [imageIndex, classList] of Object.entries(imageClassMap)) {
@@ -669,7 +708,6 @@ $(document).ready(function() {
         }
         $('#outlier-filter').val('none');
 
-        // Filter the actual data array and re-render
         const filteredImages = fullGalleryData.filter((img, idx) => classImageIndices.includes(idx));
         renderGallery(filteredImages);
     }
@@ -683,8 +721,20 @@ $(document).ready(function() {
         const filterType = $(this).val();
         if (filterType === 'none') { resetGalleryFilter(); return; }
 
+        if (filterType.startsWith('class_')) {
+            const cls = filterType.replace('class_', '');
+            filterGalleryByClass(cls);
+            return;
+        }
+
         let sortedBboxes, targetImageIndices = [];
         switch(filterType) {
+            case 'multi_label_only':
+                targetImageIndices = Object.keys(imageClassMap).filter(k => imageClassMap[k].length > 1).map(Number);
+                break;
+            case 'single_label_only':
+                targetImageIndices = Object.keys(imageClassMap).filter(k => imageClassMap[k].length === 1).map(Number);
+                break;
             case 'area_smallest': sortedBboxes = [...allBboxesData].sort((a, b) => a.area - b.area); break;
             case 'area_largest': sortedBboxes = [...allBboxesData].sort((a, b) => b.area - a.area); break;
             case 'ar_smallest': sortedBboxes = [...allBboxesData].sort((a, b) => Math.abs(a.aspect_ratio - 1) - Math.abs(b.aspect_ratio - 1)); break;
@@ -716,17 +766,37 @@ $(document).ready(function() {
 
                 renderSummaryAndWarnings(response.summary_text, response.warnings);
                 renderClassCounts(response.class_counts);
-                renderObjectsPerImage(response.objects_per_image);
-                renderAspectRatio(response.aspect_ratios);
-                renderCenterScatterPlot(response.center_points);
-                if (response.brightness_levels) renderBrightness(response.brightness_levels);
-                if (response.annotator_stats) renderAnnotatorStats(response.annotator_stats);
 
-                // Using the optimized DOM rendering
-                renderGallery(fullGalleryData);
+                if (response.is_classification) {
+                    $('#card1-header').text('CLASS SAMPLE DISTRIBUTION');
+                    $('#card2-header').text('LABEL CARDINALITY (TAGS / IMAGE)');
+                    $('#card3-header').text('LUMINOSITY SPECTRUM');
+                    $('#card4-header').text('IMAGE ASPECT RATIO (W/H)');
+                    $('#card5-header').text('MULTI-LABEL CO-OCCURRENCE PAIRS');
+                    $('#aug-simulation-row').show();
 
+                    renderLabelsPerImage(response.labels_per_image || {});
+                    renderCoOccurrence(response.co_occurrence || {});
+
+                    const select = $('#outlier-filter');
+                    select.empty();
+                    select.append('<option value="none">SHOW_ALL</option>');
+                    select.append('<option value="multi_label_only">MULTI-LABEL ONLY (>1 TAG)</option>');
+                    select.append('<option value="single_label_only">SINGLE-LABEL ONLY (1 TAG)</option>');
+                    if (response.class_counts) {
+                        Object.keys(response.class_counts).forEach(cls => {
+                            select.append(`<option value="class_${cls}">CLASS: ${cls} (${response.class_counts[cls]})</option>`);
+                        });
+                    }
+                } else {
+                    renderObjectsPerImage(response.objects_per_image);
+                    renderCenterScatterPlot(response.center_points);
+                }
+
+                // Setup live Data Augmentation simulation preview for both CLS and DET/SEG modes
                 setupAugmentationListeners('#preview-aug-controls');
                 const sourceSelector = $('#aug-preview-source-selector');
+                sourceSelector.empty();
                 const sampleImages = fullGalleryData.slice(0, 5);
                 samplePoolData = sampleImages.map(img => ({ video_uuid: img.video_uuid, frame_number: img.frame }));
 
@@ -744,6 +814,13 @@ $(document).ready(function() {
                     $(this).addClass('active');
                     triggerAugmentationPreview();
                 });
+
+                renderAspectRatio(response.aspect_ratios, response.is_classification);
+                if (response.brightness_levels) renderBrightness(response.brightness_levels);
+                if (response.annotator_stats) renderAnnotatorStats(response.annotator_stats);
+
+                // Render gallery with thumbnail tags
+                renderGallery(fullGalleryData);
             } else { $('#loading-indicator').html(`<div class="alert alert-danger shadow-sm rounded-0">ERROR: ${response.message}</div>`); }
         },
         error: function() { $('#loading-indicator').html('<div class="alert alert-danger shadow-sm rounded-0">SERVER COMMUNICATION FAILED</div>'); }

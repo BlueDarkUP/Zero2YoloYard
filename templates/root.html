@@ -539,6 +539,13 @@
                                         </div>
                                     </div>
                                     <div class="form-group col-md-6">
+                                        <label class="small text-muted font-weight-bold">SPEEDRUN_MODE <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="speedrun_auto_next"></i></label>
+                                        <div class="custom-control custom-switch mt-2">
+                                            <input type="checkbox" class="custom-control-input" id="setting-speedrun-auto-next">
+                                            <label class="custom-control-label font-monospace text-warning" for="setting-speedrun-auto-next">⚡ AUTO_NEXT_ON_TAG</label>
+                                        </div>
+                                    </div>
+                                    <div class="form-group col-md-6">
                                         <label class="small text-muted font-weight-bold">COMPRESSION_QUALITY <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="jpeg_quality"></i></label>
                                         <input type="number" id="setting-jpeg-quality" class="form-control" min="10" max="100" step="5">
                                     </div>
@@ -759,6 +766,7 @@
 
             'default_annotation_mode': { title: 'DEFAULT_TOOL', desc: 'Primary active tool automatically equipped upon entering the IDE.', tune: 'Select based on workflow preference.', when: 'Change to avoid manually switching to your favorite tool every time you open a frame.' },
             'autosave_enabled': { title: 'AUTO_SAVE', desc: 'Automatically commits bbox data to disk during timeline scrubbing or navigation.', tune: 'Highly recommended to keep ENABLED.', when: 'Disable only when performing destructive testing and you wish to discard changes.' },
+            'speedrun_auto_next': { title: 'SPEEDRUN_MODE', desc: 'Automatically advances to the next frame immediately after assigning a classification label.', tune: 'Enable for ultra-fast single-pass classification tagging.', when: 'Turn OFF if you need to double-check or assign multiple tags per image before moving forward.' },
             'jpeg_quality': { title: 'COMPRESSION_QUALITY', desc: 'JPEG compression ratio used when extracting raw frames from the source .mp4.', tune: '10 (Heavy Artifacts) -> 100 (Lossless).', when: 'Decrease to save disk space if absolute pixel clarity is not strictly required.' },
             'opencv_tracker': { title: 'LEGACY_TRACKER', desc: 'Fallback mathematical tracking algorithms (OpenCV) requiring zero GPU inference.', tune: 'CSRT (Accurate) / MOSSE (Ultra-fast).', when: 'Use to conserve power or when tracking perfectly rigid, translating objects without AI overhead.' }
         };
@@ -1047,6 +1055,7 @@
                     // 4. Workflow
                     $('#setting-default-annotation-mode').val(s.default_annotation_mode);
                     $('#setting-autosave-enabled').prop('checked', s.autosave_enabled);
+                    $('#setting-speedrun-auto-next').prop('checked', s.speedrun_auto_next !== false);
                     $('#setting-jpeg-quality').val(s.frame_extraction_jpeg_quality);
                     $('#setting-opencv-tracker').val(s.default_opencv_tracker);
 
@@ -1242,6 +1251,7 @@
 
                 default_annotation_mode: $('#setting-default-annotation-mode').val(),
                 autosave_enabled: $('#setting-autosave-enabled').is(':checked'),
+                speedrun_auto_next: $('#setting-speedrun-auto-next').is(':checked'),
                 frame_extraction_jpeg_quality: parseInt($('#setting-jpeg-quality').val()),
                 default_opencv_tracker: $('#setting-opencv-tracker').val(),
                 cache_save_interval_seconds: parseInt($('#setting-cache-save-interval').val()) || 30,

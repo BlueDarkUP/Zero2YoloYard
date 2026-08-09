@@ -1053,6 +1053,7 @@ def apply_class_to_videos_route():
     video_uuids = data.get('video_uuids')
     class_name = data.get('class_name')
     confidence_threshold = float(data.get('confidence_threshold', settings.get('default_preannotation_conf', 0.5)))
+    process_all_frames = bool(data.get('process_all_frames', True))
 
     if not video_uuids or not isinstance(video_uuids, list):
         return jsonify({'success': False, 'message': 'video_uuids (non-empty list) is required.'}), 400
@@ -1069,7 +1070,7 @@ def apply_class_to_videos_route():
     task_uuid = str(uuid.uuid4())
     threading.Thread(
         target=background_tasks.apply_class_to_videos_task,
-        args=(task_uuid, video_uuids, class_name, confidence_threshold, app.app_context()),
+        args=(task_uuid, video_uuids, class_name, confidence_threshold, app.app_context(), process_all_frames),
         name=f"ApplyClass-{task_uuid[:8]}"
     ).start()
 
@@ -1491,6 +1492,11 @@ def get_dataset_analysis_data(dataset_uuid):
     tasks_by_video = {vu: database.get_tasks_for_video(vu) for vu in video_uuids}
     video_info_cache = {vu: database.get_video_entity(vu) for vu in video_uuids}
 
+    export_format = dataset.get('export_format', '')
+    is_classification = (export_format in ['folder_classification', 'yolo_cls']) or any(
+        video_info_cache.get(vu, {}).get('annotation_type') == 'classification' for vu in video_uuids
+    )
+
     def get_task_for_frame(video_uuid, frame_number):
         for task in tasks_by_video.get(video_uuid, []):
             if task['start_frame'] <= frame_number <= task['end_frame']:
@@ -1511,6 +1517,8 @@ def get_dataset_analysis_data(dataset_uuid):
             })
 
     class_counts = Counter()
+    labels_per_image_counts = Counter()
+    co_occurrence_counts = Counter()
     aspect_ratios, objects_per_image, center_points, brightness_levels = [], [], [], []
     all_bboxes_for_outliers = []
     suspicious_pairs = []
@@ -1522,10 +1530,14 @@ def get_dataset_analysis_data(dataset_uuid):
         video_uuid, frame_number = frame['video_uuid'], frame['frame_number']
         rects, labels = [], []
 
-        # 1. 优先解析 annotations_json (适用于分割 Polygon、姿态 Keypoint、矢量 Bbox)
+        # 1. 优先解析 annotations_json (适用于分割 Polygon、姿态 Keypoint、矢量 Bbox 和 图像分类 Tag)
         if frame.get('annotations_json') and frame['annotations_json'].strip():
             try:
                 ann_data = AnnotationData.from_json(frame['annotations_json'])
+                if ann_data.classifications:
+                    for cls_name in ann_data.classifications:
+                        labels.append(cls_name)
+
                 for obj in ann_data.objects:
                     label = obj.label
                     rect = None
@@ -1543,35 +1555,54 @@ def get_dataset_analysis_data(dataset_uuid):
                 logging.error(f"Error parsing annotations_json for frame {video_uuid}/{frame_number}: {e}")
 
         # 2. 备用解析传统 bboxes_text (适用于早期检测模式)
-        if not rects and frame.get('bboxes_text') and frame['bboxes_text'].strip():
+        if not rects and not labels and frame.get('bboxes_text') and frame['bboxes_text'].strip():
             rects, labels, _ = convert_text_to_rects_and_labels(frame['bboxes_text'])
 
-        image_class_map[i] = list(set(labels))
-        objects_per_image.append(len(labels))
+        unique_frame_labels = list(set(labels))
+        image_class_map[i] = unique_frame_labels
 
-        if len(rects) > 1:
-            for (idx1, rect1), (idx2, rect2) in itertools.combinations(enumerate(rects), 2):
-                iou = calculate_iou(rect1, rect2)
-                if iou > 0.95:
-                    suspicious_pairs.append({
-                        'image_index': i, 'iou': iou,
-                        'box1_label': labels[idx1], 'box2_label': labels[idx2]
-                    })
+        if is_classification:
+            # Classification-specific metrics
+            for cls_name in unique_frame_labels:
+                class_counts[cls_name] += 1
+            
+            labels_per_image_counts[len(unique_frame_labels)] += 1
 
-        for j, rect in enumerate(rects):
-            class_counts[labels[j]] += 1
-            width, height = int(rect[2] - rect[0]), int(rect[3] - rect[1])
+            # Multi-label co-occurrence pairs
+            if len(unique_frame_labels) > 1:
+                for c1, c2 in itertools.combinations(sorted(unique_frame_labels), 2):
+                    co_occurrence_counts[f"{c1} + {c2}"] += 1
+            
+            # Raw image aspect ratio calculation
+            v_info = video_info_cache.get(video_uuid, {})
+            if v_info.get('width', 0) > 0 and v_info.get('height', 0) > 0:
+                aspect_ratios.append(round(float(v_info['width']) / float(v_info['height']), 2))
+        else:
+            # Detection/Segmentation metrics
+            objects_per_image.append(len(labels))
+            if len(rects) > 1:
+                for (idx1, rect1), (idx2, rect2) in itertools.combinations(enumerate(rects), 2):
+                    iou = calculate_iou(rect1, rect2)
+                    if iou > 0.95:
+                        suspicious_pairs.append({
+                            'image_index': i, 'iou': iou,
+                            'box1_label': labels[idx1], 'box2_label': labels[idx2]
+                        })
 
-            if width > 0 and height > 0:
-                aspect_ratios.append(width / height)
-                video_info = video_info_cache.get(video_uuid)
-                if video_info and video_info.get('width', 0) > 0 and video_info.get('height', 0) > 0:
-                    center_x = (float(rect[0]) + float(rect[2])) / 2.0 / float(video_info['width'])
-                    center_y = (float(rect[1]) + float(rect[3])) / 2.0 / float(video_info['height'])
-                    center_points.append({'x': center_x, 'y': center_y})
-                all_bboxes_for_outliers.append(
-                    {'id': f'{video_uuid}_{frame_number}_{j}', 'image_index': i, 'area': width * height,
-                     'aspect_ratio': width / height})
+            for j, rect in enumerate(rects):
+                class_counts[labels[j]] += 1
+                width, height = int(rect[2] - rect[0]), int(rect[3] - rect[1])
+
+                if width > 0 and height > 0:
+                    aspect_ratios.append(width / height)
+                    video_info = video_info_cache.get(video_uuid)
+                    if video_info and video_info.get('width', 0) > 0 and video_info.get('height', 0) > 0:
+                        center_x = (float(rect[0]) + float(rect[2])) / 2.0 / float(video_info['width'])
+                        center_y = (float(rect[1]) + float(rect[3])) / 2.0 / float(video_info['height'])
+                        center_points.append({'x': center_x, 'y': center_y})
+                    all_bboxes_for_outliers.append(
+                        {'id': f'{video_uuid}_{frame_number}_{j}', 'image_index': i, 'area': width * height,
+                         'aspect_ratio': width / height})
 
     # 随机抽样计算亮度分布 (最多200帧)
     if all_frames:
@@ -1607,7 +1638,7 @@ def get_dataset_analysis_data(dataset_uuid):
                     if frame.get('annotations_json') and frame['annotations_json'].strip():
                         try:
                             ann_data = AnnotationData.from_json(frame['annotations_json'])
-                            frame_labels = [o.label for o in ann_data.objects if o.label]
+                            frame_labels = ann_data.classifications or [o.label for o in ann_data.objects if o.label]
                         except Exception:
                             pass
                     if not frame_labels and frame.get('bboxes_text'):
@@ -1622,8 +1653,9 @@ def get_dataset_analysis_data(dataset_uuid):
     gallery_images = [{
         'original_url': f"/media/frames/{f['video_uuid']}/frame_{f['frame_number']:05d}.jpg",
         'video': f['video_description'], 'frame': f['frame_number'], 'video_uuid': f['video_uuid'],
-        'task_uuid': get_task_for_frame(f['video_uuid'], f['frame_number'])
-    } for f in all_frames]
+        'task_uuid': get_task_for_frame(f['video_uuid'], f['frame_number']),
+        'tags': image_class_map.get(i, [])
+    } for i, f in enumerate(all_frames)]
 
     warnings = []
     total_instances = sum(class_counts.values())
@@ -1632,25 +1664,33 @@ def get_dataset_analysis_data(dataset_uuid):
         for class_name, count in class_counts.items():
             if count < 10 or count < avg_instances * 0.1:
                 warnings.append(
-                    f"<b>Class Imbalance:</b> Class '{class_name}' has very few instances ({count}), which may affect model performance.")
+                    f"<b>Class Imbalance:</b> Class '{class_name}' has very few images ({count}), which may affect classification performance.")
 
-    small_object_threshold = 100
-    small_object_count = sum(1 for bbox in all_bboxes_for_outliers if bbox['area'] < small_object_threshold)
-    if small_object_count > 0:
-        warnings.append(
-            f"<b>Small Object Warning:</b> Found {small_object_count} objects with an area smaller than {small_object_threshold} pixels. Please check if they are labeling errors.")
+    if not is_classification:
+        small_object_threshold = 100
+        small_object_count = sum(1 for bbox in all_bboxes_for_outliers if bbox['area'] < small_object_threshold)
+        if small_object_count > 0:
+            warnings.append(
+                f"<b>Small Object Warning:</b> Found {small_object_count} objects with an area smaller than {small_object_threshold} pixels. Please check if they are labeling errors.")
 
-    if suspicious_pairs:
-        warnings.append(
-            f"<b>Potential Duplicate Warning:</b> Found {len(suspicious_pairs)} pairs of bounding boxes with high overlap (IoU > 0.95), which might be duplicate labels.")
+        if suspicious_pairs:
+            warnings.append(
+                f"<b>Potential Duplicate Warning:</b> Found {len(suspicious_pairs)} pairs of bounding boxes with high overlap (IoU > 0.95), which might be duplicate labels.")
 
-    summary_text = f"This dataset contains <strong>{len(class_counts)}</strong> classes, with a total of <strong>{total_instances}</strong> instances across <strong>{len(all_frames)}</strong> labeled images."
+    if is_classification:
+        multi_label_images = sum(c for k, c in labels_per_image_counts.items() if k > 1)
+        summary_text = f"This Classification dataset contains <strong>{len(class_counts)}</strong> unique classes across <strong>{len(all_frames)}</strong> labeled images. (Multi-label images: <strong>{multi_label_images}</strong>)"
+    else:
+        summary_text = f"This dataset contains <strong>{len(class_counts)}</strong> classes, with a total of <strong>{total_instances}</strong> instances across <strong>{len(all_frames)}</strong> labeled images."
 
     return jsonify({
         'success': True,
+        'is_classification': is_classification,
         'summary_text': summary_text,
         'warnings': warnings,
         'class_counts': dict(class_counts),
+        'labels_per_image': dict(labels_per_image_counts),
+        'co_occurrence': dict(co_occurrence_counts),
         'aspect_ratios': aspect_ratios,
         'objects_per_image': objects_per_image,
         'center_points': center_points,
@@ -1846,7 +1886,45 @@ def preview_augmentations():
                                                                       video_info['height'], class_map)
 
         if not yolo_bboxes:
-            return jsonify({'success': False, 'message': 'No valid labels found for this frame.'}), 404
+            # 3. 图像分类模式 / 无框图像 的通用图像数据增强预览
+            classifications_data = []
+            if frame_item.get('annotations_json') and frame_item['annotations_json'].strip():
+                from annotation_model import AnnotationData
+                try:
+                    ann_data = AnnotationData.from_json(frame_item['annotations_json'])
+                    classifications_data = ann_data.classifications or []
+                except Exception:
+                    pass
+
+            from exporters.detection.yolo_detect import build_augmentation_pipeline_for_keypoints
+            augmentation_options['mosaic'] = {'enabled': False}
+            pipeline = build_augmentation_pipeline_for_keypoints(augmentation_options)
+
+            previews = []
+            for _ in range(6):
+                if pipeline:
+                    transformed = pipeline(image=image_rgb, keypoints=[[10.0, 10.0]], keypoint_labels=[0])
+                    aug_image_rgb = transformed['image']
+                else:
+                    aug_image_rgb = image_rgb.copy()
+
+                vis_image = cv2.cvtColor(aug_image_rgb, cv2.COLOR_RGB2BGR)
+
+                # 若包含分类 Tag，在图像上方绘制亮色 Badge 标签
+                if classifications_data:
+                    x_offset = 15
+                    for cls_tag in classifications_data:
+                        (text_w, text_h), _ = cv2.getTextSize(cls_tag, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
+                        color = string_to_color_bgr(cls_tag)
+                        cv2.rectangle(vis_image, (x_offset, 15), (x_offset + text_w + 14, 15 + text_h + 14), color, -1)
+                        cv2.putText(vis_image, cls_tag, (x_offset + 7, 15 + text_h + 5), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+                        x_offset += text_w + 24
+
+                _, buffer = cv2.imencode('.jpg', vis_image)
+                img_base64 = base64.b64encode(buffer).decode('utf-8')
+                previews.append(f"data:image/jpeg;base64,{img_base64}")
+
+            return jsonify({'success': True, 'previews': previews})
 
         augmentation_options['mosaic'] = {'enabled': False}
         pipeline = background_tasks.build_augmentation_pipeline(augmentation_options)

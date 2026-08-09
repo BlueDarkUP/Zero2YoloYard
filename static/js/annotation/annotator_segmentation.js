@@ -15,6 +15,11 @@ class SegmentationAnnotator {
         this.isPainting = false;
         this.brushStrokePoints = [];
 
+        // Whole-polygon drag & drop state
+        this.isDraggingPolygon = false;
+        this.polygonDragStartPoint = null;
+        this.polygonInitialVertices = null;
+
         // DOM listeners for Paint Tools
         $(document).on('click', '#btn-brush-tool', (e) => {
             e.stopPropagation();
@@ -175,12 +180,15 @@ class SegmentationAnnotator {
             }
         }
 
-        // Check if clicking inside or near an existing polygon to select it:
+        // Check if clicking inside or near an existing polygon to select and drag it:
         const objects = this.core.annotations.objects || [];
         for (let obj of objects) {
             if (obj.type === 'polygon' && obj.polygon) {
                 if (this.isPointInPolygon([pt.x, pt.y], obj.polygon)) {
                     this.core.selectedObjectId = obj.id;
+                    this.isDraggingPolygon = true;
+                    this.polygonDragStartPoint = { x: pt.x, y: pt.y };
+                    this.polygonInitialVertices = obj.polygon.map(v => [v[0], v[1]]);
                     this.core.updateSidebarList();
                     this.core.render();
                     return;
@@ -225,6 +233,23 @@ class SegmentationAnnotator {
             }
         }
 
+        // Handle entire polygon mask dragging
+        if (this.isDraggingPolygon && this.core.selectedObjectId && this.polygonDragStartPoint && this.polygonInitialVertices) {
+            const selectedObj = this.core.annotations.objects.find(o => o.id === this.core.selectedObjectId);
+            if (selectedObj && selectedObj.polygon) {
+                const dx = pt.x - this.polygonDragStartPoint.x;
+                const dy = pt.y - this.polygonDragStartPoint.y;
+                for (let i = 0; i < selectedObj.polygon.length; i++) {
+                    selectedObj.polygon[i] = [
+                        this.polygonInitialVertices[i][0] + dx,
+                        this.polygonInitialVertices[i][1] + dy
+                    ];
+                }
+                this.core.render();
+                return;
+            }
+        }
+
         // Handle hovering state
         if (this.currentPolygonPoints.length > 0) {
             this.core.render();
@@ -243,6 +268,14 @@ class SegmentationAnnotator {
 
         if (this.draggedVertexIndex !== null) {
             this.draggedVertexIndex = null;
+            this.core.saveAnnotations();
+            this.core.render();
+        }
+
+        if (this.isDraggingPolygon) {
+            this.isDraggingPolygon = false;
+            this.polygonDragStartPoint = null;
+            this.polygonInitialVertices = null;
             this.core.saveAnnotations();
             this.core.render();
         }

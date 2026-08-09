@@ -18,6 +18,7 @@ DEFAULT_SETTINGS = {
     "frame_extraction_jpeg_quality": 75,
     "default_annotation_mode": "manual",
     "autosave_enabled": False,
+    "speedrun_auto_next": True,
     "cache_save_interval_seconds": 30,
     "class_colors": {},
 

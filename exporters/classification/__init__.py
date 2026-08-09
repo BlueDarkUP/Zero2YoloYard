@@ -1,1 +1,2 @@
 from .folder_class import FolderClassificationExporter
+from .yolo_cls import YoloClassificationExporter

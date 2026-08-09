@@ -45,8 +45,8 @@ tracking_sessions = {}
 batch_apply_sessions = {}
 
 
-def apply_class_to_videos_task(task_uuid, video_uuids, class_name, confidence_threshold, app_context):
-    """把某个类别的 SAM3 检索文本应用到一批视频未标注的帧上，生成建议框。"""
+def apply_class_to_videos_task(task_uuid, video_uuids, class_name, confidence_threshold, app_context, process_all_frames=True):
+    """把某个类别的 SAM3 检索文本应用到一批视频的帧上，生成建议框。"""
     session = {
         'status': 'RUNNING',
         'video_uuids': video_uuids,
@@ -69,7 +69,7 @@ def apply_class_to_videos_task(task_uuid, video_uuids, class_name, confidence_th
         active_tasks[vu] = task_uuid
 
     logging.info(f"[{task_uuid}] Starting to apply '{class_name}' across {len(video_uuids)} video(s), "
-                 f"threshold={confidence_threshold}")
+                 f"threshold={confidence_threshold}, process_all_frames={process_all_frames}")
 
     try:
         with app_context:
@@ -79,11 +79,30 @@ def apply_class_to_videos_task(task_uuid, video_uuids, class_name, confidence_th
                                              f"Applying '{class_name}' ({v_idx + 1}/{len(video_uuids)} videos)...")
 
                 all_frames = database.get_video_frames(video_uuid)
-                unlabeled_frames = [f for f in all_frames if not (f.get('bboxes_text') or '').strip()]
-                total_frames = len(unlabeled_frames)
-                logging.info(f"[{task_uuid}] Video {video_uuid}: {total_frames} unlabeled frames to process.")
+                if process_all_frames:
+                    target_frames = all_frames
+                else:
+                    def _is_unlabeled(f):
+                        if (f.get('bboxes_text') or '').strip():
+                            return False
+                        ann_json_str = (f.get('annotations_json') or '').strip()
+                        if not ann_json_str:
+                            return True
+                        try:
+                            from annotation_model import AnnotationData
+                            ann_data = AnnotationData.from_json(ann_json_str)
+                            if not ann_data.objects and not ann_data.classifications:
+                                return True
+                        except Exception:
+                            pass
+                        return False
 
-                for i, frame_info in enumerate(unlabeled_frames):
+                    target_frames = [f for f in all_frames if _is_unlabeled(f)]
+
+                total_frames = len(target_frames)
+                logging.info(f"[{task_uuid}] Video {video_uuid}: {total_frames} frames to process (all_frames={process_all_frames}).")
+
+                for i, frame_info in enumerate(target_frames):
                     frame_number = frame_info['frame_number']
 
                     current_video_status = database.get_video_entity(video_uuid)['status']
@@ -98,7 +117,6 @@ def apply_class_to_videos_task(task_uuid, video_uuids, class_name, confidence_th
                         f"[{v_idx + 1}/{len(video_uuids)}] video {video_uuid[:8]}: frame {i + 1}/{total_frames}")
                     if i % 10 == 0 or i == total_frames - 1:
                         database.update_video_status(video_uuid, 'APPLYING_CLASS', session['message'])
-
 
                     try:
                         predictions = ai_models.predict_by_class_text(
@@ -125,6 +143,18 @@ def apply_class_to_videos_task(task_uuid, video_uuids, class_name, confidence_th
 
                                     obj_id = f"poly_{int(time.time()*1000)}_{j}"
                                     ann_data.objects.append(AnnotationObject(id=obj_id, type='polygon', label=class_name, points=pts))
+
+                                database.save_frame_annotations(video_uuid, frame_number, ann_data.to_json())
+                            elif annotation_type == 'classification':
+                                from annotation_model import AnnotationData
+                                existing_ann_dict = database.get_frame_annotations(video_uuid, frame_number)
+                                if existing_ann_dict:
+                                    ann_data = AnnotationData.from_dict(existing_ann_dict)
+                                else:
+                                    ann_data = AnnotationData()
+
+                                if class_name not in ann_data.classifications:
+                                    ann_data.classifications.append(class_name)
 
                                 database.save_frame_annotations(video_uuid, frame_number, ann_data.to_json())
                             else:

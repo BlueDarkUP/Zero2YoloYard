@@ -118,6 +118,26 @@ def migrate_db():
                             text('INSERT INTO class_labels (label_name, create_time_ms) VALUES (:ln, :c) ON CONFLICT(label_name) DO NOTHING'),
                             {"ln": label, "c": int(time.time() * 1000)}
                         )
+            
+            # 全局同步所有视频的 labeled_frame_count
+            video_rows = conn.execute(text("SELECT video_uuid FROM videos")).fetchall()
+            for (v_uuid,) in video_rows:
+                count = conn.execute(
+                    text("""
+                        SELECT COUNT(DISTINCT vf.frame_id) FROM video_frames vf
+                        WHERE vf.video_uuid = :u
+                          AND (
+                            vf.frame_id IN (SELECT DISTINCT frame_id FROM frame_labels)
+                            OR (vf.bboxes_text IS NOT NULL AND TRIM(vf.bboxes_text) != '')
+                            OR (vf.tags IS NOT NULL AND vf.tags != '[]' AND TRIM(vf.tags) != '')
+                          )
+                    """),
+                    {"u": v_uuid}
+                ).scalar()
+                conn.execute(
+                    text("UPDATE videos SET labeled_frame_count = :c WHERE video_uuid = :u"),
+                    {"c": count, "u": v_uuid}
+                )
         except Exception as e:
             logging.error(f"Error syncing existing annotations_json labels during migration: {e}")
 
@@ -344,9 +364,9 @@ def get_annotated_video_frames(video_uuid):
                 SELECT * FROM video_frames 
                 WHERE video_uuid = :u 
                   AND (
-                      (annotations_json IS NOT NULL AND TRIM(annotations_json) != '' AND annotations_json != '{"version": 1, "objects": [], "classifications": []}')
-                      OR 
-                      (bboxes_text IS NOT NULL AND TRIM(bboxes_text) != '')
+                      frame_id IN (SELECT DISTINCT frame_id FROM frame_labels)
+                      OR (bboxes_text IS NOT NULL AND TRIM(bboxes_text) != '')
+                      OR (tags IS NOT NULL AND tags != '[]' AND TRIM(tags) != '')
                   ) 
                 ORDER BY frame_number ASC
             """),
@@ -389,9 +409,15 @@ def save_frame_annotations(video_uuid, frame_number, annotations_json_str):
 
         # 更新已标注帧计数
         new_labeled_count = conn.execute(
-            text(
-                "SELECT COUNT(*) FROM video_frames WHERE video_uuid = :u AND annotations_json IS NOT NULL AND TRIM(annotations_json) != '' AND annotations_json != '{\"version\": 1, \"objects\": [], \"classifications\": []}'"
-            ),
+            text("""
+                SELECT COUNT(DISTINCT vf.frame_id) FROM video_frames vf
+                WHERE vf.video_uuid = :u 
+                  AND (
+                      vf.frame_id IN (SELECT DISTINCT frame_id FROM frame_labels)
+                      OR (vf.bboxes_text IS NOT NULL AND TRIM(vf.bboxes_text) != '')
+                      OR (vf.tags IS NOT NULL AND vf.tags != '[]' AND TRIM(vf.tags) != '')
+                  )
+            """),
             {"u": video_uuid}
         ).scalar()
         conn.execute(text('UPDATE videos SET labeled_frame_count = :c WHERE video_uuid = :u'),
@@ -465,8 +491,15 @@ def save_frame_bboxes(video_uuid, frame_number, bboxes_text):
                 )
 
         new_labeled_count = conn.execute(
-            text(
-                "SELECT COUNT(*) FROM video_frames WHERE video_uuid = :u AND ((bboxes_text IS NOT NULL AND bboxes_text != '') OR (tags IS NOT NULL AND tags != '[]' AND tags != ''))"),
+            text("""
+                SELECT COUNT(DISTINCT vf.frame_id) FROM video_frames vf
+                WHERE vf.video_uuid = :u 
+                  AND (
+                      vf.frame_id IN (SELECT DISTINCT frame_id FROM frame_labels)
+                      OR (vf.bboxes_text IS NOT NULL AND TRIM(vf.bboxes_text) != '')
+                      OR (vf.tags IS NOT NULL AND vf.tags != '[]' AND TRIM(vf.tags) != '')
+                  )
+            """),
             {"u": video_uuid}
         ).scalar()
 
@@ -545,8 +578,15 @@ def save_frame_tags(video_uuid, frame_number, tags_json_string):
             {"t": tags_json_string, "u": video_uuid, "fn": frame_number}
         )
         new_labeled_count = conn.execute(
-            text(
-                "SELECT COUNT(*) FROM video_frames WHERE video_uuid = :u AND ((bboxes_text IS NOT NULL AND bboxes_text != '') OR (tags IS NOT NULL AND tags != '[]' AND tags != ''))"),
+            text("""
+                SELECT COUNT(DISTINCT vf.frame_id) FROM video_frames vf
+                WHERE vf.video_uuid = :u 
+                  AND (
+                      vf.frame_id IN (SELECT DISTINCT frame_id FROM frame_labels)
+                      OR (vf.bboxes_text IS NOT NULL AND TRIM(vf.bboxes_text) != '')
+                      OR (vf.tags IS NOT NULL AND vf.tags != '[]' AND TRIM(vf.tags) != '')
+                  )
+            """),
             {"u": video_uuid}
         ).scalar()
         conn.execute(text('UPDATE videos SET labeled_frame_count = :c WHERE video_uuid = :u'),

@@ -278,6 +278,133 @@
     .btn-outline-primary:hover {
         box-shadow: 0 0 15px var(--color-primary-glow);
     }
+    
+    /* 3D Gaming Keycap Badge */
+    .keybind-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-family: 'JetBrains Mono', monospace;
+        font-weight: 700;
+        font-size: 0.72rem;
+        padding: 2px 7px;
+        min-width: 32px;
+        border-radius: 4px;
+        background: linear-gradient(180deg, #2b3040 0%, #171922 100%);
+        border: 1px solid #4a5168;
+        color: #00f0ff;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.15), 0 2px 4px rgba(0,0,0,0.6);
+        transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        cursor: pointer;
+        user-select: none;
+    }
+    .keybind-btn:hover {
+        background: linear-gradient(180deg, #00f0ff 0%, #00a8ff 100%);
+        color: #000;
+        border-color: #00f0ff;
+        box-shadow: 0 0 12px rgba(0, 240, 255, 0.6);
+        transform: translateY(-1px) scale(1.08);
+    }
+    .keybind-btn.empty-key {
+        color: var(--text-muted);
+        border-style: dashed;
+        background: transparent;
+    }
+    .keybind-btn.empty-key:hover {
+        color: #fff;
+        background: rgba(0,240,255,0.2);
+    }
+
+    /* Glassmorphism Keybind Modal */
+    .keybind-modal-backdrop {
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        z-index: 1050;
+        background: rgba(8, 10, 16, 0.75);
+        backdrop-filter: blur(10px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .keybind-modal-card {
+        width: 380px;
+        background: linear-gradient(145deg, rgba(25, 28, 42, 0.95), rgba(14, 16, 24, 0.98));
+        border: 1px solid rgba(0, 240, 255, 0.4);
+        border-radius: 12px;
+        box-shadow: 0 20px 50px rgba(0,0,0,0.8), 0 0 30px rgba(0, 240, 255, 0.25);
+        padding: 24px;
+        color: var(--text-main);
+        text-align: center;
+        transform: scale(0.95);
+        animation: popIn 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+    }
+    @keyframes popIn {
+        to { transform: scale(1); }
+    }
+    .keybind-modal-header {
+        display: flex;
+        align-items: center;
+        font-family: 'Orbitron', sans-serif;
+        font-size: 0.85rem;
+        letter-spacing: 0.05em;
+        border-bottom: 1px solid rgba(255,255,255,0.08);
+        padding-bottom: 12px;
+        margin-bottom: 18px;
+    }
+    .target-class-pill {
+        display: inline-block;
+        padding: 6px 16px;
+        border-radius: 20px;
+        font-family: 'JetBrains Mono', monospace;
+        font-weight: 700;
+        font-size: 1rem;
+        background: rgba(0, 240, 255, 0.1);
+        border: 1px solid rgba(0, 240, 255, 0.4);
+        color: #00f0ff;
+        box-shadow: 0 0 15px rgba(0, 240, 255, 0.2);
+    }
+    .key-press-box {
+        padding: 15px 0;
+    }
+    .key-display-ring {
+        width: 80px;
+        height: 80px;
+        margin: 0 auto;
+        border-radius: 16px;
+        background: linear-gradient(180deg, #2b3044 0%, #171924 100%);
+        border: 2px solid #00f0ff;
+        box-shadow: 0 0 20px rgba(0, 240, 255, 0.4), inset 0 2px 4px rgba(255,255,255,0.2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 2.2rem;
+        font-weight: 800;
+        color: #ffffff;
+        animation: keyPulse 1.5s infinite ease-in-out;
+    }
+    @keyframes keyPulse {
+        0%, 100% { box-shadow: 0 0 15px rgba(0, 240, 255, 0.4); transform: scale(1); }
+        50% { box-shadow: 0 0 30px rgba(0, 240, 255, 0.8); transform: scale(1.05); }
+    }
+    .key-press-hint {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+    }
+    .key-press-hint kbd {
+        background: rgba(255,255,255,0.1);
+        border: 1px solid rgba(255,255,255,0.2);
+        border-radius: 4px;
+        padding: 2px 6px;
+        color: #00f0ff;
+    }
+    .keybind-modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        border-top: 1px solid rgba(255,255,255,0.08);
+        padding-top: 14px;
+        margin-top: 14px;
+    }
     .btn-xs {
         padding: 0.2rem 0.5rem;
         font-size: 0.7rem;
@@ -462,9 +589,12 @@
                 </span>
                 <button class="btn btn-sm btn-link text-secondary p-0 ml-2" onclick="document.getElementById('frame-slider').stepUp(); document.getElementById('frame-slider').dispatchEvent(new Event('input'));" style="transition: color 0.2s;"><i class="bi bi-caret-right-fill"></i></button>
             </div>
-            <div>
+            <div class="d-flex align-items-center">
                 <button id="save-bboxes" class="btn btn-sm btn-primary font-weight-medium px-4" style="box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
                     Save Changes
+                </button>
+                <button id="btn-toggle-speedrun" class="btn btn-sm btn-warning text-dark font-weight-bold ml-2 px-3 font-monospace" style="box-shadow: 0 2px 4px rgba(0,0,0,0.2);" title="Toggle Speedrun Auto-Advance Mode (Global Setting)">
+                    <i class="bi bi-lightning-charge-fill"></i> <span id="speedrun-status-text">SPEEDRUN: ON</span>
                 </button>
             </div>
         </div>
@@ -610,6 +740,33 @@
 <div class="modal-footer border-secondary bg-transparent pt-3 mt-2 border-top">
     <button type="button" class="btn btn-secondary rounded-0 text-uppercase" data-dismiss="modal">Cancel</button>
     <button type="button" id="confirm-apply-scope-btn" class="btn btn-primary rounded-0 text-uppercase font-weight-bold"><i class="bi bi-check2-circle"></i> Apply</button>
+<!-- Glassmorphism Keybinding Customization Modal -->
+<div id="keybind-modal" class="keybind-modal-backdrop" style="display: none;">
+    <div class="keybind-modal-card">
+        <div class="keybind-modal-header">
+            <i class="bi bi-keyboard-fill text-primary mr-2" style="font-size: 1.3rem;"></i>
+            <span class="font-weight-bold">ASSIGN HOTKEY SHORTCUT</span>
+            <button type="button" class="close text-light ml-auto" id="close-keybind-modal-btn" style="outline: none;">&times;</button>
+        </div>
+        <div class="keybind-modal-body">
+            <div class="mb-2 text-muted small">Target Class:</div>
+            <div id="keybind-target-class-badge" class="target-class-pill mb-3">-</div>
+            
+            <div class="key-press-box">
+                <div id="keybind-display-ring" class="key-display-ring">
+                    <span id="keybind-live-display">...</span>
+                </div>
+                <div class="key-press-hint mt-3">Press any key <kbd>A-Z</kbd> or <kbd>0-9</kbd> on your keyboard</div>
+            </div>
+        </div>
+        <div class="keybind-modal-footer">
+            <button type="button" id="clear-keybind-btn" class="btn btn-outline-danger btn-sm px-3">
+                <i class="bi bi-x-circle mr-1"></i> Clear <kbd>Esc</kbd>
+            </button>
+            <button type="button" id="cancel-keybind-btn" class="btn btn-secondary btn-sm px-3 ml-2">Cancel</button>
+        </div>
+    </div>
+</div>
 </div>
 {% endcall %}
 
@@ -679,6 +836,47 @@
         }
 
         const settings = {{ settings | tojson }};
+        window.currentSettings = settings;
+
+        window.triggerSpeedrunAutoNext = function() {
+            if (window.currentSettings && window.currentSettings.speedrun_auto_next !== false) {
+                setTimeout(() => {
+                    const slider = $('#frame-slider');
+                    let nextFrame = parseInt(slider.val()) + 1;
+                    const maxFrame = parseInt(slider.attr('max'));
+                    if (nextFrame <= maxFrame) {
+                        slider.val(nextFrame).trigger("input");
+                    }
+                }, 120);
+            }
+        };
+
+        function updateSpeedrunBtnUI() {
+            const isEnabled = window.currentSettings && window.currentSettings.speedrun_auto_next !== false;
+            const btn = $('#btn-toggle-speedrun');
+            if (isEnabled) {
+                btn.removeClass('btn-outline-secondary').addClass('btn-warning text-dark font-weight-bold').html('<i class="bi bi-lightning-charge-fill"></i> SPEEDRUN: ON');
+            } else {
+                btn.removeClass('btn-warning text-dark font-weight-bold').addClass('btn-outline-secondary').html('<i class="bi bi-lightning font-weight-normal"></i> SPEEDRUN: OFF');
+            }
+        }
+
+        updateSpeedrunBtnUI();
+
+        $('#btn-toggle-speedrun').on('click', function() {
+            if (!window.currentSettings) window.currentSettings = {};
+            window.currentSettings.speedrun_auto_next = !(window.currentSettings.speedrun_auto_next !== false);
+            updateSpeedrunBtnUI();
+            const newState = window.currentSettings.speedrun_auto_next;
+            if (typeof showToast === 'function') {
+                showToast(newState ? '⚡ SPEEDRUN MODE: ENABLED (Auto-next on tag)' : '⏸️ SPEEDRUN MODE: DISABLED', 2000);
+            }
+            $.ajax({
+                url: '/api/settings', type: 'POST', contentType: 'application/json',
+                data: JSON.stringify(window.currentSettings)
+            });
+        });
+
         const customClassColors = settings.class_colors || {};
         const videoUuid = "{{ video_entity.video_uuid }}";
         const task = {{ task_entity | tojson }};
@@ -711,6 +909,46 @@
         let hoveredClass = null;
         let bboxes = [];
         let selectedBboxIndex = -1;
+
+        let customKeybindings = {};
+        function initCustomKeybindings() {
+            try {
+                const stored = localStorage.getItem('class_keybindings_{{ video_entity.dataset_uuid }}');
+                if (stored) customKeybindings = JSON.parse(stored);
+            } catch(e) {}
+            window.customKeybindings = customKeybindings;
+        }
+        initCustomKeybindings();
+
+        function saveCustomKeybindings() {
+            try {
+                localStorage.setItem('class_keybindings_{{ video_entity.dataset_uuid }}', JSON.stringify(customKeybindings));
+            } catch(e) {}
+            window.customKeybindings = customKeybindings;
+        }
+
+        function getKeyForClass(clsName) {
+            if (customKeybindings[clsName]) return customKeybindings[clsName];
+            const idx = availableClasses.indexOf(clsName);
+            if (idx >= 0 && idx < 9) return String(idx + 1);
+            return null;
+        }
+
+        function getClassForKey(pressedKey) {
+            let matchedClass = Object.keys(customKeybindings).find(cls => customKeybindings[cls] === pressedKey);
+            if (matchedClass) return matchedClass;
+
+            if (!isNaN(parseInt(pressedKey))) {
+                const num = parseInt(pressedKey);
+                if (num >= 1 && num <= 9 && num <= availableClasses.length) {
+                    const defaultClass = availableClasses[num - 1];
+                    if (!customKeybindings[defaultClass]) {
+                        return defaultClass;
+                    }
+                }
+            }
+            return null;
+        }
 
         let repeatMode = { isActive: false, width: 0, height: 0, label: null };
         let history = [];
@@ -1181,6 +1419,46 @@
             });
         }
 
+        let keyBindingTargetClass = null;
+        function triggerKeybindPrompt(className) {
+            keyBindingTargetClass = className;
+            const currentKey = getKeyForClass(className);
+            $('#keybind-target-class-badge').text(className);
+            $('#keybind-live-display').text(currentKey ? currentKey.toUpperCase() : '?').css('color', '#ffffff');
+            $('#keybind-modal').fadeIn(150);
+        }
+        window.triggerKeybindPrompt = triggerKeybindPrompt;
+
+        function closeKeybindModal() {
+            keyBindingTargetClass = null;
+            $('#keybind-modal').fadeOut(150);
+        }
+
+        $(document).on('click', '#close-keybind-modal-btn, #cancel-keybind-btn', function() {
+            closeKeybindModal();
+        });
+
+        $(document).on('click', '#clear-keybind-btn', function() {
+            if (keyBindingTargetClass) {
+                const cls = keyBindingTargetClass;
+                delete customKeybindings[cls];
+                saveCustomKeybindings();
+                showToast(`Cleared shortcut for [${cls}]`, 2000);
+                closeKeybindModal();
+                renderClassList();
+                if (window.annotationCore && window.annotationCore.annotator && typeof window.annotationCore.annotator.renderSidebarTags === 'function') {
+                    window.annotationCore.annotator.renderSidebarTags();
+                }
+            }
+        });
+
+        $("#class-list").on("click", ".keybind-btn", function(e) {
+            e.stopPropagation();
+            e.preventDefault();
+            const className = $(this).data("class");
+            triggerKeybindPrompt(className);
+        });
+
         function renderClassList() {
             const list = $("#class-list");
             list.empty();
@@ -1193,16 +1471,23 @@
                 const count = classCounts[className] || 0;
                 const countHtml = count > 0 ? `<span class="class-count-badge text-primary" style="box-shadow: 0 0 5px ${color}; border: 1px solid ${color};">${count}</span>` : '';
                 const isActive = className === activeClass ? "active" : "";
+                const key = getKeyForClass(className);
+                const keyBadge = key 
+                    ? `<span class="keybind-btn px-1" title="Click to change shortcut key" data-class="${className}">[${key.toUpperCase()}]</span>`
+                    : `<span class="keybind-btn empty-key px-1" title="Click to bind shortcut key" data-class="${className}">[+Key]</span>`;
                 const listItem = $(`
                     <li class="list-group-item d-flex justify-content-between align-items-center ${isActive}" data-class-name="${className}">
-                        <div class="class-item-clickable text-truncate" title="${className}">
+                        <div class="class-item-clickable text-truncate d-flex align-items-center flex-grow-1" title="${className}" style="cursor: pointer;">
                             <span class="color-swatch flex-shrink-0" style="background-color: ${color}; border-color: ${color};"></span>
-                            <span class="text-truncate mr-2">${className}</span>
+                            <span class="text-truncate mr-1">${className}</span>
                             ${countHtml}
                         </div>
-                        <button class="btn btn-xs btn-link text-muted p-0 ml-1 flex-shrink-0 delete-class-btn" title="Delete Class" data-class="${className}">
-                            <i class="bi bi-trash"></i>
-                        </button>
+                        <div class="d-flex align-items-center flex-shrink-0 ml-1">
+                            ${keyBadge}
+                            <button class="btn btn-xs btn-link text-muted p-0 ml-1 delete-class-btn" title="Delete Class" data-class="${className}">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
                     </li>
                 `);
                 list.append(listItem);
@@ -1231,6 +1516,10 @@
         }
 
         function undo() {
+            if (window.annotationCore) {
+                window.annotationCore.undo();
+                return;
+            }
             if (historyIndex > 0) {
                 historyIndex--;
                 bboxes = JSON.parse(JSON.stringify(history[historyIndex]));
@@ -1242,6 +1531,10 @@
         }
 
         function redo() {
+            if (window.annotationCore) {
+                window.annotationCore.redo();
+                return;
+            }
             if (historyIndex < history.length - 1) {
                 historyIndex++;
                 bboxes = JSON.parse(JSON.stringify(history[historyIndex]));
@@ -2558,6 +2851,41 @@
         $('#finish-interactive-btn').on('click', clearInteractiveSession);
 
         $(document).on("keydown", function(e) {
+            if (keyBindingTargetClass) {
+                e.preventDefault();
+                e.stopPropagation();
+                const cls = keyBindingTargetClass;
+
+                if (e.key === "Escape") {
+                    delete customKeybindings[cls];
+                    saveCustomKeybindings();
+                    showToast(`Cleared shortcut for [${cls}]`, 2000);
+                    closeKeybindModal();
+                } else if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+                    const newKey = e.key.toLowerCase();
+                    Object.keys(customKeybindings).forEach(k => {
+                        if (customKeybindings[k] === newKey) delete customKeybindings[k];
+                    });
+                    customKeybindings[cls] = newKey;
+                    saveCustomKeybindings();
+                    $('#keybind-live-display').text(newKey.toUpperCase()).css('color', '#00f0ff');
+                    showToast(`Bound key [${newKey.toUpperCase()}] to [${cls}]`, 2000);
+                    setTimeout(() => {
+                        closeKeybindModal();
+                        renderClassList();
+                        if (window.annotationCore && window.annotationCore.annotator && typeof window.annotationCore.annotator.renderSidebarTags === 'function') {
+                            window.annotationCore.annotator.renderSidebarTags();
+                        }
+                    }, 250);
+                    return;
+                }
+                renderClassList();
+                if (window.annotationCore && window.annotationCore.annotator && typeof window.annotationCore.annotator.renderSidebarTags === 'function') {
+                    window.annotationCore.annotator.renderSidebarTags();
+                }
+                return;
+            }
+
             if ($(e.target).is("input, textarea")) return;
             const isApplyModalVisible = $('#apply-scope-modal').is(':visible');
             if (isApplyModalVisible) return;
@@ -2578,6 +2906,24 @@
                 if (interpolationState.isActive) { resetInterpolationState(true); showToast("Interpolation aborted.", 2000); }
                 if (repeatMode.isActive) { repeatMode.isActive = false; showToast("Repeat mode off.", 2000); canvasContainer.css('cursor', 'crosshair'); }
             } else {
+                // Check class shortcut keybinding match
+                if (!e.ctrlKey && !e.altKey && !e.metaKey && e.key.length === 1) {
+                    const pressedKey = e.key.toLowerCase();
+                    const matchedClass = getClassForKey(pressedKey);
+                    if (matchedClass) {
+                        e.preventDefault();
+                        if ("{{ video_entity.annotation_type }}" === 'classification' && window.annotationCore && window.annotationCore.annotator) {
+                            window.annotationCore.annotator.setClassification(matchedClass);
+                        } else {
+                            activeClass = matchedClass;
+                            if (window.annotationCore) window.annotationCore.selectedClass = matchedClass;
+                            renderClassList();
+                            showToast(`🏷️ Selected Class: [${matchedClass}]`, 1200);
+                        }
+                        return;
+                    }
+                }
+
                 switch (key) {
                     case "r":
                         e.preventDefault();
@@ -2610,6 +2956,7 @@
             $.get('/listClasses', function(response) {
                 if (response.success) {
                     response.labels.forEach(label => { if (!availableClasses.includes(label)) availableClasses.push(label); });
+                    window.availableClasses = availableClasses;
                     renderClassList();
                     const frameFromUrl = new URLSearchParams(window.location.search).get('frame');
                     if (frameFromUrl) {
