@@ -1,9 +1,9 @@
-{% macro render_modal(id, title) %}
+{% macro render_modal(id, title, dialog_class='', show_footer=False) %}
 <div class="modal fade" id="{{ id }}" tabindex="-1" role="dialog">
-    <div class="modal-dialog" role="document">
+    <div class="modal-dialog modal-dialog-centered {{ dialog_class }}" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">{{ title }}</h5>
+                <h5 class="modal-title font-weight-bold text-uppercase tracking-wider">{{ title }}</h5>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close">
                     <span aria-hidden="true">&times;</span>
                 </button>
@@ -11,9 +11,11 @@
             <div class="modal-body">
                 {{ caller() }}
             </div>
+            {% if show_footer %}
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
             </div>
+            {% endif %}
         </div>
     </div>
 </div>
