@@ -1,0 +1,24 @@
+<!-- COCO 17 Keypoints Pose Sidebar Sub-Template -->
+<div class="task-panel task-pose">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h6 class="font-weight-bold text-uppercase text-danger mb-0">
+            <i class="fas fa-running mr-2"></i>Skeletons (<span id="pose-count">0</span>)
+        </h6>
+        <button id="btn-add-skeleton" class="btn btn-sm btn-primary font-weight-bold">
+            <i class="fas fa-plus mr-1"></i>Add Person Skeleton
+        </button>
+    </div>
+
+    <div class="card bg-dark border-secondary p-2 mb-3">
+        <div class="small font-weight-bold text-muted mb-2">SELECTED JOINT STATUS:</div>
+        <div class="btn-group btn-group-sm w-100" role="group">
+            <button type="button" class="btn btn-outline-success active" data-v="2">Visible (v=2)</button>
+            <button type="button" class="btn btn-outline-warning" data-v="1">Occluded (v=1)</button>
+            <button type="button" class="btn btn-outline-danger" data-v="0">Absent (v=0)</button>
+        </div>
+    </div>
+
+    <div id="pose-object-list" class="annotation-object-list">
+        <!-- Dynamically rendered Skeleton items -->
+    </div>
+</div>

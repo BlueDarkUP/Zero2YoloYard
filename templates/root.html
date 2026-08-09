@@ -597,9 +597,18 @@
     </div>
     <div class="form-group">
         <label class="font-weight-bold small text-muted">
-            SAMPLING FPS (0 = EXTRACT ALL NATIVE FRAMES)
+            FRAME EXTRACTION INTERVAL (EXTRACT 1 FRAME EVERY X FRAMES, 1 = ALL FRAMES)
         </label>
-        <input type="number" class="form-control" id="target-fps" name="target_fps" value="5" min="0" max="120" step="0.1" required>
+        <input type="number" class="form-control" id="frame-interval" name="frame_interval" value="5" min="1" max="1000" step="1" required>
+    </div>
+    <div class="form-group">
+        <label class="font-weight-bold small text-muted">ANNOTATION TYPE</label>
+        <select class="form-control custom-select" id="annotation-type" name="annotation_type" required>
+            <option value="detection" selected>Bounding Box (Detection)</option>
+            <option value="segmentation">Polygon (Segmentation)</option>
+            <option value="pose">Keypoints (Pose Estimation)</option>
+            <option value="classification">Classification</option>
+        </select>
     </div>
     <button type="submit" class="btn btn-primary btn-block tracking-wider font-weight-bold">INITIATE_UPLOAD</button>
 </form>
@@ -618,6 +627,12 @@
     <div class="form-row">
         <div class="form-group col-6"><label class="font-weight-bold small text-muted">VALIDATION %</label><input type="number" class="form-control" id="eval-percent" value="20"></div>
         <div class="form-group col-6"><label class="font-weight-bold small text-muted">TESTING %</label><input type="number" class="form-control" id="test-percent" value="10"></div>
+    </div>
+    <div class="form-group">
+        <label class="font-weight-bold small text-muted">EXPORT FORMAT</label>
+        <select class="form-control custom-select" id="dataset-export-format" required>
+            <option value="yolo_v8_detect">YOLO Detection (v5/v7/v8/v9/v11)</option>
+        </select>
     </div>
     <div class="card mb-3 border-secondary" style="background: rgba(255,255,255,0.02);">
         <div class="card-body p-3">
@@ -825,7 +840,7 @@
             if (status === 'READY') {
                 badgeClass = 'success';
                 icon = '<i class="bi bi-check2-square mr-1"></i>';
-            } else if (['PROCESSING', 'EXTRACTING', 'PENDING', 'PRE_ANNOTATING', 'APPLYING_PROTOTYPES'].includes(status)) {
+            } else if (['PROCESSING', 'EXTRACTING', 'PENDING', 'PRE_ANNOTATING', 'APPLYING_PROTOTYPES', 'APPLYING_CLASS'].includes(status)) {
                 badgeClass = 'info';
                 icon = '<span class="spinner-border spinner-border-sm mr-1" style="border-width: 1px;"></span>';
             } else if (status === 'CANCELLING') {
@@ -871,7 +886,7 @@
                             actions += `<button class="btn btn-sm btn-outline-secondary mr-1" disabled><i class="bi bi-images"></i></button>`;
                         }
 
-                        if (['PRE_ANNOTATING', 'APPLYING_PROTOTYPES'].includes(video.status)) {
+                        if (['PRE_ANNOTATING', 'APPLYING_PROTOTYPES', 'APPLYING_CLASS'].includes(video.status)) {
                             actions += `<button class="btn btn-sm btn-danger btn-cancel-task mr-1" data-uuid="${video.video_uuid}" title="ABORT"><i class="bi bi-stop-circle"></i></button>`;
                         }
 
@@ -922,7 +937,7 @@
                     data.datasets.forEach(dataset => {
                         let actions = '';
                         if (dataset.status === 'READY') {
-                            actions += `<a href="/downloadDataset/${dataset.dataset_uuid}" class="btn btn-sm btn-outline-success mr-1" title="DOWNLOAD"><i class="bi bi-download"></i></a>`;
+                            actions += `<a href="/downloadDataset/${dataset.dataset_uuid}" download="${dataset.description || 'dataset'}.zip" target="_blank" class="btn btn-sm btn-outline-success mr-1" title="DOWNLOAD"><i class="bi bi-download"></i></a>`;
                             actions += `<a href="/datasetAnalysis/${dataset.dataset_uuid}" class="btn btn-sm btn-outline-info mr-1" title="ANALYZE"><i class="bi bi-bar-chart-line"></i></a>`;
                             actions += `<button class="btn btn-sm btn-outline-secondary btn-regenerate-dataset mr-1" data-uuid="${dataset.dataset_uuid}" title="RECOMPILE"><i class="bi bi-arrow-repeat"></i></button>`;
                         } else if (dataset.status === 'FAILED') {
@@ -1082,6 +1097,21 @@
                 context.find('#' + controlsId).toggle($(this).is(':checked'));
             });
         }
+        $('#createDatasetModal').on('show.bs.modal', function() {
+            $.get('/api/export_formats', function(res) {
+                if (res.success && res.formats) {
+                    const formatSelect = $('#dataset-export-format');
+                    formatSelect.empty();
+                    res.formats.forEach(function(fmt) {
+                        formatSelect.append($('<option>', {
+                            value: fmt.key,
+                            text: fmt.name
+                        }));
+                    });
+                }
+            });
+        });
+
         $('#aug-enabled').on('change', function() {
             $('#augmentation-options-panel').slideToggle($(this).is(':checked'));
         });
@@ -1120,6 +1150,7 @@
                 video_uuids: $('#dataset-videos').val(),
                 eval_percent: $('#eval-percent').val(),
                 test_percent: $('#test-percent').val(),
+                export_format: $('#dataset-export-format').val(),
                 augmentation_options: augmentation_options
             };
             $.ajax({

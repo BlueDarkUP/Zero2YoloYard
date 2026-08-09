@@ -58,14 +58,22 @@ def migrate_db():
                 conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"))
                 logging.info(f"Added column '{column}' to table '{table}'.")
 
+        # --- 数据表自动补全列迁移 ---
         add_column('datasets', 'eval_percent', 'REAL')
         add_column('datasets', 'test_percent', 'REAL')
+        # 补上下面这一行：自动为旧数据库补充 export_format 字段
+        add_column('datasets', 'export_format', "TEXT DEFAULT 'yolo_v8_detect'")
+
         add_column('models', 'label_filename', 'TEXT')
         add_column('models', 'model_type', 'TEXT')
         add_column('videos', 'last_pre_annotation_info', 'TEXT')
         add_column('video_frames', 'tags', 'TEXT')
         add_column('video_frames', 'suggested_bboxes_text', 'TEXT')
         add_column('class_labels', 'sam3_prompt', 'TEXT')
+        add_column('video_frames', 'annotations_json', 'TEXT')
+        add_column('videos', 'annotation_type', 'TEXT')
+        add_column('videos', 'keypoint_schema', 'TEXT')
+        conn.execute(text("UPDATE videos SET annotation_type = 'detection' WHERE annotation_type IS NULL"))
 
         conn.execute(text('''
                           CREATE TABLE IF NOT EXISTS frame_labels
@@ -77,7 +85,8 @@ def migrate_db():
                           '''))
         conn.execute(text('CREATE INDEX IF NOT EXISTS idx_frame_labels_name ON frame_labels (label_name)'))
         conn.execute(text('CREATE INDEX IF NOT EXISTS idx_frame_labels_frame_id ON frame_labels (frame_id)'))
-        conn.execute(text('CREATE INDEX IF NOT EXISTS idx_video_frames_uuid_frame ON video_frames (video_uuid, frame_number)'))
+        conn.execute(
+            text('CREATE INDEX IF NOT EXISTS idx_video_frames_uuid_frame ON video_frames (video_uuid, frame_number)'))
         conn.execute(text('CREATE INDEX IF NOT EXISTS idx_video_frames_uuid ON video_frames (video_uuid)'))
 
         conn.execute(text('''
@@ -88,6 +97,45 @@ def migrate_db():
                               create_time_ms INTEGER
                           )
                           '''))
+
+        # 自动补全已有 annotations_json 帧的 frame_labels 和 class_labels 记录
+        try:
+            from annotation_model import AnnotationData
+            rows = conn.execute(text(
+                "SELECT frame_id, annotations_json FROM video_frames WHERE annotations_json IS NOT NULL AND TRIM(annotations_json) != ''"
+            )).fetchall()
+            for r in rows:
+                fid = r[0]
+                aj_str = r[1]
+                ann_data = AnnotationData.from_json(aj_str)
+                unique_labels = ann_data.get_unique_labels()
+                if unique_labels:
+                    conn.execute(text('DELETE FROM frame_labels WHERE frame_id = :fid'), {"fid": fid})
+                    labels_to_insert = [{"fid": fid, "ln": label} for label in unique_labels]
+                    conn.execute(text('INSERT INTO frame_labels (frame_id, label_name) VALUES (:fid, :ln)'), labels_to_insert)
+                    for label in unique_labels:
+                        conn.execute(
+                            text('INSERT INTO class_labels (label_name, create_time_ms) VALUES (:ln, :c) ON CONFLICT(label_name) DO NOTHING'),
+                            {"ln": label, "c": int(time.time() * 1000)}
+                        )
+        except Exception as e:
+            logging.error(f"Error syncing existing annotations_json labels during migration: {e}")
+
+        try:
+            sug_rows = conn.execute(text(
+                "SELECT video_uuid, frame_number, suggested_bboxes_text FROM video_frames WHERE suggested_bboxes_text IS NOT NULL AND TRIM(suggested_bboxes_text) != ''"
+            )).fetchall()
+        except Exception as e:
+            sug_rows = []
+            logging.error(f"Error reading historical suggested_bboxes_text: {e}")
+
+    if sug_rows:
+        try:
+            for r in sug_rows:
+                vu, fn, sb_text = r[0], r[1], r[2]
+                convert_suggestions_to_formal_annotations(vu, fn, sb_text)
+        except Exception as e:
+            logging.error(f"Error migrating historical suggested_bboxes_text: {e}")
 
 
 
@@ -110,7 +158,9 @@ def init_db():
                               extracted_frame_count    INTEGER DEFAULT 0,
                               included_frame_count     INTEGER DEFAULT 0,
                               labeled_frame_count      INTEGER DEFAULT 0,
-                              last_pre_annotation_info TEXT
+                              last_pre_annotation_info TEXT,
+                              annotation_type          TEXT DEFAULT 'detection',
+                              keypoint_schema          TEXT
                           )
                           '''))
 
@@ -124,6 +174,7 @@ def init_db():
                               suggested_bboxes_text    TEXT,
                               tags                     TEXT,
                               include_frame_in_dataset INTEGER,
+                              annotations_json         TEXT,
                               FOREIGN KEY (video_uuid) REFERENCES videos (video_uuid) ON DELETE CASCADE
                           )
                           '''))
@@ -140,7 +191,8 @@ def init_db():
                               zip_path          TEXT,
                               sorted_label_list TEXT,
                               eval_percent      REAL,
-                              test_percent      REAL
+                              test_percent      REAL,
+                              export_format     TEXT DEFAULT 'yolo_v8_detect'
                           )
                           '''))
 
@@ -205,14 +257,14 @@ def init_db():
 
 # --- 数据操作 (CRUD) ---
 
-def create_video_entry(description, video_filename, file_size, create_time_ms):
+def create_video_entry(description, video_filename, file_size, create_time_ms, annotation_type='detection'):
     video_uuid = str(uuid.uuid4().hex)
     with engine.begin() as conn:
         conn.execute(
             text(
-                'INSERT INTO videos (video_uuid, description, video_filename, file_size, create_time_ms, status) VALUES (:u, :d, :f, :s, :c, :st)'),
+                'INSERT INTO videos (video_uuid, description, video_filename, file_size, create_time_ms, status, annotation_type) VALUES (:u, :d, :f, :s, :c, :st, :at)'),
             {"u": video_uuid, "d": description, "f": video_filename, "s": file_size, "c": create_time_ms,
-             "st": 'UPLOADING'}
+             "st": 'UPLOADING', "at": annotation_type}
         )
     return video_uuid
 
@@ -256,13 +308,13 @@ def update_video_after_extraction_start(video_uuid, width, height, fps, frame_co
                 "UPDATE videos SET width=:w, height=:h, fps=:f, frame_count=:fc, included_frame_count=:fc, status=:st WHERE video_uuid=:u"),
             {"w": width, "h": height, "f": fps, "fc": frame_count, "st": 'EXTRACTING', "u": video_uuid}
         )
-        frames_to_insert = [{"u": video_uuid, "fn": i, "bt": "", "sb": "", "t": "", "inc": 1} for i in
+        frames_to_insert = [{"u": video_uuid, "fn": i, "bt": "", "sb": "", "t": "", "aj": "", "inc": 1} for i in
                             range(frame_count)]
 
         # 批量插入提速
         conn.execute(
             text(
-                'INSERT INTO video_frames (video_uuid, frame_number, bboxes_text, suggested_bboxes_text, tags, include_frame_in_dataset) VALUES (:u, :fn, :bt, :sb, :t, :inc)'),
+                'INSERT INTO video_frames (video_uuid, frame_number, bboxes_text, suggested_bboxes_text, tags, annotations_json, include_frame_in_dataset) VALUES (:u, :fn, :bt, :sb, :t, :aj, :inc)'),
             frames_to_insert
         )
 
@@ -288,10 +340,98 @@ def get_video_frames(video_uuid):
 def get_annotated_video_frames(video_uuid):
     with engine.connect() as conn:
         result = conn.execute(
-            text("SELECT * FROM video_frames WHERE video_uuid = :u AND bboxes_text IS NOT NULL AND TRIM(bboxes_text) != '' ORDER BY frame_number ASC"),
+            text("""
+                SELECT * FROM video_frames 
+                WHERE video_uuid = :u 
+                  AND (
+                      (annotations_json IS NOT NULL AND TRIM(annotations_json) != '' AND annotations_json != '{"version": 1, "objects": [], "classifications": []}')
+                      OR 
+                      (bboxes_text IS NOT NULL AND TRIM(bboxes_text) != '')
+                  ) 
+                ORDER BY frame_number ASC
+            """),
             {"u": video_uuid}
         )
         return _to_dict(result)
+
+def save_frame_annotations(video_uuid, frame_number, annotations_json_str):
+    with engine.begin() as conn:
+        frame = conn.execute(
+            text('SELECT frame_id FROM video_frames WHERE video_uuid = :u AND frame_number = :fn'),
+            {"u": video_uuid, "fn": frame_number}
+        ).fetchone()
+
+        if not frame:
+            logging.error(f"无法为 video {video_uuid}, frame {frame_number} 找到 frame_id。")
+            return
+
+        frame_id = frame._mapping['frame_id']
+        conn.execute(
+            text('UPDATE video_frames SET annotations_json = :aj WHERE frame_id = :fid'),
+            {"aj": annotations_json_str, "fid": frame_id}
+        )
+
+        # 同步更新 frame_labels 和 class_labels 表
+        conn.execute(text('DELETE FROM frame_labels WHERE frame_id = :fid'), {"fid": frame_id})
+        from annotation_model import AnnotationData
+        ann_data = AnnotationData.from_json(annotations_json_str)
+        unique_labels = ann_data.get_unique_labels()
+        if unique_labels:
+            labels_to_insert = [{"fid": frame_id, "ln": label} for label in unique_labels]
+            conn.execute(text('INSERT INTO frame_labels (frame_id, label_name) VALUES (:fid, :ln)'), labels_to_insert)
+
+            for label in unique_labels:
+                conn.execute(
+                    text(
+                        'INSERT INTO class_labels (label_name, create_time_ms) VALUES (:ln, :c) ON CONFLICT(label_name) DO NOTHING'),
+                    {"ln": label, "c": int(time.time() * 1000)}
+                )
+
+        # 更新已标注帧计数
+        new_labeled_count = conn.execute(
+            text(
+                "SELECT COUNT(*) FROM video_frames WHERE video_uuid = :u AND annotations_json IS NOT NULL AND TRIM(annotations_json) != '' AND annotations_json != '{\"version\": 1, \"objects\": [], \"classifications\": []}'"
+            ),
+            {"u": video_uuid}
+        ).scalar()
+        conn.execute(text('UPDATE videos SET labeled_frame_count = :c WHERE video_uuid = :u'),
+                     {"c": new_labeled_count, "u": video_uuid})
+
+def get_frame_annotations(video_uuid, frame_number):
+    with engine.connect() as conn:
+        result = conn.execute(
+            text('SELECT annotations_json FROM video_frames WHERE video_uuid = :u AND frame_number = :fn'),
+            {"u": video_uuid, "fn": frame_number}
+        ).fetchone()
+        if result and result._mapping['annotations_json']:
+            import json
+            try:
+                return json.loads(result._mapping['annotations_json'])
+            except:
+                pass
+        return None
+
+def set_video_annotation_type(video_uuid, annotation_type):
+    with engine.begin() as conn:
+        conn.execute(text('UPDATE videos SET annotation_type = :t WHERE video_uuid = :u'),
+                     {"t": annotation_type, "u": video_uuid})
+
+def get_video_annotation_type(video_uuid):
+    with engine.connect() as conn:
+        result = conn.execute(text('SELECT annotation_type FROM videos WHERE video_uuid = :u'),
+                              {"u": video_uuid}).fetchone()
+        return result._mapping['annotation_type'] if result else 'detection'
+
+def set_video_keypoint_schema(video_uuid, schema_json):
+    with engine.begin() as conn:
+        conn.execute(text('UPDATE videos SET keypoint_schema = :s WHERE video_uuid = :u'),
+                     {"s": schema_json, "u": video_uuid})
+
+def get_video_keypoint_schema(video_uuid):
+    with engine.connect() as conn:
+        result = conn.execute(text('SELECT keypoint_schema FROM videos WHERE video_uuid = :u'),
+                              {"u": video_uuid}).fetchone()
+        return result._mapping['keypoint_schema'] if result else None
 
 
 def save_frame_bboxes(video_uuid, frame_number, bboxes_text):
@@ -334,12 +474,68 @@ def save_frame_bboxes(video_uuid, frame_number, bboxes_text):
                      {"c": new_labeled_count, "u": video_uuid})
 
 
-def save_frame_suggestions(video_uuid, frame_number, suggested_bboxes_text):
+def convert_suggestions_to_formal_annotations(video_uuid, frame_number, suggested_bboxes_text):
+    if not suggested_bboxes_text or not suggested_bboxes_text.strip():
+        return
+
+    annotation_type = get_video_annotation_type(video_uuid)
+    lines = [line.strip() for line in suggested_bboxes_text.strip().split('\n') if line.strip()]
+    if not lines:
+        return
+
+    if annotation_type == 'segmentation':
+        from annotation_model import AnnotationData, AnnotationObject
+        existing_ann_dict = get_frame_annotations(video_uuid, frame_number)
+        if existing_ann_dict:
+            ann_data = AnnotationData.from_dict(existing_ann_dict)
+        else:
+            ann_data = AnnotationData()
+
+        for idx, line in enumerate(lines):
+            parts = line.split(',')
+            if len(parts) >= 5:
+                xmin, ymin, xmax, ymax = float(parts[0]), float(parts[1]), float(parts[2]), float(parts[3])
+                label = parts[4]
+                poly_str = parts[6] if len(parts) >= 7 else ""
+                poly_pts = []
+                if poly_str and '|' in poly_str:
+                    try:
+                        poly_pts = [[float(p.split(';')[0]), float(p.split(';')[1])] for p in poly_str.split('|') if ';' in p]
+                    except:
+                        poly_pts = []
+
+                if not poly_pts or len(poly_pts) < 3:
+                    poly_pts = [[xmin, ymin], [xmax, ymin], [xmax, ymax], [xmin, ymax]]
+
+                obj_id = f"poly_{int(time.time()*1000)}_{idx}"
+                ann_data.objects.append(AnnotationObject(id=obj_id, type='polygon', label=label, points=poly_pts))
+
+        save_frame_annotations(video_uuid, frame_number, ann_data.to_json())
+
+    else:
+        new_bbox_lines = []
+        for line in lines:
+            parts = line.split(',')
+            if len(parts) >= 5:
+                xmin, ymin, xmax, ymax, label = parts[0], parts[1], parts[2], parts[3], parts[4]
+                new_bbox_lines.append(f"{xmin},{ymin},{xmax},{ymax},{label}")
+
+        existing = get_frame_bboxes(video_uuid, frame_number)
+        if existing and existing.get('bboxes_text') and existing['bboxes_text'].strip():
+            combined_text = existing['bboxes_text'].strip() + "\n" + "\n".join(new_bbox_lines)
+        else:
+            combined_text = "\n".join(new_bbox_lines)
+
+        save_frame_bboxes(video_uuid, frame_number, combined_text)
+
     with engine.begin() as conn:
         conn.execute(
-            text('UPDATE video_frames SET suggested_bboxes_text = :sb WHERE video_uuid = :u AND frame_number = :fn'),
-            {"sb": suggested_bboxes_text, "u": video_uuid, "fn": frame_number}
+            text("UPDATE video_frames SET suggested_bboxes_text = '' WHERE video_uuid = :u AND frame_number = :fn"),
+            {"u": video_uuid, "fn": frame_number}
         )
+
+def save_frame_suggestions(video_uuid, frame_number, suggested_bboxes_text):
+    convert_suggestions_to_formal_annotations(video_uuid, frame_number, suggested_bboxes_text)
 
 
 def save_frame_tags(video_uuid, frame_number, tags_json_string):
@@ -376,12 +572,12 @@ def add_frames_to_video(video_uuid, frames_data_list):
         for i, image_bytes in enumerate(frames_data_list):
             new_frame_number = start_frame_number + i
             file_storage.save_frame_image(video_uuid, new_frame_number, image_bytes)
-            db_rows_to_insert.append({"u": video_uuid, "fn": new_frame_number, "bt": "", "sb": "", "t": "", "inc": 1})
+            db_rows_to_insert.append({"u": video_uuid, "fn": new_frame_number, "bt": "", "sb": "", "t": "", "aj": "", "inc": 1})
 
         if db_rows_to_insert:
             conn.execute(
                 text(
-                    'INSERT INTO video_frames (video_uuid, frame_number, bboxes_text, suggested_bboxes_text, tags, include_frame_in_dataset) VALUES (:u, :fn, :bt, :sb, :t, :inc)'),
+                    'INSERT INTO video_frames (video_uuid, frame_number, bboxes_text, suggested_bboxes_text, tags, annotations_json, include_frame_in_dataset) VALUES (:u, :fn, :bt, :sb, :t, :aj, :inc)'),
                 db_rows_to_insert
             )
 
@@ -532,15 +728,26 @@ def delete_class_tag(tag_name):
         conn.execute(text('DELETE FROM class_tags WHERE tag_name = :tn'), {"tn": tag_name})
 
 
-def create_dataset_entry(description, video_uuids, create_time_ms, eval_percent, test_percent):
-    dataset_uuid = str(uuid.uuid4().hex)
-    with engine.begin() as conn:
+def create_dataset_entry(description, video_uuids, create_time, eval_percent=20.0, test_percent=10.0, export_format='yolo_v8_detect'):
+    dataset_uuid = str(uuid.uuid4())
+    video_uuids_json = json.dumps(video_uuids)
+    with engine.connect() as conn:
         conn.execute(
-            text(
-                'INSERT INTO datasets (dataset_uuid, description, video_uuids, create_time_ms, status, eval_percent, test_percent) VALUES (:du, :d, :vu, :c, :s, :ep, :tp)'),
-            {"du": dataset_uuid, "d": description, "vu": json.dumps(video_uuids), "c": create_time_ms, "s": 'PENDING',
-             "ep": eval_percent, "tp": test_percent}
+            text("""
+                INSERT INTO datasets (dataset_uuid, description, video_uuids, create_time_ms, eval_percent, test_percent, export_format, status)
+                VALUES (:dataset_uuid, :description, :video_uuids, :create_time, :eval_percent, :test_percent, :export_format, 'PENDING')
+            """),
+            {
+                "dataset_uuid": dataset_uuid,
+                "description": description,
+                "video_uuids": video_uuids_json,
+                "create_time": create_time,
+                "eval_percent": eval_percent,
+                "test_percent": test_percent,
+                "export_format": export_format,
+            }
         )
+        conn.commit()
     return dataset_uuid
 
 

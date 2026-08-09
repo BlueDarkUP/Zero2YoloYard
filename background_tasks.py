@@ -4,6 +4,7 @@ import random
 import shutil
 import time
 import traceback
+import uuid
 import zipfile
 
 import cv2
@@ -104,16 +105,47 @@ def apply_class_to_videos_task(task_uuid, video_uuids, class_name, confidence_th
                             video_uuid, frame_number, class_name, confidence_threshold=confidence_threshold
                         )
                         if predictions:
-                            suggested_text = "\n".join([
-                                f"{int(p['box'][0])},{int(p['box'][1])},{int(p['box'][2])},{int(p['box'][3])},"
-                                f"{class_name},{p['score']:.4f}"
-                                for p in predictions])
-                            database.save_frame_suggestions(video_uuid, frame_number, suggested_text)
+                            annotation_type = database.get_video_annotation_type(video_uuid)
+                            if annotation_type == 'segmentation':
+                                from annotation_model import AnnotationData, AnnotationObject
+                                existing_ann_dict = database.get_frame_annotations(video_uuid, frame_number)
+                                if existing_ann_dict:
+                                    ann_data = AnnotationData.from_dict(existing_ann_dict)
+                                else:
+                                    ann_data = AnnotationData()
+
+                                for j, p in enumerate(predictions):
+                                    poly = p.get('polygon', [])
+                                    if poly and len(poly) >= 3:
+                                        pts = [[float(pt[0]), float(pt[1])] for pt in poly]
+                                    else:
+                                        box = p['box']
+                                        x1, y1, x2, y2 = box
+                                        pts = [[float(x1), float(y1)], [float(x2), float(y1)], [float(x2), float(y2)], [float(x1), float(y2)]]
+
+                                    obj_id = f"poly_{int(time.time()*1000)}_{j}"
+                                    ann_data.objects.append(AnnotationObject(id=obj_id, type='polygon', label=class_name, points=pts))
+
+                                database.save_frame_annotations(video_uuid, frame_number, ann_data.to_json())
+                            else:
+                                lines = []
+                                for p in predictions:
+                                    box_str = f"{int(p['box'][0])},{int(p['box'][1])},{int(p['box'][2])},{int(p['box'][3])}"
+                                    lines.append(f"{box_str},{class_name}")
+
+                                existing_frame = database.get_frame_bboxes(video_uuid, frame_number)
+                                if existing_frame and existing_frame.get('bboxes_text') and existing_frame['bboxes_text'].strip():
+                                    combined = existing_frame['bboxes_text'].strip() + "\n" + "\n".join(lines)
+                                else:
+                                    combined = "\n".join(lines)
+
+                                database.save_frame_bboxes(video_uuid, frame_number, combined)
+
                     except Exception as frame_e:
                         logging.error(f"[{task_uuid}] Failed to process frame {frame_number} of {video_uuid}: {frame_e}")
 
                 database.update_video_status(video_uuid, 'READY',
-                                             f"Finished applying '{class_name}' suggestions. Review suggestions.")
+                                             f"Finished applying '{class_name}'. Formal annotations generated.")
                 if active_tasks.get(video_uuid) == task_uuid:
                     del active_tasks[video_uuid]
                 session['videos_done'] += 1
@@ -246,13 +278,13 @@ def start_sam2_batch_tracking_task(video_uuid, tracker_uuid, start_frame, end_fr
             del active_tasks[video_uuid]
         logging.info(f"Batch tracking task for {tracker_uuid} cleaned up.")
 
-def extract_frames_task(video_uuid, target_fps=0.0):
+def extract_frames_task(video_uuid, frame_interval=1):
     if active_tasks.get(video_uuid) == 'EXTRACTING':
         logging.warning(f"Extraction for {video_uuid} is already running.")
         return
 
     active_tasks[video_uuid] = 'EXTRACTING'
-    logging.info(f"Starting frame extraction for {video_uuid} (Target FPS: {target_fps})")
+    logging.info(f"Starting frame extraction for {video_uuid} (Frame Interval: {frame_interval})")
     video_path = file_storage.get_video_path(video_uuid)
 
     try:
@@ -273,12 +305,11 @@ def extract_frames_task(video_uuid, target_fps=0.0):
             while vid.grab():
                 total_native_frames += 1
             vid.set(cv2.CAP_PROP_POS_FRAMES, 0)
-        if target_fps > 0 and target_fps < native_fps:
-            skip_interval = native_fps / target_fps
-            actual_fps = target_fps
-        else:
-            skip_interval = 1.0
-            actual_fps = native_fps
+
+        interval = float(frame_interval) if frame_interval and float(frame_interval) >= 1.0 else 1.0
+        skip_interval = interval
+        actual_fps = native_fps / skip_interval
+
         frames_to_extract_indices = set()
         next_target = 0.0
         for i in range(total_native_frames):
@@ -288,7 +319,7 @@ def extract_frames_task(video_uuid, target_fps=0.0):
         exact_frame_count = len(frames_to_extract_indices)
         if exact_frame_count > config.MAX_FRAMES_PER_VIDEO:
             raise ValueError(
-                f"Extracted frames ({exact_frame_count}) exceed limit ({config.MAX_FRAMES_PER_VIDEO}). Please lower the sampling FPS.")
+                f"Extracted frames ({exact_frame_count}) exceed limit ({config.MAX_FRAMES_PER_VIDEO}). Please increase extraction interval.")
         database.update_video_after_extraction_start(video_uuid, width, height, actual_fps, exact_frame_count)
         settings = settings_manager.load_settings()
         jpeg_quality = int(settings.get('frame_extraction_jpeg_quality', 75))
@@ -307,8 +338,8 @@ def extract_frames_task(video_uuid, target_fps=0.0):
                     file_storage.save_frame_image(video_uuid, extracted_index, buffer.tobytes())
                     if (extracted_index + 1) % 20 == 0 or (extracted_index + 1) == exact_frame_count:
                         database.update_extracted_frame_count(video_uuid, extracted_index + 1)
+                    extracted_index += 1
 
-                extracted_index += 1
             native_count += 1
         vid.release()
         database.update_video_status(video_uuid, 'READY')
@@ -404,16 +435,26 @@ def pre_annotate_video_task(video_uuid, model_uuid, options):
             if model_type == 'float16':
                 logging.info("TFLite model configured for FP16 inference.")
 
+        annotation_type = video.get('annotation_type') or 'detection'
+
         all_frames = database.get_video_frames(video_uuid)
         frames_to_process = []
         for frame_info in all_frames:
             if start_frame <= frame_info['frame_number'] <= end_frame:
-                if merge_strategy == 'skip_labeled' and frame_info.get('bboxes_text', '').strip():
-                    continue
+                if merge_strategy == 'skip_labeled':
+                    if annotation_type == 'segmentation':
+                        if frame_info.get('annotations_json') and frame_info['annotations_json'].strip():
+                            continue
+                    else:
+                        if frame_info.get('bboxes_text') and frame_info['bboxes_text'].strip():
+                            continue
                 frames_to_process.append(frame_info)
 
         total_frames_to_process = len(frames_to_process)
         logging.info(f"Total frames to process after filtering: {total_frames_to_process}")
+
+        from annotation_model import AnnotationData, AnnotationObject
+        import time
 
         for i, frame_info in enumerate(frames_to_process):
             if i % 10 == 0:
@@ -432,17 +473,25 @@ def pre_annotate_video_task(video_uuid, model_uuid, options):
                 continue
 
             frame_img = cv2.imread(frame_path)
+            if frame_img is None:
+                continue
             imH, imW, _ = frame_img.shape
             frame_rgb = cv2.cvtColor(frame_img, cv2.COLOR_BGR2RGB)
 
             bboxes_text_lines = []
+            ann_data = AnnotationData()
+            has_masks = False
 
             if is_pt:
                 results = yolo_model(frame_rgb, conf=confidence_threshold, verbose=False)
                 if results and len(results) > 0:
-                    boxes_data = results[0].boxes
+                    res0 = results[0]
+                    boxes_data = getattr(res0, 'boxes', None)
+                    masks_data = getattr(res0, 'masks', None)
+                    has_masks = masks_data is not None and getattr(masks_data, 'xy', None) is not None and len(masks_data.xy) > 0
+
                     if boxes_data is not None and len(boxes_data) > 0:
-                        xyxy = boxes_data.xyxy.cpu().numpy()  # 像素坐标 [xmin, ymin, xmax, ymax]
+                        xyxy = boxes_data.xyxy.cpu().numpy()
                         conf = boxes_data.conf.cpu().numpy()
                         cls = boxes_data.cls.cpu().numpy()
 
@@ -453,10 +502,26 @@ def pre_annotate_video_task(video_uuid, model_uuid, options):
                             ymax = int(min(imH, xyxy[j][3]))
                             score = float(conf[j])
                             class_id = int(cls[j])
+                            object_name = labels[class_id] if class_id < len(labels) else f"class_{class_id}"
 
-                            if class_id < len(labels):
-                                object_name = labels[class_id]
-                                bboxes_text_lines.append(f"{xmin},{ymin},{xmax},{ymax},{object_name}")
+                            bboxes_text_lines.append(f"{xmin},{ymin},{xmax},{ymax},{object_name}")
+
+                            poly_pts = []
+                            if has_masks and j < len(masks_data.xy):
+                                pts = masks_data.xy[j]
+                                if len(pts) >= 3:
+                                    poly_pts = [[float(max(0, min(imW, pt[0]))), float(max(0, min(imH, pt[1])))] for pt in pts]
+
+                            if not poly_pts:
+                                poly_pts = [[float(xmin), float(ymin)], [float(xmax), float(ymin)], [float(xmax), float(ymax)], [float(xmin), float(ymax)]]
+
+                            obj_id = f"poly_{int(time.time()*1000)}_{j}"
+                            ann_data.objects.append(AnnotationObject(
+                                id=obj_id,
+                                type='polygon',
+                                label=object_name,
+                                points=poly_pts
+                            ))
 
             else:
                 image_resized = cv2.resize(frame_rgb, (width, height))
@@ -501,8 +566,21 @@ def pre_annotate_video_task(video_uuid, model_uuid, options):
                             object_name = labels[object_id]
                             bboxes_text_lines.append(f"{xmin},{ymin},{xmax},{ymax},{object_name}")
 
-            final_bboxes_text = "\n".join(bboxes_text_lines)
-            database.save_frame_bboxes(video_uuid, frame_info['frame_number'], final_bboxes_text)
+                            poly_pts = [[float(xmin), float(ymin)], [float(xmax), float(ymin)], [float(xmax), float(ymax)], [float(xmin), float(ymax)]]
+                            obj_id = f"poly_{int(time.time()*1000)}_{j}"
+                            ann_data.objects.append(AnnotationObject(
+                                id=obj_id,
+                                type='polygon',
+                                label=object_name,
+                                points=poly_pts
+                            ))
+
+            if annotation_type == 'segmentation' or has_masks:
+                json_str = ann_data.to_json()
+                database.save_frame_annotations(video_uuid, frame_info['frame_number'], json_str)
+            else:
+                final_bboxes_text = "\n".join(bboxes_text_lines)
+                database.save_frame_bboxes(video_uuid, frame_info['frame_number'], final_bboxes_text)
 
         database.update_video_status(video_uuid, 'READY', "Pre-annotation complete")
         logging.info(f"Pre-annotation for {video_uuid} completed successfully.")
@@ -588,116 +666,19 @@ def start_tracking_task(video_uuid, tracker_uuid, tracker_name, scale, init_fram
             f"Tracking task for {video_uuid} finished with status: {tracking_sessions.get(tracker_uuid, {}).get('status')}")
 
 
-def build_augmentation_pipeline(options):
-    if A is None: return None
-    transforms = []
-    if options.get('hflip', {}).get('enabled'):
-        transforms.append(A.HorizontalFlip(p=options['hflip']['p']))
-    if options.get('vflip', {}).get('enabled'):
-        transforms.append(A.VerticalFlip(p=options['vflip']['p']))
-    if options.get('rotate90', {}).get('enabled'):
-        transforms.append(A.RandomRotate90(p=options['rotate90']['p']))
-    if options.get('rotate', {}).get('enabled'):
-        transforms.append(
-            A.Rotate(limit=options['rotate']['limit'], p=options['rotate']['p'], border_mode=cv2.BORDER_CONSTANT,
-                     value=0))
-    if options.get('ssr', {}).get('enabled'):
-        transforms.append(A.ShiftScaleRotate(shift_limit=options['ssr']['shift'], scale_limit=options['ssr']['scale'],
-                                             rotate_limit=options['ssr']['rotate'], p=options['ssr']['p'],
-                                             border_mode=cv2.BORDER_CONSTANT, value=0))
-    if options.get('affine', {}).get('enabled'):
-        limit = options['affine']['shear']
-        transforms.append(
-            A.Affine(shear={'x': (-limit, limit), 'y': (-limit, limit)}, p=options['affine']['p'], cval=0))
-    if options.get('crop', {}).get('enabled'):
-        transforms.append(A.RandomSizedBBoxSafeCrop(height=1024, width=1024, erosion_rate=0.2,
-                                                    p=options['crop']['p']))
-
-    if options.get('grayscale', {}).get('enabled'):
-        transforms.append(A.ToGray(p=options['grayscale']['p']))
-    if options.get('hsv', {}).get('enabled'):
-        transforms.append(A.HueSaturationValue(hue_shift_limit=options['hsv']['h'], sat_shift_limit=options['hsv']['s'],
-                                               val_shift_limit=options['hsv']['v'], p=options['hsv']['p']))
-    if options.get('bc', {}).get('enabled'):
-        transforms.append(
-            A.RandomBrightnessContrast(brightness_limit=options['bc']['b'], contrast_limit=options['bc']['c'],
-                                       p=options['bc']['p']))
-
-    if options.get('blur', {}).get('enabled'):
-        transforms.append(A.GaussianBlur(blur_limit=(3, options['blur']['limit']), p=options['blur']['p']))
-    if options.get('noise', {}).get('enabled'):
-        transforms.append(A.GaussNoise(var_limit=(10.0, options['noise']['limit']), p=options['noise']['p']))
-
-    if options.get('cutout', {}).get('enabled'):
-        transforms.append(
-            BboxSafeCoarseDropout(max_holes=options['cutout']['holes'], max_height=options['cutout']['size'],
-                                  max_width=options['cutout']['size'], fill_value=0, p=options['cutout']['p']))
-
-    if not transforms: return None
-    return A.Compose(transforms,
-                     bbox_params=A.BboxParams(format='yolo', label_fields=['class_labels'], min_visibility=0.1))
+# Note: Augmentation and process_frame_worker logic has been moved to exporters/detection/yolo_detect.py
+from exporters.detection.yolo_detect import build_augmentation_pipeline, build_augmentation_pipeline_for_keypoints
 
 
-def process_frame_worker(args):
-    frame_info, target_img_dir, target_lbl_dir, class_map, augmentation_options = args
+def create_dataset_task(dataset_uuid, video_uuids, eval_percent, test_percent, export_format="yolo_v8_detect", augmentation_options=None):
+    from exporters import ExporterRegistry
+    import json
+    from annotation_model import AnnotationData
 
-    augment_pipeline = None
-    is_augmented = frame_info.get("type") == "augmented"
-    if is_augmented and augmentation_options and augmentation_options.get("enabled", False):
-        augment_pipeline = build_augmentation_pipeline(augmentation_options)
-
-    try:
-        if is_augmented:
-            base_filename = frame_info["augmented_id"]
-        else:
-            base_filename = f"{frame_info['video_uuid']}_{frame_info['frame_number']:05d}"
-
-        src_img_path = file_storage.get_frame_path(frame_info['video_uuid'], frame_info['frame_number'])
-        if not os.path.exists(src_img_path):
-            logging.warning(f"源文件未找到，跳过: {src_img_path}")
-            return None
-
-        image = cv2.imread(src_img_path)
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        yolo_bboxes, class_indices = file_storage.get_yolo_bboxes(
-            frame_info['bboxes_text'], frame_info['width'], frame_info['height'], class_map
-        )
-
-        if not yolo_bboxes:
-            return None
-
-        if is_augmented and augment_pipeline:
-            transformed = augment_pipeline(image=image, bboxes=yolo_bboxes, class_labels=class_indices)
-            image_aug_rgb = transformed['image']
-            bboxes_aug_yolo_tuples = transformed['bboxes']
-            labels_aug_indices = transformed['class_labels']
-            bboxes_aug_yolo = [(labels_aug_indices[i], *box) for i, box in enumerate(bboxes_aug_yolo_tuples)]
-        else:
-            image_aug_rgb = image
-            bboxes_aug_yolo = [(class_indices[i], *box) for i, box in enumerate(yolo_bboxes)]
-
-        final_image_bgr = cv2.cvtColor(image_aug_rgb, cv2.COLOR_RGB2BGR)
-        output_image_path = os.path.join(target_img_dir, base_filename + '.jpg')
-        cv2.imwrite(output_image_path, final_image_bgr)
-
-        yolo_content_lines = [f"{class_id} {x:.6f} {y:.6f} {w:.6f} {h:.6f}" for class_id, x, y, w, h in bboxes_aug_yolo]
-        output_label_path = os.path.join(target_lbl_dir, base_filename + '.txt')
-        with open(output_label_path, 'w') as f:
-            f.write("\n".join(yolo_content_lines))
-
-        return output_image_path
-
-    except Exception as e:
-        logging.error(f"处理帧 {frame_info.get('augmented_id') or frame_info.get('frame_number')} 时发生错误: {e}")
-        logging.error(traceback.format_exc())
-        return None
-
-
-def create_dataset_task(dataset_uuid, video_uuids, eval_percent, test_percent, augmentation_options=None):
     if augmentation_options is None:
         augmentation_options = {}
 
-    logging.info(f"Starting dataset creation task for UUID: {dataset_uuid} with augmentations: {augmentation_options}")
+    logging.info(f"Starting dataset creation task for UUID: {dataset_uuid} with format: {export_format}, augmentations: {augmentation_options}")
     try:
         if eval_percent is None: eval_percent = 20.0
         if test_percent is None: test_percent = 10.0
@@ -712,97 +693,52 @@ def create_dataset_task(dataset_uuid, video_uuids, eval_percent, test_percent, a
         logging.info(f"Gathering frames from {len(video_uuids)} selected video(s)...")
         for video_uuid in video_uuids:
             video = database.get_video_entity(video_uuid)
-            all_video_frames = database.get_video_frames(video_uuid)
+            all_video_frames = database.get_annotated_video_frames(video_uuid)
             for frame in all_video_frames:
-                if frame.get('bboxes_text') and frame['bboxes_text'].strip():
+                ann_data = None
+                if frame.get('annotations_json'):
+                    ann_data = AnnotationData.from_json(frame['annotations_json'])
+                elif frame.get('bboxes_text'):
+                    # Fallback for old data during transition
+                    from annotation_model import AnnotationObject
+                    from bbox_writer import parse_bboxes_text
+                    ann_data = AnnotationData()
+                    bboxes, classes = parse_bboxes_text(frame['bboxes_text'], 1.0)
+                    for bbox, cls in zip(bboxes, classes):
+                        ann_data.objects.append(AnnotationObject(id=str(uuid.uuid4()), type="bbox", label=cls, bbox=bbox))
+                
+                if ann_data and (ann_data.objects or ann_data.classifications):
                     frames_to_include.append({
                         "video_uuid": video_uuid, "frame_number": frame['frame_number'],
-                        "bboxes_text": frame['bboxes_text'], "width": video['width'], "height": video['height']
+                        "annotations": ann_data, "width": video['width'], "height": video['height']
                     })
-                    labels_in_frame = extract_labels(frame['bboxes_text'])
-                    for label in labels_in_frame: all_labels.add(label)
+                    for label in ann_data.get_unique_labels():
+                        all_labels.add(label)
 
         if not frames_to_include:
-            raise ValueError("No labeled frames with valid bounding boxes were found in the selected videos.")
+            raise ValueError("No labeled frames were found in the selected videos.")
 
         sorted_labels = sorted(list(all_labels))
-        class_map = {name: i for i, name in enumerate(sorted_labels)}
         logging.info(f"Dataset classes (sorted): {sorted_labels}")
 
-        is_aug_enabled = A is not None and augmentation_options.get("enabled", False)
-        multiplication_factor = int(augmentation_options.get("multiply_factor", 1)) if is_aug_enabled else 1
-        final_frames_to_process = []
-        if is_aug_enabled and multiplication_factor > 1:
-            for frame_info in frames_to_include:
-                final_frames_to_process.append({"type": "original", **frame_info})
-                for i in range(multiplication_factor - 1):
-                    aug_id = f"aug_{i}_{frame_info['video_uuid']}_{frame_info['frame_number']:05d}"
-                    final_frames_to_process.append({"type": "augmented", "augmented_id": aug_id, **frame_info})
-        else:
-            final_frames_to_process = [{"type": "original", **frame_info} for frame_info in frames_to_include]
-
-        random.shuffle(final_frames_to_process)
-        total_count = len(final_frames_to_process)
-        val_count = int(total_count * eval_percent / 100.0)
-        test_count = int(total_count * test_percent / 100.0)
-
-        val_data = final_frames_to_process[:val_count]
-        test_data = final_frames_to_process[val_count:val_count + test_count]
-        train_data = final_frames_to_process[val_count + test_count:]
-
         dataset_dir = file_storage.get_dataset_dir(dataset_uuid)
-        if os.path.exists(dataset_dir): shutil.rmtree(dataset_dir)
-        dir_map = {
-            'train': (os.path.join(dataset_dir, 'images', 'train'), os.path.join(dataset_dir, 'labels', 'train')),
-            'val': (os.path.join(dataset_dir, 'images', 'val'), os.path.join(dataset_dir, 'labels', 'val')),
-            'test': (os.path.join(dataset_dir, 'images', 'test'), os.path.join(dataset_dir, 'labels', 'test')),
-        }
-        for img_dir, lbl_dir in dir_map.values():
-            os.makedirs(img_dir, exist_ok=True)
-            os.makedirs(lbl_dir, exist_ok=True)
-        all_tasks = []
-        for split_name, split_data in [('train', train_data), ('val', val_data), ('test', test_data)]:
-            img_dir, lbl_dir = dir_map[split_name]
-            for frame_info in split_data:
-                all_tasks.append((frame_info, img_dir, lbl_dir, class_map, augmentation_options))
-
-        settings = settings_manager.load_settings()
-
-        # Determine max_workers based on settings
-        max_workers_setting = settings.get('max_workers', 8)
-        if max_workers_setting == 'auto':
-            safe_workers = min(4, max(1, cpu_count() // 2))
-        else:
-            # We constrain it to a reasonable maximum for the pool, e.g., CPU count or configured limit
-            safe_workers = min(int(max_workers_setting), max(1, cpu_count()))
-
-        database.update_dataset_status(dataset_uuid, status="PROCESSING",
-                                       message=f"Processing {len(all_tasks)} images across {safe_workers} CPU cores...")
-        logging.info(f"Starting parallel processing of {len(all_tasks)} images using {safe_workers} cores.")
-
-        processed_count = 0
-        with Pool(processes=safe_workers) as pool:
-            for result in pool.imap_unordered(process_frame_worker, all_tasks):
-                if result:
-                    processed_count += 1
-                    if processed_count % 50 == 0:
-                        progress_msg = f"Processed {processed_count}/{len(all_tasks)} images..."
-                        database.update_dataset_status(dataset_uuid, status="PROCESSING", message=progress_msg)
-
-        logging.info(f"Parallel processing finished. Processed {processed_count} images successfully.")
-
-        if yaml:
-            yaml_content = {'path': f"../datasets/{dataset_uuid}", 'train': 'images/train', 'val': 'images/val',
-                            'test': 'images/test', 'nc': len(sorted_labels), 'names': sorted_labels}
-            with open(os.path.join(dataset_dir, 'data.yaml'), 'w') as f:
-                yaml.dump(yaml_content, f, sort_keys=False)
-        else:
-            logging.error("PyYAML is not installed! Cannot create data.yaml for the dataset.")
+        
+        exporter = ExporterRegistry.get(export_format)
+        exporter.export(
+            export_dir=dataset_dir,
+            frames_data=frames_to_include,
+            class_list=sorted_labels,
+            dataset_uuid=dataset_uuid,
+            eval_percent=eval_percent,
+            test_percent=test_percent,
+            augmentation_options=augmentation_options
+        )
 
         database.update_dataset_status(dataset_uuid, status="PROCESSING", message="Creating ZIP archive...")
         zip_path_base = os.path.join(config.STORAGE_DIR, 'datasets', dataset_uuid)
         zip_path = f"{zip_path_base}.zip"
-
+        
+        settings = settings_manager.load_settings()
         zip_setting = settings.get('zip_compression', 'standard')
         compress_type = zipfile.ZIP_STORED if zip_setting == 'fast' else zipfile.ZIP_DEFLATED
         compress_level = 1 if zip_setting == 'fast' else (9 if zip_setting == 'max' else 6)
@@ -823,8 +759,7 @@ def create_dataset_task(dataset_uuid, video_uuids, eval_percent, test_percent, a
             for v_uuid in video_uuids:
                 all_v_frames = database.get_video_frames(v_uuid)
                 for f_info in all_v_frames:
-                    if not f_info.get('bboxes_text') or not f_info['bboxes_text'].strip():
-                        # Delete the physical file from disk
+                    if not f_info.get('annotations_json') and not f_info.get('bboxes_text'):
                         f_path = file_storage.get_frame_path(v_uuid, f_info['frame_number'])
                         if os.path.exists(f_path):
                             os.remove(f_path)

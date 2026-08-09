@@ -1,0 +1,22 @@
+<!-- Instance/Semantic Segmentation (Polygon) Sidebar Sub-Template -->
+<div class="task-panel task-segmentation">
+    {% include '_label_inference_tools.html' %}
+
+    <div class="d-flex justify-content-between align-items-center mb-2 mt-3">
+        <h6 class="font-weight-bold text-uppercase text-info mb-0">
+            <i class="bi bi-bezier2 mr-1"></i> Polygons (<span id="segmentation-count">0</span>)
+        </h6>
+        <button id="btn-complete-polygon" class="btn btn-sm btn-outline-success font-weight-bold" style="display:none;">
+            <i class="bi bi-check-lg mr-1"></i>Close Shape (Enter)
+        </button>
+    </div>
+
+    <div class="alert alert-dark p-2 small mb-3 border-secondary text-muted" style="font-size: 0.75rem;">
+        <i class="bi bi-info-circle mr-1"></i><b>Manual</b>: Click to add vertices. Right-click / Enter to close. Esc to cancel.<br>
+        <i class="bi bi-info-circle mr-1"></i><b>SAM Point / LAM</b>: Toggle tools above, then click canvas to auto-segment.
+    </div>
+
+    <div id="segmentation-object-list" class="annotation-object-list">
+        <!-- Dynamically rendered Polygon items -->
+    </div>
+</div>

@@ -1,4 +1,4 @@
-import psutil
+import os
 import flask
 from flask import Response, request, jsonify, render_template, send_from_directory, send_file
 import os
@@ -287,6 +287,19 @@ def complete_setup():
 @app.route('/labelVideo')
 def label_video():
     task_uuid = request.args.get('task_uuid')
+    video_uuid = request.args.get('video_uuid')
+
+    if not task_uuid and video_uuid:
+        tasks = database.get_tasks_for_video(video_uuid)
+        if tasks:
+            task_uuid = tasks[0]['task_uuid']
+        else:
+            video = database.get_video_entity(video_uuid)
+            if video:
+                task_uuid = database.create_annotation_task(
+                    video_uuid, "admin", video['description'], 0, max(0, (video.get('frame_count') or 1) - 1)
+                )
+
     if not task_uuid:
         return "Task UUID is required.", 400
 
@@ -330,21 +343,56 @@ def serve_annotated_frame(video_uuid, frame_number):
         if image is None:
             return "Could not read frame image", 500
 
-        # 替换为使用新的通用查询方法
-        frame_data = database.get_frame_bboxes(video_uuid, frame_number)
+        # 获取指定帧的数据库记录
+        frames = database.get_video_frames(video_uuid)
+        frame_item = next((f for f in frames if f['frame_number'] == frame_number), None)
 
-        bboxes_text = frame_data['bboxes_text'] if frame_data else None
+        if frame_item:
+            # 1. 优先绘制高级 JSON 标注 (适用于分割多边形、姿态、高级框)
+            if frame_item.get('annotations_json') and frame_item['annotations_json'].strip():
+                from annotation_model import AnnotationData
+                ann_data = AnnotationData.from_json(frame_item['annotations_json'])
+                for obj in ann_data.objects:
+                    color = string_to_color_bgr(obj.label)
 
-        if bboxes_text and bboxes_text.strip():
-            rects, labels, _ = convert_text_to_rects_and_labels(bboxes_text)
-            for i, rect in enumerate(rects):
-                label = labels[i]
-                color = string_to_color_bgr(label)
-                x1, y1, x2, y2 = rect
-                cv2.rectangle(image, (x1, y1), (x2, y2), color, 2)
-                (text_width, text_height), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
-                cv2.rectangle(image, (x1, y1 - text_height - 5), (x1 + text_width, y1), color, -1)
-                cv2.putText(image, label, (x1, y1 - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+                    # 绘制分割多边形与半透明色彩掩码
+                    if obj.type == 'polygon' and obj.polygon:
+                        pts = np.array(obj.polygon, np.int32).reshape((-1, 1, 2))
+                        cv2.polylines(image, [pts], isClosed=True, color=color, thickness=2)
+
+                        overlay = image.copy()
+                        cv2.fillPoly(overlay, [pts], color)
+                        cv2.addWeighted(overlay, 0.35, image, 0.65, 0, image)
+
+                        # 绘制类别标签
+                        x_min = int(np.min(pts[:, 0, 0]))
+                        y_min = int(np.min(pts[:, 0, 1]))
+                        (text_w, text_h), _ = cv2.getTextSize(obj.label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+                        cv2.rectangle(image, (x_min, max(0, y_min - text_h - 5)), (x_min + text_w, y_min), color, -1)
+                        cv2.putText(image, obj.label, (x_min, max(text_h, y_min - 4)), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                                    (255, 255, 255), 1)
+
+                    # 绘制矩形框
+                    elif obj.type == 'bbox' and obj.bbox:
+                        x1, y1, x2, y2 = map(int, obj.bbox)
+                        cv2.rectangle(image, (x1, y1), (x2, y2), color, 2)
+                        (text_w, text_h), _ = cv2.getTextSize(obj.label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+                        cv2.rectangle(image, (x1, max(0, y1 - text_h - 5)), (x1 + text_w, y1), color, -1)
+                        cv2.putText(image, obj.label, (x1, max(text_h, y1 - 4)), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                                    (255, 255, 255), 1)
+
+            # 2. 兼容传统文本检测框 (bboxes_text)
+            elif frame_item.get('bboxes_text') and frame_item['bboxes_text'].strip():
+                rects, labels, _ = convert_text_to_rects_and_labels(frame_item['bboxes_text'])
+                for i, rect in enumerate(rects):
+                    label = labels[i]
+                    color = string_to_color_bgr(label)
+                    x1, y1, x2, y2 = rect
+                    cv2.rectangle(image, (x1, y1), (x2, y2), color, 2)
+                    (text_w, text_h), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+                    cv2.rectangle(image, (x1, max(0, y1 - text_h - 5)), (x1 + text_w, y1), color, -1)
+                    cv2.putText(image, label, (x1, max(text_h, y1 - 4)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255),
+                                1)
 
         success, buffer = cv2.imencode('.jpg', image)
         if not success:
@@ -353,7 +401,7 @@ def serve_annotated_frame(video_uuid, frame_number):
         return Response(buffer.tobytes(), mimetype='image/jpeg')
 
     except Exception as e:
-        logging.error(f"Error generating annotated frame for {video_uuid}/{frame_number}: {e}")
+        logging.error(f"Error generating annotated frame for {video_uuid}/{frame_number}: {e}", exc_info=True)
         return "Internal server error", 500
 
 
@@ -372,9 +420,12 @@ def upload_video():
     desc = request.form.get('description')
     video_file = request.files.get('video_file')
     try:
-        target_fps = float(request.form.get('target_fps', 0))
+        raw_val = request.form.get('frame_interval') or request.form.get('target_fps') or '5'
+        frame_interval = int(float(raw_val))
+        if frame_interval < 1:
+            frame_interval = 1
     except ValueError:
-        target_fps = 0.0
+        frame_interval = 5
 
     is_valid, message = validate_description(desc, [v['description'] for v in database.get_all_video_list()])
     if not is_valid:
@@ -383,10 +434,11 @@ def upload_video():
         return jsonify({'success': False, 'message': 'No video file provided.'}), 400
 
     create_time_ms = int(time.time() * 1000)
-    video_uuid = database.create_video_entry(desc, video_file.filename, 0, create_time_ms)
+    annotation_type = request.form.get('annotation_type', 'detection')
+    video_uuid = database.create_video_entry(desc, video_file.filename, 0, create_time_ms, annotation_type=annotation_type)
     file_storage.save_uploaded_video(video_file, video_uuid)
 
-    threading.Thread(target=background_tasks.extract_frames_task, args=(video_uuid, target_fps),
+    threading.Thread(target=background_tasks.extract_frames_task, args=(video_uuid, frame_interval),
                      name=f"Extractor-{video_uuid[:6]}").start()
 
     return jsonify({'success': True, 'video_uuid': video_uuid})
@@ -452,7 +504,7 @@ def import_frames():
 
 @app.route('/retrieveVideoEntity', methods=['POST'])
 def retrieve_video_entity():
-    video_uuid = request.json.get('video_uuid')
+    video_uuid = (request.json or {}).get('video_uuid')
     entity = database.get_video_entity(video_uuid)
     if entity:
         return jsonify({'success': True, 'video_entity': sanitize_dict(entity)})
@@ -461,7 +513,7 @@ def retrieve_video_entity():
 
 @app.route('/deleteVideo', methods=['POST'])
 def delete_video():
-    video_uuid = request.json.get('video_uuid')
+    video_uuid = (request.json or {}).get('video_uuid')
     database.delete_video(video_uuid)
     file_storage.delete_video_file(video_uuid)
     file_storage.delete_frames_for_video(video_uuid)
@@ -470,7 +522,7 @@ def delete_video():
 
 @app.route('/retrieveVideoFrames', methods=['POST'])
 def retrieve_video_frames():
-    video_uuid = request.json.get('video_uuid')
+    video_uuid = (request.json or {}).get('video_uuid')
     frames = database.get_video_frames(video_uuid)
     for frame in frames:
         frame['image_url'] = f"/media/frames/{video_uuid}/frame_{frame['frame_number']:05d}.jpg"
@@ -487,6 +539,32 @@ def store_video_frame_bboxes_text():
     database.save_frame_bboxes(video_uuid, frame_number, bboxes_text)
 
     return jsonify({'success': True})
+
+
+@app.route('/saveFrameAnnotations', methods=['POST'])
+def save_frame_annotations():
+    data = request.json
+    video_uuid = data.get('video_uuid')
+    frame_number = int(data.get('frame_number'))
+    annotations_json = data.get('annotations_json')
+
+    if not video_uuid or frame_number is None:
+        return jsonify({'success': False, 'message': 'Missing video_uuid or frame_number'}), 400
+
+    database.save_frame_annotations(video_uuid, frame_number, annotations_json)
+    return jsonify({'success': True})
+
+
+@app.route('/getFrameAnnotations', methods=['GET'])
+def get_frame_annotations():
+    video_uuid = request.args.get('video_uuid')
+    frame_number = request.args.get('frame_number', type=int)
+
+    if not video_uuid or frame_number is None:
+        return jsonify({'success': False, 'message': 'Missing video_uuid or frame_number'}), 400
+
+    frame_data = database.get_frame_annotations(video_uuid, frame_number)
+    return jsonify({'success': True, 'annotations': frame_data})
 
 
 @app.route('/listTasks', methods=['GET'])
@@ -532,7 +610,7 @@ def create_task():
 
 @app.route('/deleteTask', methods=['POST'])
 def delete_task():
-    task_uuid = request.json.get('task_uuid')
+    task_uuid = (request.json or {}).get('task_uuid')
     database.delete_task(task_uuid)
     return jsonify({'success': True})
 
@@ -622,7 +700,12 @@ def interpolate_bboxes():
 
             existing_bboxes = frame_db['bboxes_text'] if frame_db else ''
             lines = existing_bboxes.split('\n') if existing_bboxes else []
-            updated_lines = [line for line in lines if not line.endswith(f',{object_id}')]
+            updated_lines = []
+            for line in lines:
+                parts = line.split(',')
+                if len(parts) >= 6 and parts[5] == object_id:
+                    continue
+                updated_lines.append(line)
 
             updated_lines.append(new_bbox_line)
             final_bboxes_text = '\n'.join(filter(None, updated_lines))
@@ -660,7 +743,7 @@ def delete_class():
 
 
 def check_class_usage():
-    label_name = request.json.get('label_name')
+    label_name = (request.json or {}).get('label_name')
     if not label_name:
         return jsonify({'success': False, 'usage_count': 0})
 
@@ -771,7 +854,7 @@ def sam_predict():
         bbox = predict_box_from_point_ultralytics(image_path, coords_tuple)
 
         if bbox:
-            return jsonify({'success': True, 'bbox': bbox})
+            return jsonify({'success': True, 'bbox': bbox, 'polygon': bbox.get('polygon', [])})
         else:
             return jsonify({'success': False, 'message': 'No object found at the specified point.'})
 
@@ -1133,7 +1216,7 @@ def stream_sam2_tracking(tracker_uuid):
 
 @app.route('/stopSam2Tracking', methods=['POST'])
 def stop_sam2_tracking():
-    tracker_uuid = request.json.get('tracker_uuid')
+    tracker_uuid = (request.json or {}).get('tracker_uuid')
     if tracker_uuid in background_tasks.tracking_sessions:
         session = background_tasks.tracking_sessions[tracker_uuid]
         session['stop_requested'] = True
@@ -1160,7 +1243,7 @@ def prepare_to_start_tracking():
 
 @app.route('/retrieveTrackedBboxes', methods=['POST'])
 def retrieve_tracked_bboxes():
-    tracker_uuid = request.json.get('tracker_uuid')
+    tracker_uuid = (request.json or {}).get('tracker_uuid')
     session = background_tasks.tracking_sessions.get(tracker_uuid)
     if session:
         session['last_client_update'] = time.time()
@@ -1187,7 +1270,7 @@ def continue_tracking():
 
 @app.route('/stopTracking', methods=['POST'])
 def stop_tracking():
-    tracker_uuid = request.json.get('tracker_uuid')
+    tracker_uuid = (request.json or {}).get('tracker_uuid')
     if tracker_uuid in background_tasks.tracking_sessions:
         background_tasks.tracking_sessions[tracker_uuid]['stop_requested'] = True
     return jsonify({'success': True})
@@ -1206,6 +1289,7 @@ def create_dataset():
     video_uuids = data.get('video_uuids')
     eval_percent = float(data.get('eval_percent', 20.0))
     test_percent = float(data.get('test_percent', 10.0))
+    export_format = data.get('export_format', 'yolo_v8_detect')
     augmentation_options = data.get('augmentation_options', {})
 
     is_valid, message = validate_description(desc, [d['description'] for d in database.get_dataset_list()])
@@ -1215,10 +1299,10 @@ def create_dataset():
         return jsonify({'success': False, 'message': 'Please select at least one video.'}), 400
 
     create_time = int(time.time() * 1000)
-    dataset_uuid = database.create_dataset_entry(desc, video_uuids, create_time, eval_percent, test_percent)
+    dataset_uuid = database.create_dataset_entry(desc, video_uuids, create_time, eval_percent, test_percent, export_format)
 
     threading.Thread(target=background_tasks.create_dataset_task, args=(
-        dataset_uuid, video_uuids, eval_percent, test_percent, augmentation_options
+        dataset_uuid, video_uuids, eval_percent, test_percent, export_format, augmentation_options
     ), name=f"Dataset-{dataset_uuid[:6]}").start()
 
     return jsonify({'success': True, 'dataset_uuid': dataset_uuid})
@@ -1226,7 +1310,7 @@ def create_dataset():
 
 @app.route('/regenerateDataset', methods=['POST'])
 def regenerate_dataset():
-    dataset_uuid = request.json.get('dataset_uuid')
+    dataset_uuid = (request.json or {}).get('dataset_uuid')
     if not dataset_uuid:
         return jsonify({'success': False, 'message': 'Dataset UUID is required.'}), 400
 
@@ -1239,22 +1323,30 @@ def regenerate_dataset():
     video_uuids = json.loads(dataset['video_uuids'])
     eval_percent = dataset.get('eval_percent')
     test_percent = dataset.get('test_percent')
+    export_format = dataset.get('export_format', 'yolo_v8_detect')
     augmentation_options = {'enabled': False}
 
     threading.Thread(target=background_tasks.create_dataset_task, args=(
-        dataset_uuid, video_uuids, eval_percent, test_percent, augmentation_options
+        dataset_uuid, video_uuids, eval_percent, test_percent, export_format, augmentation_options
     ), name=f"Dataset-Regen-{dataset_uuid[:6]}").start()
 
     return jsonify({'success': True, 'message': 'Dataset regeneration started.'})
 
 
+@app.route('/api/export_formats', methods=['GET'])
+def get_export_formats():
+    from exporters import ExporterRegistry
+    return jsonify({'success': True, 'formats': ExporterRegistry.list_all()})
+
+
 @app.route('/downloadDataset/<dataset_uuid>')
 def download_dataset(dataset_uuid):
     dataset = database.get_dataset_entity(dataset_uuid)
-    if not dataset or dataset['status'] != 'READY' or not dataset['zip_path']:
+    if not dataset or dataset['status'] != 'READY' or not dataset['zip_path'] or not os.path.exists(dataset['zip_path']):
         return "Dataset not found or not ready.", 404
     try:
-        return send_file(dataset['zip_path'], as_attachment=True)
+        filename = f"{dataset['description']}.zip" if dataset.get('description') else "dataset.zip"
+        return send_file(dataset['zip_path'], as_attachment=True, download_name=filename)
     except Exception as e:
         logging.error(f"Could not send file: {e}")
         return "Error downloading file.", 500
@@ -1262,7 +1354,7 @@ def download_dataset(dataset_uuid):
 
 @app.route('/deleteDataset', methods=['POST'])
 def delete_dataset():
-    dataset_uuid = request.json.get('dataset_uuid')
+    dataset_uuid = (request.json or {}).get('dataset_uuid')
     database.delete_dataset(dataset_uuid)
     file_storage.delete_dataset_files(dataset_uuid)
     return jsonify({'success': True})
@@ -1317,7 +1409,7 @@ def import_model():
 
 @app.route('/deleteModel', methods=['POST'])
 def delete_model():
-    model_uuid = request.json.get('model_uuid')
+    model_uuid = (request.json or {}).get('model_uuid')
     database.delete_model(model_uuid)
     file_storage.delete_model_file(model_uuid)
     file_storage.delete_label_file(model_uuid)
@@ -1362,7 +1454,7 @@ def start_pre_annotation():
 
 @app.route('/cancelTask', methods=['POST'])
 def cancel_task():
-    video_uuid = request.json.get('video_uuid')
+    video_uuid = (request.json or {}).get('video_uuid')
     if not video_uuid:
         return jsonify({'success': False, 'message': 'Video UUID is required.'}), 400
 
@@ -1370,7 +1462,7 @@ def cancel_task():
     if not video:
         return jsonify({'success': False, 'message': 'Video not found.'}), 404
 
-    if video['status'] in ['PRE_ANNOTATING', 'APPLYING_PROTOTYPES']:
+    if video['status'] in ['PRE_ANNOTATING', 'APPLYING_PROTOTYPES', 'APPLYING_CLASS']:
         database.update_video_status(video_uuid, 'CANCELLING', 'Cancellation requested by user.')
         return jsonify({'success': True, 'message': 'Cancellation request sent.'})
     else:
@@ -1424,9 +1516,35 @@ def get_dataset_analysis_data(dataset_uuid):
     suspicious_pairs = []
     image_class_map = {}
 
+    from annotation_model import AnnotationData
+
     for i, frame in enumerate(all_frames):
-        video_uuid, frame_number, bboxes_text = frame['video_uuid'], frame['frame_number'], frame['bboxes_text']
-        rects, labels, _ = convert_text_to_rects_and_labels(bboxes_text)
+        video_uuid, frame_number = frame['video_uuid'], frame['frame_number']
+        rects, labels = [], []
+
+        # 1. 优先解析 annotations_json (适用于分割 Polygon、姿态 Keypoint、矢量 Bbox)
+        if frame.get('annotations_json') and frame['annotations_json'].strip():
+            try:
+                ann_data = AnnotationData.from_json(frame['annotations_json'])
+                for obj in ann_data.objects:
+                    label = obj.label
+                    rect = None
+                    if obj.type == 'polygon' and obj.polygon:
+                        xs = [pt[0] for pt in obj.polygon]
+                        ys = [pt[1] for pt in obj.polygon]
+                        if xs and ys:
+                            rect = [min(xs), min(ys), max(xs), max(ys)]
+                    elif obj.type == 'bbox' and obj.bbox:
+                        rect = obj.bbox
+                    if rect and label:
+                        rects.append(rect)
+                        labels.append(label)
+            except Exception as e:
+                logging.error(f"Error parsing annotations_json for frame {video_uuid}/{frame_number}: {e}")
+
+        # 2. 备用解析传统 bboxes_text (适用于早期检测模式)
+        if not rects and frame.get('bboxes_text') and frame['bboxes_text'].strip():
+            rects, labels, _ = convert_text_to_rects_and_labels(frame['bboxes_text'])
 
         image_class_map[i] = list(set(labels))
         objects_per_image.append(len(labels))
@@ -1447,7 +1565,7 @@ def get_dataset_analysis_data(dataset_uuid):
             if width > 0 and height > 0:
                 aspect_ratios.append(width / height)
                 video_info = video_info_cache.get(video_uuid)
-                if video_info and video_info['width'] > 0 and video_info['height'] > 0:
+                if video_info and video_info.get('width', 0) > 0 and video_info.get('height', 0) > 0:
                     center_x = (float(rect[0]) + float(rect[2])) / 2.0 / float(video_info['width'])
                     center_y = (float(rect[1]) + float(rect[3])) / 2.0 / float(video_info['height'])
                     center_points.append({'x': center_x, 'y': center_y})
@@ -1455,7 +1573,7 @@ def get_dataset_analysis_data(dataset_uuid):
                     {'id': f'{video_uuid}_{frame_number}_{j}', 'image_index': i, 'area': width * height,
                      'aspect_ratio': width / height})
 
-    # Fast sampled brightness calculation (max 200 frames)
+    # 随机抽样计算亮度分布 (最多200帧)
     if all_frames:
         sample_size = min(len(all_frames), 200)
         sampled_frames = random.sample(all_frames, sample_size)
@@ -1480,11 +1598,22 @@ def get_dataset_analysis_data(dataset_uuid):
     for frame in all_frames:
         processed_users = set()
         for task in all_tasks:
-            if task['video_uuid'] == frame['video_uuid'] and task['start_frame'] <= frame['frame_number'] <= task['end_frame']:
+            if task['video_uuid'] == frame['video_uuid'] and task['start_frame'] <= frame['frame_number'] <= task[
+                'end_frame']:
                 user = task['assigned_to']
                 user_frame_sets[user].add(f"{frame['video_uuid']}_{frame['frame_number']}")
                 if user not in processed_users:
-                    annotator_stats[user]['class_counts'].update(extract_labels(frame['bboxes_text']))
+                    frame_labels = []
+                    if frame.get('annotations_json') and frame['annotations_json'].strip():
+                        try:
+                            ann_data = AnnotationData.from_json(frame['annotations_json'])
+                            frame_labels = [o.label for o in ann_data.objects if o.label]
+                        except Exception:
+                            pass
+                    if not frame_labels and frame.get('bboxes_text'):
+                        frame_labels = extract_labels(frame['bboxes_text'])
+
+                    annotator_stats[user]['class_counts'].update(frame_labels)
                     processed_users.add(user)
 
     for user, frame_set in user_frame_sets.items():
@@ -1533,7 +1662,6 @@ def get_dataset_analysis_data(dataset_uuid):
         'image_class_map': image_class_map,
         'gallery_images': gallery_images
     })
-
 
 @app.route('/api/datasetAnalysis/<dataset_uuid>/consistency_check', methods=['POST'])
 def run_consistency_check(dataset_uuid):
@@ -1638,26 +1766,93 @@ def preview_augmentations():
         image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         video_info = database.get_video_entity(video_uuid)
 
-        # 替换为使用新的通用查询方法
-        frame_db_info = database.get_frame_bboxes(video_uuid, frame_number)
+        frames = database.get_video_frames(video_uuid)
+        frame_item = next((f for f in frames if f['frame_number'] == frame_number), None)
 
-        if not frame_db_info or not frame_db_info['bboxes_text']:
-            return jsonify({'success': False, 'message': 'No labels found for this frame.'}), 404
+        if not frame_item:
+            return jsonify({'success': False, 'message': 'Frame data not found in database.'}), 404
+
+        all_labels = database.get_all_class_labels()
+        class_map = {name: i for i, name in enumerate(all_labels)}
+
+        # 1. 优先解析 annotations_json 分割多边形
+        polygons_data = []
+        if frame_item.get('annotations_json') and frame_item['annotations_json'].strip():
+            from annotation_model import AnnotationData, AnnotationObject
+            ann_data = AnnotationData.from_json(frame_item['annotations_json'])
+            for obj in ann_data.objects:
+                if obj.type == 'polygon' and obj.polygon:
+                    polygons_data.append(obj)
+                elif obj.type == 'bbox' and obj.bbox:
+                    x1, y1, x2, y2 = obj.bbox
+                    poly = [[x1, y1], [x2, y1], [x2, y2], [x1, y2]]
+                    polygons_data.append(AnnotationObject(id=obj.id, type='polygon', label=obj.label, points=poly))
+
+        if polygons_data:
+            from exporters.detection.yolo_detect import build_augmentation_pipeline_for_keypoints
+            augmentation_options['mosaic'] = {'enabled': False}
+            pipeline = build_augmentation_pipeline_for_keypoints(augmentation_options)
+            if not pipeline:
+                return jsonify({'success': False, 'message': 'No valid augmentations selected.'}), 400
+
+            flat_kpts = []
+            kpt_labels = []
+            poly_info = []
+            for poly_idx, obj in enumerate(polygons_data):
+                poly_pts = obj.polygon
+                poly_info.append((obj.label, len(poly_pts)))
+                for pt in poly_pts:
+                    flat_kpts.append([float(pt[0]), float(pt[1])])
+                    kpt_labels.append(poly_idx)
+
+            previews = []
+            for _ in range(6):
+                transformed = pipeline(image=image_rgb, keypoints=flat_kpts, keypoint_labels=kpt_labels)
+                aug_image_rgb = transformed['image']
+                aug_kpts = transformed['keypoints']
+                aug_kpt_labels = transformed['keypoint_labels']
+
+                img_h, img_w, _ = aug_image_rgb.shape
+                vis_image = cv2.cvtColor(aug_image_rgb, cv2.COLOR_RGB2BGR)
+
+                for poly_idx, (label, count) in enumerate(poly_info):
+                    pts = [aug_kpts[idx] for idx, l_idx in enumerate(aug_kpt_labels) if l_idx == poly_idx]
+                    if len(pts) >= 3:
+                        pts_np = np.array([[max(0, min(img_w - 1, int(pt[0]))), max(0, min(img_h - 1, int(pt[1])))] for pt in pts], np.int32).reshape((-1, 1, 2))
+                        color = string_to_color_bgr(label)
+                        cv2.polylines(vis_image, [pts_np], isClosed=True, color=color, thickness=2)
+
+                        overlay = vis_image.copy()
+                        cv2.fillPoly(overlay, [pts_np], color)
+                        cv2.addWeighted(overlay, 0.35, vis_image, 0.65, 0, vis_image)
+
+                        x_min = int(np.min(pts_np[:, 0, 0]))
+                        y_min = int(np.min(pts_np[:, 0, 1]))
+                        (text_w, text_h), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+                        cv2.rectangle(vis_image, (x_min, max(0, y_min - text_h - 5)), (x_min + text_w, y_min), color, -1)
+                        cv2.putText(vis_image, label, (x_min, max(text_h, y_min - 4)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+
+                _, buffer = cv2.imencode('.jpg', vis_image)
+                img_base64 = base64.b64encode(buffer).decode('utf-8')
+                previews.append(f"data:image/jpeg;base64,{img_base64}")
+
+            return jsonify({'success': True, 'previews': previews})
+
+        # 2. 备用解析传统 bboxes_text
+        yolo_bboxes = []
+        class_indices = []
+        if frame_item.get('bboxes_text') and frame_item['bboxes_text'].strip():
+            yolo_bboxes, class_indices = file_storage.get_yolo_bboxes(frame_item['bboxes_text'], video_info['width'],
+                                                                      video_info['height'], class_map)
+
+        if not yolo_bboxes:
+            return jsonify({'success': False, 'message': 'No valid labels found for this frame.'}), 404
 
         augmentation_options['mosaic'] = {'enabled': False}
         pipeline = background_tasks.build_augmentation_pipeline(augmentation_options)
         if not pipeline:
             return jsonify({'success': False, 'message': 'No valid augmentations selected.'}), 400
 
-        all_labels = database.get_all_class_labels()
-        class_map = {name: i for i, name in enumerate(all_labels)}
-        yolo_bboxes, class_indices = file_storage.get_yolo_bboxes(frame_db_info['bboxes_text'], video_info['width'],
-                                                                  video_info['height'], class_map)
-        if not yolo_bboxes:
-            return jsonify({'success': False, 'message': 'Could not parse labels into YOLO format.'}), 500
-
-        # 防御性 clamp：标注框坐标因浮点误差可能略微超出 [0,1]，
-        # albumentations 对此零容忍，这里统一截断。
         def _clamp_yolo(bbox):
             cx, cy, bw, bh = bbox
             x1, y1 = cx - bw / 2, cy - bh / 2
@@ -1668,16 +1863,30 @@ def preview_augmentations():
             nw, nh = x2 - x1, y2 - y1
             return [x1 + nw / 2, y1 + nh / 2, nw, nh]
         yolo_bboxes = [_clamp_yolo(b) for b in yolo_bboxes]
-        yolo_bboxes = [b for b in yolo_bboxes if b[2] > 0 and b[3] > 0]
+        yolo_bboxes_filtered = []
+        class_indices_filtered = []
+        track_ids = []
+        for i, b in enumerate(yolo_bboxes):
+            if b[2] > 0 and b[3] > 0:
+                yolo_bboxes_filtered.append(b)
+                class_indices_filtered.append(class_indices[i])
+                track_ids.append(i)
+        yolo_bboxes = yolo_bboxes_filtered
+        class_indices = class_indices_filtered
         if not yolo_bboxes:
             return jsonify({'success': False, 'message': 'All bboxes became invalid after clamping.'}), 500
 
         previews = []
         for _ in range(6):
-            transformed = pipeline(image=image_rgb, bboxes=yolo_bboxes, class_labels=class_indices)
+            transformed = pipeline(image=image_rgb, bboxes=yolo_bboxes, class_labels=class_indices, track_ids=track_ids)
             aug_image_rgb = transformed['image']
             aug_bboxes_yolo = transformed['bboxes']
             aug_labels_indices = transformed['class_labels']
+            aug_track_ids = transformed['track_ids']
+
+            from exporters.detection.yolo_detect import tight_fit_bbox
+            aug_bboxes_yolo = tight_fit_bbox(yolo_bboxes, aug_bboxes_yolo, orig_ids=track_ids, aug_ids=aug_track_ids)
+
             h, w, _ = aug_image_rgb.shape
             vis_image = aug_image_rgb.copy()
             for i, bbox in enumerate(aug_bboxes_yolo):

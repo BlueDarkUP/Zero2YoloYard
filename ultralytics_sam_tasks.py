@@ -262,13 +262,54 @@ def sam3_query_frame(video_uuid, frame_number, text_prompt=None, positive_boxes=
         scores = state.get("scores", [])
 
     results = []
+    sam2_pred = _load_sam2_models(mode="image")
+    img_cv = None
+    if sam2_pred is not None:
+        try:
+            img_path = file_storage.get_frame_path(video_uuid, frame_number)
+            if os.path.exists(img_path):
+                img_cv = cv2.imread(img_path)
+                if img_cv is not None:
+                    sam2_pred.set_image(cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB))
+        except Exception:
+            img_cv = None
+
     for i in range(len(boxes)):
         box_data = boxes[i]
         score = float(scores[i])
         if torch.is_tensor(box_data):
             box_data = box_data.detach().cpu().numpy().tolist()
         x1, y1, x2, y2 = map(int, box_data)
-        results.append({"box": [x1, y1, x2, y2], "score": score})
+        polygon = [[x1, y1], [x2, y1], [x2, y2], [x1, y2]]
+
+        if sam2_pred is not None and img_cv is not None:
+            try:
+                m, _, _ = sam2_pred.predict(box=np.array([x1, y1, x2, y2]), multimask_output=False)
+                if m is not None and m.size > 0:
+                    mask_np = m[0].astype(np.uint8)
+                    cnts, _ = cv2.findContours(mask_np, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                    if cnts:
+                        c = max(cnts, key=cv2.contourArea)
+                        if sam2_pred is not None and img_cv is not None:
+                            try:
+                                m, _, _ = sam2_pred.predict(box=np.array([x1, y1, x2, y2]), multimask_output=False)
+                                if m is not None and m.size > 0:
+                                    mask_np = m[0].astype(np.uint8)
+                                    cnts, _ = cv2.findContours(mask_np, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                                    if cnts:
+                                        c = max(cnts, key=cv2.contourArea)
+                                        # 修复：将系数从 0.004 缩小到 0.0015，提取更精细、贴合物体真实轮廓的多边形
+                                        eps = 0.0015 * cv2.arcLength(c, True)
+                                        approx = cv2.approxPolyDP(c, eps, True)
+                                        polygon = approx.reshape(-1, 2).tolist()
+                            except Exception as e:
+                                logging.error(f"[SAM2 Polygon Refinement Failed]: {e}")
+                        approx = cv2.approxPolyDP(c, eps, True)
+                        polygon = approx.reshape(-1, 2).tolist()
+            except Exception:
+                pass
+
+        results.append({"box": [x1, y1, x2, y2], "polygon": polygon, "score": score})
 
     results.sort(key=lambda r: r["score"], reverse=True)
     return results
@@ -329,7 +370,19 @@ def predict_box_from_point_ultralytics(image_path, point_coords):
                 if np.any(rows) and np.any(cols):
                     y_min, y_max = np.where(rows)[0][[0, -1]]
                     x_min, x_max = np.where(cols)[0][[0, -1]]
-                    return {'x1': int(x_min), 'y1': int(y_min), 'x2': int(x_max) + 1, 'y2': int(y_max) + 1}
+                    bbox = {'x1': int(x_min), 'y1': int(y_min), 'x2': int(x_max) + 1, 'y2': int(y_max) + 1}
+
+                    mask_np = mask.astype(np.uint8)
+                    cnts, _ = cv2.findContours(mask_np, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                    polygon = []
+                    if cnts:
+                        c = max(cnts, key=cv2.contourArea)
+                        epsilon = 0.004 * cv2.arcLength(c, True)
+                        approx = cv2.approxPolyDP(c, epsilon, True)
+                        polygon = approx.reshape(-1, 2).tolist()
+
+                    bbox['polygon'] = polygon
+                    return bbox
     except Exception as e:
         logging.error(f"[SAM2] Point predict failed: {e}")
     return None

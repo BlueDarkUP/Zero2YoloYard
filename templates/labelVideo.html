@@ -498,6 +498,17 @@
     </div>
     <div class="ide-resizer" id="sidebar-resizer"></div>
     <div class="ide-sidebar custom-scrollbar" id="ide-sidebar">
+        <!-- Task-Specific Sub-Template Inclusion -->
+        {% if video_entity.annotation_type == 'segmentation' %}
+            {% include '_label_segmentation.html' %}
+        {% elif video_entity.annotation_type == 'classification' %}
+            {% include '_label_classification.html' %}
+        {% elif video_entity.annotation_type == 'pose' %}
+            {% include '_label_pose.html' %}
+        {% else %}
+            {% include '_label_detection.html' %}
+        {% endif %}
+
         <div class="tool-section-title">
             <span>Class Registry</span>
             <i class="bi bi-tag-fill"></i>
@@ -521,93 +532,7 @@
                 </div>
             </div>
         </div>
-        <div class="tool-section-title">
-            <span>Inference Tools</span>
-            <i class="bi bi-lightning-charge-fill"></i>
-        </div>
-        <div class="row no-gutters mb-3">
-            <div class="col-6 pr-1 mb-2">
-                <button id="sam-toggle-btn" class="btn btn-sm btn-outline-primary w-100 text-truncate font-weight-bold info-trigger" data-key="sam_point"><i class="bi bi-magic"></i> SAM Point</button>
-            </div>
-            <div class="col-6 pl-1 mb-2">
-                <button id="lam-toggle-btn" class="btn btn-sm btn-outline-primary w-100 text-truncate font-weight-bold info-trigger" data-key="lam_text"><i class="bi bi-fonts"></i> LAM Text</button>
-            </div>
-            <div class="col-12 mb-2">
-                <button id="interactive-mode-toggle" class="btn btn-sm btn-outline-info w-100 font-weight-bold info-trigger" data-key="smart_select"><i class="bi bi-crosshair"></i> Smart Select</button>
-            </div>
-            <div class="col-12 mb-2">
-                <button id="sam3-true-lam-toggle" class="btn btn-sm btn-outline-warning w-100 font-weight-bold info-trigger" data-key="sam3_text"><i class="bi bi-chat-square-text-fill"></i> True LAM (Zero-Shot)</button>
-            </div>
-            <div class="col-12" id="sam2-track-wrapper">
-                <div class="target-frame-box mb-2">
-                    <span class="text-muted text-uppercase" style="font-size: 0.7rem; font-family: 'JetBrains Mono'; letter-spacing: 0.05em;">
-                        <i class="bi bi-stop-circle text-success mr-1"></i> End Frame
-                    </span>
-                    <div class="d-flex align-items-center">
-                        <input type="number" id="sam2-end-frame-input" class="target-frame-input text-success font-weight-bold" value="{{ task_entity.end_frame }}" min="{{ task_entity.start_frame }}" max="{{ task_entity.end_frame }}">
-                        <button class="target-frame-btn" type="button" onclick="document.getElementById('sam2-end-frame-input').value = '{{ task_entity.end_frame }}'" title="Reset to Max">
-                            <i class="bi bi-skip-forward-fill"></i>
-                        </button>
-                    </div>
-                </div>
-                <button id="sam2-track-btn" class="btn btn-sm btn-outline-success w-100 font-weight-bold info-trigger" data-key="video_tracking"><i class="bi bi-activity"></i> Video Tracking</button>
-            </div>
-        </div>
 
-        <div id="sam3-true-lam-controls" style="display: none;" class="mb-3 p-3 border border-warning" style="background: rgba(255,208,0,0.05); border-radius: 4px;">
-            <h6 class="small font-weight-bold mb-2 text-warning text-uppercase"><i class="bi bi-magic"></i> Concept Segmentation</h6>
-            <p class="text-muted small mb-2 font-monospace" style="font-size: 0.7rem;">> ENTER OBJECT DESCRIPTION <br>> SYSTEM WILL LOCATE ALL INSTANCES</p>
-            <input type="text" id="sam3-text-prompt-input" class="form-control form-control-sm tool-input mb-2" placeholder="e.g. 'red car', 'person with hat'...">
-            <button id="sam3-text-execute-btn" class="btn btn-sm btn-warning w-100 font-weight-bold text-dark"><i class="bi bi-search"></i> Scan & Segment</button>
-        </div>
-
-        <div id="interactive-segment-controls" style="display: none;">
-            <h6 class="small font-weight-bold mb-2 text-info text-uppercase"><i class="bi bi-crosshair"></i> Smart Select Active</h6>
-            <p class="text-muted small mb-3 font-monospace" style="font-size: 0.7rem;">> DESIGNATE TARGET BOX <br>> SYSTEM WILL LOCATE SIMILAR</p>
-            <div class="custom-control custom-switch mb-3 border-bottom border-secondary pb-2">
-                <input type="checkbox" class="custom-control-input" id="smart-select-use-color">
-                <label class="custom-control-label small text-muted text-uppercase" for="smart-select-use-color">Strict Color Match <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="color_match"></i></label>
-            </div>
-            <button id="find-similar-btn" class="btn btn-sm btn-primary w-100 mb-2 text-uppercase font-weight-bold" style="display: none;"><i class="bi bi-radar"></i> Scan Frame</button>
-            <button id="clear-samples-btn" class="btn btn-sm btn-secondary w-100 mb-2 text-uppercase"><i class="bi bi-eraser"></i> Clear Signal</button>
-            <div id="interactive-results-controls" style="display: none;" class="mt-3 border-top border-secondary pt-3">
-                <div class="form-group mb-3">
-                    <label class="small mb-1 d-flex justify-content-between text-muted text-uppercase"><span>Confidence</span> <span id="threshold-value" class="font-weight-bold text-white">0.50</span></label>
-                    <input type="range" class="custom-range" id="result-threshold" min="0.1" max="0.99" step="0.01" value="0.50">
-                </div>
-                <button id="accept-visible-btn" class="btn btn-sm btn-success w-100 mb-2 text-uppercase font-weight-bold"><i class="bi bi-check2-square"></i> Confirm All</button>
-                <button id="finish-interactive-btn" class="btn btn-sm btn-outline-light w-100 text-uppercase">Terminate</button>
-            </div>
-        </div>
-        <div id="suggestion-review-controls" style="display: none;">
-            <h6 class="small font-weight-bold mb-3 text-warning text-uppercase"><i class="bi bi-lightbulb"></i> AI Suggestions</h6>
-            <div class="form-group mb-3">
-                <label class="small mb-1 d-flex justify-content-between text-muted text-uppercase"><span>Confidence</span> <span id="suggestion-threshold-value" class="font-weight-bold text-white">0.50</span></label>
-                <input type="range" class="custom-range" id="suggestion-threshold" min="0.1" max="0.99" step="0.01" value="0.50">
-            </div>
-            <button id="accept-all-suggestions-btn" class="btn btn-sm btn-warning w-100 text-uppercase font-weight-bold"><i class="bi bi-check-all"></i> Accept Visible</button>
-        </div>
-        <div id="track-controls" style="display: none;">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-                <h6 class="small font-weight-bold mb-0 text-success text-uppercase" id="track-status-header">TRACKING_SEQUENCE...</h6>
-            </div>
-            <div class="progress mb-3 rounded-0 bg-dark" style="height: 8px; border: 1px solid var(--border-color);">
-                <div id="track-progress-bar" class="progress-bar bg-success" role="progressbar" style="width: 0%; box-shadow: 0 0 10px var(--color-success);"></div>
-            </div>
-            <button id="stop-sam2-track-btn" class="btn btn-sm btn-danger w-100 mb-3 text-uppercase font-weight-bold"><i class="bi bi-stop-fill"></i> Abort</button>
-            <div class="border-top border-secondary pt-3 mt-2">
-                <small class="text-muted d-block mb-2 text-uppercase font-monospace">> Review Mode Active</small>
-                <button id="save-all-tracked-btn" class="btn btn-sm btn-success w-100 mb-2 text-uppercase font-weight-bold" disabled><i class="bi bi-hdd-fill"></i> Commit Results</button>
-                <button id="exit-track-mode-btn" class="btn btn-sm btn-secondary w-100 text-uppercase">Exit</button>
-            </div>
-        </div>
-        <div class="tool-section-title mt-3">
-            <span>Detected Entities</span>
-            <i class="bi bi-layers-fill"></i>
-        </div>
-        <div class="flex-grow-1 position-relative" style="min-height: 150px;">
-            <ul id="bbox-list" class="list-group list-group-flush h-100 custom-scrollbar border border-secondary" style="position: absolute; width: 100%; overflow-y: auto; background: rgba(0,0,0,0.3);"></ul>
-        </div>
     </div>
 </div>
 
@@ -668,7 +593,7 @@
     <p class="text-muted small font-monospace">
         <i class="bi bi-info-circle mr-1"></i>
         SAM3 will scan every unlabeled frame in the selected scope using the class's retrieval text (<code id="apply-scope-class-name">-</code>),
-        and write the results as review-able suggestions.
+        and write the results as formal annotations.
     </p>
     <div id="apply-scope-options" class="border border-secondary p-2" style="max-height: 240px; overflow-y: auto;">
         <div class="form-check py-1">
@@ -793,24 +718,27 @@
         let isDrawing = false;
         let startX, startY;
 
-        let isSamModeActive = false;
-        let isLamModeActive = false;
-        let isInteractiveMode = false;
-        let isTrueLamModeActive = false;
+        window.isSamModeActive = false;
+        window.isLamModeActive = false;
+        window.isInteractiveMode = false;
+        window.isTrueLamModeActive = false;
         
         let sam2TrackerUuid = null;
         let sam2EventSource = null;
         let isReviewMode = false;
         let trackedBboxCache = {};
 
-        let positiveExampleBboxes = [];
-        let interactivePreviewBboxes = [];
+        window.positiveExampleBboxes = [];
+        window.negativeExampleBboxes = [];
+        window.interactivePreviewBboxes = [];
         let suggestionBboxes = [];
+        window.suggestionBboxes = [];
         let currentCacheKey = null;
         let lastProcessedFrame = -1;
         let lastDatasetClassName = null;
         let pendingApplyClassName = null;
         let hoveredPreviewIndex = -1;
+        window.hoveredPreviewIndex = -1;
         let overlappingCycleIndex = 0;
         let lastClickPosForCycle = null;
         let isCKeyPressed = false;
@@ -821,11 +749,6 @@
         let draggedHandle = null;
         let draggedBboxInitialState = null;
         let isDraggingBbox = false;
-
-        // 注: 这里原来还有 negSamplingFrames/currentNegSampleIndex/negativeSamplesStore/
-        // isDrawingNeg/negStartX/negStartY 六个变量，是"负样本采样"UI专用的。SAM3
-        // 迁移后批量应用改成纯文本检索驱动，不再需要用户额外画反例框，这套状态和对应
-        // 的 UI（下面原来的 neg-canvas 相关代码）一并移除。
 
         let toastTimeout;
         let isRequestingAnimationFrame = false;
@@ -867,6 +790,10 @@
         $("#class-list").on("click", ".class-item-clickable", function() {
             const clickedClass = $(this).closest('li').data("class-name");
             activeClass = activeClass === clickedClass ? null : clickedClass;
+            window.activeClass = activeClass;
+            if (window.annotationCore) {
+                window.annotationCore.selectedClass = activeClass;
+            }
             renderClassList();
         });
 
@@ -946,7 +873,8 @@
                                 }
                             }
                             if (parseInt(frameSlider.val()) === frameNum) {
-                                suggestionBboxes =[];
+                                suggestionBboxes = [];
+                                window.suggestionBboxes = [];
                                 $('#suggestion-review-controls').slideUp();
                                 if(!isSilent) redrawStaticCanvas();
                             }
@@ -985,6 +913,10 @@
         }
 
         function redrawStaticCanvas() {
+            if ("{{ video_entity.annotation_type }}" !== "detection") {
+                if (window.annotationCore) window.annotationCore.render();
+                return;
+            }
             if (!frameImage.complete || frameImage.naturalWidth === 0) return;
             const dpr = window.devicePixelRatio || 1;
             staticCtx.clearRect(0, 0, staticCanvas.width / dpr, staticCanvas.height / dpr);
@@ -1093,7 +1025,7 @@
                  staticCtx.lineWidth = 2 / dpr;
                  staticCtx.setLineDash([5/dpr, 3/dpr]);
                  positiveExampleBboxes.forEach(box => {
-                      const x = box.x1 * scaleX, y = box[1] * scaleY, w = (box[2] - box[0]) * scaleX, h = (box[3] - box[1]) * scaleY;
+                      const x = box.x1 * scaleX, y = box.y1 * scaleY, w = (box.x2 - box.x1) * scaleX, h = (box.y2 - box.y1) * scaleY;
                       staticCtx.strokeRect(x,y,w,h);
                  });
                  staticCtx.setLineDash([]);
@@ -1103,6 +1035,31 @@
         }
 
         function redrawDynamicCanvas(pos) {
+            if ("{{ video_entity.annotation_type }}" !== "detection") {
+                if (window.annotationCore) {
+                    window.annotationCore.render();
+                    if (isDrawing && isInteractiveMode && pos && startX !== undefined && startY !== undefined) {
+                        const dpr = window.devicePixelRatio || 1;
+                        let currentX = Math.max(0, Math.min(pos.x, frameImage.clientWidth));
+                        let currentY = Math.max(0, Math.min(pos.y, frameImage.clientHeight));
+                        dynamicCtx.lineWidth = 2 / dpr;
+                        dynamicCtx.strokeStyle = getColor('positiveExampleStroke');
+                        dynamicCtx.setLineDash([5 / dpr, 3 / dpr]);
+                        dynamicCtx.strokeRect(startX, startY, currentX - startX, currentY - startY);
+                        dynamicCtx.setLineDash([]);
+                    }
+                    if (!isDrawing && !isReviewMode && !isDraggingBbox && pos && (isInteractiveMode || isSamModeActive || isLamModeActive)) {
+                         const dpr = window.devicePixelRatio || 1;
+                         dynamicCtx.strokeStyle = getColor('crosshair');
+                         dynamicCtx.lineWidth = 1 / dpr;
+                         dynamicCtx.beginPath();
+                         dynamicCtx.moveTo(0, pos.y); dynamicCtx.lineTo(dynamicCanvas.width / dpr, pos.y);
+                         dynamicCtx.moveTo(pos.x, 0); dynamicCtx.lineTo(pos.x, dynamicCanvas.height / dpr);
+                         dynamicCtx.stroke();
+                    }
+                }
+                return;
+            }
             if (pos) lastMousePos = pos;
             const currentPos = pos || lastMousePos;
             const dpr = window.devicePixelRatio || 1;
@@ -1247,6 +1204,7 @@
             if (toastTimeout) clearTimeout(toastTimeout);
             toastTimeout = setTimeout(() => { notification.removeClass("show"); }, duration);
         }
+        window.showToast = showToast;
 
         function saveStateToHistory() {
             history = history.slice(0, historyIndex + 1);
@@ -1334,7 +1292,22 @@
                 .map(line => {
                     const parts = line.split(",");
                     if (parts.length < 6) return null;
-                    return { box: [parseInt(parts[0]), parseInt(parts[1]), parseInt(parts[2]), parseInt(parts[3])], label: parts[4], score: parseFloat(parts[5]) };
+                    const box = [parseInt(parts[0]), parseInt(parts[1]), parseInt(parts[2]), parseInt(parts[3])];
+                    const label = parts[4];
+                    const score = parseFloat(parts[5]);
+                    let polygon = null;
+
+                    // 修复：解析第 7 个字段中的 SAM 2 精确多边形轮廓
+                    if (parts.length >= 7 && parts[6].trim() !== "") {
+                        polygon = parts[6].split("|").map(pt => {
+                            const coords = pt.split(";").map(Number);
+                            return [coords[0], coords[1]];
+                        });
+                    }
+                    if (!polygon || polygon.length < 3) {
+                        polygon = [[box[0], box[1]], [box[2], box[1]], [box[2], box[3]], [box[0], box[3]]];
+                    }
+                    return { box: box, polygon: polygon, label: label, score: score };
                 }).filter(b => b !== null);
         }
 
@@ -1369,20 +1342,26 @@
             bboxes = parseBboxesFromString(frameData ? frameData.bboxes_text : '');
             suggestionBboxes = parseSuggestionsFromString(frameData ? frameData.suggested_bboxes_text : '');
 
-            let needReRenderClassList = false;
-            bboxes.forEach(box => {
-                if (box.label && !availableClasses.includes(box.label)) {
-                    availableClasses.push(box.label);
-                    needReRenderClassList = true;
-                    $.ajax({url: "/addClass", type: "POST", contentType: "application/json", data: JSON.stringify({ label_name: box.label })});
-                }
-            });
-
-            if (suggestionBboxes.length > 0) {
-                $('#suggestion-review-controls').slideDown();
+            if (suggestionBboxes && suggestionBboxes.length > 0) {
+                suggestionBboxes.forEach(sug => {
+                    const b = sug.box;
+                    const label = sug.label || 'object';
+                    bboxes.push({
+                        id: generateUUID(),
+                        xmin: b[0], ymin: b[1], xmax: b[2], ymax: b[3],
+                        label: label,
+                        polygon: sug.polygon && sug.polygon.length >= 3 ? sug.polygon : null
+                    });
+                });
+                suggestionBboxes = [];
+                window.suggestionBboxes = [];
+                if (frameData) frameData.suggested_bboxes_text = "";
+                saveCurrentFrameAnnotations(true);
             } else {
-                $('#suggestion-review-controls').slideUp();
+                window.suggestionBboxes = [];
             }
+
+            $('#suggestion-review-controls').hide();
 
             clearInteractiveSession(false);
 
@@ -1512,6 +1491,7 @@
             interactivePreviewBboxes = [];
             lastDatasetClassName = null;
             hoveredPreviewIndex = -1;
+            window.hoveredPreviewIndex = -1;
             overlappingCycleIndex = 0;
             lastClickPosForCycle = null;
             $('#interactive-results-controls').slideUp();
@@ -1621,8 +1601,16 @@
         }
 
         function showLamSuggestions(bbox, suggestions, clickX, clickY) {
-            const tempBbox = { ...bbox, label: 'suggestion', id: 'temp' };
-            bboxes.push(tempBbox); redrawStaticCanvas(); bboxes.pop();
+            if ("{{ video_entity.annotation_type }}" !== "detection") {
+                window.tempLamPolygon = bbox.polygon;
+                if (!window.tempLamPolygon || window.tempLamPolygon.length < 3) {
+                    window.tempLamPolygon = [[bbox.x1, bbox.y1], [bbox.x2, bbox.y1], [bbox.x2, bbox.y2], [bbox.x1, bbox.y2]];
+                }
+                if (window.annotationCore) window.annotationCore.render();
+            } else {
+                const tempBbox = { ...bbox, label: 'suggestion', id: 'temp' };
+                bboxes.push(tempBbox); redrawStaticCanvas(); bboxes.pop();
+            }
 
             const template = document.getElementById('lam-suggestion-popup-template').content.cloneNode(true);
             const popup = $(template).find('#lam-suggestion-popup');
@@ -1648,13 +1636,29 @@
             popup.on('click', 'button', function() {
                 const selectedLabel = $(this).data('label');
                 if (selectedLabel) {
-                    bboxes.push({ ...bbox, label: selectedLabel, id: self.crypto.randomUUID() });
-                    saveStateToHistory(); selectedBboxIndex = bboxes.length - 1; renderBboxList(); renderClassList();
+                    if ("{{ video_entity.annotation_type }}" !== "detection") {
+                        let polyPoints = bbox.polygon;
+                        if (!polyPoints || polyPoints.length < 3) {
+                            polyPoints = [[bbox.x1, bbox.y1], [bbox.x2, bbox.y1], [bbox.x2, bbox.y2], [bbox.x1, bbox.y2]];
+                        }
+                        window.annotationCore.annotations.objects.push({
+                            id: 'poly_' + Date.now(),
+                            type: 'polygon',
+                            label: selectedLabel,
+                            polygon: polyPoints
+                        });
+                        window.annotationCore.saveAnnotations();
+                        window.annotationCore.render();
+                    } else {
+                        bboxes.push({ ...bbox, label: selectedLabel, id: self.crypto.randomUUID() });
+                        saveStateToHistory(); selectedBboxIndex = bboxes.length - 1; renderBboxList(); renderClassList();
+                    }
                 }
+                window.tempLamPolygon = null;
                 popup.remove(); redrawStaticCanvas();
             });
 
-            setTimeout(() => { $(document).one('mousedown', function(e) { if (!$(e.target).closest('#lam-suggestion-popup').length) { popup.remove(); redrawStaticCanvas(); } }); }, 100);
+            setTimeout(() => { $(document).one('mousedown', function(e) { if (!$(e.target).closest('#lam-suggestion-popup').length) { window.tempLamPolygon = null; popup.remove(); redrawStaticCanvas(); } }); }, 100);
         }
 
         frameImage.onload = function() {
@@ -1673,7 +1677,13 @@
             const newFrameNumber = parseInt($(this).val());
             if (newFrameNumber === currentEditingFrame) return;
 
-            if (settings.autosave_enabled) { performSave(currentEditingFrame, formatBboxesToString(), true); }
+            if (settings.autosave_enabled) { 
+                if (annotation_type === 'segmentation' && window.annotationCore) {
+                    window.annotationCore.saveAnnotations();
+                } else {
+                    performSave(currentEditingFrame, formatBboxesToString(), true); 
+                }
+            }
 
             currentEditingFrame = newFrameNumber;
             $("#frame-number-display").text(newFrameNumber);
@@ -1695,6 +1705,7 @@
         });
 
         canvasContainer.on('mousedown', function(e) {
+            if ("{{ video_entity.annotation_type }}" !== "detection" && !isInteractiveMode && !isSamModeActive && !isLamModeActive) return;
             if (repeatMode.isActive) {
                 e.preventDefault();
                 const pos = getMousePos(dynamicCanvas, e);
@@ -1738,13 +1749,41 @@
                     data: JSON.stringify({ video_uuid: videoUuid, frame_number: frameSlider.val(), point: { x: Math.round(pos.x * scaleX), y: Math.round(pos.y * scaleY) } }),
                     success: function(res) {
                         if (!res.success) { window.sysAlert(res.message || "SAM failed.", 'error'); return; }
-                        if (isInteractiveMode) {
-                            positiveExampleBboxes = [res.bbox]; redrawStaticCanvas(); showToast('Sample added. Scanning...', 2000); triggerFindSimilar();
+                        
+                        const currentClass = activeClass || (window.annotationCore ? window.annotationCore.selectedClass : null);
+                        if (!currentClass) { window.sysAlert('Select class first.', 'error'); return; }
+
+                        if ("{{ video_entity.annotation_type }}" !== "detection") {
+                            if (isInteractiveMode) {
+                                positiveExampleBboxes = [res.bbox];
+                                if (window.annotationCore) window.annotationCore.render();
+                                showToast('Sample added. Scanning...', 2000);
+                                triggerFindSimilar();
+                            } else {
+                                let polyPoints = res.polygon || (res.bbox ? res.bbox.polygon : null);
+                                if (!polyPoints || polyPoints.length < 3) {
+                                    const b = res.bbox;
+                                    polyPoints = [[b.x1, b.y1], [b.x2, b.y1], [b.x2, b.y2], [b.x1, b.y2]];
+                                }
+                                const newPolyId = 'poly_' + Date.now();
+                                window.annotationCore.annotations.objects.push({
+                                    id: newPolyId,
+                                    type: 'polygon',
+                                    label: currentClass,
+                                    polygon: polyPoints
+                                });
+                                window.annotationCore.selectedObjectId = newPolyId;
+                                window.annotationCore.saveAnnotations();
+                                window.annotationCore.render();
+                                showToast('SAM polygon added!', 2000);
+                            }
                         } else {
-                            if (activeClass) {
-                                bboxes.push({ ...res.bbox, label: activeClass, id: self.crypto.randomUUID() });
+                            if (isInteractiveMode) {
+                                positiveExampleBboxes = [res.bbox]; redrawStaticCanvas(); showToast('Sample added. Scanning...', 2000); triggerFindSimilar();
+                            } else {
+                                bboxes.push({ ...res.bbox, label: currentClass, id: self.crypto.randomUUID() });
                                 saveStateToHistory(); selectedBboxIndex = bboxes.length - 1; renderBboxList(); renderClassList(); redrawStaticCanvas(); showToast('SAM object added!', 2000);
-                            } else { window.sysAlert('Select class first.', 'error'); }
+                            }
                         }
                     },
                     error: function(xhr) { window.sysAlert('SAM Error: ' + (xhr.responseJSON ? xhr.responseJSON.message : 'Unknown'), 'error'); },
@@ -1774,8 +1813,28 @@
                 if (clickedSugIndex !== -1) {
                     e.preventDefault();
                     const acc = suggestionBboxes.splice(clickedSugIndex, 1)[0];
-                    bboxes.push({ x1: acc.box[0], y1: acc.box[1], x2: acc.box[2], y2: acc.box[3], label: acc.label, id: self.crypto.randomUUID() });
-                    saveStateToHistory(); selectedBboxIndex = bboxes.length - 1; redrawStaticCanvas(); renderBboxList(); renderClassList();
+                    window.suggestionBboxes = suggestionBboxes;
+
+                    if ("{{ video_entity.annotation_type }}" !== "detection") {
+                        // 优先使用 SAM 2 提取的高精度轮廓多边形
+                        let polyPoints = acc.polygon;
+                        if (!polyPoints || polyPoints.length < 3) {
+                            const b = acc.box;
+                            polyPoints = [[b[0], b[1]], [b[2], b[1]], [b[2], b[3]], [b[0], b[3]]];
+                        }
+                        window.annotationCore.annotations.objects.push({
+                            id: 'poly_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+                            type: 'polygon',
+                            label: acc.label,
+                            polygon: polyPoints
+                        });
+                        window.annotationCore.saveAnnotations();
+                        window.annotationCore.render();
+                    } else {
+                        bboxes.push({ x1: acc.box[0], y1: acc.box[1], x2: acc.box[2], y2: acc.box[3], label: acc.label, id: self.crypto.randomUUID() });
+                        saveStateToHistory(); selectedBboxIndex = bboxes.length - 1; redrawStaticCanvas(); renderBboxList(); renderClassList();
+                    }
+
                     showToast(`Accepted suggestion.`, 2000);
                     return;
                 }
@@ -1804,9 +1863,27 @@
                     } else { targetBoxIndex = overlappingIndices[0]; lastClickPosForCycle = null; }
 
                     const res = interactivePreviewBboxes[targetBoxIndex]; const b = res.box;
-                    bboxes.push({ x1: b[0], y1: b[1], x2: b[2], y2: b[3], label: res.label || activeClass });
+
+                    if ("{{ video_entity.annotation_type }}" !== "detection") {
+                        let polyPoints = res.polygon;
+                        if (!polyPoints || polyPoints.length < 3) {
+                            polyPoints = [[b[0], b[1]], [b[2], b[1]], [b[2], b[3]], [b[0], b[3]]];
+                        }
+                        window.annotationCore.annotations.objects.push({
+                            id: 'poly_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+                            type: 'polygon',
+                            label: res.label || activeClass,
+                            polygon: polyPoints
+                        });
+                        window.annotationCore.saveAnnotations();
+                    } else {
+                        bboxes.push({ x1: b[0], y1: b[1], x2: b[2], y2: b[3], label: res.label || activeClass });
+                        saveStateToHistory(); renderBboxList(); renderClassList();
+                    }
+
                     interactivePreviewBboxes.splice(targetBoxIndex, 1);
-                    saveStateToHistory(); renderBboxList(); renderClassList(); hoveredPreviewIndex = -1; redrawStaticCanvas();
+                    hoveredPreviewIndex = -1; window.hoveredPreviewIndex = -1;
+                    redrawStaticCanvas();
                     return;
                 }
             }
@@ -1849,12 +1926,17 @@
         });
 
         $(document).on('mousemove', function(e) {
+            if ("{{ video_entity.annotation_type }}" !== "detection" && !isInteractiveMode) return;
             if (isRequestingAnimationFrame) return;
             isRequestingAnimationFrame = true;
 
             requestAnimationFrame(() => {
                 if (!$(e.target).closest('#canvas-container').length) {
-                    if (hoveredPreviewIndex !== -1) { hoveredPreviewIndex = -1; redrawStaticCanvas(); }
+                    if (hoveredPreviewIndex !== -1) {
+                        hoveredPreviewIndex = -1;
+                        window.hoveredPreviewIndex = -1;
+                        redrawStaticCanvas();
+                    }
                     $(dynamicCanvas).removeClass((index, className) => (className.match(/\bcursor-\S+/g) || []).join(' '));
                     lastMousePos = null; redrawDynamicCanvas(null);
                     isRequestingAnimationFrame = false;
@@ -1901,6 +1983,7 @@
                     }
                     if (newHoveredIndex !== hoveredPreviewIndex) {
                         hoveredPreviewIndex = newHoveredIndex;
+                        window.hoveredPreviewIndex = hoveredPreviewIndex;
                         redrawStaticCanvas();
                     }
 
@@ -1927,6 +2010,7 @@
                 isRequestingAnimationFrame = false;
             });
         }).on('mouseup', function(e) {
+            if ("{{ video_entity.annotation_type }}" !== "detection" && !isInteractiveMode) return;
             if (isDrawing) {
                 isDrawing = false;
                 const pos = getMousePos(dynamicCanvas, e);
@@ -1963,6 +2047,7 @@
         });
 
         $('#canvas-container').on('mouseleave', function() {
+            if ("{{ video_entity.annotation_type }}" !== "detection" && !isInteractiveMode) return;
             lastMousePos = null; redrawDynamicCanvas(null);
             $(dynamicCanvas).removeClass((index, className) => (className.match(/\bcursor-\S+/g) || []).join(' '));
         });
@@ -1984,7 +2069,13 @@
             saveStateToHistory(); selectedBboxIndex = -1; redrawStaticCanvas(); renderBboxList(); renderClassList();
         });
 
-        $("#save-bboxes").on("click", function() { performSave(parseInt(frameSlider.val()), formatBboxesToString(), false); });
+        $("#save-bboxes").on("click", function() {
+            if (annotation_type === 'segmentation' && window.annotationCore) {
+                window.annotationCore.saveAnnotations();
+            } else {
+                performSave(parseInt(frameSlider.val()), formatBboxesToString(), false);
+            }
+        });
 
         $('#edit-class-prompt-btn').on('click', function() {
             if (!activeClass) { window.sysAlert('Select a class first.', 'error'); return; }
@@ -1997,15 +2088,12 @@
                     $btn.prop('disabled', false);
                     if (!res.success) { window.sysAlert('Error: ' + res.message, 'error'); return; }
                     const current = res.sam3_prompt || '';
-                    // 用原生 prompt() 而不是站内自定义弹窗: 这是一个低频、开发者向的配置
-                    // 动作(给类别写一段检索描述)，暂时没有必要为它单独造一个带文本输入框
-                    // 的主题化弹窗组件。
                     const next = window.prompt(
                         `SAM3 retrieval text for class "${activeClass}"\n` +
                         `(leave empty to fall back to the class name itself as the query)`,
                         current
                     );
-                    if (next === null) return; // 用户取消
+                    if (next === null) return;
                     $.ajax({
                         url: '/api/setClassSam3Prompt', type: 'POST', contentType: 'application/json',
                         data: JSON.stringify({ class_name: activeClass, sam3_prompt: next }),
@@ -2026,6 +2114,7 @@
 
         $('#lam-toggle-btn').on('click', function() {
             isLamModeActive = !isLamModeActive;
+            window.isLamModeActive = isLamModeActive;
             $(this).toggleClass('active', isLamModeActive);
             canvasContainer.toggleClass('lam-active', isLamModeActive);
 
@@ -2044,6 +2133,7 @@
 
         $('#sam-toggle-btn').on('click', function() {
             isSamModeActive = !isSamModeActive;
+            window.isSamModeActive = isSamModeActive;
             $(this).toggleClass('active', isSamModeActive);
             canvasContainer.toggleClass('sam-active', isSamModeActive);
             updateSamButtonText();
@@ -2056,6 +2146,7 @@
 
         $('#sam3-true-lam-toggle').on('click', function() {
             isTrueLamModeActive = !isTrueLamModeActive;
+            window.isTrueLamModeActive = isTrueLamModeActive;
             $(this).toggleClass('active', isTrueLamModeActive);
             $('#sam3-true-lam-controls').slideToggle(isTrueLamModeActive);
             
@@ -2114,18 +2205,36 @@
                             if (!availableClasses.includes(safeClassName)) {
                                 addClass(safeClassName);
                             }
-                            res.results.forEach(item => {
-                                const b = item.box;
-                                bboxes.push({
-                                    x1: b[0], y1: b[1], x2: b[2], y2: b[3], 
-                                    label: safeClassName, 
-                                    id: self.crypto.randomUUID()
+                            if ("{{ video_entity.annotation_type }}" !== "detection") {
+                                res.results.forEach(item => {
+                                    let polyPoints = item.polygon;
+                                    if (!polyPoints || polyPoints.length < 3) {
+                                        const b = item.box;
+                                        polyPoints = [[b[0], b[1]], [b[2], b[1]], [b[2], b[3]], [b[0], b[3]]];
+                                    }
+                                    window.annotationCore.annotations.objects.push({
+                                        id: 'poly_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+                                        type: 'polygon',
+                                        label: safeClassName,
+                                        polygon: polyPoints
+                                    });
                                 });
-                            });
-                            saveStateToHistory();
-                            renderBboxList();
-                            renderClassList();
-                            redrawStaticCanvas();
+                                window.annotationCore.saveAnnotations();
+                                window.annotationCore.render();
+                            } else {
+                                res.results.forEach(item => {
+                                    const b = item.box;
+                                    bboxes.push({
+                                        x1: b[0], y1: b[1], x2: b[2], y2: b[3], 
+                                        label: safeClassName, 
+                                        id: self.crypto.randomUUID()
+                                    });
+                                });
+                                saveStateToHistory();
+                                renderBboxList();
+                                renderClassList();
+                                redrawStaticCanvas();
+                            }
                         } else {
                             window.sysAlert(`No instances of "${promptText}" found.`, 'warning');
                         }
@@ -2244,6 +2353,7 @@
 
         $('#interactive-mode-toggle').on('click', function() {
             isInteractiveMode = !isInteractiveMode;
+            window.isInteractiveMode = isInteractiveMode;
             $(this).toggleClass('active', isInteractiveMode);
             $('#interactive-segment-controls').slideToggle(isInteractiveMode);
             if (isInteractiveMode) {
@@ -2330,12 +2440,46 @@
             if (suggestionBboxes.length === 0) return;
             const threshold = parseFloat($('#suggestion-threshold').val());
             let acceptedCount = 0; const remainingSuggestions = [];
+
+            if ("{{ video_entity.annotation_type }}" !== "detection") {
+                suggestionBboxes.forEach(sug => {
+                    if (sug.score >= threshold) {
+                        // 优先使用 SAM 2 提取的高精度轮廓多边形
+                        let polyPoints = sug.polygon;
+                        if (!polyPoints || polyPoints.length < 3) {
+                            const b = sug.box;
+                            polyPoints = [[b[0], b[1]], [b[2], b[1]], [b[2], b[3]], [b[0], b[3]]];
+                        }
+                        window.annotationCore.annotations.objects.push({
+                            id: 'poly_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+                            type: 'polygon',
+                            label: sug.label,
+                            polygon: polyPoints
+                        });
+                        acceptedCount++;
+                    } else {
+                        remainingSuggestions.push(sug);
+                    }
+                });
+                if (acceptedCount > 0) {
+                    suggestionBboxes = remainingSuggestions;
+                    window.suggestionBboxes = suggestionBboxes;
+                    window.annotationCore.saveAnnotations();
+                    window.annotationCore.render();
+                    showToast(`Accepted ${acceptedCount} suggestions.`, 2000);
+                } else {
+                    showToast('No suggestions visible.', 2000);
+                }
+                return;
+            }
+
             suggestionBboxes.forEach(sug => {
                 if (sug.score >= threshold) { bboxes.push({ x1: sug.box[0], y1: sug.box[1], x2: sug.box[2], y2: sug.box[3], label: sug.label, id: self.crypto.randomUUID() }); acceptedCount++; }
                 else { remainingSuggestions.push(sug); }
             });
             if (acceptedCount > 0) {
                 suggestionBboxes = remainingSuggestions;
+                window.suggestionBboxes = suggestionBboxes;
                 saveStateToHistory(); selectedBboxIndex = -1; redrawStaticCanvas(); renderBboxList(); renderClassList();
                 showToast(`Accepted ${acceptedCount} suggestions.`, 2000);
             } else { showToast('No suggestions visible.', 2000); }
@@ -2344,9 +2488,38 @@
         $('#apply-confidence-threshold').on('input', function() { $('#apply-confidence-value').text(parseFloat($(this).val()).toFixed(2)); });
 
         $('#accept-visible-btn').on('click', function() {
-            if (!activeClass) { window.sysAlert('Select class first.', 'error'); return }
+            const currentClass = activeClass || (window.annotationCore ? window.annotationCore.selectedClass : null);
+            if (!currentClass) { window.sysAlert('Select class first.', 'error'); return }
             const threshold = parseFloat($('#result-threshold').val());
             let addedCount = 0; const remainingPreviews = [];
+
+            if ("{{ video_entity.annotation_type }}" !== "detection") {
+                interactivePreviewBboxes.forEach(res => {
+                    if (res.score >= threshold) {
+                        let polyPoints = res.polygon;
+                        if (!polyPoints || polyPoints.length < 3) {
+                            const b = res.box;
+                            polyPoints = [[b[0], b[1]], [b[2], b[1]], [b[2], b[3]], [b[0], b[3]]];
+                        }
+                        window.annotationCore.annotations.objects.push({
+                            id: 'poly_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+                            type: 'polygon',
+                            label: currentClass,
+                            polygon: polyPoints
+                        });
+                        addedCount++;
+                    } else { remainingPreviews.push(res); }
+                });
+                if (addedCount > 0) {
+                    interactivePreviewBboxes = remainingPreviews;
+                    window.annotationCore.saveAnnotations();
+                    window.annotationCore.render();
+                    showToast(`${addedCount} entities added.`, 2000);
+                    clearInteractiveSession();
+                }
+                return;
+            }
+
             interactivePreviewBboxes.forEach(res => {
                 if (res.score >= threshold) { bboxes.push({ x1: res.box[0], y1: res.box[1], x2: res.box[2], y2: res.box[3], label: res.label || activeClass }); addedCount++; }
                 else { remainingPreviews.push(res); }
@@ -2356,13 +2529,6 @@
                 saveStateToHistory(); renderBboxList(); renderClassList(); redrawStaticCanvas();
                 showToast(`${addedCount} entities added.`, 2000);
 
-                // "智能选择"的结果本身是基于用户在当前这一帧画的框样例(SAM3
-                // add_geometric_prompt)，这类框样例 prompt 只对拍摄它的那一帧的
-                // backbone 特征有意义，没法直接搬到其它帧/视频上去用。所以"把智能选择
-                // 结果应用到整个数据集"，实际做法是: 既然这些框已经被确认打上了
-                // activeClass 标签，就转而用这个类别自己的 SAM3 检索文本(在类别管理里
-                // 配置，没配置则用类别名)去驱动跨帧/跨视频的批量检测——复用和"文本检索
-                // 标注一帧后应用到数据集"完全相同的后端机制。
                 setTimeout(() => {
                     window.sysConfirm(`Apply '${activeClass}' SAM3 retrieval to unlabeled frames elsewhere?`, function() {
                         openApplyScopeModal(activeClass);
@@ -2375,9 +2541,6 @@
 
         $(document).on("keydown", function(e) {
             if ($(e.target).is("input, textarea")) return;
-            // apply-scope-modal 只是一个确认弹窗(置信度阈值 + 范围单选)，不再像旧版
-            // negative-sampling-modal 那样需要画框/翻页快捷键，这里只需要在它打开时
-            // 别让标注区的快捷键(撤销/删除/保存等)误触发。
             const isApplyModalVisible = $('#apply-scope-modal').is(':visible');
             if (isApplyModalVisible) return;
             const key = e.key.toLowerCase();
@@ -2447,13 +2610,42 @@
                 }
             });
         }
-        
-        // 注: 这里原来还有 negative-sampling-modal 的 shown.bs.modal / window resize
-        // 处理，是给负样本画框 canvas 做尺寸自适应用的。apply-scope-modal 是纯表单
-        // (阈值滑条 + 单选范围)，不需要 canvas，随负样本采样 UI 一并移除。
 
         if (window.cachedFrames) delete window.cachedFrames;
         if (frameImage.complete && frameImage.naturalWidth > 0) { performInitialLoad(); } else { $(frameImage).one('load', performInitialLoad); }
     });
 </script>
+<script src="{{ url_for('static', filename='js/annotation/annotation_core.js') }}"></script>
+<script src="{{ url_for('static', filename='js/annotation/annotator_detection.js') }}"></script>
+<script src="{{ url_for('static', filename='js/annotation/annotator_segmentation.js') }}"></script>
+
+<script>
+    $(document).ready(function() {
+        if ("{{ video_entity.annotation_type }}" !== "detection") {
+            window.annotationCore = new AnnotationCore({
+                canvas: document.getElementById('dynamic-canvas'),
+                videoUuid: "{{ video_entity.video_uuid }}",
+                annotationType: "{{ video_entity.annotation_type }}"
+            });
+            
+            if ("{{ video_entity.annotation_type }}" === "segmentation") {
+                window.annotationCore.setAnnotator(new SegmentationAnnotator(window.annotationCore));
+            }
+            
+            $('#frame-slider').on('input', function() {
+                const newFrameNumber = parseInt($(this).val());
+                const imageUrl = `/media/frames/{{ video_entity.video_uuid }}/frame_${String(newFrameNumber).padStart(5, "0")}.jpg`;
+                window.annotationCore.loadFrame(newFrameNumber, imageUrl);
+            });
+            
+            const initialImageUrl = document.getElementById('frame-image').src;
+            window.annotationCore.loadFrame(parseInt($('#frame-slider').val()), initialImageUrl);
+            
+            $('#save-bboxes').text("Save Annotations").off('click').on('click', function() {
+                window.annotationCore.saveAnnotations();
+            });
+        }
+    });
+</script>
+
 {% endblock %}

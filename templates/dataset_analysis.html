@@ -161,7 +161,7 @@
     <div class="d-flex justify-content-between align-items-end mb-4 pb-2 border-bottom border-secondary">
          <div>
             <h3 class="mb-0 font-weight-bold" style="font-family: 'Inter', sans-serif; color: var(--text-main); letter-spacing: -0.02em;">Dataset Analytics</h3>
-            <p class="mb-0 text-muted font-monospace small">> {{ dataset.description }}</p>
+            <p class="mb-0 text-muted font-monospace small">> {{ dataset.description }} <span class="badge badge-primary font-monospace ml-2">{{ dataset.export_format }}</span></p>
         </div>
         <a href="/" class="btn btn-outline-secondary text-uppercase btn-sm rounded-0">
             <i class="bi bi-chevron-left"></i> Return to Base
@@ -628,8 +628,8 @@ $(document).ready(function() {
         for (let i = currentRenderIndex; i < endIndex; i++) {
             const image = imagesToRender[i];
             const annotatedUrl = `/media/annotated_frame/${image.video_uuid}/${image.frame}.jpg`;
-            const goToLabelUrl = image.task_uuid ? `/labelVideo?task_uuid=${image.task_uuid}&frame=${image.frame}` : '#';
-            const buttonDisabled = image.task_uuid ? '' : 'disabled';
+            const goToLabelUrl = image.task_uuid ? `/labelVideo?task_uuid=${image.task_uuid}&frame=${image.frame}` : `/labelVideo?video_uuid=${image.video_uuid}&frame=${image.frame}`;
+            const buttonDisabled = '';
 
             const item = document.createElement('div');
             item.className = 'gallery-item fade-in';
