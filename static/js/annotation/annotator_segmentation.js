@@ -97,12 +97,38 @@ class SegmentationAnnotator {
 
         // Active Paint Brush / Eraser Tool
         if (this.activeTool === 'brush' || this.activeTool === 'eraser') {
-            const currentClass = this.getSelectedClass();
-            if (!currentClass && this.activeTool === 'brush') {
-                if (typeof window.showToast === 'function') {
-                    window.showToast("⚠️ Please select a Class from the right sidebar first!", 3000);
+            if (this.activeTool === 'eraser') {
+                // Auto-detect target polygon under eraser if not currently selected
+                let targetObj = null;
+                const objects = this.core.annotations.objects || [];
+                const r = this.brushRadius;
+                for (let obj of objects) {
+                    if (obj.type === 'polygon' && obj.polygon && obj.polygon.length >= 3) {
+                        if (this.isPointInPolygon([pt.x, pt.y], obj.polygon)) {
+                            targetObj = obj;
+                            break;
+                        }
+                        for (let v of obj.polygon) {
+                            if (Math.hypot(pt.x - v[0], pt.y - v[1]) <= r) {
+                                targetObj = obj;
+                                break;
+                            }
+                        }
+                        if (targetObj) break;
+                    }
                 }
-                return;
+                if (targetObj) {
+                    this.core.selectedObjectId = targetObj.id;
+                    this.core.updateSidebarList();
+                }
+            } else if (this.activeTool === 'brush') {
+                const currentClass = this.getSelectedClass();
+                if (!currentClass) {
+                    if (typeof window.showToast === 'function') {
+                        window.showToast("⚠️ Please select a Class from the right sidebar first!", 3000);
+                    }
+                    return;
+                }
             }
             this.isPainting = true;
             this.brushStrokePoints = [[pt.x, pt.y]];
@@ -249,7 +275,13 @@ class SegmentationAnnotator {
         maxX = Math.min(imgW - 1, maxX); maxY = Math.min(imgH - 1, maxY);
 
         // Draw existing selected polygon if editing/adding with brush/eraser
-        let selectedObj = this.core.selectedObjectId ? this.core.annotations.objects.find(o => o.id === this.core.selectedObjectId) : null;
+        let selectedObj = this.core.annotations.objects.find(o => o.id === this.core.selectedObjectId);
+
+        if (this.activeTool === 'eraser') {
+            if (!selectedObj || !selectedObj.polygon || selectedObj.polygon.length < 3) return;
+        }
+
+        // Draw existing selected polygon if editing/erasing
         if (selectedObj && selectedObj.polygon && selectedObj.polygon.length >= 3) {
             ctx.beginPath();
             ctx.moveTo(selectedObj.polygon[0][0], selectedObj.polygon[0][1]);
@@ -261,10 +293,12 @@ class SegmentationAnnotator {
             ctx.fill();
         }
 
-        // Rasterize new brush stroke onto offscreen canvas
+        // Rasterize brush stroke or eraser subtraction onto offscreen canvas
         ctx.save();
         if (this.activeTool === 'eraser') {
             ctx.globalCompositeOperation = 'destination-out';
+            ctx.fillStyle = '#000000';
+            ctx.strokeStyle = '#000000';
         } else {
             ctx.fillStyle = '#ffffff';
             ctx.strokeStyle = '#ffffff';
@@ -297,6 +331,7 @@ class SegmentationAnnotator {
                 const idx = this.core.annotations.objects.findIndex(o => o.id === selectedObj.id);
                 if (idx >= 0) this.core.annotations.objects.splice(idx, 1);
                 this.core.selectedObjectId = null;
+                this.core.updateSidebarList();
             }
             return;
         }
