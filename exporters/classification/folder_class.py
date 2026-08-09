@@ -1,5 +1,6 @@
 import os
 import shutil
+import random
 from ..base import BaseExporter
 from .. import ExporterRegistry
 from annotation_model import AnnotationData
@@ -12,26 +13,43 @@ class FolderClassificationExporter(BaseExporter):
     annotation_types = ["classification"]
 
     def export(self, export_dir: str, frames_data: list, class_list: list, **options) -> None:
+        eval_percent = options.get("eval_percent", 20.0)
+        test_percent = options.get("test_percent", 10.0)
+
         if os.path.exists(export_dir):
             shutil.rmtree(export_dir)
 
-        os.makedirs(export_dir, exist_ok=True)
-        for class_name in class_list:
-            os.makedirs(os.path.join(export_dir, class_name), exist_ok=True)
-        os.makedirs(os.path.join(export_dir, "_unlabeled"), exist_ok=True)
+        shuffled_data = list(frames_data)
+        random.shuffle(shuffled_data)
 
-        for frame_info in frames_data:
-            base_name = f"{frame_info['video_uuid']}_{frame_info['frame_number']:05d}.jpg"
-            src_img_path = file_storage.get_frame_path(frame_info['video_uuid'], frame_info['frame_number'])
+        total_count = len(shuffled_data)
+        val_count = int(total_count * eval_percent / 100.0)
+        test_count = int(total_count * test_percent / 100.0)
 
-            if not os.path.exists(src_img_path):
-                continue
+        val_data = shuffled_data[:val_count]
+        test_data = shuffled_data[val_count:val_count + test_count]
+        train_data = shuffled_data[val_count + test_count:]
 
-            annotations: AnnotationData = frame_info["annotations"]
-            if annotations.classifications:
-                for target_cls in annotations.classifications:
-                    target_dir = os.path.join(export_dir, target_cls)
-                    os.makedirs(target_dir, exist_ok=True)
-                    shutil.copy(src_img_path, os.path.join(target_dir, base_name))
-            else:
-                shutil.copy(src_img_path, os.path.join(export_dir, "_unlabeled", base_name))
+        splits = [('train', train_data), ('val', val_data), ('test', test_data)]
+
+        for split_name, split_frames in splits:
+            split_dir = os.path.join(export_dir, split_name)
+            for class_name in class_list:
+                os.makedirs(os.path.join(split_dir, class_name), exist_ok=True)
+            os.makedirs(os.path.join(split_dir, "_unlabeled"), exist_ok=True)
+
+            for frame_info in split_frames:
+                base_name = f"{frame_info['video_uuid']}_{frame_info['frame_number']:05d}.jpg"
+                src_img_path = file_storage.get_frame_path(frame_info['video_uuid'], frame_info['frame_number'])
+
+                if not os.path.exists(src_img_path):
+                    continue
+
+                annotations: AnnotationData = frame_info["annotations"]
+                if annotations.classifications:
+                    for target_cls in annotations.classifications:
+                        target_dir = os.path.join(split_dir, target_cls)
+                        os.makedirs(target_dir, exist_ok=True)
+                        shutil.copy(src_img_path, os.path.join(target_dir, base_name))
+                else:
+                    shutil.copy(src_img_path, os.path.join(split_dir, "_unlabeled", base_name))

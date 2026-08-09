@@ -1,9 +1,17 @@
 <!-- Image Classification Sidebar Sub-Template -->
 <div class="task-panel task-classification">
-    <div class="d-flex justify-content-between align-items-center mb-3">
+    <div class="d-flex justify-content-between align-items-center mb-2">
         <h6 class="font-weight-bold text-uppercase text-warning mb-0">
-            <i class="fas fa-tags mr-2"></i>Global Image Tags
+            <i class="bi bi-tags-fill mr-1"></i> Image Categories
         </h6>
+        <button id="btn-clear-classification" class="btn btn-xs btn-outline-danger" onclick="if(window.annotationCore && window.annotationCore.annotator) window.annotationCore.annotator.clearClassification();">
+            <i class="bi bi-x-circle"></i> Clear
+        </button>
+    </div>
+
+    <div class="alert alert-dark p-2 small mb-3 border-secondary text-muted" style="font-size: 0.75rem;">
+        <i class="bi bi-lightning-charge-fill text-warning mr-1"></i><b>1-Key Tagging</b>: Press keys <span class="badge badge-secondary">1</span> - <span class="badge badge-secondary">9</span> to tag & auto-next.<br>
+        <i class="bi bi-info-circle mr-1"></i>Press <span class="badge badge-secondary">C</span> to clear tag. Click chips below to select.
     </div>
 
     <div class="form-group mb-3">

@@ -9,7 +9,7 @@ class AnnotationCore {
         this.annotationType = options.annotationType || 'segmentation';
 
         this.currentFrame = 0;
-        this.image = new Image();
+        this.image = document.getElementById('frame-image') || new Image();
 
         // View Transform (Zoom & Pan)
         this.zoom = 1.0;
@@ -22,7 +22,8 @@ class AnnotationCore {
 
         // Unified Annotation Data
         this.annotations = {
-            objects: []
+            objects: [],
+            classifications: []
         };
 
         this.selectedObjectId = null;
@@ -173,20 +174,30 @@ class AnnotationCore {
 
     loadFrame(frameNumber, imageUrl) {
         this.currentFrame = frameNumber;
-        this.image.onload = () => {
-            this.canvas.width = this.image.naturalWidth || 1920;
-            this.canvas.height = this.image.naturalHeight || 1080;
+        const self = this;
 
-            const container = this.canvas.parentElement;
-            if (container && this.zoom === 1.0 && this.panX === 0 && this.panY === 0) {
+        const onImgLoaded = () => {
+            self.canvas.width = self.image.naturalWidth || 1920;
+            self.canvas.height = self.image.naturalHeight || 1080;
+
+            const container = self.canvas.parentElement;
+            if (container && self.zoom === 1.0 && self.panX === 0 && self.panY === 0) {
                 const rect = container.getBoundingClientRect();
-                this.canvas.style.width = `${rect.width}px`;
-                this.canvas.style.height = `${rect.height}px`;
+                self.canvas.style.width = `${rect.width}px`;
+                self.canvas.style.height = `${rect.height}px`;
             }
 
-            this.fetchAnnotations();
+            self.fetchAnnotations();
         };
-        this.image.src = imageUrl;
+
+        if (this.image.complete && this.image.naturalWidth > 0 && (this.image.src === imageUrl || this.image.src.endsWith(imageUrl))) {
+            onImgLoaded();
+        } else {
+            this.image.onload = onImgLoaded;
+            if (!this.image.src.endsWith(imageUrl)) {
+                this.image.src = imageUrl;
+            }
+        }
     }
 
     fetchAnnotations() {
@@ -200,8 +211,9 @@ class AnnotationCore {
                         this.annotations = data.annotations;
                     }
                     if (!this.annotations.objects) this.annotations.objects = [];
+                    if (!this.annotations.classifications) this.annotations.classifications = [];
                 } else {
-                    this.annotations = { objects: [] };
+                    this.annotations = { objects: [], classifications: [] };
                 }
                 this.updateSidebarList();
                 this.render();

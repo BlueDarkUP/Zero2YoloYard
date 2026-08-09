@@ -2618,6 +2618,7 @@
 <script src="{{ url_for('static', filename='js/annotation/annotation_core.js') }}"></script>
 <script src="{{ url_for('static', filename='js/annotation/annotator_detection.js') }}"></script>
 <script src="{{ url_for('static', filename='js/annotation/annotator_segmentation.js') }}"></script>
+<script src="{{ url_for('static', filename='js/annotation/annotator_classification.js') }}"></script>
 
 <script>
     $(document).ready(function() {
@@ -2627,20 +2628,22 @@
                 videoUuid: "{{ video_entity.video_uuid }}",
                 annotationType: "{{ video_entity.annotation_type }}"
             });
-            
+
             if ("{{ video_entity.annotation_type }}" === "segmentation") {
                 window.annotationCore.setAnnotator(new SegmentationAnnotator(window.annotationCore));
+            } else if ("{{ video_entity.annotation_type }}" === "classification") {
+                window.annotationCore.setAnnotator(new ClassificationAnnotator(window.annotationCore));
             }
-            
+
             $('#frame-slider').on('input', function() {
                 const newFrameNumber = parseInt($(this).val());
                 const imageUrl = `/media/frames/{{ video_entity.video_uuid }}/frame_${String(newFrameNumber).padStart(5, "0")}.jpg`;
                 window.annotationCore.loadFrame(newFrameNumber, imageUrl);
             });
-            
+
             const initialImageUrl = document.getElementById('frame-image').src;
             window.annotationCore.loadFrame(parseInt($('#frame-slider').val()), initialImageUrl);
-            
+
             $('#save-bboxes').text("Save Annotations").off('click').on('click', function() {
                 window.annotationCore.saveAnnotations();
             });
