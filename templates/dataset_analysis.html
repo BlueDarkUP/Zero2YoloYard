@@ -188,17 +188,12 @@
                     <h6 class="font-weight-bold mb-2 text-uppercase text-info"><i class="bi bi-cpu mr-1"></i> AI Consistency Scan</h6>
                     <p class="text-muted small mb-3 font-monospace">Detect anomalies using embedding vectors.</p>
 
-                    <div class="d-flex align-items-center flex-wrap" style="gap: 15px;">
-                        <div class="custom-control custom-switch mb-2">
+                    <div class="d-flex align-items-center flex-wrap">
+                        <div class="custom-control custom-switch mr-4 mb-2">
                             <input type="checkbox" class="custom-control-input" id="enable-color-check" checked>
                             <label class="custom-control-label font-weight-bold small text-uppercase text-muted" for="enable-color-check">Strict Color Check</label>
                         </div>
-                        <div class="d-flex align-items-center mb-2">
-                            <label class="font-weight-bold small text-uppercase text-muted mb-0 mr-2">Min Semantic Conf:</label>
-                            <input type="range" class="custom-range mr-2" id="consistency-semantic-threshold" min="0.01" max="0.50" step="0.01" value="0.05" style="width: 120px;">
-                            <span id="consistency-semantic-threshold-val" class="font-monospace text-primary small">0.05</span>
-                        </div>
-                        <button class="btn btn-sm btn-primary rounded-0 text-uppercase mb-2" id="run-consistency-check-btn">
+                        <button class="btn btn-sm btn-primary rounded-0 text-uppercase" id="run-consistency-check-btn">
                             <i class="bi bi-search mr-1"></i> Initiate Scan
                         </button>
                     </div>
@@ -754,23 +749,18 @@ $(document).ready(function() {
         error: function() { $('#loading-indicator').html('<div class="alert alert-danger shadow-sm rounded-0">SERVER COMMUNICATION FAILED</div>'); }
     });
 
-    $('#consistency-semantic-threshold').on('input', function() {
-        $('#consistency-semantic-threshold-val').text(parseFloat($(this).val()).toFixed(2));
-    });
-
     // AI Consistency Check Button
     $('#run-consistency-check-btn').on('click', function() {
         const $btn = $(this);
         $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status"></span> SCANNING...');
 
         const isColorCheckEnabled = $('#enable-color-check').is(':checked');
-        const semanticThreshold = parseFloat($('#consistency-semantic-threshold').val());
 
         $.ajax({
             url: `/api/datasetAnalysis/${datasetUuid}/consistency_check`,
             type: 'POST',
             contentType: 'application/json',
-            data: JSON.stringify({ enable_color_check: isColorCheckEnabled, semantic_threshold: semanticThreshold }),
+            data: JSON.stringify({ enable_color_check: isColorCheckEnabled }),
             success: function(response) {
                 if (response.success) {
                     consistencyOutlierIndices = response.outlier_image_indices;

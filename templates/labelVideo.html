@@ -511,6 +511,10 @@
             </div>
             <ul id="class-list" class="list-group list-group-flush border border-secondary" style="max-height: 220px; overflow-y: auto; background: rgba(0,0,0,0.3);"></ul>
             <div class="mt-3">
+                <div class="custom-control custom-switch mb-2">
+                    <input type="checkbox" class="custom-control-input" id="dataset-find-use-color">
+                    <label class="custom-control-label small text-muted text-uppercase font-weight-bold" for="dataset-find-use-color">Strict Color Match <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="color_match"></i></label>
+                </div>
                 <div class="d-flex justify-content-between">
                     <button id="find-from-dataset-btn" class="btn btn-xs btn-outline-info w-50 mr-1 text-truncate info-trigger" data-key="find_sim"><i class="bi bi-search"></i> Find Sim</button>
                     <button id="edit-class-prompt-btn" class="btn btn-xs btn-outline-warning w-50 ml-1 text-truncate info-trigger" data-key="edit_prompt"><i class="bi bi-cpu"></i> Edit Prompt</button>
@@ -554,13 +558,16 @@
             <h6 class="small font-weight-bold mb-2 text-warning text-uppercase"><i class="bi bi-magic"></i> Concept Segmentation</h6>
             <p class="text-muted small mb-2 font-monospace" style="font-size: 0.7rem;">> ENTER OBJECT DESCRIPTION <br>> SYSTEM WILL LOCATE ALL INSTANCES</p>
             <input type="text" id="sam3-text-prompt-input" class="form-control form-control-sm tool-input mb-2" placeholder="e.g. 'red car', 'person with hat'...">
-            <button id="sam3-text-execute-btn" class="btn btn-sm btn-warning w-100 font-weight-bold text-dark mb-2"><i class="bi bi-search"></i> Scan & Segment</button>
-            <button id="sam3-text-apply-dataset-btn" class="btn btn-sm btn-outline-warning w-100 font-weight-bold text-uppercase"><i class="bi bi-globe"></i> Apply Prompt to Dataset...</button>
+            <button id="sam3-text-execute-btn" class="btn btn-sm btn-warning w-100 font-weight-bold text-dark"><i class="bi bi-search"></i> Scan & Segment</button>
         </div>
 
         <div id="interactive-segment-controls" style="display: none;">
             <h6 class="small font-weight-bold mb-2 text-info text-uppercase"><i class="bi bi-crosshair"></i> Smart Select Active</h6>
             <p class="text-muted small mb-3 font-monospace" style="font-size: 0.7rem;">> DESIGNATE TARGET BOX <br>> SYSTEM WILL LOCATE SIMILAR</p>
+            <div class="custom-control custom-switch mb-3 border-bottom border-secondary pb-2">
+                <input type="checkbox" class="custom-control-input" id="smart-select-use-color">
+                <label class="custom-control-label small text-muted text-uppercase" for="smart-select-use-color">Strict Color Match <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="color_match"></i></label>
+            </div>
             <button id="find-similar-btn" class="btn btn-sm btn-primary w-100 mb-2 text-uppercase font-weight-bold" style="display: none;"><i class="bi bi-radar"></i> Scan Frame</button>
             <button id="clear-samples-btn" class="btn btn-sm btn-secondary w-100 mb-2 text-uppercase"><i class="bi bi-eraser"></i> Clear Signal</button>
             <div id="interactive-results-controls" style="display: none;" class="mt-3 border-top border-secondary pt-3">
@@ -569,7 +576,6 @@
                     <input type="range" class="custom-range" id="result-threshold" min="0.1" max="0.99" step="0.01" value="0.50">
                 </div>
                 <button id="accept-visible-btn" class="btn btn-sm btn-success w-100 mb-2 text-uppercase font-weight-bold"><i class="bi bi-check2-square"></i> Confirm All</button>
-                <button id="apply-dataset-scope-btn" class="btn btn-sm btn-outline-info w-100 mb-2 text-uppercase font-weight-bold"><i class="bi bi-globe"></i> Apply Model to Dataset...</button>
                 <button id="finish-interactive-btn" class="btn btn-sm btn-outline-light w-100 text-uppercase">Terminate</button>
             </div>
         </div>
@@ -929,7 +935,7 @@
                                 const frameData = window.cachedFrames.find(f => f.frame_number == frameNum);
                                 if (frameData) {
                                     frameData.bboxes_text = bboxesString;
-                                    frameData.suggested_bboxes_text = "";  // 清除建议，防止切帧后重现
+                                    frameData.suggested_bboxes_text = ""
                                 } else {
                                     window.cachedFrames.push({
                                         video_uuid: videoUuid,
@@ -1509,7 +1515,6 @@
             overlappingCycleIndex = 0;
             lastClickPosForCycle = null;
             $('#interactive-results-controls').slideUp();
-            $('#apply-scope-modal').modal('hide');
             if (shouldRedraw) redrawStaticCanvas();
         }
 
@@ -1518,11 +1523,12 @@
             lastDatasetClassName = null;
             const frameNumber = parseInt(frameSlider.val());
             const $button = $('#find-similar-btn');
+            const useColor = $('#smart-select-use-color').is(':checked');
 
             $button.prop('disabled', true);
             const runPrediction = () => {
-                showToast('Scanning...', 4000);
-                const payload = { video_uuid: videoUuid, frame_number: frameNumber, prompt_boxes: positiveExampleBboxes, use_color: false };
+                showToast(useColor ? 'Scanning (Color + Shape)...' : 'Scanning...', 4000);
+                const payload = { video_uuid: videoUuid, frame_number: frameNumber, prompt_boxes: positiveExampleBboxes, use_color: useColor };
                 $.ajax({
                     url: '/interactive_segment/predict', type: 'POST', contentType: 'application/json', data: JSON.stringify(payload),
                     success: res => {
@@ -1991,26 +1997,27 @@
                     $btn.prop('disabled', false);
                     if (!res.success) { window.sysAlert('Error: ' + res.message, 'error'); return; }
                     const current = res.sam3_prompt || '';
-
-                    window.sysPrompt({
-                        title: `EDIT SAM3 PROMPT - [${activeClass}]`,
-                        message: `Set description for class "${activeClass}" (leave empty to use class name):`,
-                        defaultValue: current
-                    }, function(next) {
-                        if (next === null || next === undefined) return;
-                        $.ajax({
-                            url: '/api/setClassSam3Prompt', type: 'POST', contentType: 'application/json',
-                            data: JSON.stringify({ class_name: activeClass, sam3_prompt: next }),
-                            success: function(res2) {
-                                if (res2.success) {
-                                    showToast(`Retrieval text for '${activeClass}' updated.`, 3000);
-                                    if (!res2.has_labeled_examples) {
-                                        showToast(`Note: '${activeClass}' has no labeled examples yet in this project.`, 4000);
-                                    }
-                                } else { window.sysAlert('Error: ' + res2.message, 'error'); }
-                            },
-                            error: function() { window.sysAlert('Error: Failed to save retrieval text.', 'error'); }
-                        });
+                    // 用原生 prompt() 而不是站内自定义弹窗: 这是一个低频、开发者向的配置
+                    // 动作(给类别写一段检索描述)，暂时没有必要为它单独造一个带文本输入框
+                    // 的主题化弹窗组件。
+                    const next = window.prompt(
+                        `SAM3 retrieval text for class "${activeClass}"\n` +
+                        `(leave empty to fall back to the class name itself as the query)`,
+                        current
+                    );
+                    if (next === null) return; // 用户取消
+                    $.ajax({
+                        url: '/api/setClassSam3Prompt', type: 'POST', contentType: 'application/json',
+                        data: JSON.stringify({ class_name: activeClass, sam3_prompt: next }),
+                        success: function(res2) {
+                            if (res2.success) {
+                                showToast(`Retrieval text for '${activeClass}' updated.`, 3000);
+                                if (!res2.has_labeled_examples) {
+                                    showToast(`Note: '${activeClass}' has no labeled examples yet in this project.`, 4000);
+                                }
+                            } else { window.sysAlert('Error: ' + res2.message, 'error'); }
+                        },
+                        error: function() { window.sysAlert('Error: Failed to save retrieval text.', 'error'); }
                     });
                 },
                 error: function() { $btn.prop('disabled', false); window.sysAlert('Error: Failed to load current retrieval text.', 'error'); }
@@ -2137,54 +2144,6 @@
             });
         });
 
-        $('#sam3-text-apply-dataset-btn').on('click', function() {
-            const promptText = $('#sam3-text-prompt-input').val().trim();
-            if (!promptText) {
-                window.sysAlert('Please enter an object description first.', 'error');
-                return;
-            }
-
-            let safeClassName = promptText.replace(/[^a-zA-Z0-9_\-]/g, '_').toUpperCase();
-            if (!availableClasses.includes(safeClassName)) {
-                addClass(safeClassName);
-            }
-            activeClass = safeClassName;
-            renderClassList();
-
-            if (bboxes.length > 0) {
-                const startFrame = parseInt(frameSlider.val());
-                const currentBboxes = formatBboxesToString();
-                $.ajax({
-                    url: "/storeVideoFrameBboxesText", type: "POST", contentType: "application/json", async: false,
-                    data: JSON.stringify({ video_uuid: videoUuid, frame_number: startFrame, bboxes_text: currentBboxes })
-                });
-            }
-
-            const $btn = $(this);
-            $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> Setting prompt...');
-
-            $.ajax({
-                url: '/api/setClassSam3Prompt',
-                type: 'POST',
-                contentType: 'application/json',
-                data: JSON.stringify({ class_name: safeClassName, sam3_prompt: promptText }),
-                success: function(res) {
-                    if (res.success) {
-                        openApplyScopeModal(safeClassName);
-                    } else {
-                        window.sysAlert('Failed to set SAM3 prompt: ' + res.message, 'error');
-                    }
-                },
-                error: function(xhr) {
-                    const msg = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Server error';
-                    window.sysAlert('Error setting SAM3 prompt: ' + msg, 'error');
-                },
-                complete: function() {
-                    $btn.prop('disabled', false).html('<i class="bi bi-globe"></i> Apply Prompt to Dataset...');
-                }
-            });
-        });
-
         $('#sam2-track-btn').on('click', function() {
             if (bboxes.length === 0) { window.sysAlert("Label at least one object first.", 'error'); return; }
 
@@ -2304,21 +2263,26 @@
 
         $('#find-from-dataset-btn').on('click', function() {
             if (!activeClass) { window.sysAlert('Select class first!', 'error'); return; }
-            const frameNumber = parseInt(frameSlider.val()), $button = $(this);
+            const frameNumber = parseInt(frameSlider.val()), $button = $(this), useColor = $('#dataset-find-use-color').is(':checked');
 
             $button.prop('disabled', true);
-            showToast(`Querying '${activeClass}'...`, 10000);
+            showToast(useColor ? `Querying '${activeClass}' (Color+Shape)...` : `Querying '${activeClass}'...`, 10000);
             lastDatasetClassName = activeClass;
 
             $.ajax({
                 url: '/interactive_segment/predict_from_dataset', type: 'POST', contentType: 'application/json',
-                data: JSON.stringify({ video_uuid: videoUuid, frame_number: frameNumber, class_name: activeClass, use_color: false }),
+                data: JSON.stringify({ video_uuid: videoUuid, frame_number: frameNumber, class_name: activeClass, use_color: useColor }),
                 success: function(res) {
                     if (res.success) {
                         interactivePreviewBboxes = res.results;
                         $('#interactive-results-controls').slideDown(); $('#result-threshold').trigger('input'); redrawStaticCanvas();
                         showToast(`Found ${res.results.length} entities.`, 4000);
                         if (res.warning) { showToast(res.warning, 6000); }
+                        setTimeout(() => {
+                            window.sysConfirm(`Entities detected. Apply '${activeClass}' SAM3 model to unlabeled frames?`, function() {
+                                openApplyScopeModal(activeClass);
+                            });
+                        }, 500);
                     } else { window.sysAlert('Prediction failed: ' + res.message, 'error'); }
                 },
                 error: function() { window.sysAlert('Server error.', 'error'); },
@@ -2391,12 +2355,20 @@
                 interactivePreviewBboxes = remainingPreviews;
                 saveStateToHistory(); renderBboxList(); renderClassList(); redrawStaticCanvas();
                 showToast(`${addedCount} entities added.`, 2000);
-            } else { showToast('No visible entities.', 2000); }
-        });
 
-        $('#apply-dataset-scope-btn').on('click', function() {
-            if (!activeClass) { window.sysAlert('Select class first.', 'error'); return; }
-            openApplyScopeModal(activeClass);
+                // "智能选择"的结果本身是基于用户在当前这一帧画的框样例(SAM3
+                // add_geometric_prompt)，这类框样例 prompt 只对拍摄它的那一帧的
+                // backbone 特征有意义，没法直接搬到其它帧/视频上去用。所以"把智能选择
+                // 结果应用到整个数据集"，实际做法是: 既然这些框已经被确认打上了
+                // activeClass 标签，就转而用这个类别自己的 SAM3 检索文本(在类别管理里
+                // 配置，没配置则用类别名)去驱动跨帧/跨视频的批量检测——复用和"文本检索
+                // 标注一帧后应用到数据集"完全相同的后端机制。
+                setTimeout(() => {
+                    window.sysConfirm(`Apply '${activeClass}' SAM3 retrieval to unlabeled frames elsewhere?`, function() {
+                        openApplyScopeModal(activeClass);
+                    });
+                }, 400);
+            } else { showToast('No visible entities.', 2000); }
         });
 
         $('#finish-interactive-btn').on('click', clearInteractiveSession);

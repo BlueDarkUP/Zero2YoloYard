@@ -11,7 +11,6 @@ import cv2
 import numpy as np
 import base64
 from collections import Counter, defaultdict
-from functools import lru_cache
 from skimage import io as skio
 import itertools
 import random
@@ -77,6 +76,7 @@ except ImportError:
     logging.error("PyYAML is not installed! Dataset export will fail. Please run 'pip install pyyaml'.")
     yaml = None
 
+# ----------------- 动态获取线程数 -----------------
 initial_settings = settings_manager.load_settings()
 max_workers_setting = initial_settings.get('max_workers', 8)
 
@@ -91,6 +91,10 @@ else:
 app = flask.Flask(__name__)
 app.secret_key = os.urandom(24)
 APP_BOOT_ID = uuid.uuid4().hex
+# 注: 原来这里有一个 prototype_executor (ThreadPoolExecutor)，专给"重建类别原型"
+# (MobileNet+KMeans，比较慢，需要后台跑) 用。SAM3 迁移后，"类别检索文本"只是一次
+# DB 写入 (见 /api/setClassSam3Prompt)，同步返回即可，已确认全仓库没有其它地方在用
+# 这个线程池，一并删除。
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(threadName)s - %(message)s')
 
 with app.app_context():
@@ -111,7 +115,6 @@ def sanitize_dict(d):
     return d
 
 
-@lru_cache(maxsize=256)
 def string_to_color_bgr(s):
     hash_val = 0
     for char in s:
@@ -436,12 +439,9 @@ def import_frames():
             elif filename.endswith(('.jpg', '.jpeg', '.png', '.bmp', '.webp')):
                 image_bytes_list.append(file.read())
 
-        # 3. 统一分批写入数据库 (避免超大列表内存压力)
+        # 3. 统一写入数据库 (使用 database.py 中新写的安全函数)
         if image_bytes_list:
-            CHUNK_SIZE = 100
-            for i in range(0, len(image_bytes_list), CHUNK_SIZE):
-                chunk = image_bytes_list[i:i + CHUNK_SIZE]
-                total_imported += database.add_frames_to_video(video_uuid, chunk)
+            total_imported = database.add_frames_to_video(video_uuid, image_bytes_list)
 
         return jsonify({'success': True, 'imported_count': total_imported})
 
@@ -695,12 +695,19 @@ def save_settings():
 
     restart_required = sam_model_changed or device_changed or max_workers_changed
 
+    # --- THE FIX: Merge the new settings into the current ones ---
     current_settings.update(new_settings)
 
+    # --- Pass the merged 'current_settings' instead of 'new_settings' ---
     if settings_manager.save_settings(current_settings):
         if sam_model_changed or device_changed:
             logging.info("SAM model or device setting changed. Clearing SAM2/SAM3 cache.")
             try:
+                # 修复: 原代码这里 `from ultralytics_sam_tasks import _sam_model_cache`
+                # 引用的是一个不存在的变量名（实际缓存字典叫 _sam_cache），一直被
+                # except (ImportError, AttributeError) 静默吞掉，"切换模型后清缓存"
+                # 这个动作过去其实从没真正生效过。这里改成正确清空 SAM2/SAM3 各自的
+                # 模型缓存，以及 SAM3 迁移新增的帧级 backbone 缓存。
                 import ultralytics_sam_tasks as sam_tasks_module
                 sam_tasks_module._sam_cache["sam2_image_predictor"] = None
                 sam_tasks_module._sam_cache["sam2_video_predictor"] = None
@@ -797,6 +804,8 @@ def sam3_text_predict():
             {'success': False, 'message': 'Missing required data (video_uuid, frame_number, text_prompt).'}), 400
 
     try:
+        # 改为直接调用统一原语 sam3_query_frame（同一帧多次查询会复用 backbone 缓存），
+        # 取代原来独立实现、逻辑重复的 predict_boxes_from_text_sam3。
         results = sam3_query_frame(video_uuid, int(frame_number), text_prompt=text_prompt, confidence=confidence)
 
         return jsonify({'success': True, 'results': results})
@@ -822,6 +831,8 @@ def interactive_segment_preprocess_route():
         return jsonify({'success': False, 'message': 'Missing video_uuid or frame_number.'}), 400
 
     try:
+        # 预热该帧的 SAM3 backbone 缓存（跑一次最贵的图像前向），后续同一帧的文本/
+        # 框样例查询都会直接复用，不再需要旧版"生成全部候选框+提特征"的预处理。
         ai_models.warm_frame_cache(video_uuid, int(frame_number))
         cache_key = f"{video_uuid}_{frame_number}"
         return jsonify({'success': True, 'message': 'Preprocessing successful', 'cache_key': cache_key})
@@ -843,6 +854,8 @@ def interactive_segment_predict_route():
     video_uuid = data.get('video_uuid')
     frame_number = int(data.get('frame_number'))
     prompt_boxes = data.get('prompt_boxes', [])
+    # 新增: 负例框 (框样例检索的 label=False)，同一帧内"这不是我想要的"的反例，
+    # 前端可以让用户额外画几个负例框来提升精度。
     negative_prompt_boxes = data.get('negative_prompt_boxes', [])
     use_color = data.get('use_color', False)
 
@@ -883,6 +896,8 @@ def predict_from_dataset_route():
         return jsonify({'success': False, 'message': 'Missing required data.'}), 400
 
     try:
+        # 不再需要"先构建原型再预测"两步：直接用该类别的 SAM3 检索文本
+        # (database.class_labels.sam3_prompt，没配置则回退用类别名) 查询这一帧。
         results = ai_models.predict_by_class_text(video_uuid, frame_number, class_name, confidence_threshold)
         response = {'success': True, 'results': results}
         if not ai_models.class_has_labeled_examples(class_name):
@@ -922,6 +937,10 @@ def background_preprocess_frame():
 
     return jsonify({'success': True, 'message': 'Preprocessing started in background.'})
 
+
+# 注: 这里原来有一个 /api/get_random_frames_for_neg_sampling 路由，专给旧版
+# negative-sampling-modal（随机抽帧、手绘负例框、给 MobileNet 建负原型）用。SAM3
+# 迁移后批量应用改成纯文本检索驱动，前端已经不再调用这个接口，一并删除。
 
 
 @app.route('/api/apply_class_to_videos', methods=['POST'])
@@ -1528,15 +1547,18 @@ def run_consistency_check(dataset_uuid):
     try:
         request_data = request.get_json() or {}
         is_color_check_enabled = request_data.get('enable_color_check', True)
-        semantic_threshold = request_data.get('semantic_threshold')
 
         if is_color_check_enabled:
-            logging.info(f"Starting AI Quality Control with SEMANTIC (SAM3, thresh={semantic_threshold}) and COLOR checks.")
+            logging.info("Starting AI Quality Control with SEMANTIC (SAM3) and COLOR checks.")
         else:
-            logging.info(f"Starting AI Quality Control with SEMANTIC (SAM3, thresh={semantic_threshold}) check ONLY.")
+            logging.info("Starting AI Quality Control with SEMANTIC (SAM3) check ONLY.")
 
+        # 旧实现: 已标注框 -> MobileNet 语义向量 + HSV 颜色直方图 -> 类内/类间相似度找
+        #        离群点。这一整段逻辑（含 embedding 提取、按类别建 prototype_library、
+        #        余弦相似度比较）已经移进 ai_models.check_dataset_consistency，改用
+        #        SAM3 自己的开放词汇置信度分数判断"标得对不对"，不再需要 embedding。
         outlier_image_indices, all_bboxes_info, message = ai_models.check_dataset_consistency(
-            dataset_uuid, enable_color_check=is_color_check_enabled, semantic_threshold=semantic_threshold
+            dataset_uuid, enable_color_check=is_color_check_enabled
         )
 
         if outlier_image_indices is None:
@@ -1700,6 +1722,11 @@ def start_server():
         ai_models.startup_ai_models()
     else:
         logging.warning("=== 处于初始配置向导模式：已拦截 AI 模型加载，等待用户完成环境配置 ===")
+
+    # 注: 原来这里有两个 atexit.register，退出时把 "原型库" 和 "预处理特征缓存" 落盘
+    # (prototype_library.pt / preprocessed_cache.pt)，是 MobileNet 时代的产物。SAM3
+    # 迁移后不再有需要跨进程持久化的 embedding/原型概念，帧级 backbone 缓存本来就只是
+    # 一个短期的内存 LRU（退出即丢，下次用到时重新跑一次 backbone 即可），不需要落盘。
 
     time.sleep(0.01)
 
