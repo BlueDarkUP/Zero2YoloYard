@@ -71,25 +71,23 @@ class ClassificationAnnotator {
             this.core.annotations.classifications = [];
         }
 
-        // Single label classification: replace with chosen class
-        this.core.annotations.classifications = [className];
+        const idx = this.core.annotations.classifications.indexOf(className);
+        if (idx !== -1) {
+            this.core.annotations.classifications.splice(idx, 1);
+            if (typeof window.showToast === 'function') {
+                window.showToast(`🗑️ Removed [${className}]`, 1200);
+            }
+        } else {
+            this.core.annotations.classifications.push(className);
+            if (typeof window.showToast === 'function') {
+                window.showToast(`🏷️ Classified as [${className}]`, 1200);
+            }
+        }
+
         this.core.saveAnnotations();
         this.renderSidebarTags();
         this.core.render();
 
-        if (typeof window.showToast === 'function') {
-            window.showToast(`🏷️ Classified as [${className}]`, 1200);
-        }
-
-        // Auto Advance to Next Frame if enabled
-        if (this.autoAdvance) {
-            const slider = $('#frame-slider');
-            const currentVal = parseInt(slider.val());
-            const maxVal = parseInt(slider.attr('max'));
-            if (currentVal < maxVal) {
-                slider.val(currentVal + 1).trigger('input');
-            }
-        }
     }
 
     clearClassification() {

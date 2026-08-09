@@ -899,16 +899,34 @@
         }
 
         function resizeCanvas() {
+            const container = document.getElementById('canvas-container');
+            const oldTransform = container.style.transform;
+            container.style.transform = 'none';
+
             const dpr = window.devicePixelRatio || 1;
             const rect = frameImage.getBoundingClientRect();
-            [staticCanvas, dynamicCanvas].forEach(canvas => {
-                canvas.style.width = `${rect.width}px`;
-                canvas.style.height = `${rect.height}px`;
-                canvas.width = Math.round(rect.width * dpr);
-                canvas.height = Math.round(rect.height * dpr);
-            });
+            
+            staticCanvas.style.width = `${rect.width}px`;
+            staticCanvas.style.height = `${rect.height}px`;
+            staticCanvas.width = Math.round(rect.width * dpr);
+            staticCanvas.height = Math.round(rect.height * dpr);
             staticCtx.scale(dpr, dpr);
-            dynamicCtx.scale(dpr, dpr);
+
+            dynamicCanvas.style.width = `${rect.width}px`;
+            dynamicCanvas.style.height = `${rect.height}px`;
+
+            if ("{{ video_entity.annotation_type }}" === 'detection') {
+                dynamicCanvas.width = Math.round(rect.width * dpr);
+                dynamicCanvas.height = Math.round(rect.height * dpr);
+                dynamicCtx.scale(dpr, dpr);
+            } else {
+                if (frameImage.naturalWidth) {
+                    dynamicCanvas.width = frameImage.naturalWidth;
+                    dynamicCanvas.height = frameImage.naturalHeight;
+                }
+            }
+
+            container.style.transform = oldTransform;
             redrawStaticCanvas();
         }
 
@@ -1297,7 +1315,7 @@
                     const score = parseFloat(parts[5]);
                     let polygon = null;
 
-                    // 修复：解析第 7 个字段中的 SAM 2 精确多边形轮廓
+                    // 修复：解析第 7 个字段中�?SAM 2 精确多边形轮�?
                     if (parts.length >= 7 && parts[6].trim() !== "") {
                         polygon = parts[6].split("|").map(pt => {
                             const coords = pt.split(";").map(Number);
@@ -1678,7 +1696,7 @@
             if (newFrameNumber === currentEditingFrame) return;
 
             if (settings.autosave_enabled) { 
-                if (annotation_type === 'segmentation' && window.annotationCore) {
+                if ("{{ video_entity.annotation_type }}" === 'segmentation' && window.annotationCore) {
                     window.annotationCore.saveAnnotations();
                 } else {
                     performSave(currentEditingFrame, formatBboxesToString(), true); 
@@ -1816,7 +1834,7 @@
                     window.suggestionBboxes = suggestionBboxes;
 
                     if ("{{ video_entity.annotation_type }}" !== "detection") {
-                        // 优先使用 SAM 2 提取的高精度轮廓多边形
+                        // 优先使用 SAM 2 提取的高精度轮廓多边�?
                         let polyPoints = acc.polygon;
                         if (!polyPoints || polyPoints.length < 3) {
                             const b = acc.box;
@@ -2070,7 +2088,7 @@
         });
 
         $("#save-bboxes").on("click", function() {
-            if (annotation_type === 'segmentation' && window.annotationCore) {
+            if ("{{ video_entity.annotation_type }}" === 'segmentation' && window.annotationCore) {
                 window.annotationCore.saveAnnotations();
             } else {
                 performSave(parseInt(frameSlider.val()), formatBboxesToString(), false);
@@ -2444,7 +2462,7 @@
             if ("{{ video_entity.annotation_type }}" !== "detection") {
                 suggestionBboxes.forEach(sug => {
                     if (sug.score >= threshold) {
-                        // 优先使用 SAM 2 提取的高精度轮廓多边形
+                        // 优先使用 SAM 2 提取的高精度轮廓多边�?
                         let polyPoints = sug.polygon;
                         if (!polyPoints || polyPoints.length < 3) {
                             const b = sug.box;

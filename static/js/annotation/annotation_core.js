@@ -32,12 +32,6 @@ class AnnotationCore {
         // Active Annotator Plugin
         this.annotator = null;
 
-        // Hide underlying HTML img to prevent double-image rendering
-        const frameImg = document.getElementById('frame-image');
-        if (frameImg && this.annotationType !== 'detection') {
-            frameImg.style.visibility = 'hidden';
-        }
-
         this.initEvents();
         this.bindClassRegistry();
     }
@@ -83,19 +77,23 @@ class AnnotationCore {
         // Zoom (Wheel) - Centered on Mouse Cursor
         container.addEventListener('wheel', (e) => {
             e.preventDefault();
-            const rect = this.canvas.getBoundingClientRect();
-            const mouseX = e.clientX - rect.left;
-            const mouseY = e.clientY - rect.top;
-
+            const canvasContainer = document.getElementById('canvas-container');
+            
             const zoomFactor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
             const newZoom = Math.max(0.1, Math.min(15.0, this.zoom * zoomFactor));
 
-            // Adjust pan so point under cursor stays stationary
-            this.panX = mouseX - (mouseX - this.panX) * (newZoom / this.zoom);
-            this.panY = mouseY - (mouseY - this.panY) * (newZoom / this.zoom);
+            // Adjust pan so point under cursor stays stationary relative to screen
+            // mouse position relative to container
+            const rect = canvasContainer.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            this.panX = this.panX - mouseX * (newZoom / this.zoom - 1);
+            this.panY = this.panY - mouseY * (newZoom / this.zoom - 1);
             this.zoom = newZoom;
 
-            this.render();
+            canvasContainer.style.transformOrigin = '0 0';
+            canvasContainer.style.transform = `translate(${this.panX}px, ${this.panY}px) scale(${this.zoom})`;
         }, { passive: false });
 
         // Pan with Middle Click or Space + Left Click
@@ -119,9 +117,11 @@ class AnnotationCore {
 
         window.addEventListener('mousemove', (e) => {
             if (this.isPanning) {
-                this.panX = e.clientX - this.startPanX;
-                this.panY = e.clientY - this.startPanY;
-                this.render();
+                this.panX += e.movementX;
+                this.panY += e.movementY;
+                const canvasContainer = document.getElementById('canvas-container');
+                canvasContainer.style.transformOrigin = '0 0';
+                canvasContainer.style.transform = `translate(${this.panX}px, ${this.panY}px) scale(${this.zoom})`;
                 return;
             }
 
@@ -163,41 +163,15 @@ class AnnotationCore {
         const scaleX = this.canvas.width / rect.width;
         const scaleY = this.canvas.height / rect.height;
 
-        const mouseX = (e.clientX - rect.left) * scaleX;
-        const mouseY = (e.clientY - rect.top) * scaleY;
-
-        const x = (mouseX - this.panX) / this.zoom;
-        const y = (mouseY - this.panY) / this.zoom;
-
-        return { x: Math.max(0, Math.min(this.canvas.width, x)), y: Math.max(0, Math.min(this.canvas.height, y)) };
+        return {
+            x: (e.clientX - rect.left) * scaleX,
+            y: (e.clientY - rect.top) * scaleY
+        };
     }
 
     loadFrame(frameNumber, imageUrl) {
         this.currentFrame = frameNumber;
-        const self = this;
-
-        const onImgLoaded = () => {
-            self.canvas.width = self.image.naturalWidth || 1920;
-            self.canvas.height = self.image.naturalHeight || 1080;
-
-            const container = self.canvas.parentElement;
-            if (container && self.zoom === 1.0 && self.panX === 0 && self.panY === 0) {
-                const rect = container.getBoundingClientRect();
-                self.canvas.style.width = `${rect.width}px`;
-                self.canvas.style.height = `${rect.height}px`;
-            }
-
-            self.fetchAnnotations();
-        };
-
-        if (this.image.complete && this.image.naturalWidth > 0 && (this.image.src === imageUrl || this.image.src.endsWith(imageUrl))) {
-            onImgLoaded();
-        } else {
-            this.image.onload = onImgLoaded;
-            if (!this.image.src.endsWith(imageUrl)) {
-                this.image.src = imageUrl;
-            }
-        }
+        this.fetchAnnotations();
     }
 
     fetchAnnotations() {
@@ -280,11 +254,6 @@ class AnnotationCore {
         this.ctx.save();
         this.ctx.translate(this.panX, this.panY);
         this.ctx.scale(this.zoom, this.zoom);
-
-        // 1. Draw Background Video Frame Image
-        if (this.image.complete && this.image.naturalWidth > 0) {
-            this.ctx.drawImage(this.image, 0, 0);
-        }
 
         // 2. Delegate Saved Shape Rendering to Active Annotator Plugin
         if (this.annotator && this.annotator.render) {
