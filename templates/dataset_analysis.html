@@ -203,11 +203,11 @@
                 <div id="cls-clustering-action-card" class="mt-4 pt-3 border-top border-secondary" style="display: none;">
                     <div class="d-flex justify-content-between align-items-center flex-wrap bg-black p-3 border border-secondary">
                         <div>
-                            <h6 class="font-weight-bold text-primary font-monospace mb-1"><i class="bi bi-diagram-3-fill mr-2"></i> 视觉向量聚类与一键批量打标 (VISUAL VECTOR CLUSTERING)</h6>
-                            <p class="text-muted small mb-0 font-monospace">基于 HSV 颜色分布、空间网格与纹理特征提取，自动将相似图片聚类成组，实现 1 秒全组批量打标。</p>
+                            <h6 class="font-weight-bold text-primary font-monospace mb-1"><i class="bi bi-diagram-3-fill mr-2"></i> VISUAL VECTOR CLUSTERING & BATCH TAGGING</h6>
+                            <p class="text-muted small mb-0 font-monospace">Automatically group visually similar images into clusters based on color, spatial layout, and texture for 1-click batch classification tagging.</p>
                         </div>
                         <button id="open-clustering-modal-btn" class="btn btn-sm btn-primary font-monospace font-weight-bold mt-2 mt-md-0">
-                            <i class="bi bi-magic mr-1"></i> 打开聚类批量打标面板
+                            <i class="bi bi-magic mr-1"></i> OPEN VISUAL CLUSTERING PANEL
                         </button>
                     </div>
                 </div>
@@ -219,32 +219,27 @@
             <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable" role="document">
                 <div class="modal-content bg-dark text-white border-secondary">
                     <div class="modal-header border-secondary bg-black">
-                        <h5 class="modal-title font-monospace text-primary"><i class="bi bi-diagram-3-fill mr-2"></i> 视觉向量聚类与一键批量打标</h5>
+                        <h5 class="modal-title font-monospace text-primary"><i class="bi bi-diagram-3-fill mr-2"></i> VISUAL VECTOR CLUSTERING & BATCH TAGGING</h5>
                         <button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button>
                     </div>
                     <div class="modal-body bg-dark">
                         <div class="d-flex align-items-center justify-content-between mb-3 p-3 bg-black border border-secondary flex-wrap">
                             <div class="d-flex align-items-center flex-wrap mb-2 mb-md-0">
-                                <label class="mr-2 mb-0 small text-muted font-weight-bold font-monospace">聚类簇数量 (K):</label>
-                                <select id="cluster-k-select" class="form-control form-control-sm mr-3 bg-dark text-white border-secondary font-monospace" style="width: 110px;">
-                                    <option value="4">4 簇</option>
-                                    <option value="6" selected>6 簇</option>
-                                    <option value="8">8 簇</option>
-                                    <option value="12">12 簇</option>
-                                </select>
+                                <label class="mr-2 mb-0 small text-muted font-weight-bold font-monospace">NUM CLUSTERS (K):</label>
+                                <input type="number" id="cluster-k-select" class="form-control form-control-sm mr-3 bg-dark text-white border-secondary font-monospace" min="2" max="100" value="6" style="width: 90px;" placeholder="K值...">
                                 <div class="custom-control custom-checkbox mr-3">
                                     <input type="checkbox" class="custom-control-input" id="cluster-unlabeled-only">
-                                    <label class="custom-control-label small font-monospace text-warning" for="cluster-unlabeled-only">仅扫描未标注图片</label>
+                                    <label class="custom-control-label small font-monospace text-warning" for="cluster-unlabeled-only">UNLABELED IMAGES ONLY</label>
                                 </div>
                             </div>
                             <button id="run-clustering-btn" class="btn btn-sm btn-primary font-monospace font-weight-bold">
-                                <i class="bi bi-play-fill mr-1"></i> 执行视觉聚类扫描
+                                <i class="bi bi-play-fill mr-1"></i> RUN CLUSTERING SCAN
                             </button>
                         </div>
 
                         <div id="clustering-loader" class="text-center my-5" style="display: none;">
                             <div class="spinner-border text-primary" role="status"></div>
-                            <p class="mt-2 text-primary font-monospace small">正在提取高维视觉特征向量并进行 K-Means 聚类...</p>
+                            <p class="mt-2 text-primary font-monospace small">Extracting visual feature vectors and performing K-Means clustering...</p>
                         </div>
 
                         <div id="clustering-results-container" class="custom-scrollbar" style="max-height: 600px; overflow-y: auto;"></div>
@@ -427,7 +422,6 @@ $(document).ready(function() {
         return {
             maintainAspectRatio: false,
             responsive: true,
-            // 终端扫描式入场动画
             animation: {
                 duration: 800,
                 easing: 'linear'
@@ -441,7 +435,7 @@ $(document).ready(function() {
                     borderColor: 'var(--color-primary)',
                     borderWidth: 1,
                     padding: 12,
-                    cornerRadius: 0, // 赛博朋克直角
+                    cornerRadius: 0,
                     titleFont: { family: 'Orbitron', size: 13 },
                     bodyFont: { family: 'JetBrains Mono', size: 11 },
                     displayColors: false
@@ -925,9 +919,27 @@ $(document).ready(function() {
             error: function(xhr) {
                 $('#clustering-loader').hide();
                 $('#run-clustering-btn').prop('disabled', false);
-                const msg = xhr.responseJSON ? xhr.responseJSON.message : "视觉聚类分析失败。";
+                const msg = xhr.responseJSON ? xhr.responseJSON.message : "Visual clustering failed.";
                 $('#clustering-results-container').html(`<div class="alert alert-danger font-monospace small m-3">${msg}</div>`);
             }
+        });
+    }
+
+    function renderClusterGridThumbnails(cluster, grid) {
+        grid.empty();
+        cluster.images.forEach(img => {
+            const hasTag = img.tags && img.tags.length > 0;
+            const tagText = hasTag ? img.tags.join(', ') : '';
+            const tagBadge = hasTag 
+                ? `<span class="badge badge-info font-monospace position-absolute cluster-thumb-badge" style="top: 4px; left: 4px; z-index: 5; background: rgba(23, 162, 184, 0.9); font-size: 11px; max-width: 92%; overflow: hidden; text-overflow: ellipsis;" title="${tagText}">${tagText}</span>` 
+                : '';
+            const thumbCol = $(`
+                <div class="col-4 col-sm-3 col-md-2 p-1 position-relative cluster-thumb-col" data-vu="${img.video_uuid}" data-fn="${img.frame_number}">
+                    ${tagBadge}
+                    <img src="${img.original_url}" class="img-fluid border border-secondary rounded" style="height: 90px; width: 100%; object-fit: cover;" title="Frame #${img.frame_number} | Tags: ${tagText || 'None'}">
+                </div>
+            `);
+            grid.append(thumbCol);
         });
     }
 
@@ -935,31 +947,48 @@ $(document).ready(function() {
         const container = $('#clustering-results-container').empty();
 
         if (!clusters || clusters.length === 0) {
-            container.html('<div class="alert alert-info font-monospace small m-3">未发现可聚类的图片。</div>');
+            container.html('<div class="alert alert-info font-monospace small m-3">No images found for visual clustering.</div>');
             return;
         }
 
-        let classOptionsHtml = '<option value="">-- 选择已有类名 --</option>';
-        if (window.datasetClassNames && window.datasetClassNames.length > 0) {
-            window.datasetClassNames.forEach(c => {
-                classOptionsHtml += `<option value="${c}">${c}</option>`;
-            });
+        let classesList = [];
+        if (window.datasetClassNames && Array.isArray(window.datasetClassNames)) {
+            classesList = window.datasetClassNames.slice();
         }
+        clusters.forEach(cl => {
+            cl.images.forEach(img => {
+                if (img.tags && Array.isArray(img.tags)) {
+                    img.tags.forEach(t => {
+                        if (t && !classesList.includes(t)) classesList.push(t);
+                    });
+                }
+            });
+        });
+
+        let classOptionsHtml = '<option value="">-- SELECT CLASS --</option>';
+        let quickButtonsHtml = '';
+        classesList.forEach(c => {
+            classOptionsHtml += `<option value="${c}">${c}</option>`;
+            quickButtonsHtml += `<button type="button" class="btn btn-xs btn-outline-info mr-1 mb-1 quick-cluster-tag-btn" data-class="${c}" title="Add tag '${c}' to all images in this cluster"><i class="bi bi-plus-circle mr-1"></i>${c}</button>`;
+        });
 
         clusters.forEach((cluster, idx) => {
             const card = $(`
                 <div class="card mb-4 border-secondary bg-black">
                     <div class="card-header bg-dark d-flex justify-content-between align-items-center flex-wrap p-2 border-secondary">
                         <div class="font-monospace text-primary font-weight-bold">
-                            <i class="bi bi-collection-fill mr-1"></i> 聚类簇 #${cluster.cluster_id + 1} (${cluster.count} 张图片)
+                            <i class="bi bi-collection-fill mr-1"></i> CLUSTER #${cluster.cluster_id + 1} (${cluster.count} IMAGES)
                         </div>
                         <div class="d-flex align-items-center flex-wrap mt-2 mt-md-0">
-                            <select class="form-control form-control-sm mr-2 bg-dark text-white border-secondary font-monospace cluster-tag-select" style="width: 150px;">
+                            <div class="quick-tag-bar mr-2 d-flex align-items-center flex-wrap">
+                                ${quickButtonsHtml}
+                            </div>
+                            <select class="form-control form-control-sm mr-2 bg-dark text-white border-secondary font-monospace cluster-tag-select" style="width: 140px;">
                                 ${classOptionsHtml}
                             </select>
-                            <input type="text" class="form-control form-control-sm mr-2 bg-dark text-white border-secondary font-monospace cluster-custom-tag" placeholder="或输入新标签..." style="width: 140px;">
+                            <input type="text" class="form-control form-control-sm mr-2 bg-dark text-white border-secondary font-monospace cluster-custom-tag" placeholder="Or new class..." style="width: 120px;">
                             <button class="btn btn-sm btn-success font-monospace font-weight-bold batch-tag-cluster-btn">
-                                <i class="bi bi-tag-fill mr-1"></i> 🏷️ 一键打标全簇 (${cluster.count}张)
+                                <i class="bi bi-tag-fill mr-1"></i> LABEL ALL (${cluster.count})
                             </button>
                         </div>
                     </div>
@@ -970,16 +999,12 @@ $(document).ready(function() {
             `);
 
             const grid = card.find(`.cluster-grid-${idx}`);
-            cluster.images.forEach(img => {
-                const hasTag = img.tags && img.tags.length > 0;
-                const tagBadge = hasTag ? `<span class="badge badge-info font-monospace position-absolute" style="top: 4px; left: 4px; z-index: 5;">${img.tags.join(', ')}</span>` : '';
-                const thumbCol = $(`
-                    <div class="col-4 col-sm-3 col-md-2 p-1 position-relative">
-                        ${tagBadge}
-                        <img src="${img.original_url}" class="img-fluid border border-secondary rounded" style="height: 90px; width: 100%; object-fit: cover;">
-                    </div>
-                `);
-                grid.append(thumbCol);
+            renderClusterGridThumbnails(cluster, grid);
+
+            card.find('.quick-cluster-tag-btn').on('click', function() {
+                const chosenTag = $(this).data('class');
+                card.find('.cluster-tag-select').val(chosenTag);
+                card.find('.batch-tag-cluster-btn').click();
             });
 
             card.find('.batch-tag-cluster-btn').on('click', function() {
@@ -989,11 +1014,11 @@ $(document).ready(function() {
                 const tagName = customVal || selectVal;
 
                 if (!tagName) {
-                    window.sysAlert('请先选择或输入要打上的标签名称！', 'warning');
+                    window.sysAlert('Please select or enter a class name first!', 'warning');
                     return;
                 }
 
-                $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> 打标中...');
+                $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> Tagging...');
 
                 $.ajax({
                     url: '/api/batchTagClusterImages',
@@ -1005,27 +1030,21 @@ $(document).ready(function() {
                     }),
                     success: function(tagRes) {
                         if (tagRes.success) {
-                            window.sysAlert(`成功为聚类簇 #${cluster.cluster_id + 1} 的 ${tagRes.updated_count} 张图片打上标签 '${tagName}'！`, 'success');
-                            $btn.removeClass('btn-success').addClass('btn-secondary').html(`<i class="bi bi-check-lg mr-1"></i> 已标记为 '${tagName}'`);
+                            window.sysAlert(`Successfully added tag '${tagName}' to ${tagRes.updated_count} images in Cluster #${cluster.cluster_id + 1}!`, 'success');
+                            $btn.removeClass('btn-success').addClass('btn-secondary').html(`<i class="bi bi-check-lg mr-1"></i> Labeled '${tagName}'`);
                             
                             cluster.images.forEach(img => {
                                 if (!img.tags.includes(tagName)) img.tags.push(tagName);
                             });
-                            grid.find('.col-4, .col-sm-3, .col-md-2').each(function() {
-                                if ($(this).find('.badge-info').length === 0) {
-                                    $(this).prepend(`<span class="badge badge-info font-monospace position-absolute" style="top: 4px; left: 4px; z-index: 5;">${tagName}</span>`);
-                                } else {
-                                    $(this).find('.badge-info').text(tagName);
-                                }
-                            });
+                            renderClusterGridThumbnails(cluster, grid);
                         } else {
-                            window.sysAlert('打标失败: ' + tagRes.message, 'error');
-                            $btn.prop('disabled', false).html('<i class="bi bi-tag-fill mr-1"></i> 🏷️ 一键打标全簇');
+                            window.sysAlert('Tagging failed: ' + tagRes.message, 'error');
+                            $btn.prop('disabled', false).html('<i class="bi bi-tag-fill mr-1"></i> LABEL ALL');
                         }
                     },
-                    error: function() {
-                        window.sysAlert('服务器打标失败。', 'error');
-                        $btn.prop('disabled', false).html('<i class="bi bi-tag-fill mr-1"></i> 🏷️ 一键打标全簇');
+                    error: function(xhr) {
+                        window.sysAlert('Tagging request failed: ' + (xhr.responseJSON ? xhr.responseJSON.message : xhr.statusText), 'error');
+                        $btn.prop('disabled', false).html('<i class="bi bi-tag-fill mr-1"></i> LABEL ALL');
                     }
                 });
             });

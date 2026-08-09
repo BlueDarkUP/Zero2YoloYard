@@ -1145,13 +1145,26 @@ def cluster_classification_images_route():
 
     if dataset_uuid and not video_uuids:
         ds = database.get_dataset_entity(dataset_uuid)
-        if ds:
-            video_uuids = ds.get('video_uuids', [])
+        if ds and ds.get('video_uuids'):
+            raw_v = ds.get('video_uuids')
+            if isinstance(raw_v, str):
+                try:
+                    video_uuids = json.loads(raw_v)
+                except Exception:
+                    video_uuids = [raw_v]
+            elif isinstance(raw_v, list):
+                video_uuids = raw_v
 
-    if not video_uuids:
+    if isinstance(video_uuids, str):
+        try:
+            video_uuids = json.loads(video_uuids)
+        except Exception:
+            video_uuids = [video_uuids]
+
+    if not video_uuids or not isinstance(video_uuids, list):
         return jsonify({'success': False, 'message': 'No video UUIDs provided.'}), 400
 
-    num_clusters = max(2, min(20, num_clusters))
+    num_clusters = max(1, min(100, num_clusters))
 
     # 1. 收集目标图片
     frames_to_cluster = []
@@ -1162,11 +1175,13 @@ def cluster_classification_images_route():
             ann_json = (f.get('annotations_json') or '').strip()
             has_label = False
             tags = []
+            is_ambiguous = False
             if ann_json:
                 try:
                     from annotation_model import AnnotationData
                     ann_data = AnnotationData.from_json(ann_json)
                     tags = ann_data.classifications or []
+                    is_ambiguous = getattr(ann_data, 'is_ambiguous', False)
                     if ann_data.objects or ann_data.classifications:
                         has_label = True
                 except Exception:
@@ -1178,22 +1193,31 @@ def cluster_classification_images_route():
                 'video_uuid': vu,
                 'frame_number': f['frame_number'],
                 'tags': tags,
+                'is_ambiguous': is_ambiguous,
                 'has_label': has_label
             }
             all_valid_frames.append(f_item)
             if not (unlabeled_only and has_label):
                 frames_to_cluster.append(f_item)
 
-    # 如果开启了"仅未标注"但未找到未标注图片，自动降级为全量图片聚类
+    # Fallback to all images if unlabeled_only resulted in 0 images
     if not frames_to_cluster and all_valid_frames:
         frames_to_cluster = all_valid_frames
 
     if not frames_to_cluster:
-        return jsonify({'success': False, 'message': '未找到可用于聚类的图片。'}), 400
+        return jsonify({'success': False, 'message': 'No images found for visual clustering.'}), 400
 
     num_clusters = max(1, min(len(frames_to_cluster), num_clusters))
 
-    # 2. 提取特征向量
+    # 2. 提取特征向量 (优先使用 CLIP 深度特征向量)
+    model_name = data.get('model_name')
+    use_clip = False
+    try:
+        import clip_model
+        use_clip = True
+    except Exception:
+        use_clip = False
+
     feature_matrix = []
     valid_frames = []
 
@@ -1202,7 +1226,14 @@ def cluster_classification_images_route():
         if os.path.exists(frame_path):
             img = cv2.imread(frame_path)
             if img is not None:
-                feat = extract_visual_feature_vector(img)
+                feat = None
+                if use_clip:
+                    try:
+                        feat = clip_model.clip_manager.extract_image_feature_vector(img, model_name=model_name)
+                    except Exception as e:
+                        print(f"[Cluster] CLIP feature extraction failed, falling back to HSV: {e}")
+                if feat is None:
+                    feat = extract_visual_feature_vector(img)
                 feature_matrix.append(feat)
                 f_item['original_url'] = f"/media/annotated_frame/{f_item['video_uuid']}/{f_item['frame_number']}.jpg"
                 valid_frames.append(f_item)
@@ -1239,6 +1270,223 @@ def cluster_classification_images_route():
         'total_images': len(valid_frames),
         'num_clusters': len(result_clusters),
         'clusters': result_clusters
+    })
+
+
+@app.route('/api/getClipModels', methods=['GET', 'POST'])
+def get_clip_models_route():
+    try:
+        import clip_model
+        models = clip_model.clip_manager.get_available_models()
+        active = clip_model.clip_manager.active_model_name or (models[0] if models else None)
+        return jsonify({
+            'success': True,
+            'models': models,
+            'active_model': active
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/applyClipZeroShot', methods=['POST'])
+def apply_clip_zero_shot_route():
+    """
+    Run CLIP zero-shot pre-annotation for a video or dataset
+    """
+    data = request.json or {}
+    dataset_uuid = data.get('dataset_uuid')
+    video_uuids = data.get('video_uuids')
+    candidate_classes = data.get('candidate_classes', [])
+    confidence_threshold = float(data.get('confidence_threshold', 0.40))
+    prompt_template = data.get('prompt_template', 'a photo of a {}')
+    model_name = data.get('model_name')
+    unlabeled_only = bool(data.get('unlabeled_only', True))
+
+    if dataset_uuid and not video_uuids:
+        ds = database.get_dataset_entity(dataset_uuid)
+        if ds and ds.get('video_uuids'):
+            raw_v = ds.get('video_uuids')
+            if isinstance(raw_v, str):
+                try:
+                    video_uuids = json.loads(raw_v)
+                except Exception:
+                    video_uuids = [raw_v]
+            elif isinstance(raw_v, list):
+                video_uuids = raw_v
+
+    if isinstance(video_uuids, str):
+        try:
+            video_uuids = json.loads(video_uuids)
+        except Exception:
+            video_uuids = [video_uuids]
+
+    if not video_uuids or not isinstance(video_uuids, list):
+        return jsonify({'success': False, 'message': 'No video UUIDs provided.'}), 400
+
+    if not candidate_classes or not isinstance(candidate_classes, list):
+        return jsonify({'success': False, 'message': 'Candidate classes list is required.'}), 400
+
+    try:
+        import clip_model
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'CLIP module unavailable: {e}'}), 500
+
+    # 1. 收集目标帧
+    target_frames = []
+    all_frames_list = []
+    from annotation_model import AnnotationData
+
+    for vu in video_uuids:
+        frames = database.get_video_frames(vu)
+        for f in frames:
+            ann_json = (f.get('annotations_json') or '').strip()
+            has_label = False
+            if ann_json:
+                try:
+                    ann_data = AnnotationData.from_json(ann_json)
+                    if ann_data.classifications or ann_data.objects:
+                        has_label = True
+                except Exception:
+                    pass
+            if not has_label and (f.get('bboxes_text') or '').strip():
+                has_label = True
+
+            f_obj = {'video_uuid': vu, 'frame_number': f['frame_number']}
+            all_frames_list.append(f_obj)
+            if not (unlabeled_only and has_label):
+                target_frames.append(f_obj)
+
+    # Fallback to all frames if unlabeled_only resulted in 0 frames
+    if not target_frames and all_frames_list:
+        target_frames = all_frames_list
+
+    if not target_frames:
+        return jsonify({'success': False, 'message': 'No matching frames found for zero-shot pre-annotation.'}), 404
+
+    # 2. 批量推断与标注
+    updated_count = 0
+    predictions_summary = []
+
+    for item in target_frames:
+        vu = item['video_uuid']
+        fn = item['frame_number']
+        frame_path = file_storage.get_frame_path(vu, fn)
+        if os.path.exists(frame_path):
+            img = cv2.imread(frame_path)
+            if img is not None:
+                preds = clip_model.clip_manager.predict_zero_shot(
+                    img, candidate_classes, prompt_template=prompt_template, model_name=model_name
+                )
+                if preds and preds[0]['score'] >= confidence_threshold:
+                    top_class = preds[0]['class_name']
+                    top_score = preds[0]['score']
+
+                    existing_ann_dict = database.get_frame_annotations(vu, fn)
+                    if existing_ann_dict:
+                        ann_data = AnnotationData.from_dict(existing_ann_dict)
+                    else:
+                        ann_data = AnnotationData()
+
+                    if top_class not in ann_data.classifications:
+                        ann_data.classifications.append(top_class)
+                        database.save_frame_annotations(vu, fn, ann_data.to_json())
+                        updated_count += 1
+                        predictions_summary.append({
+                            'video_uuid': vu,
+                            'frame_number': fn,
+                            'top_class': top_class,
+                            'confidence': round(top_score, 4)
+                        })
+
+    return jsonify({
+        'success': True,
+        'total_scanned': len(target_frames),
+        'updated_count': updated_count,
+        'predictions': predictions_summary[:50]
+    })
+
+
+@app.route('/api/findSimilarClassificationImages', methods=['POST'])
+def find_similar_classification_images_route():
+    """
+    Find top-K visually & semantically similar frames using CLIP embeddings
+    """
+    data = request.json or {}
+    query_video_uuid = data.get('query_video_uuid')
+    query_frame_number = data.get('query_frame_number')
+    dataset_uuid = data.get('dataset_uuid')
+    video_uuids = data.get('video_uuids')
+    similarity_threshold = float(data.get('similarity_threshold', 0.70))
+    top_k = int(data.get('top_k', 30))
+    model_name = data.get('model_name')
+
+    if not query_video_uuid or query_frame_number is None:
+        return jsonify({'success': False, 'message': 'query_video_uuid and query_frame_number are required.'}), 400
+
+    if dataset_uuid and not video_uuids:
+        ds = database.get_dataset_entity(dataset_uuid)
+        if ds and ds.get('video_uuids'):
+            raw_v = ds.get('video_uuids')
+            if isinstance(raw_v, str):
+                try:
+                    video_uuids = json.loads(raw_v)
+                except Exception:
+                    video_uuids = [raw_v]
+            elif isinstance(raw_v, list):
+                video_uuids = raw_v
+
+    if isinstance(video_uuids, str):
+        try:
+            video_uuids = json.loads(video_uuids)
+        except Exception:
+            video_uuids = [video_uuids]
+
+    if not video_uuids:
+        video_uuids = [query_video_uuid]
+
+    try:
+        import clip_model
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'CLIP module unavailable: {e}'}), 500
+
+    query_img_path = file_storage.get_frame_path(query_video_uuid, int(query_frame_number))
+    if not os.path.exists(query_img_path):
+        return jsonify({'success': False, 'message': 'Query frame image not found on disk.'}), 404
+
+    query_img = cv2.imread(query_img_path)
+    if query_img is None:
+        return jsonify({'success': False, 'message': 'Failed to read query frame image.'}), 400
+
+    query_vec = clip_model.clip_manager.extract_image_feature_vector(query_img, model_name=model_name)
+
+    matches = []
+    for vu in video_uuids:
+        frames = database.get_video_frames(vu)
+        for f in frames:
+            fn = f['frame_number']
+            if vu == query_video_uuid and fn == int(query_frame_number):
+                continue
+            frame_path = file_storage.get_frame_path(vu, fn)
+            if os.path.exists(frame_path):
+                img = cv2.imread(frame_path)
+                if img is not None:
+                    target_vec = clip_model.clip_manager.extract_image_feature_vector(img, model_name=model_name)
+                    sim = float(np.dot(query_vec, target_vec))
+                    if sim >= similarity_threshold:
+                        matches.append({
+                            'video_uuid': vu,
+                            'frame_number': fn,
+                            'similarity': round(sim, 4),
+                            'original_url': f"/media/annotated_frame/{vu}/{fn}.jpg"
+                        })
+
+    matches.sort(key=lambda x: x['similarity'], reverse=True)
+    matches = matches[:top_k]
+
+    return jsonify({
+        'success': True,
+        'count': len(matches),
+        'matches': matches
     })
 
 
@@ -1279,6 +1527,68 @@ def batch_tag_cluster_images_route():
         'updated_count': updated_count,
         'tag_name': tag_name,
         'message': f"Successfully tagged {updated_count} images as '{tag_name}'."
+    })
+
+
+@app.route('/api/flagAmbiguousCluster', methods=['POST'])
+def flag_ambiguous_cluster_route():
+    """
+    一键标记/取消标记某个 Cluster 下的所有图片为"有歧义(Needs Review/Disambiguation)"
+    """
+    data = request.json or {}
+    target_images = data.get('target_images', [])
+    is_ambiguous = bool(data.get('is_ambiguous', True))
+
+    if not target_images or not isinstance(target_images, list):
+        return jsonify({'success': False, 'message': 'target_images must be a non-empty list.'}), 400
+
+    from annotation_model import AnnotationData
+
+    updated_count = 0
+    for item in target_images:
+        vu = item.get('video_uuid')
+        fn = item.get('frame_number')
+        if vu and fn is not None:
+            existing_ann_dict = database.get_frame_annotations(vu, fn)
+            if existing_ann_dict:
+                ann_data = AnnotationData.from_dict(existing_ann_dict)
+            else:
+                ann_data = AnnotationData()
+
+            ann_data.is_ambiguous = is_ambiguous
+            database.save_frame_annotations(vu, fn, ann_data.to_json())
+            updated_count += 1
+
+    return jsonify({
+        'success': True,
+        'updated_count': updated_count,
+        'is_ambiguous': is_ambiguous,
+        'message': f"Successfully {'flagged' if is_ambiguous else 'unflagged'} {updated_count} images as ambiguous."
+    })
+
+
+@app.route('/api/getAmbiguousFrames/<video_uuid>', methods=['GET'])
+def get_ambiguous_frames_route(video_uuid):
+    """
+    获取某视频中被标记为"有歧义"的所有帧列表，供前端消歧义过滤器跳转
+    """
+    frames = database.get_video_frames(video_uuid)
+    ambiguous_frames = []
+    from annotation_model import AnnotationData
+    for f in frames:
+        ann_json = (f.get('annotations_json') or '').strip()
+        if ann_json:
+            try:
+                ann_data = AnnotationData.from_json(ann_json)
+                if getattr(ann_data, 'is_ambiguous', False):
+                    ambiguous_frames.append(f['frame_number'])
+            except Exception:
+                pass
+    return jsonify({
+        'success': True,
+        'video_uuid': video_uuid,
+        'count': len(ambiguous_frames),
+        'ambiguous_frames': ambiguous_frames
     })
 
 

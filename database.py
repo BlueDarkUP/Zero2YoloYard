@@ -157,7 +157,83 @@ def migrate_db():
         except Exception as e:
             logging.error(f"Error migrating historical suggested_bboxes_text: {e}")
 
+    force_resync_all_dataset_labels()
 
+
+def force_resync_all_dataset_labels():
+    """强行重新扫描所有帧的真实标注数据，修复视频标注计数与索引表"""
+    logging.info("=== 开始对所有视频执行标注数据全量校准与修复... ===")
+    try:
+        from annotation_model import AnnotationData
+        with engine.begin() as conn:
+            # 1. 重置可能卡在中间态的视频状态为 READY
+            conn.execute(text(
+                "UPDATE videos SET status = 'READY' WHERE status IN ('EXTRACTING', 'PRE_ANNOTATING', 'APPLYING_CLASS', 'UPLOADING', 'CANCELLING')"))
+
+            # 2. 遍历所有帧，从 JSON / 框文本 / 标签中解析真实标注
+            rows = conn.execute(
+                text("SELECT frame_id, video_uuid, bboxes_text, tags, annotations_json FROM video_frames")).fetchall()
+            for r in rows:
+                fid, vu, bt, t_str, aj_str = r[0], r[1], r[2], r[3], r[4]
+                unique_labels = set()
+
+                # 2.1 从传统框文本提取
+                if bt and bt.strip():
+                    unique_labels.update(extract_labels(bt))
+
+                # 2.2 从 JSON 高级标注提取（包含分类 Tag、分割多边形、姿态等）
+                if aj_str and aj_str.strip():
+                    ann_data = AnnotationData.from_json(aj_str)
+                    unique_labels.update(ann_data.get_unique_labels())
+
+                # 2.3 从旧版 tags 字段提取
+                if t_str and t_str.strip() and t_str != '[]':
+                    try:
+                        tags_list = json.loads(t_str)
+                        unique_labels.update(tags_list)
+                    except Exception:
+                        pass
+
+                # 2.4 同步补全 frame_labels 关联表
+                if unique_labels:
+                    conn.execute(text("DELETE FROM frame_labels WHERE frame_id = :fid"), {"fid": fid})
+                    conn.execute(
+                        text("INSERT INTO frame_labels (frame_id, label_name) VALUES (:fid, :ln)"),
+                        [{"fid": fid, "ln": lbl} for lbl in unique_labels]
+                    )
+                    for lbl in unique_labels:
+                        conn.execute(
+                            text(
+                                "INSERT INTO class_labels (label_name, create_time_ms) VALUES (:ln, :c) ON CONFLICT(label_name) DO NOTHING"),
+                            {"ln": lbl, "c": int(time.time() * 1000)}
+                        )
+
+            # 3. 重新精确校准每一个视频的真实已标注帧数 labeled_frame_count
+            video_rows = conn.execute(text("SELECT video_uuid FROM videos")).fetchall()
+            for (v_uuid,) in video_rows:
+                count = conn.execute(
+                    text("""
+                         SELECT COUNT(DISTINCT vf.frame_id)
+                         FROM video_frames vf
+                         WHERE vf.video_uuid = :u
+                           AND (
+                             vf.frame_id IN (SELECT DISTINCT frame_id FROM frame_labels)
+                                 OR (vf.bboxes_text IS NOT NULL AND TRIM(vf.bboxes_text) != '')
+                                 OR (vf.tags IS NOT NULL AND vf.tags != '[]' AND TRIM(vf.tags) != '')
+                                 OR (vf.annotations_json IS NOT NULL AND TRIM(vf.annotations_json) != '' AND
+                                     vf.annotations_json NOT LIKE '%"objects": [], "classifications": []%')
+                             )
+                         """),
+                    {"u": v_uuid}
+                ).scalar() or 0
+
+                conn.execute(text("UPDATE videos SET labeled_frame_count = :c WHERE video_uuid = :u"),
+                             {"c": count, "u": v_uuid})
+                logging.info(f"视频 [{v_uuid[:8]}] 标注校准完成，实际已标注帧数: {count}")
+
+        logging.info("=== 数据库全量数据修复与同步完成！ ===")
+    except Exception as e:
+        logging.error(f"校准数据库标注状态失败: {e}", exc_info=True)
 
 def init_db():
     with engine.begin() as conn:

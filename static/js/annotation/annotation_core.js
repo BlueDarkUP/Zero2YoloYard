@@ -228,6 +228,16 @@ class AnnotationCore {
                 } else {
                     this.annotations = { objects: [], classifications: [] };
                 }
+                if (this.annotations && this.annotations.is_ambiguous) {
+                    this.annotations.is_ambiguous = false;
+                    this.saveAnnotations(false); // 静默保存到数据库，不入历史栈
+                    if (typeof window.updateAmbiguousCountBadge === 'function') {
+                        window.updateAmbiguousCountBadge();
+                    }
+                    if (typeof window.showToast === 'function') {
+                        window.showToast(`✅ 帧 #${this.currentFrame} 已完成消歧义复核`, 2000);
+                    }
+                }
                 // Reset history stack for this frame
                 this.history = [JSON.parse(JSON.stringify(this.annotations))];
                 this.historyIndex = 0;

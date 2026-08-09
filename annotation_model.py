@@ -63,10 +63,11 @@ class AnnotationObject:
         )
 
 class AnnotationData:
-    def __init__(self, version: int = 1, objects: Optional[List[AnnotationObject]] = None, classifications: Optional[List[str]] = None):
+    def __init__(self, version: int = 1, objects: Optional[List[AnnotationObject]] = None, classifications: Optional[List[str]] = None, is_ambiguous: bool = False):
         self.version = version
         self.objects = objects if objects is not None else []
         self.classifications = classifications if classifications is not None else []
+        self.is_ambiguous = is_ambiguous
 
     @staticmethod
     def from_dict(data: Dict[str, Any]) -> 'AnnotationData':
@@ -76,7 +77,8 @@ class AnnotationData:
         return AnnotationData(
             version=data.get("version", 1),
             objects=objects,
-            classifications=data.get("classifications", [])
+            classifications=data.get("classifications", []),
+            is_ambiguous=bool(data.get("is_ambiguous", False))
         )
 
     @staticmethod
@@ -92,13 +94,14 @@ class AnnotationData:
 
     @staticmethod
     def empty() -> 'AnnotationData':
-        return AnnotationData(version=1, objects=[], classifications=[])
+        return AnnotationData(version=1, objects=[], classifications=[], is_ambiguous=False)
 
     def to_json(self) -> str:
         return json.dumps({
             "version": self.version,
             "objects": [obj.to_dict() for obj in self.objects],
-            "classifications": self.classifications
+            "classifications": self.classifications,
+            "is_ambiguous": self.is_ambiguous
         })
 
     def get_bboxes(self) -> List[AnnotationObject]:

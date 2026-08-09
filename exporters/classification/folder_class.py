@@ -53,3 +53,14 @@ class FolderClassificationExporter(BaseExporter):
                         shutil.copy(src_img_path, os.path.join(target_dir, base_name))
                 else:
                     shutil.copy(src_img_path, os.path.join(split_dir, "_unlabeled", base_name))
+
+        # Clean up empty directories in splits
+        for split_name, _ in splits:
+            split_dir = os.path.join(export_dir, split_name)
+            if os.path.exists(split_dir):
+                for sub_dir in os.listdir(split_dir):
+                    sub_path = os.path.join(split_dir, sub_dir)
+                    if os.path.isdir(sub_path) and not os.listdir(sub_path):
+                        os.rmdir(sub_path)
+                if not os.listdir(split_dir):
+                    os.rmdir(split_dir)
