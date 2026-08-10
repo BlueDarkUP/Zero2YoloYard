@@ -201,13 +201,19 @@ cd ..
 3. **Deconv 解置卷积上采样与 SoftArgmax (`network/upsampler.py`, `utils/utils.py`)**：
    - `DetectionHead` 利用 `UpsamplerByDeconv` 将低分辨率特征上采样为高清晰热力图 (Heatmap)；
    - 配合 **SoftArgmax** 亚像素回归公式求解连续概率期望点：
-     $$\hat{x} = \sum_{u, v} u \cdot \text{Softmax}(H_{u,v} / \tau), \quad \hat{y} = \sum_{u, v} v \cdot \text{Softmax}(H_{u,v} / \tau)$$
+
+$$
+\hat{x} = \sum_{u, v} u \cdot \text{Softmax}(H_{u,v} / \tau), \quad \hat{y} = \sum_{u, v} v \cdot \text{Softmax}(H_{u,v} / \tau)
+$$
+
      实现亚像素级的关键点坐标定位。
 
 ### 3.2 SAM3 开放词汇与提示框 IoU 匹配算法
 在 `ai_models.py` 的 `_best_iou_match` 中，针对 SAM3 预测的候选框集与目标参考框进行重叠度匹配：
 
-$$\text{IoU}(A, B) = \frac{\text{Area}(A \cap B)}{\text{Area}(A \cup B)} = \frac{\max(0, x_2 - x_1) \times \max(0, y_2 - y_1)}{\text{Area}(A) + \text{Area}(B) - \text{Area}(A \cap B)}$$
+$$
+\text{IoU}(A, B) = \frac{\text{Area}(A \cap B)}{\text{Area}(A \cup B)} = \frac{\max(0, x_2 - x_1) \times \max(0, y_2 - y_1)}{\text{Area}(A) + \text{Area}(B) - \text{Area}(A \cap B)}
+$$
 
 当 $\max(\text{IoU}) < \text{min-iou}$ (阈值设为 0.1) 时，认为候选框无实际匹配，系统强行输出匹配得分 `0.0`，杜绝假阳性。
 
@@ -223,7 +229,9 @@ def _sam3_frame_cache_put(key, value):
 ```
 在视频跟踪任务中，利用拆分机制分块计算显存占用：
 
-$$\text{chunk-end} = \min(\text{chunk-start} + \text{chunk-size}, \text{end-frame} + 1)$$
+$$
+\text{chunk-end} = \min(\text{chunk-start} + \text{chunk-size}, \text{end-frame} + 1)
+$$
 
 ### 3.4 CLIP 零样本分类与 8 模板 Prompt Ensembling
 `clip_model.py` 实现了 OpenAI/FiftyOne 标准的 Prompt 组装算法：
@@ -236,40 +244,62 @@ templates = [
 ```
 对属于类别 $c$ 的文本向量求均值：
 
-$$\vec{w}_c = \text{Normalize}\left( \frac{1}{T} \sum_{t=1}^T \text{CLIP}_{\text{text}}(\text{Template}_t(c)) \right)$$
+$$
+\vec{w}_c = \text{Normalize}\left( \frac{1}{T} \sum_{t=1}^T \text{CLIP}_{\text{text}}(\text{Template}_t(c)) \right)
+$$
 
 计算最终 Softmax 概率矩阵：
 
-$$\text{Probability}_c = \frac{\exp(\text{logit-scale} \cdot \vec{f}_{\text{img}} \cdot \vec{w}_c^T)}{\sum_{k} \exp(\text{logit-scale} \cdot \vec{f}_{\text{img}} \cdot \vec{w}_k^T)}$$
+$$
+\text{Probability}_c = \frac{\exp(\text{logit-scale} \cdot \vec{f}_{\text{img}} \cdot \vec{w}_c^T)}{\sum_{k} \exp(\text{logit-scale} \cdot \vec{f}_{\text{img}} \cdot \vec{w}_k^T)}
+$$
 
 当类别数 $N=1$ 时，自动引入背景负类 `"other background, floor or irrelevant object"` 防止过拟合。
 
 ### 3.5 深度语义与 HSV 色彩双流数据审计模型
 `ai_models.py` 中的 `check_dataset_consistency` 实现了双通道向量特征加权融合：
+
 - **组合特征向量**：
-  $$\vec{v}_{\text{combined}} = \text{Normalize}\Big( \text{Concat}\big[ 0.7 \cdot \frac{\vec{v}_{\text{semantic}}}{\|\vec{v}_{\text{semantic}}\|_2}, \; 0.3 \cdot \frac{\vec{v}_{\text{HSV}}}{\|\vec{v}_{\text{HSV}}\|_2} \big] \Big)$$
-- **类别中枢 Centroid** 与 **2-Sigma 阈值下界**：
-  $$\vec{C}_k = \text{Normalize}\Big( \frac{1}{|S_k|} \sum_{i \in S_k} \vec{v}_i \Big), \quad \text{Thresh}_k = \max(0.50, \; \mu_{\text{sim}} - 2.0 \times \sigma_{\text{sim}})$$
+
+$$
+\vec{v}_{\text{combined}} = \text{Normalize}\Big( \text{Concat}\big[ 0.7 \cdot \frac{\vec{v}_{\text{semantic}}}{\|\vec{v}_{\text{semantic}}\|_2}, \; 0.3 \cdot \frac{\vec{v}_{\text{HSV}}}{\|\vec{v}_{\text{HSV}}\|_2} \big] \Big)
+$$
+
+- **类别中枢 Centroid 与 2-Sigma 阈值下界**：
+
+$$
+\vec{C}_k = \text{Normalize}\Big( \frac{1}{|S_k|} \sum_{i \in S_k} \vec{v}_i \Big), \quad \text{Thresh}_k = \max(0.50, \; \mu_{\text{sim}} - 2.0 \times \sigma_{\text{sim}})
+$$
+
 - **跨类混淆条件**：若存在 $j \neq k$ 满足 $\vec{v}_i \cdot \vec{C}_j > \vec{v}_i \cdot \vec{C}_k + 0.06$ 且 $\vec{v}_i \cdot \vec{C}_j > 0.65$，则触发警告。
 
 ### 3.6 跨帧 BBox 与姿态 Keypoints 线性插值公式
 针对起始帧 $F_{\text{start}}$ 与结束帧 $F_{\text{end}}$ 中的特定对象（基于 `object_id` 强匹配）：
 
-$$t = \frac{i}{F_{\text{end}} - F_{\text{start}}}, \quad i \in [1, F_{\text{end}} - F_{\text{start}} - 1]$$
-$$X(t) = X_{\text{start}} + t \cdot (X_{\text{end}} - X_{\text{start}})$$
-$$Y(t) = Y_{\text{start}} + t \cdot (Y_{\text{end}} - Y_{\text{start}})$$
+$$
+t = \frac{i}{F_{\text{end}} - F_{\text{start}}}, \quad i \in [1, F_{\text{end}} - F_{\text{start}} - 1]
+$$
+$$
+X(t) = X_{\text{start}} + t \cdot (X_{\text{end}} - X_{\text{start}})
+$$
+$$
+Y(t) = Y_{\text{start}} + t \cdot (Y_{\text{end}} - Y_{\text{start}})
+$$
 
 针对姿态 keypoint，保持其可见度 $v$ 与骨架连接拓扑不变。
 
 ### 3.7 4-in-1 Mosaic 拼图与 YOLO 坐标 Clamp 防越界机制
 在 `file_storage.py` 的 `_clip_yolo_bbox` 中，针对归一化坐标 $(cx, cy, w, h)$ 执行严格几何截断：
 
-$$\begin{aligned}
+$$
+\begin{aligned}
 x_{\min} &= \max(0.0, \min(1.0 - \epsilon, cx - w/2)) \\
 x_{\max} &= \max(\epsilon, \min(1.0, cx + w/2)) \\
 cx_{\text{new}} &= x_{\min} + (x_{\max} - x_{\min}) / 2 \\
 w_{\text{new}} &= x_{\max} - x_{\min}
-\end{aligned}$$
+\end{aligned}
+$$
+
 其中 $\epsilon = 10^{-6}$，防止因为数据增强产生溢出阻断后续训练。
 
 ---
@@ -366,67 +396,67 @@ erDiagram
     videos ||--o{ annotation_tasks : "1 : N (CASCADE)"
     
     videos {
-        string video_uuid PK "主键 UUID"
-        string description "描述 (UNIQUE)"
-        string video_filename "视频文件本地名"
-        int file_size "文件字节数"
-        int width "帧宽度"
-        int height "帧高度"
-        float fps "帧率"
-        int frame_count "总帧数"
-        int extracted_frame_count "已抽取帧数"
-        int labeled_frame_count "已标注帧数"
-        string annotation_type "标注类型 (detection/segmentation/pose/classification)"
-        string keypoint_schema "对应姿态的关键点配置 JSON"
+        string video_uuid PK "Primary Key UUID"
+        string description "Description UNIQUE"
+        string video_filename "Local video filename"
+        int file_size "File size in bytes"
+        int width "Frame width"
+        int height "Frame height"
+        float fps "Frames per second"
+        int frame_count "Total video frames"
+        int extracted_frame_count "Extracted frames count"
+        int labeled_frame_count "Labeled frames count"
+        string annotation_type "Task type"
+        string keypoint_schema "Associated pose keypoint schema JSON"
     }
 
     video_frames {
-        int frame_id PK "自增主键"
-        string video_uuid FK "外键指向 videos"
-        int frame_number "帧序号"
-        string bboxes_text "文本框坐标与标签"
-        string suggested_bboxes_text "AI 建议框坐标与标签"
-        string tags "图像分类标签列"
-        int include_frame_in_dataset "是否包含在导出库中 (1/0)"
-        string annotations_json "包含 Polygon/Keypoints/Bbox 的全量 JSON"
+        int frame_id PK "Auto increment ID"
+        string video_uuid FK "Foreign key to videos"
+        int frame_number "Frame index number"
+        string bboxes_text "Bounding box text representation"
+        string suggested_bboxes_text "AI suggested bounding boxes"
+        string tags "Classification tag comma separated string"
+        int include_frame_in_dataset "Dataset inclusion flag"
+        string annotations_json "Full JSON containing Polygon Keypoints Bbox"
     }
 
     datasets {
-        string dataset_uuid PK "数据集 UUID"
-        string description "名称描述 (UNIQUE)"
-        string video_uuids "包含的视频 UUID 数组 JSON"
-        string zip_path "打平 ZIP 压缩包路径"
-        float eval_percent "验证集占比"
-        float test_percent "测试集占比"
-        string export_format "导出格式 key"
+        string dataset_uuid PK "Dataset UUID"
+        string description "Name description UNIQUE"
+        string video_uuids "Included video UUID array JSON"
+        string zip_path "Flattened ZIP archive file path"
+        float eval_percent "Validation split ratio"
+        float test_percent "Test split ratio"
+        string export_format "Export format key"
     }
 
     models {
-        string model_uuid PK "模型 UUID"
-        string description "模型描述"
-        string label_filename "类别描述文件名"
-        string model_type "模型精度类型 (float32/float16/uint8)"
+        string model_uuid PK "Model UUID"
+        string description "Model description"
+        string label_filename "Class labels filename"
+        string model_type "Precision type"
     }
 
     annotation_tasks {
-        string task_uuid PK "任务 UUID"
-        string video_uuid FK "关联视频 UUID"
-        string assigned_to "分配标注员账号"
-        int start_frame "起止帧"
-        int end_frame "结束帧"
-        string status "任务状态"
+        string task_uuid PK "Task UUID"
+        string video_uuid FK "Associated video UUID"
+        string assigned_to "Assigned annotator ID"
+        int start_frame "Start frame index"
+        int end_frame "End frame index"
+        string status "Task status"
     }
 
     class_labels {
-        int label_id PK "自增主键"
-        string label_name UNIQUE "类别名称"
-        string sam3_prompt "SAM3 检索用 Text Prompt"
-        string keypoint_schema "姿态骨架关联 JSON"
+        int label_id PK "Auto increment ID"
+        string label_name "Class name UNIQUE"
+        string sam3_prompt "Text prompt for SAM3 open vocabulary query"
+        string keypoint_schema "Pose skeleton connection schema JSON"
     }
 
     class_tags {
-        int tag_id PK "自增主键"
-        string tag_name UNIQUE "全局标签名称"
+        int tag_id PK "Auto increment ID"
+        string tag_name "Global classification tag name UNIQUE"
     }
 ```
 

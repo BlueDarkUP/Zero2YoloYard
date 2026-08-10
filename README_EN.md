@@ -201,13 +201,19 @@ Located inside `gkdt_engine/`, the end-to-end keypoint detection pipeline operat
 3. **Deconv Upsampling & SoftArgmax (`network/upsampler.py`, `utils/utils.py`)**:
    - `DetectionHead` utilizes `UpsamplerByDeconv` to upsample low-resolution features into high-resolution heatmaps ($H$).
    - Sub-pixel continuous coordinates are regressed via **SoftArgmax**:
-     $$\hat{x} = \sum_{u, v} u \cdot \text{Softmax}(H_{u,v} / \tau), \quad \hat{y} = \sum_{u, v} v \cdot \text{Softmax}(H_{u,v} / \tau)$$
+
+$$
+\hat{x} = \sum_{u, v} u \cdot \text{Softmax}(H_{u,v} / \tau), \quad \hat{y} = \sum_{u, v} v \cdot \text{Softmax}(H_{u,v} / \tau)
+$$
+
      enabling sub-pixel keypoint localization accuracy.
 
 ### 3.2 SAM3 Open-Vocabulary & Bounding Box IoU Matching
 In `ai_models.py` (`_best_iou_match`), candidate bounding boxes predicted by SAM3 are matched against a reference target box:
 
-$$\text{IoU}(A, B) = \frac{\text{Area}(A \cap B)}{\text{Area}(A \cup B)} = \frac{\max(0, x_2 - x_1) \times \max(0, y_2 - y_1)}{\text{Area}(A) + \text{Area}(B) - \text{Area}(A \cap B)}$$
+$$
+\text{IoU}(A, B) = \frac{\text{Area}(A \cap B)}{\text{Area}(A \cup B)} = \frac{\max(0, x_2 - x_1) \times \max(0, y_2 - y_1)}{\text{Area}(A) + \text{Area}(B) - \text{Area}(A \cap B)}
+$$
 
 If $\max(\text{IoU}) < \text{min-iou}$ (threshold set to 0.1), candidate boxes are rejected and assigned a score of `0.0` to eliminate false positives.
 
@@ -223,7 +229,9 @@ def _sam3_frame_cache_put(key, value):
 ```
 Chunking prevents GPU Out-Of-Memory (OOM) errors during long video tracking tasks:
 
-$$\text{chunk-end} = \min(\text{chunk-start} + \text{chunk-size}, \text{end-frame} + 1)$$
+$$
+\text{chunk-end} = \min(\text{chunk-start} + \text{chunk-size}, \text{end-frame} + 1)
+$$
 
 ### 3.4 CLIP Zero-Shot Classification & 8-Template Prompt Ensembling
 `clip_model.py` implements prompt ensembling standard in OpenAI and FiftyOne benchmarks:
@@ -236,40 +244,62 @@ templates = [
 ```
 Text prompt vectors for class $c$ are averaged and normalized:
 
-$$\vec{w}_c = \text{Normalize}\left( \frac{1}{T} \sum_{t=1}^T \text{CLIP}_{\text{text}}(\text{Template}_t(c)) \right)$$
+$$
+\vec{w}_c = \text{Normalize}\left( \frac{1}{T} \sum_{t=1}^T \text{CLIP}_{\text{text}}(\text{Template}_t(c)) \right)
+$$
 
 Softmax probabilities are computed as:
 
-$$\text{Probability}_c = \frac{\exp(\text{logit-scale} \cdot \vec{f}_{\text{img}} \cdot \vec{w}_c^T)}{\sum_{k} \exp(\text{logit-scale} \cdot \vec{f}_{\text{img}} \cdot \vec{w}_k^T)}$$
+$$
+\text{Probability}_c = \frac{\exp(\text{logit-scale} \cdot \vec{f}_{\text{img}} \cdot \vec{w}_c^T)}{\sum_{k} \exp(\text{logit-scale} \cdot \vec{f}_{\text{img}} \cdot \vec{w}_k^T)}
+$$
 
 When single-class $N=1$ classification is requested, a negative background prompt `"other background, floor or irrelevant object"` is automatically appended.
 
 ### 3.5 Deep Semantic & HSV Dual-Stream Data Audit Model
 `ai_models.py` (`check_dataset_consistency`) computes dual-stream feature fusion vectors for dataset auditing:
+
 - **Combined Feature Vector**:
-  $$\vec{v}_{\text{combined}} = \text{Normalize}\Big( \text{Concat}\big[ 0.7 \cdot \frac{\vec{v}_{\text{semantic}}}{\|\vec{v}_{\text{semantic}}\|_2}, \; 0.3 \cdot \frac{\vec{v}_{\text{HSV}}}{\|\vec{v}_{\text{HSV}}\|_2} \big] \Big)$$
+
+$$
+\vec{v}_{\text{combined}} = \text{Normalize}\Big( \text{Concat}\big[ 0.7 \cdot \frac{\vec{v}_{\text{semantic}}}{\|\vec{v}_{\text{semantic}}\|_2}, \; 0.3 \cdot \frac{\vec{v}_{\text{HSV}}}{\|\vec{v}_{\text{HSV}}\|_2} \big] \Big)
+$$
+
 - **Class Centroid & 2-Sigma Lower Bound**:
-  $$\vec{C}_k = \text{Normalize}\Big( \frac{1}{|S_k|} \sum_{i \in S_k} \vec{v}_i \Big), \quad \text{Thresh}_k = \max(0.50, \; \mu_{\text{sim}} - 2.0 \times \sigma_{\text{sim}})$$
+
+$$
+\vec{C}_k = \text{Normalize}\Big( \frac{1}{|S_k|} \sum_{i \in S_k} \vec{v}_i \Big), \quad \text{Thresh}_k = \max(0.50, \; \mu_{\text{sim}} - 2.0 \times \sigma_{\text{sim}})
+$$
+
 - **Cross-Class Confusion Condition**: Triggers an audit alert if $\exists j \neq k$ such that $\vec{v}_i \cdot \vec{C}_j > \vec{v}_i \cdot \vec{C}_k + 0.06$ and $\vec{v}_i \cdot \vec{C}_j > 0.65$.
 
 ### 3.6 Cross-Frame BBox & Keypoint Linear Interpolation
 For matched objects (via `object_id`) across keyframes $F_{\text{start}}$ and $F_{\text{end}}$:
 
-$$t = \frac{i}{F_{\text{end}} - F_{\text{start}}}, \quad i \in [1, F_{\text{end}} - F_{\text{start}} - 1]$$
-$$X(t) = X_{\text{start}} + t \cdot (X_{\text{end}} - X_{\text{start}})$$
-$$Y(t) = Y_{\text{start}} + t \cdot (Y_{\text{end}} - Y_{\text{start}})$$
+$$
+t = \frac{i}{F_{\text{end}} - F_{\text{start}}}, \quad i \in [1, F_{\text{end}} - F_{\text{start}} - 1]
+$$
+$$
+X(t) = X_{\text{start}} + t \cdot (X_{\text{end}} - X_{\text{start}})
+$$
+$$
+Y(t) = Y_{\text{start}} + t \cdot (Y_{\text{end}} - Y_{\text{start}})
+$$
 
 Keypoint visibility flags $v$ and skeleton topology connections remain invariant.
 
 ### 3.7 4-in-1 Mosaic Augmentation & YOLO Coordinate Clamping
 In `file_storage.py` (`_clip_yolo_bbox`), normalized coordinates $(cx, cy, w, h)$ are clamped to maintain valid bounding box geometries:
 
-$$\begin{aligned}
+$$
+\begin{aligned}
 x_{\min} &= \max(0.0, \min(1.0 - \epsilon, cx - w/2)) \\
 x_{\max} &= \max(\epsilon, \min(1.0, cx + w/2)) \\
 cx_{\text{new}} &= x_{\min} + (x_{\max} - x_{\min}) / 2 \\
 w_{\text{new}} &= x_{\max} - x_{\min}
-\end{aligned}$$
+\end{aligned}
+$$
+
 where $\epsilon = 10^{-6}$ prevents bounding box coordinates from overflowing image boundaries.
 
 ---
@@ -367,7 +397,7 @@ erDiagram
     
     videos {
         string video_uuid PK "Primary Key UUID"
-        string description "Description (UNIQUE)"
+        string description "Description UNIQUE"
         string video_filename "Local video filename"
         int file_size "File size in bytes"
         int width "Frame width"
@@ -376,24 +406,24 @@ erDiagram
         int frame_count "Total video frames"
         int extracted_frame_count "Extracted frames count"
         int labeled_frame_count "Labeled frames count"
-        string annotation_type "Task type (detection/segmentation/pose/classification)"
+        string annotation_type "Task type"
         string keypoint_schema "Associated pose keypoint schema JSON"
     }
 
     video_frames {
-        int frame_id PK "Auto-increment ID"
+        int frame_id PK "Auto increment ID"
         string video_uuid FK "Foreign key to videos"
         int frame_number "Frame index number"
         string bboxes_text "Bounding box text representation"
         string suggested_bboxes_text "AI suggested bounding boxes"
-        string tags "Classification tag comma-separated string"
-        int include_frame_in_dataset "Dataset inclusion flag (1/0)"
-        string annotations_json "Full JSON containing Polygon/Keypoints/Bbox"
+        string tags "Classification tag comma separated string"
+        int include_frame_in_dataset "Dataset inclusion flag"
+        string annotations_json "Full JSON containing Polygon Keypoints Bbox"
     }
 
     datasets {
         string dataset_uuid PK "Dataset UUID"
-        string description "Name description (UNIQUE)"
+        string description "Name description UNIQUE"
         string video_uuids "Included video UUID array JSON"
         string zip_path "Flattened ZIP archive file path"
         float eval_percent "Validation split ratio"
@@ -405,7 +435,7 @@ erDiagram
         string model_uuid PK "Model UUID"
         string description "Model description"
         string label_filename "Class labels filename"
-        string model_type "Precision type (float32/float16/uint8)"
+        string model_type "Precision type"
     }
 
     annotation_tasks {
@@ -418,15 +448,15 @@ erDiagram
     }
 
     class_labels {
-        int label_id PK "Auto-increment ID"
-        string label_name UNIQUE "Class name"
-        string sam3_prompt "Text prompt for SAM3 open-vocabulary query"
+        int label_id PK "Auto increment ID"
+        string label_name "Class name UNIQUE"
+        string sam3_prompt "Text prompt for SAM3 open vocabulary query"
         string keypoint_schema "Pose skeleton connection schema JSON"
     }
 
     class_tags {
-        int tag_id PK "Auto-increment ID"
-        string tag_name UNIQUE "Global classification tag name"
+        int tag_id PK "Auto increment ID"
+        string tag_name "Global classification tag name UNIQUE"
     }
 ```
 
