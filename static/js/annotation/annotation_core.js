@@ -256,6 +256,18 @@ class AnnotationCore {
 
                 this.updateSidebarList();
                 this.render();
+            })
+            .catch(err => {
+                console.error('[AnnotationCore] 加载标注数据失败:', err);
+                // 网络异常时重置为空状态，避免界面卡死
+                this.annotations = { objects: [], classifications: [] };
+                this.history = [JSON.parse(JSON.stringify(this.annotations))];
+                this.historyIndex = 0;
+                this.updateSidebarList();
+                this.render();
+                if (typeof window.showToast === 'function') {
+                    window.showToast('⚠️ 标注数据加载失败，请检查网络连接', 3000);
+                }
             });
     }
 
@@ -272,6 +284,14 @@ class AnnotationCore {
                 frame_number: this.currentFrame,
                 annotations_json: JSON.stringify(this.annotations)
             })
+        }).catch(err => {
+            // 保存失败时明确通知用户，防止标注数据静默丢失
+            console.error('[AnnotationCore] 标注保存失败:', err);
+            if (typeof window.showToast === 'function') {
+                window.showToast('❌ 标注保存失败！请检查网络或重新加载页面。', 5000);
+            } else {
+                alert('标注保存失败，请检查网络连接！');
+            }
         });
     }
 
