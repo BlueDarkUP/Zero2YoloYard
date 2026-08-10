@@ -570,6 +570,49 @@ def get_frame_annotations():
         return jsonify({'success': False, 'message': 'Missing video_uuid or frame_number'}), 400
 
     frame_data = database.get_frame_annotations(video_uuid, frame_number)
+    ann_type = database.get_video_annotation_type(video_uuid)
+
+    # 自动平滑转换逻辑：若当前为姿态模式(POSET)，但数据库中只有此前 FindSim 生成的文本检测框(bboxes_text)而无 keypoint，自动实时转换为高精姿态骨架
+    if ann_type == 'pose':
+        has_kpts = False
+        if frame_data and isinstance(frame_data, dict):
+            objs = frame_data.get('objects', [])
+            has_kpts = any(isinstance(o, dict) and o.get('type') == 'keypoint' for o in objs)
+
+        if not has_kpts:
+            bbox_frame = database.get_frame_bboxes(video_uuid, frame_number)
+            if bbox_frame and bbox_frame.get('bboxes_text') and bbox_frame['bboxes_text'].strip():
+                try:
+                    from bbox_writer import convert_text_to_rects_and_labels
+                    from annotation_model import AnnotationData, AnnotationObject
+                    import gkdt_tasks
+
+                    rects, labels, _ = convert_text_to_rects_and_labels(bbox_frame['bboxes_text'])
+                    if rects:
+                        if frame_data:
+                            ann_data = AnnotationData.from_dict(frame_data)
+                        else:
+                            ann_data = AnnotationData()
+
+                        for i, rect in enumerate(rects):
+                            lbl = labels[i]
+                            try:
+                                pose_obj = gkdt_tasks.predict_pose_from_text(
+                                    video_uuid=video_uuid,
+                                    frame_number=frame_number,
+                                    class_label=lbl,
+                                    bbox=rect
+                                )
+                                ann_data.objects.append(AnnotationObject.from_dict(pose_obj))
+                            except Exception as pe:
+                                logging.warning(f"Auto-convert bbox to pose failed for frame {frame_number}: {pe}")
+
+                        if ann_data.objects:
+                            database.save_frame_annotations(video_uuid, frame_number, ann_data.to_json())
+                            frame_data = database.get_frame_annotations(video_uuid, frame_number)
+                except Exception as e:
+                    logging.warning(f"On-the-fly bbox to pose conversion error: {e}")
+
     return jsonify({'success': True, 'annotations': frame_data})
 
 
@@ -1099,6 +1142,38 @@ def apply_class_to_videos_route():
     ).start()
 
     return jsonify({'success': True, 'task_uuid': task_uuid, 'message': 'Task to apply suggestions has started.'})
+
+
+@app.route('/api/apply_pose_class_to_videos', methods=['POST'])
+def apply_pose_class_to_videos_route():
+    """把某个类别的 SAM3 + GKDT 姿态生成推导全量应用到整套数据集（所有视频）的所有帧上"""
+    data = request.json or {}
+    video_uuids = data.get('video_uuids')
+    class_name = data.get('class_name')
+    confidence_threshold = float(data.get('confidence_threshold', 0.25))
+    process_all_frames = bool(data.get('process_all_frames', True))
+
+    if not video_uuids or not isinstance(video_uuids, list):
+        return jsonify({'success': False, 'message': 'video_uuids (non-empty list) is required.'}), 400
+    if not class_name:
+        return jsonify({'success': False, 'message': 'class_name is required.'}), 400
+
+    busy = [vu for vu in video_uuids if background_tasks.active_tasks.get(vu)]
+    if busy:
+        return jsonify({
+            'success': False,
+            'message': f"以下视频当前有其它任务在运行: {', '.join(v[:8] for v in busy)}"
+        }), 409
+
+    task_uuid = str(uuid.uuid4())
+    threading.Thread(
+        target=background_tasks.apply_pose_class_to_videos_task,
+        args=(task_uuid, video_uuids, class_name, confidence_threshold, app.app_context(), process_all_frames),
+        name=f"ApplyPose-{task_uuid[:8]}"
+    ).start()
+
+    return jsonify({'success': True, 'task_uuid': task_uuid, 'message': 'Pose dataset-wide auto-labeling started.'})
+
 
 
 @app.route('/api/batchApplyStatus/<task_uuid>', methods=['GET'])
@@ -1671,36 +1746,6 @@ def start_sam2_tracking():
     return jsonify({'success': True, 'tracker_uuid': tracker_uuid})
 
 
-@app.route('/api/startSam2PoseTracking', methods=['POST'])
-def start_sam2_pose_tracking():
-    try:
-        from ultralytics_sam_tasks import get_sam_model
-        if not get_sam_model():
-            return jsonify(
-                {'success': False, 'message': 'SAM model is disabled in system settings to save resources.'}), 501
-    except ImportError:
-        return jsonify({'success': False, 'message': 'SAM features are not installed on server.'}), 501
-
-    data = request.json or {}
-    video_uuid = data.get('video_uuid')
-    start_frame = int(data.get('start_frame', 0))
-    end_frame = int(data.get('end_frame', 0))
-    init_pose_objects = data.get('init_pose_objects', [])
-
-    if not video_uuid or not init_pose_objects:
-        return jsonify({'success': False, 'message': 'video_uuid and init_pose_objects are required.'}), 400
-
-    if background_tasks.active_tasks.get(video_uuid):
-        return jsonify(
-            {'success': False, 'message': 'Another task is already running for this video.'})
-
-    tracker_uuid = str(uuid.uuid4().hex)
-
-    threading.Thread(target=background_tasks.start_sam2_pose_tracking_task, args=(
-        video_uuid, tracker_uuid, start_frame, end_frame, init_pose_objects
-    ), name=f"SAM-PoseTracker-{video_uuid[:6]}").start()
-
-    return jsonify({'success': True, 'tracker_uuid': tracker_uuid})
 
 
 @app.route('/startSam2BatchTracking', methods=['POST'])
@@ -2327,6 +2372,102 @@ def run_consistency_check(dataset_uuid):
     except Exception as e:
         logging.error(f"On-demand consistency check failed: {e}", exc_info=True)
         return jsonify({'success': False, 'message': f'审查失败: {e}'}), 500
+
+# --- GKDT 姿态通用关键点 AI 识别接口 ---
+
+@app.route('/api/gkdt_text_pose_predict', methods=['POST'])
+def gkdt_text_pose_predict_route():
+    """文本 Prompt 自动识别关键点生成骨架"""
+    data = request.json or {}
+    video_uuid = data.get('video_uuid')
+    frame_number = data.get('frame_number')
+    class_label = data.get('class_label')
+    custom_kps_texts = data.get('custom_kps_texts') # 可选
+    bbox = data.get('bbox') # 可选 ROI [x1, y1, x2, y2]
+
+    if not video_uuid or frame_number is None or not class_label:
+        return jsonify({'success': False, 'message': 'Missing required parameters (video_uuid, frame_number, class_label)'}), 400
+
+    try:
+        import gkdt_tasks
+        pose_object = gkdt_tasks.predict_pose_from_text(
+            video_uuid=video_uuid,
+            frame_number=int(frame_number),
+            class_label=class_label,
+            custom_kps_texts=custom_kps_texts,
+            bbox=bbox
+        )
+        return jsonify({'success': True, 'pose_object': pose_object})
+
+    except Exception as e:
+        logging.error(f"GKDT Pose Predict Failed: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/gkdt_sam_pose_predict', methods=['POST'])
+def gkdt_sam_pose_predict_route():
+    """SAM 2.1 + GKDT 交互点选生成独立目标姿态"""
+    data = request.json or {}
+    video_uuid = data.get('video_uuid')
+    frame_number = data.get('frame_number')
+    class_label = data.get('class_label')
+    point_coords = data.get('point')  # {'x': ..., 'y': ...}
+
+    if not all([video_uuid, frame_number is not None, class_label, point_coords]):
+        return jsonify(
+            {'success': False, 'message': '缺少必要参数 (video_uuid, frame_number, class_label, point)'}), 400
+
+    try:
+        import gkdt_tasks
+        coords_tuple = (int(point_coords['x']), int(point_coords['y']))
+
+        pose_object = gkdt_tasks.predict_pose_from_sam_point(
+            video_uuid=video_uuid,
+            frame_number=int(frame_number),
+            class_label=class_label,
+            point_coords=coords_tuple
+        )
+        return jsonify({'success': True, 'pose_object': pose_object})
+
+    except Exception as e:
+        logging.error(f"SAM 2.1 + GKDT Pose Predict Failed: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/gkdt_sam3_batch_pose_predict', methods=['POST'])
+def gkdt_sam3_batch_pose_predict_route():
+    """SAM3 开放词汇文本盲扫 + GKDT 全图多目标姿态自动识别 (TrueLAM Pose)"""
+    data = request.json or {}
+    video_uuid = data.get('video_uuid')
+    frame_number = data.get('frame_number')
+    class_label = data.get('class_label')
+    text_prompt = data.get('text_prompt')
+    confidence = float(data.get('confidence', 0.25))
+
+    if not video_uuid or frame_number is None or not class_label:
+        return jsonify({
+            'success': False,
+            'message': '缺少必要参数 (video_uuid, frame_number, class_label)'
+        }), 400
+
+    try:
+        import gkdt_tasks
+        pose_objects = gkdt_tasks.predict_sam3_gkdt_batch_pose(
+            video_uuid=video_uuid,
+            frame_number=int(frame_number),
+            class_label=class_label,
+            text_prompt=text_prompt,
+            confidence=confidence
+        )
+        return jsonify({
+            'success': True,
+            'pose_objects': pose_objects,
+            'count': len(pose_objects)
+        })
+
+    except Exception as e:
+        logging.error(f"SAM3 + GKDT TrueLAM Batch Pose Predict Failed: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 
 @app.route('/lam_predict', methods=['POST'])

@@ -1,17 +1,12 @@
 /**
- * PoseAnnotator - Manual Keypoint / Skeleton Annotator Plugin
+ * PoseAnnotator - Manual & AI Keypoint / Skeleton Annotator Plugin
  *
  * 设计目标：完全不写死点位数量或名称。每个"骨架实例"就是一个
  * AnnotationObject { type:'keypoint', label, bbox, keypoints:[{name,x,y,v}, ...] }，
  * keypoints 数组长度、顺序、命名完全自由 —— 可以是 COCO-17，也可以是 6 点的机械臂，
  * 21 点的手部，或者任何你想标的东西。
  *
- * "点位模板 (Schema)" 只是纯前端的标注效率工具（存 localStorage，按 视频+类别 区分），
- * 用来一键把某个类别常用的点位一次性放到画布上，而不是逼你手动敲字。它不是数据格式的
- * 一部分 —— 完全不用模板、每次现场点、现场起名字，一样能正常标注、显示、保存。
- *
- * 与其它 Annotator（SegmentationAnnotator / ClassificationAnnotator）保持同样的接口约定：
- * onMouseDown / onMouseMove / onMouseUp / onContextMenu / render(ctx, annotations, selectedId)
+ * 集成 SAM 2.1 实例隔离 + GKDT 姿态生成交互引擎，彻底消除跨目标混淆。
  */
 class PoseAnnotator {
     constructor(core) {
@@ -29,6 +24,9 @@ class PoseAnnotator {
         // 无模板兜底：逐点点击 + 现场起名的模式
         this.isFreeformAdding = false;
         this.activeNewInstance = null;
+
+        // GKDT + SAM 2.1 交互点选模式开关
+        this.isGkdtModeActive = false;
 
         // 悬停/预览用
         this.hoverPoint = null;
@@ -153,6 +151,193 @@ class PoseAnnotator {
     initDOM() {
         const self = this;
 
+        // GKDT + SAM2.1 开关切换逻辑
+        $(document).off('click', '#btn-toggle-gkdt-interactive').on('click', '#btn-toggle-gkdt-interactive', function () {
+            self.isGkdtModeActive = !self.isGkdtModeActive;
+            const $btn = $(this);
+
+            if (self.isGkdtModeActive) {
+                $btn.removeClass('btn-outline-danger').addClass('btn-danger text-white')
+                    .html('<i class="bi bi-crosshair mr-1"></i>GKDT 智能点选 ON (点击图片物体)');
+                self.core.canvas.style.cursor = 'crosshair';
+                if (typeof window.showToast === 'function') {
+                    window.showToast('🎯 GKDT 智能点选已开启：点击图像中的目标主体（如某个人），SAM 2.1 + GKDT 将自动提取其独立姿态！', 3500);
+                }
+            } else {
+                $btn.removeClass('btn-danger text-white').addClass('btn-outline-danger')
+                    .html('<i class="bi bi-crosshair mr-1"></i>开启 GKDT 智能点选模式');
+                self.core.canvas.style.cursor = 'default';
+                if (typeof window.showToast === 'function') {
+                    window.showToast('⏸️ 已恢复默认手动姿态标注模式', 2000);
+                }
+            }
+        });
+
+        // SAM3 TrueLAM 全图文本盲扫 + GKDT 姿态生成
+        $(document).off('click', '#btn-truelam-pose-batch').on('click', '#btn-truelam-pose-batch', function (e) {
+            if (e) { e.preventDefault(); e.stopPropagation(); }
+
+            let cls = self.getSelectedClass();
+            const customPrompt = $('#pose-truelam-prompt-input').val().trim();
+
+            if (!cls) {
+                if (customPrompt) {
+                    cls = customPrompt;
+                } else {
+                    const firstClassLi = $('#class-list li').first();
+                    if (firstClassLi.length && firstClassLi.data('class-name')) {
+                        cls = firstClassLi.data('class-name');
+                    }
+                }
+            }
+
+            if (!cls) {
+                const warnMsg = '⚠️ 请先在右侧选择或创建一个类别，或在输入框中填入目标文本（如 person / dog）';
+                if (typeof window.showToast === 'function') {
+                    window.showToast(warnMsg, 3500);
+                } else {
+                    alert(warnMsg);
+                }
+                return;
+            }
+
+            const promptToUse = customPrompt || cls;
+            const $btn = $(this);
+            $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm mr-1"></span> SAM3 盲扫 + GKDT 生成中...');
+
+            if (typeof window.showToast === 'function') {
+                window.showToast(`🔍 正在使用 SAM3 盲扫全图检索 [${promptToUse}] 并生成 [${cls}] 姿态...`, 4000);
+            }
+
+            const currentFrame = (typeof self.core.currentFrame !== 'undefined') ? self.core.currentFrame : parseInt($('#frame-slider').val() || '0', 10);
+            const videoUuid = self.core.videoUuid || (window.annotationCore ? window.annotationCore.videoUuid : '');
+
+            $.ajax({
+                url: '/api/gkdt_sam3_batch_pose_predict',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    video_uuid: videoUuid,
+                    frame_number: currentFrame,
+                    class_label: cls,
+                    text_prompt: promptToUse,
+                    confidence: 0.25
+                }),
+                success: function(res) {
+                    $btn.prop('disabled', false).html('<i class="bi bi-magic mr-1"></i>TrueLAM 识别画面全量姿态');
+                    if (res.success && res.pose_objects && res.pose_objects.length > 0) {
+                        if (typeof window.showToast === 'function') {
+                            window.showToast(`🎉 成功识别并自动挂载 ${res.pose_objects.length} 个 '${promptToUse}' 目标姿态！`, 3500);
+                        }
+
+                        if (!self.core.annotations) self.core.annotations = { objects: [] };
+                        if (!self.core.annotations.objects) self.core.annotations.objects = [];
+
+                        res.pose_objects.forEach(obj => {
+                            self.core.annotations.objects.push(obj);
+                        });
+
+                        if (typeof self.core.saveAnnotations === 'function') {
+                            self.core.saveAnnotations();
+                        }
+                        if (typeof self.updateSidebarList === 'function') {
+                            self.updateSidebarList();
+                        }
+                        if (typeof self.core.render === 'function') {
+                            self.core.render();
+                        }
+                    } else {
+                        const warnMsg = `⚠️ SAM3 未能在当前画面检测到符合 '${promptToUse}' 的目标`;
+                        if (typeof window.showToast === 'function') {
+                            window.showToast(warnMsg, 3500);
+                        } else {
+                            alert(warnMsg);
+                        }
+                    }
+                },
+                error: function(err) {
+                    $btn.prop('disabled', false).html('<i class="bi bi-magic mr-1"></i>TrueLAM 识别画面全量姿态');
+                    const msg = (err.responseJSON && err.responseJSON.message) ? err.responseJSON.message : '识别服务出错，请检查日志';
+                    if (typeof window.showToast === 'function') {
+                        window.showToast('⚠️ ' + msg, 3500);
+                    } else {
+                        alert('⚠️ ' + msg);
+                    }
+                }
+            });
+        });
+
+        // SAM3 TrueLAM 姿态盲扫推导至全数据集 (Dataset-Wide Pose Auto-Labeling)
+        $(document).off('click', '#btn-truelam-pose-dataset-batch').on('click', '#btn-truelam-pose-dataset-batch', function (e) {
+            if (e) { e.preventDefault(); e.stopPropagation(); }
+
+            let cls = self.getSelectedClass();
+            const customPrompt = $('#pose-truelam-prompt-input').val().trim();
+
+            if (!cls) {
+                if (customPrompt) {
+                    cls = customPrompt;
+                } else {
+                    const firstClassLi = $('#class-list li').first();
+                    if (firstClassLi.length && firstClassLi.data('class-name')) {
+                        cls = firstClassLi.data('class-name');
+                    }
+                }
+            }
+
+            if (!cls) {
+                const warnMsg = '⚠️ 请先选择或创建一个类别，或在输入框中填入目标文本（如 person）';
+                if (typeof window.showToast === 'function') window.showToast(warnMsg, 3500);
+                else alert(warnMsg);
+                return;
+            }
+
+            const promptToUse = customPrompt || cls;
+            if (!confirm(`🚀 确定要开启 SAM3 + GKDT 自动姿态盲扫？\n\n目标类别: [${cls}]\n检索 Prompt: [${promptToUse}]\n\n系统将在后台自动为该数据集内的所有视频帧推理姿态骨架！`)) {
+                return;
+            }
+
+            const $btn = $(this);
+            $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm mr-1"></span> 全数据集姿态推导中...');
+
+            let videoUuids = [self.core.videoUuid || (window.annotationCore ? window.annotationCore.videoUuid : '')];
+            if (window.datasetVideoUuids && Array.isArray(window.datasetVideoUuids) && window.datasetVideoUuids.length > 0) {
+                videoUuids = window.datasetVideoUuids;
+            }
+
+            $.ajax({
+                url: '/api/apply_pose_class_to_videos',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    video_uuids: videoUuids,
+                    class_name: cls,
+                    confidence_threshold: 0.25,
+                    process_all_frames: true
+                }),
+                success: function(res) {
+                    $btn.prop('disabled', false).html('<i class="bi bi-collection-play mr-1"></i>推导姿态至【全数据集/所有视频】');
+                    if (res.success && res.task_uuid) {
+                        if (typeof window.showToast === 'function') {
+                            window.showToast(`🚀 后台全数据集姿态自动推导任务已开启！(类别: ${cls})`, 4000);
+                        } else {
+                            alert(`🚀 后台全数据集姿态自动推导任务已开启！`);
+                        }
+                    } else {
+                        const warnMsg = '⚠️ 启动全数据集任务失败: ' + (res.message || '未知错误');
+                        if (typeof window.showToast === 'function') window.showToast(warnMsg, 3500);
+                        else alert(warnMsg);
+                    }
+                },
+                error: function(err) {
+                    $btn.prop('disabled', false).html('<i class="bi bi-collection-play mr-1"></i>推导姿态至【全数据集/所有视频】');
+                    const msg = (err.responseJSON && err.responseJSON.message) ? err.responseJSON.message : '启动失败';
+                    if (typeof window.showToast === 'function') window.showToast('⚠️ ' + msg, 3500);
+                    else alert('⚠️ ' + msg);
+                }
+            });
+        });
+
         $(document).off('click', '#btn-add-skeleton').on('click', '#btn-add-skeleton', function () {
             const cls = self.getSelectedClass();
             if (!cls) {
@@ -184,51 +369,6 @@ class PoseAnnotator {
             self.finishFreeformAdding();
         });
 
-        $(document).off('click', '#btn-sam2-track-pose').on('click', '#btn-sam2-track-pose', function () {
-            const currentFrame = self.core.currentFrame || parseInt($('#frame-slider').val() || '0', 10);
-            const allObjs = typeof self.core.getObjects === 'function' ? self.core.getObjects() : (self.core.annotations ? self.core.annotations.objects : []);
-            const poseObjs = (allObjs || []).filter(o => o.type === 'keypoint');
-
-            if (poseObjs.length === 0) {
-                if (typeof window.showToast === 'function') window.showToast('⚠️ 当前帧未找到任何骨架标注，请先放置骨架！', 3000);
-                return;
-            }
-
-            const maxFrame = parseInt($('#frame-slider').attr('max') || '9999', 10);
-            const trackCount = parseInt($('#pose-track-frames-count').val() || '30', 10);
-            const endFrame = Math.min(maxFrame, currentFrame + trackCount);
-
-            const $btn = $(this);
-            $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm mr-1"></span> AI 追帧中...');
-
-            $.ajax({
-                url: '/api/startSam2PoseTracking',
-                type: 'POST',
-                contentType: 'application/json',
-                data: JSON.stringify({
-                    video_uuid: self.core.videoUuid,
-                    start_frame: currentFrame,
-                    end_frame: endFrame,
-                    init_pose_objects: poseObjs
-                }),
-                success: function(res) {
-                    if (res.success && res.tracker_uuid) {
-                        if (typeof window.showToast === 'function') {
-                            window.showToast(`🚀 SAM2 已开启骨架追帧！(帧 ${currentFrame} -> ${endFrame})`, 2500);
-                        }
-                        self.pollSam2TrackingProgress(res.tracker_uuid, $btn);
-                    } else {
-                        if (typeof window.showToast === 'function') window.showToast('⚠️ 启动失败: ' + (res.message || '未知错误'), 3000);
-                        $btn.prop('disabled', false).html('<i class="bi bi-magic mr-1"></i>AI 时空自动追帧 (SAM2)');
-                    }
-                },
-                error: function() {
-                    if (typeof window.showToast === 'function') window.showToast('⚠️ 通信失败，请重试', 3000);
-                    $btn.prop('disabled', false).html('<i class="bi bi-magic mr-1"></i>AI 时空自动追帧 (SAM2)');
-                }
-            });
-        });
-
         // 关节可见性按钮（Visible / Occluded / Absent）
         $(document).off('click', '.task-pose [data-v]').on('click', '.task-pose [data-v]', function () {
             const v = parseInt($(this).data('v'));
@@ -236,29 +376,6 @@ class PoseAnnotator {
         });
 
         this.updateVisibilityButtonsUI();
-    }
-
-    pollSam2TrackingProgress(trackerUuid, $btn) {
-        const self = this;
-        const interval = setInterval(() => {
-            $.get(`/stream_sam2_tracking/${trackerUuid}`, function(res) {
-                if (res.status === 'PROCESSING' || res.status === 'COMPLETED') {
-                    if (self.core) {
-                        self.core.fetchAnnotations();
-                    }
-                }
-                if (res.status === 'COMPLETED' || res.status === 'FAILED' || res.status === 'STOPPED') {
-                    clearInterval(interval);
-                    $btn.prop('disabled', false).html('<i class="bi bi-magic mr-1"></i>AI 时空自动追帧 (SAM2)');
-                    if (res.status === 'COMPLETED' && typeof window.showToast === 'function') {
-                        window.showToast('✅ 姿态骨架 SAM2 追帧完成！', 2500);
-                    }
-                }
-            }).fail(() => {
-                clearInterval(interval);
-                $btn.prop('disabled', false).html('<i class="bi bi-magic mr-1"></i>AI 时空自动追帧 (SAM2)');
-            });
-        }, 800);
     }
 
     bindShortcuts() {
@@ -524,6 +641,55 @@ class PoseAnnotator {
         // 命名输入框弹出期间，画布点击一律忽略（先确认/取消命名）
         if (this.nameInputEl) return;
 
+        // 【新增】：如果 GKDT 智能点选模式开启，点击直接触发 SAM2.1 + GKDT 级联推理
+        if (this.isGkdtModeActive) {
+            const cls = this.getSelectedClass();
+            if (!cls) {
+                if (typeof window.showToast === 'function') window.showToast('⚠️ 请先在右侧 Class Registry 选择/创建一个类别！', 3000);
+                return;
+            }
+
+            const currentFrame = this.core.currentFrame || parseInt($('#frame-slider').val() || '0', 10);
+            const self = this;
+
+            if (typeof window.showToast === 'function') {
+                window.showToast('⚡ SAM 2.1 隔离目标中 -> GKDT 生成独立姿态...', 4000);
+            }
+
+            $.ajax({
+                url: '/api/gkdt_sam_pose_predict',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    video_uuid: self.core.videoUuid,
+                    frame_number: currentFrame,
+                    class_label: cls,
+                    point: { x: Math.round(pt.x), y: Math.round(pt.y) }
+                }),
+                success: function(res) {
+                    if (res.success && res.pose_object) {
+                        self.core.annotations.objects.push(res.pose_object);
+                        self.core.selectedObjectId = res.pose_object.id;
+                        self.selectedKeypointIndex = null;
+
+                        self.core.saveAnnotations();
+                        self.updateSidebarList();
+                        self.core.render();
+                        if (typeof window.showToast === 'function') {
+                            window.showToast(`✨ SAM 2.1 目标隔离完成！已生成 [${cls}] 姿态`, 2500);
+                        }
+                    } else {
+                        if (typeof window.showToast === 'function') window.showToast('⚠️ 识别失败: ' + (res.message || '未知错误'), 3500);
+                    }
+                },
+                error: function(xhr) {
+                    const msg = xhr.responseJSON ? xhr.responseJSON.message : '服务器通信失败';
+                    if (typeof window.showToast === 'function') window.showToast('⚠️ 错误: ' + msg, 3500);
+                }
+            });
+            return; // 拦截默认点击逻辑
+        }
+
         if (this.isFreeformAdding && this.activeNewInstance) {
             this.activeNewInstance.keypoints.push({ name: '', x: pt.x, y: pt.y, v: 2 });
             this.core.render();
@@ -622,32 +788,76 @@ class PoseAnnotator {
         objects.forEach(obj => {
             const isSelectedInstance = obj.id === selectedId;
             const classColor = this.getColorForClass(obj.label);
-            const kps = obj.keypoints || [];
+
+            // 1. 实例 Bounding Box 虚线框绘制
+            if (obj.bbox && obj.bbox.length === 4) {
+                const bx1 = parseFloat(obj.bbox[0]);
+                const by1 = parseFloat(obj.bbox[1]);
+                const bx2 = parseFloat(obj.bbox[2]);
+                const by2 = parseFloat(obj.bbox[3]);
+
+                if (!isNaN(bx1) && !isNaN(by1) && !isNaN(bx2) && !isNaN(by2)) {
+                    ctx.save();
+                    ctx.strokeStyle = classColor;
+                    ctx.lineWidth = (isSelectedInstance ? 2.0 : 1.0) / zoom;
+                    ctx.setLineDash([4 / zoom, 4 / zoom]);
+                    ctx.globalAlpha = isSelectedInstance ? 0.9 : 0.45;
+                    ctx.strokeRect(bx1, by1, bx2 - bx1, by2 - by1);
+                    ctx.restore();
+                }
+            }
+
+            // 2. 关键点数据预处理（转换为纯数字，避免字符串拼接导致的 Canvas 渲染失效）
+            const kps = (obj.keypoints || []).map(k => ({
+                name: k.name || '',
+                x: parseFloat(k.x) || 0,
+                y: parseFloat(k.y) || 0,
+                v: (typeof k.v !== 'undefined') ? parseInt(k.v) : 2
+            }));
+
             const byName = {};
             kps.forEach(k => { if (k.name) byName[k.name] = k; });
 
-            // 骨架连线（按该类别的模板 edges，用名字匹配；双端都存在且都不是 absent 才画）
+            // 3. 骨架连线（按该类别的模板 edges，用名字匹配；双端都存在且都不是 absent 才画）
             const schema = this.getSchema(obj.label);
-            if (schema.edges && schema.edges.length > 0) {
+            let drewAnyEdge = false;
+            if (schema && schema.edges && schema.edges.length > 0) {
                 ctx.save();
                 ctx.strokeStyle = classColor;
                 ctx.lineWidth = (isSelectedInstance ? 2.5 : 1.5) / zoom;
-                ctx.globalAlpha = isSelectedInstance ? 0.95 : 0.55;
+                ctx.globalAlpha = isSelectedInstance ? 0.95 : 0.65;
                 schema.edges.forEach(([a, b]) => {
                     const pa = byName[a], pb = byName[b];
-                    if (pa && pb && (pa.v ?? 2) > 0 && (pb.v ?? 2) > 0) {
+                    if (pa && pb && pa.v > 0 && pb.v > 0) {
                         ctx.beginPath();
                         ctx.moveTo(pa.x, pa.y);
                         ctx.lineTo(pb.x, pb.y);
                         ctx.stroke();
+                        drewAnyEdge = true;
                     }
                 });
                 ctx.restore();
             }
 
-            // 关键点
+            // 如果类别模版中未配置 edges 连线（例如通用物体/机械臂），按顺序连接所有可见关节点
+            if (!drewAnyEdge && kps.length > 1) {
+                ctx.save();
+                ctx.strokeStyle = classColor;
+                ctx.lineWidth = (isSelectedInstance ? 2.0 : 1.2) / zoom;
+                ctx.globalAlpha = 0.65;
+                const visKps = kps.filter(k => k.v > 0);
+                for (let i = 0; i < visKps.length - 1; i++) {
+                    ctx.beginPath();
+                    ctx.moveTo(visKps[i].x, visKps[i].y);
+                    ctx.lineTo(visKps[i + 1].x, visKps[i + 1].y);
+                    ctx.stroke();
+                }
+                ctx.restore();
+            }
+
+            // 4. 关键点圆圈绘制
             kps.forEach((kp, idx) => {
-                const v = kp.v ?? 2;
+                const v = kp.v;
                 const isSelectedPoint = isSelectedInstance && idx === this.selectedKeypointIndex;
                 const radius = (isSelectedPoint ? 7 : 5) / zoom;
 
@@ -655,7 +865,7 @@ class PoseAnnotator {
                 ctx.beginPath();
                 ctx.arc(kp.x, kp.y, radius, 0, Math.PI * 2);
                 ctx.fillStyle = this.colorForVisibility(v);
-                ctx.globalAlpha = v === 0 ? 0.55 : (isSelectedInstance ? 1.0 : 0.85);
+                ctx.globalAlpha = v === 0 ? 0.45 : (isSelectedInstance ? 1.0 : 0.85);
                 ctx.fill();
                 ctx.lineWidth = (isSelectedPoint ? 2.5 : 1.2) / zoom;
                 ctx.strokeStyle = isSelectedPoint ? '#ffffff' : 'rgba(0,0,0,0.6)';
@@ -673,9 +883,9 @@ class PoseAnnotator {
         });
 
         // 放置模式下的准心预览
-        if ((this.isPlacingNewInstance || this.isFreeformAdding) && this.hoverPoint) {
+        if ((this.isPlacingNewInstance || this.isFreeformAdding || this.isGkdtModeActive) && this.hoverPoint) {
             ctx.save();
-            ctx.strokeStyle = 'rgba(0, 240, 255, 0.9)';
+            ctx.strokeStyle = this.isGkdtModeActive ? 'rgba(255, 42, 42, 0.9)' : 'rgba(0, 240, 255, 0.9)';
             ctx.lineWidth = 1.5 / zoom;
             const s = 10 / zoom;
             ctx.beginPath();

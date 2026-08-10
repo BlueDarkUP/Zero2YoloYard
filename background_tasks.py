@@ -157,6 +157,31 @@ def apply_class_to_videos_task(task_uuid, video_uuids, class_name, confidence_th
                                     ann_data.classifications.append(class_name)
 
                                 database.save_frame_annotations(video_uuid, frame_number, ann_data.to_json())
+                            elif annotation_type == 'pose':
+                                from annotation_model import AnnotationData, AnnotationObject
+                                import gkdt_tasks
+                                existing_ann_dict = database.get_frame_annotations(video_uuid, frame_number)
+                                if existing_ann_dict:
+                                    ann_data = AnnotationData.from_dict(existing_ann_dict)
+                                else:
+                                    ann_data = AnnotationData()
+
+                                try:
+                                    pose_objects = gkdt_tasks.predict_sam3_gkdt_batch_pose(
+                                        video_uuid=video_uuid,
+                                        frame_number=int(frame_number),
+                                        class_label=class_name,
+                                        confidence=confidence_threshold
+                                    )
+                                    if pose_objects:
+                                        for p_obj in pose_objects:
+                                            if isinstance(p_obj, dict):
+                                                ann_data.objects.append(AnnotationObject.from_dict(p_obj))
+                                            else:
+                                                ann_data.objects.append(p_obj)
+                                        database.save_frame_annotations(video_uuid, frame_number, ann_data.to_json())
+                                except Exception as pose_e:
+                                    logging.warning(f"[{task_uuid}] Failed to generate pose for frame {frame_number} of {video_uuid[:8]}: {pose_e}")
                             else:
                                 lines = []
                                 for p in predictions:
@@ -258,55 +283,6 @@ def start_sam2_tracking_task(video_uuid, tracker_uuid, start_frame, end_frame, i
         logging.info(f"Resource cleanup for task {tracker_uuid} complete.")
 
 
-def start_sam2_pose_tracking_task(video_uuid, tracker_uuid, start_frame, end_frame, init_pose_objects):
-    if active_tasks.get(video_uuid):
-        logging.warning(f"A task is already running for video {video_uuid}.")
-        tracking_sessions[tracker_uuid] = {'status': 'FAILED', 'message': 'Another task is active.'}
-        return
-
-    if ultralytics_sam_tasks is None:
-        logging.error("Ultralytics SAM Tasks module not available.")
-        tracking_sessions[tracker_uuid] = {'status': 'FAILED',
-                                           'message': 'Ultralytics library not installed or configured on server.'}
-        return
-
-    active_tasks[video_uuid] = tracker_uuid
-    session = {
-        'status': 'STARTING',
-        'progress': 0,
-        'total': (end_frame - start_frame) + 1,
-        'results': {},
-        'stop_requested': False,
-        'message': ''
-    }
-    tracking_sessions[tracker_uuid] = session
-
-    try:
-        logging.info(
-            f"Starting POSE SAM2 point tracking for video {video_uuid} from frame {start_frame} to {end_frame}")
-        session['status'] = 'PROCESSING'
-
-        ultralytics_sam_tasks.track_pose_video_sam2(
-            video_uuid,
-            start_frame,
-            end_frame,
-            init_pose_objects,
-            session
-        )
-
-        final_status = session.get('status', 'COMPLETED')
-        logging.info(f"POSE SAM2 tracking for {tracker_uuid} finished with status: {final_status}.")
-
-    except Exception as e:
-        logging.error(f"Error during POSE SAM2 tracking for {video_uuid}: {e}\n{traceback.format_exc()}")
-        session['status'] = 'FAILED'
-        session['message'] = str(e)
-    finally:
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-
-        if active_tasks.get(video_uuid) == tracker_uuid:
-            del active_tasks[video_uuid]
 
 
 def start_sam2_batch_tracking_task(video_uuid, tracker_uuid, start_frame, end_frame, init_bboxes_text):
@@ -899,3 +875,93 @@ def create_dataset_task(dataset_uuid, video_uuids, eval_percent, test_percent, e
         logging.error(f"{error_message}: {e}")
         logging.error(traceback.format_exc())
         database.update_dataset_status(dataset_uuid, status="FAILED", message=str(e))
+
+
+def apply_pose_class_to_videos_task(task_uuid, video_uuids, class_name, confidence_threshold, app_context, process_all_frames=True):
+    """把某个类别的 SAM3 + GKDT 开放姿态大模型推导应用到整套数据集的所有视频帧上"""
+    session = {
+        'status': 'RUNNING',
+        'video_uuids': video_uuids,
+        'total_videos': len(video_uuids),
+        'videos_done': 0,
+        'current_video_uuid': None,
+        'class_name': class_name,
+        'message': f"Preparing to apply TrueLAM Pose '{class_name}' across {len(video_uuids)} video(s)...",
+        'error': None,
+    }
+    batch_apply_sessions[task_uuid] = session
+
+    busy_videos = [vu for vu in video_uuids if active_tasks.get(vu)]
+    if busy_videos:
+        session['status'] = 'FAILED'
+        session['message'] = f"以下视频当前有其它任务在运行，无法开始: {', '.join(v[:8] for v in busy_videos)}"
+        return
+
+    for vu in video_uuids:
+        active_tasks[vu] = task_uuid
+
+    logging.info(f"[{task_uuid}] Starting Pose SAM3+GKDT auto-labeling for '{class_name}' across {len(video_uuids)} video(s)...")
+
+    try:
+        with app_context:
+            import gkdt_tasks
+            from annotation_model import AnnotationData
+
+            for v_idx, video_uuid in enumerate(video_uuids):
+                session['current_video_uuid'] = video_uuid
+                database.update_video_status(video_uuid, 'APPLYING_CLASS',
+                                             f"Applying Pose '{class_name}' ({v_idx + 1}/{len(video_uuids)} videos)...")
+
+                all_frames = database.get_video_frames(video_uuid)
+                target_frames = all_frames if process_all_frames else [f for f in all_frames if not (f.get('annotations_json') or '').strip()]
+                total_frames = len(target_frames)
+
+                for i, frame_info in enumerate(target_frames):
+                    frame_number = frame_info['frame_number']
+                    session['message'] = f"[{v_idx + 1}/{len(video_uuids)}] Pose {video_uuid[:8]}: frame {i + 1}/{total_frames}"
+
+                    if i % 5 == 0 or i == total_frames - 1:
+                        database.update_video_status(video_uuid, 'APPLYING_CLASS', session['message'])
+
+                    try:
+                        pose_objects = gkdt_tasks.predict_sam3_gkdt_batch_pose(
+                            video_uuid=video_uuid,
+                            frame_number=int(frame_number),
+                            class_label=class_name,
+                            confidence=confidence_threshold
+                        )
+
+                        if pose_objects:
+                            existing_ann_dict = database.get_frame_annotations(video_uuid, frame_number)
+                            if existing_ann_dict:
+                                ann_data = AnnotationData.from_dict(existing_ann_dict)
+                            else:
+                                ann_data = AnnotationData()
+
+                            from annotation_model import AnnotationObject
+                            for p_obj in pose_objects:
+                                if isinstance(p_obj, dict):
+                                    ann_data.objects.append(AnnotationObject.from_dict(p_obj))
+                                else:
+                                    ann_data.objects.append(p_obj)
+
+                            database.save_frame_annotations(video_uuid, frame_number, ann_data.to_json())
+
+                    except Exception as e:
+                        logging.warning(f"[{task_uuid}] Pose auto-label error on frame {frame_number} of {video_uuid[:8]}: {e}")
+
+                session['videos_done'] += 1
+                database.update_video_status(video_uuid, 'READY', f"Pose '{class_name}' auto-labeling complete.")
+
+        session['status'] = 'COMPLETED'
+        session['message'] = f"Successfully auto-labeled pose '{class_name}' across all {len(video_uuids)} video(s)."
+
+    except Exception as e:
+        logging.error(f"[{task_uuid}] Pose batch apply failed: {e}", exc_info=True)
+        session['status'] = 'FAILED'
+        session['error'] = str(e)
+        session['message'] = f"Pose auto-labeling failed: {e}"
+    finally:
+        for vu in video_uuids:
+            if active_tasks.get(vu) == task_uuid:
+                del active_tasks[vu]

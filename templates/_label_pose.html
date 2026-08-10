@@ -26,9 +26,39 @@
     </div>
 
     <div class="alert alert-dark p-2 small mb-3 border-secondary text-muted" style="font-size: 0.75rem;">
-        <i class="bi bi-info-circle mr-1"></i>选好类别后点 <b>Add Skeleton</b>，再点画布放置。
-        有模板就自动摆好一整套点，拖到正确位置即可；没模板就逐点点击 + 现场起名。<br>
-        <i class="bi bi-info-circle mr-1"></i>点位数量完全自由，不限定 17 点。
+        <i class="bi bi-info-circle mr-1"></i>选好类别后点 <b>Add Skeleton</b>，再点画布放置；或开启 <b>GKDT 智能点选</b> 极速生成独立姿态。<br>
+        <i class="bi bi-info-circle mr-1"></i>点位数量与命名完全自由，不限定 17 点。
+    </div>
+
+    <!-- SAM 2.1 + GKDT 交互开关卡片 -->
+    <div class="card bg-dark border-danger p-2 mb-2">
+        <div class="small font-weight-bold text-danger mb-1 d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-stars mr-1"></i>GKDT 交互生成 (SAM 2.1 + GKDT)</span>
+            <span class="badge badge-danger">ECCV 2026</span>
+        </div>
+        <button id="btn-toggle-gkdt-interactive" class="btn btn-sm btn-outline-danger font-weight-bold w-100">
+            <i class="bi bi-crosshair mr-1"></i>开启 GKDT 智能点选模式
+        </button>
+    </div>
+
+    <!-- SAM3 TrueLAM 开放文本盲扫 + GKDT 姿态生成卡片 -->
+    <div class="card bg-dark border-warning p-2 mb-3">
+        <div class="small font-weight-bold text-warning mb-1 d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-lightning-charge-fill mr-1"></i>TrueLAM 姿态盲扫 (SAM3 + GKDT)</span>
+            <span class="badge badge-warning">AI 自动生成</span>
+        </div>
+        <div class="input-group input-group-sm mb-2">
+            <div class="input-group-prepend">
+                <span class="input-group-text bg-dark text-warning border-secondary"><i class="bi bi-search"></i></span>
+            </div>
+            <input type="text" id="pose-truelam-prompt-input" class="form-control bg-dark text-light border-secondary" placeholder="输入识别文本 (如: person, dog)" title="SAM3 开放词汇文本 Prompt">
+        </div>
+        <button type="button" id="btn-truelam-pose-batch" class="btn btn-sm btn-warning font-weight-bold w-100 text-dark">
+            <i class="bi bi-magic mr-1"></i>TrueLAM 识别画面全量姿态
+        </button>
+        <button type="button" id="btn-truelam-pose-dataset-batch" class="btn btn-sm btn-outline-warning font-weight-bold w-100 mt-2" title="使用 SAM3 + GKDT 将姿态识别全自动推导应用到整套数据集所有视频帧">
+            <i class="bi bi-collection-play mr-1"></i>推导姿态至【全数据集/所有视频】
+        </button>
     </div>
 
     <div class="d-flex mb-2" style="gap: 6px;">
@@ -44,19 +74,6 @@
         <i class="bi bi-check-lg mr-1"></i>完成骨架 (Enter / 右键)
     </button>
 
-    <div class="card bg-dark border-secondary p-2 mb-3">
-        <div class="small font-weight-bold text-info mb-1 d-flex justify-content-between align-items-center">
-            <span><i class="bi bi-cpu-fill mr-1"></i>SAM2 骨架 AI 追帧传播</span>
-        </div>
-        <div class="d-flex align-items-center mb-2" style="gap: 5px;">
-            <span class="small text-muted font-monospace">向前追:</span>
-            <input type="number" id="pose-track-frames-count" class="form-control form-control-sm bg-dark text-light border-secondary" value="30" min="1" max="500" style="width: 70px;">
-            <span class="small text-muted font-monospace">帧</span>
-        </div>
-        <button id="btn-sam2-track-pose" class="btn btn-sm btn-outline-warning font-weight-bold w-100">
-            <i class="bi bi-magic mr-1"></i>AI 时空自动追帧 (SAM2)
-        </button>
-    </div>
 
     <div class="card bg-dark border-secondary p-2 mb-3">
         <div class="small font-weight-bold text-muted mb-2">选中关键点的可见性：</div>
