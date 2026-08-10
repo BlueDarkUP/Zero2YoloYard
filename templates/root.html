@@ -750,7 +750,6 @@
         const sysManualDb = {
             'gpu_device': { title: 'COMPUTATION_NODE', desc: 'Specifies the hardware accelerator for neural network operations.', tune: 'Prioritize NVIDIA_CUDA. Select CPU only if no dedicated GPU is available.', when: 'Switch if console reports CUDA Out-Of-Memory (OOM) errors or to reassign GPU workloads.' },
             'sam_model': { title: 'SEGMENT_CORE (SAM)', desc: 'Core AI vision engine. Determines precision of point-clicks and tracking.', tune: 'Tiny (Fast, 1.5GB VRAM) -> Large (High Precision, 10GB+ VRAM).', when: 'Upgrade to Base/Large if object edges are poorly segmented. Downgrade to Tiny if system crashes or lags heavily.' },
-            'feature_extractor': { title: 'SAM3_RETRIEVAL', desc: 'SAM 3.1 open-vocabulary / visual-exemplar engine powering Smart Select, LAM, bulk apply, and AI Consistency QC.', tune: 'Enable/disable via the toggle below.', when: 'Keep enabled unless you are on very low VRAM and only need SAM2 point-click/tracking.' },
             'enable_sam': { title: 'SAM_TOGGLE', desc: 'Loads/Unloads the heavy SAM checkpoint into VRAM.', tune: 'Enabled/Disabled.', when: 'Disable on extremely low-end hardware to free VRAM (disables most AI tools).' },
             'enable_feature': { title: 'FEATURE_TOGGLE', desc: 'Toggles SAM 3.1 retrieval features (Smart Select / LAM / bulk apply / Consistency QC).', tune: 'Enabled/Disabled.', when: 'Disable if VRAM is limited and you only need SAM2 point-click/tracking.' },
 
