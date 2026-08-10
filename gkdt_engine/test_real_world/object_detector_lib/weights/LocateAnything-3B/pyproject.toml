@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "locateanything-la-flash"
+version = "0.1.0"
+description = "LocateAnything batch utils with LA Flash inference backend."
+requires-python = ">=3.10"
+dependencies = [
+  "numpy",
+  "pillow",
+  "torch",
+  "transformers",
+]
+
+[tool.setuptools]
+packages = ["batch_utils", "kernel_utils"]

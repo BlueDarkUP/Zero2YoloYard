@@ -121,7 +121,7 @@ dmypy.json
 # Pyre type checker
 .pt_cache/
 
-# Strict AI model weights & Large Checkpoints
+# Binary Model Weights (Strict File Extensions Only)
 *.pt
 *.pth
 *.safetensors
@@ -135,16 +135,12 @@ dmypy.json
 *.tflite
 *.pb
 
-# Model directories & HuggingFace caches
+# Model Weight Checkpoint Directories
 checkpoints/
 output/
-weights/
 .cache/
-**/GKDT-H_for_app/
-**/GKDT-L_for_app/
-**/object_detector_lib/weights/
 
-# Video & Media assets
+# Media assets
 *.mp4
 *.avi
 *.mov
