@@ -105,9 +105,25 @@
                         <label class="font-weight-bold small text-muted">SAM 3.1 RETRIEVAL FEATURES</label>
                         <select id="setup-feature-extractor" class="form-control custom-select bg-dark text-white border-secondary">
                             <option value="off" data-level="0">DISABLE (SAVES VRAM)</option>
-                            <option value="on" data-level="1">ENABLE (SMART SELECT / LAM / BULK APPLY / QC)</option>
+                            <option value="on" data-level="1" selected>ENABLE (SMART SELECT / LAM / BULK APPLY / QC)</option>
                         </select>
                         <div class="over-limit-warning" id="warn-feature"><i class="bi bi-exclamation-triangle-fill"></i> MAY CAUSE LAG</div>
+                    </div>
+                </div>
+                <div class="form-row mt-2">
+                    <div class="form-group col-md-6">
+                        <label class="font-weight-bold small text-muted">CLASSIFICATION MODEL (CLIP)</label>
+                        <select id="setup-cls-model" class="form-control custom-select bg-dark text-white border-secondary">
+                            <option value="on" selected>ENABLE (CLIP ZERO-SHOT & CLUSTERING)</option>
+                            <option value="off">DISABLE (SAVES VRAM/MEMORY)</option>
+                        </select>
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label class="font-weight-bold small text-muted">POSE ESTIMATION MODEL (KEYPOINTS)</label>
+                        <select id="setup-pose-model" class="form-control custom-select bg-dark text-white border-secondary">
+                            <option value="on" selected>ENABLE (GROUNDED KEYPOINT POSE)</option>
+                            <option value="off">DISABLE (SAVES VRAM/MEMORY)</option>
+                        </select>
                     </div>
                 </div>
             </div>
@@ -298,6 +314,8 @@ $(document).ready(function() {
             // 现在是一个纯粹的开关，控制智能选择/LAM/批量应用/一致性检查这几个 SAM3
             // 检索类功能是否启用。
             enable_feature_extractor: $('#setup-feature-extractor').val() === 'on',
+            enable_cls_model: $('#setup-cls-model').val() === 'on',
+            enable_pose_model: $('#setup-pose-model').val() === 'on',
 
             max_workers: parseInt($('#setup-workers').val()),
             max_cache_size: parseInt($('#setup-max-cache-size').val()),

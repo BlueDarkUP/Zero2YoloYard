@@ -184,6 +184,25 @@ def startup_ai_models():
     else:
         logging.warning("SAM3 检索类功能 (enable_feature_extractor) 已在系统设置中被禁用。")
 
+    if settings.get('enable_cls_model', True):
+        logging.info("正在检查分类模型 (CLIP) 环境 (根据设置已启用)...")
+        try:
+            import clip_model
+            clip_model.clip_manager.get_available_models()
+        except Exception as e:
+            logging.warning(f"CLIP 分类模型初始化检查失败: {e}")
+    else:
+        logging.warning("分类模型 (CLIP) 已在系统设置中被禁用，将跳过预加载。")
+
+    if settings.get('enable_pose_model', True):
+        logging.info("正在检查姿态估计模型 (Grounded Pose) 环境 (根据设置已启用)...")
+        try:
+            import gkdt_tasks
+        except Exception as e:
+            logging.warning(f"姿态估计模型初始化检查失败: {e}")
+    else:
+        logging.warning("姿态估计模型 (Grounded Pose) 已在系统设置中被禁用，将跳过预加载。")
+
 
 def clear_retrieval_engine_cache():
     """

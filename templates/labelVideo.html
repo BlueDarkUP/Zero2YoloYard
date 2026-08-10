@@ -900,6 +900,8 @@
 
         const isSamEnabled = {{ is_sam_enabled | tojson }};
         const isFeatureExtractorEnabled = {{ is_feature_extractor_enabled | tojson }};
+        const isClsEnabled = {{ is_cls_enabled | tojson }};
+        const isPoseEnabled = {{ is_pose_enabled | tojson }};
         const disabledTitle = "This feature is disabled in system settings to save resources.";
 
         if (!isSamEnabled) {
@@ -912,6 +914,14 @@
 
         if (!isSamEnabled || !isFeatureExtractorEnabled) {
              $('#lam-toggle-btn, #interactive-mode-toggle').prop('disabled', true).attr('title', disabledTitle);
+        }
+
+        if (!isClsEnabled) {
+            $('#btn-open-clip-zeroshot, #btn-open-visual-clustering, #btn-open-visual-clustering-side').prop('disabled', true).attr('title', "Classification (CLIP) features are disabled in system settings.");
+        }
+
+        if (!isPoseEnabled) {
+            $('#btn-gkdt-auto-predict, #btn-gkdt-batch-predict, #btn-auto-pose-convert').prop('disabled', true).attr('title', "Pose Estimation features are disabled in system settings.");
         }
 
         const settings = {{ settings | tojson }};

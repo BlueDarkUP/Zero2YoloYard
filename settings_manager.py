@@ -52,7 +52,9 @@ DEFAULT_SETTINGS = {
 
     # 5. 模型与功能开关 (Model & Feature Toggles)
     "enable_sam_model": True,  # 总开关：启用SAM系列功能 (点选、追踪)
-    "enable_feature_extractor": True  # 总开关：启用SAM3开放词汇检索功能 (智能选择、LAM、批量应用、一致性检查)
+    "enable_feature_extractor": True,  # 总开关：启用SAM3开放词汇检索功能 (智能选择、LAM、批量应用、一致性检查)
+    "enable_cls_model": True,  # 总开关：启用分类模型与无监督特征聚类 (CLIP Zero-Shot / Cluster)
+    "enable_pose_model": True  # 总开关：启用姿态估计与关键点自动预测 (Grounded Pose / Keypoints)
 }
 _device = None
 

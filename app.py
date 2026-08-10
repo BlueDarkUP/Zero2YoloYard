@@ -328,7 +328,9 @@ def label_video():
                            settings=settings,
                            limit_data=config.get_limit_data_for_render_template(),
                            is_sam_enabled=settings.get('enable_sam_model', True),
-                           is_feature_extractor_enabled=settings.get('enable_feature_extractor', True))
+                           is_feature_extractor_enabled=settings.get('enable_feature_extractor', True),
+                           is_cls_enabled=settings.get('enable_cls_model', True),
+                           is_pose_enabled=settings.get('enable_pose_model', True))
 
 
 @app.route('/media/<path:path>')
@@ -1372,6 +1374,10 @@ def cluster_classification_images_route():
     """
     提取图像视觉特征向量，使用 K-Means 进行无监督视觉聚类。
     """
+    settings = settings_manager.load_settings()
+    if not settings.get('enable_cls_model', True):
+        return jsonify({'success': False, 'message': 'Classification (CLIP) features are disabled in System Settings.'}), 400
+
     data = request.json or {}
     dataset_uuid = data.get('dataset_uuid')
     video_uuids = data.get('video_uuids')
@@ -1530,6 +1536,10 @@ def apply_clip_zero_shot_route():
     """
     Run CLIP zero-shot pre-annotation for a video or dataset
     """
+    settings = settings_manager.load_settings()
+    if not settings.get('enable_cls_model', True):
+        return jsonify({'success': False, 'message': 'Classification (CLIP) features are disabled in System Settings.'}), 400
+
     data = request.json or {}
     dataset_uuid = data.get('dataset_uuid')
     video_uuids = data.get('video_uuids')
@@ -2517,6 +2527,10 @@ def run_consistency_check(dataset_uuid):
 @app.route('/api/gkdt_text_pose_predict', methods=['POST'])
 def gkdt_text_pose_predict_route():
     """文本 Prompt 自动识别关键点生成骨架"""
+    settings = settings_manager.load_settings()
+    if not settings.get('enable_pose_model', True):
+        return jsonify({'success': False, 'message': 'Pose estimation features are disabled in System Settings.'}), 400
+
     data = request.json or {}
     video_uuid = data.get('video_uuid')
     frame_number = data.get('frame_number')
@@ -2546,6 +2560,10 @@ def gkdt_text_pose_predict_route():
 @app.route('/api/gkdt_sam_pose_predict', methods=['POST'])
 def gkdt_sam_pose_predict_route():
     """SAM 2.1 + GKDT 交互点选生成独立目标姿态"""
+    settings = settings_manager.load_settings()
+    if not settings.get('enable_pose_model', True):
+        return jsonify({'success': False, 'message': 'Pose estimation features are disabled in System Settings.'}), 400
+
     data = request.json or {}
     video_uuid = data.get('video_uuid')
     frame_number = data.get('frame_number')
@@ -2564,7 +2582,7 @@ def gkdt_sam_pose_predict_route():
             video_uuid=video_uuid,
             frame_number=int(frame_number),
             class_label=class_label,
-            point_coords=coords_tuple
+ point_coords=coords_tuple
         )
         return jsonify({'success': True, 'pose_object': pose_object})
 
@@ -2576,6 +2594,10 @@ def gkdt_sam_pose_predict_route():
 @app.route('/api/gkdt_sam3_batch_pose_predict', methods=['POST'])
 def gkdt_sam3_batch_pose_predict_route():
     """SAM3 开放词汇文本盲扫 + GKDT 全图多目标姿态自动识别 (TrueLAM Pose)"""
+    settings = settings_manager.load_settings()
+    if not settings.get('enable_pose_model', True):
+        return jsonify({'success': False, 'message': 'Pose estimation features are disabled in System Settings.'}), 400
+
     data = request.json or {}
     video_uuid = data.get('video_uuid')
     frame_number = data.get('frame_number')

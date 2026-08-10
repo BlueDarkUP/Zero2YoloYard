@@ -338,6 +338,22 @@
                                         </div>
                                     </div>
                                 </div>
+                                <div class="form-row mt-2">
+                                    <div class="form-group col-md-6">
+                                        <label class="small text-muted font-weight-bold">CLASSIFICATION MODEL (CLIP) <i class="bi bi-info-square-fill ml-1 text-info info-trigger" data-key="enable_cls"></i></label>
+                                        <div class="custom-control custom-switch mt-2">
+                                            <input type="checkbox" class="custom-control-input" id="setting-enable-cls">
+                                            <label class="custom-control-label font-monospace" for="setting-enable-cls">ENABLE CLIP ZERO-SHOT & CLUSTERING</label>
+                                        </div>
+                                    </div>
+                                    <div class="form-group col-md-6">
+                                        <label class="small text-muted font-weight-bold">POSE ESTIMATION MODEL (KEYPOINTS) <i class="bi bi-info-square-fill ml-1 text-info info-trigger" data-key="enable_pose"></i></label>
+                                        <div class="custom-control custom-switch mt-2">
+                                            <input type="checkbox" class="custom-control-input" id="setting-enable-pose">
+                                            <label class="custom-control-label font-monospace" for="setting-enable-pose">ENABLE GROUNDED POSE / KEYPOINTS</label>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -1028,6 +1044,8 @@
                     // 模型与功能开关
                     $('#setting-enable-sam').prop('checked', s.enable_sam_model !== false);
                     $('#setting-enable-feature-extractor').prop('checked', s.enable_feature_extractor !== false);
+                    $('#setting-enable-cls').prop('checked', s.enable_cls_model !== false);
+                    $('#setting-enable-pose').prop('checked', s.enable_pose_model !== false);
 
                     // 如果需要在创建数据集页面体现默认比例
                     $('#eval-percent').val(s.default_eval_percent || 20.0);
@@ -1266,6 +1284,8 @@
 
                 enable_sam_model: $('#setting-enable-sam').is(':checked'),
                 enable_feature_extractor: $('#setting-enable-feature-extractor').is(':checked'),
+                enable_cls_model: $('#setting-enable-cls').is(':checked'),
+                enable_pose_model: $('#setting-enable-pose').is(':checked'),
 
                 batch_tracking_conf: parseFloat($('#setting-batch-tracking-conf').val()),
                 default_preannotation_conf: parseFloat($('#setting-preannotation-conf').val()),
