@@ -1,114 +1,138 @@
 <!-- Pose / Keypoint Skeleton Sidebar Sub-Template
-     关键点数量与命名完全自由（不限定 COCO-17），详见 static/js/annotation/annotator_pose.js -->
+     Custom keypoint schema & agnostic object topology support -->
 <style>
     .pose-inline-name-input {
         position: fixed;
         z-index: 2000;
         width: 180px;
-        padding: 4px 8px;
+        padding: 5px 10px;
         font-family: 'JetBrains Mono', monospace;
         font-size: 0.8rem;
-        background: #14161f;
+        background: #0d0f17;
         color: #00f0ff;
         border: 1px solid #00f0ff;
-        border-radius: 4px;
-        box-shadow: 0 4px 16px rgba(0,0,0,0.6), 0 0 12px rgba(0,240,255,0.3);
+        border-radius: 6px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.7), 0 0 14px rgba(0,240,255,0.4);
         outline: none;
     }
-    .task-pose [data-v]:disabled { opacity: 0.4; cursor: not-allowed; }
+    .task-pose [data-v]:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    .task-pose .pose-card {
+        background: rgba(15, 18, 28, 0.7);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 8px;
+        transition: all 0.2s ease-in-out;
+    }
+    .task-pose .pose-card:hover {
+        border-color: rgba(0, 240, 255, 0.25);
+    }
+    .task-pose .pose-card-gkdt {
+        border-left: 3px solid #ff2a5f;
+    }
+    .task-pose .pose-card-truelam {
+        border-left: 3px solid #ffb400;
+    }
+    .task-pose .pose-card-interp {
+        border-left: 3px solid #00f0ff;
+    }
 </style>
 
 <div class="task-panel task-pose">
+    <!-- Header -->
     <div class="d-flex justify-content-between align-items-center mb-2">
-        <h6 class="font-weight-bold text-uppercase text-danger mb-0">
+        <h6 class="font-weight-bold text-uppercase text-danger mb-0" style="letter-spacing: 0.5px;">
             <i class="bi bi-diagram-3-fill mr-2"></i>Skeletons (<span id="pose-count">0</span>)
         </h6>
     </div>
 
-    <div class="alert alert-dark p-2 small mb-3 border-secondary text-muted" style="font-size: 0.75rem;">
-        <i class="bi bi-info-circle mr-1"></i>选好类别后点 <b>Add Skeleton</b>，再点画布放置；或开启 <b>GKDT 智能点选</b> 极速生成独立姿态。<br>
-        <i class="bi bi-info-circle mr-1"></i>点位数量与命名完全自由，不限定 17 点。
+    <!-- Quick Instruction Banner -->
+    <div class="alert alert-dark p-2 small mb-3 border-secondary text-muted" style="font-size: 0.75rem; background: rgba(20, 24, 36, 0.6); border-radius: 6px;">
+        <i class="bi bi-info-circle text-cyan mr-1"></i>Select a class and click <b>Add Skeleton</b>, or use <b>GKDT Point-Click Mode</b> for instant pose extraction.<br>
+        <i class="bi bi-info-circle text-cyan mr-1"></i>Keypoint names & topology are fully agnostic (unlimited pts).
     </div>
 
-    <!-- SAM 2.1 + GKDT 交互开关卡片 -->
-    <div class="card bg-dark border-danger p-2 mb-2">
+    <!-- GKDT Interactive Generation (SAM 2.1 + GKDT) -->
+    <div class="card pose-card pose-card-gkdt p-2 mb-2">
         <div class="small font-weight-bold text-danger mb-1 d-flex justify-content-between align-items-center">
-            <span><i class="bi bi-stars mr-1"></i>GKDT 交互生成 (SAM 2.1 + GKDT)</span>
-            <span class="badge badge-danger">ECCV 2026</span>
+            <span><i class="bi bi-crosshair mr-1"></i>GKDT Interactive (SAM 2.1 + GKDT)</span>
+            <span class="badge badge-danger" style="font-size: 0.65rem;">ECCV 2026</span>
         </div>
-        <button id="btn-toggle-gkdt-interactive" class="btn btn-sm btn-outline-danger font-weight-bold w-100">
-            <i class="bi bi-crosshair mr-1"></i>开启 GKDT 智能点选模式
+        <button id="btn-toggle-gkdt-interactive" class="btn btn-sm btn-outline-danger font-weight-bold w-100 mt-1">
+            <i class="bi bi-crosshair mr-1"></i>Enable GKDT Point-Click Mode
         </button>
     </div>
 
-    <!-- SAM3 TrueLAM 开放文本盲扫 + GKDT 姿态生成卡片 -->
-    <div class="card bg-dark border-warning p-2 mb-3">
+    <!-- TrueLAM Open-Vocabulary Pose Auto-Detect (SAM3 + GKDT) -->
+    <div class="card pose-card pose-card-truelam p-2 mb-3">
         <div class="small font-weight-bold text-warning mb-1 d-flex justify-content-between align-items-center">
-            <span><i class="bi bi-lightning-charge-fill mr-1"></i>TrueLAM 姿态盲扫 (SAM3 + GKDT)</span>
-            <span class="badge badge-warning">AI 自动生成</span>
+            <span><i class="bi bi-lightning-charge-fill mr-1"></i>TrueLAM Pose Auto-Detect (SAM3 + GKDT)</span>
+            <span class="badge badge-warning text-dark" style="font-size: 0.65rem; font-weight: 700;">AI Auto</span>
         </div>
-        <div class="input-group input-group-sm mb-2">
+        <div class="input-group input-group-sm my-1">
             <div class="input-group-prepend">
                 <span class="input-group-text bg-dark text-warning border-secondary"><i class="bi bi-search"></i></span>
             </div>
-            <input type="text" id="pose-truelam-prompt-input" class="form-control bg-dark text-light border-secondary" placeholder="输入识别文本 (如: person, dog)" title="SAM3 开放词汇文本 Prompt">
+            <input type="text" id="pose-truelam-prompt-input" class="form-control bg-dark text-light border-secondary" placeholder="Enter prompt (e.g. person, robot arm)" title="SAM3 Open-Vocabulary Text Prompt">
         </div>
-        <button type="button" id="btn-truelam-pose-batch" class="btn btn-sm btn-warning font-weight-bold w-100 text-dark">
-            <i class="bi bi-magic mr-1"></i>TrueLAM 识别画面全量姿态
+        <button type="button" id="btn-truelam-pose-batch" class="btn btn-sm btn-warning font-weight-bold w-100 text-dark mt-1">
+            <i class="bi bi-magic mr-1"></i>Detect Poses on Current Frame
         </button>
-        <button type="button" id="btn-truelam-pose-dataset-batch" class="btn btn-sm btn-outline-warning font-weight-bold w-100 mt-2" title="使用 SAM3 + GKDT 将姿态识别全自动推导应用到整套数据集所有视频帧">
-            <i class="bi bi-collection-play mr-1"></i>推导姿态至【全数据集/所有视频】
+        <button type="button" id="btn-truelam-pose-dataset-batch" class="btn btn-sm btn-outline-warning font-weight-bold w-100 mt-2" title="Automatically apply SAM3 + GKDT pose detection to all frames across the dataset">
+            <i class="bi bi-collection-play mr-1"></i>Propagate Poses to Dataset (All Videos)
         </button>
     </div>
 
-    <!-- 关键点帧间线性插值卡片 -->
-    <div class="card bg-dark border-info p-2 mb-3">
+    <!-- Keypoint Frame Interpolation Card -->
+    <div class="card pose-card pose-card-interp p-2 mb-3">
         <div class="small font-weight-bold text-info mb-1 d-flex justify-content-between align-items-center">
-            <span><i class="bi bi-graph-up-arrow mr-1"></i>关键点帧间线性插值</span>
-            <span class="badge badge-info">Interpolation</span>
+            <span><i class="bi bi-graph-up-arrow mr-1"></i>Keypoint Frame Interpolation</span>
+            <span class="badge badge-info text-dark" style="font-size: 0.65rem; font-weight: 700;">Linear</span>
         </div>
         <div class="d-flex mb-1" style="gap: 4px;">
             <div class="input-group input-group-sm flex-fill">
-                <div class="input-group-prepend"><span class="input-group-text bg-dark text-info border-secondary">起</span></div>
-                <input type="number" id="pose-interp-start-frame" class="form-control bg-dark text-light border-secondary" placeholder="起始帧">
+                <div class="input-group-prepend"><span class="input-group-text bg-dark text-info border-secondary" style="font-size: 0.75rem;">Start</span></div>
+                <input type="number" id="pose-interp-start-frame" class="form-control bg-dark text-light border-secondary" placeholder="Frame">
             </div>
-            <button type="button" id="btn-set-pose-interp-start" class="btn btn-sm btn-outline-info" title="设当前帧为起始帧">📍设起</button>
+            <button type="button" id="btn-set-pose-interp-start" class="btn btn-sm btn-outline-info" style="font-size: 0.75rem;" title="Set current frame as start frame">📍Set Start</button>
         </div>
         <div class="d-flex mb-2" style="gap: 4px;">
             <div class="input-group input-group-sm flex-fill">
-                <div class="input-group-prepend"><span class="input-group-text bg-dark text-info border-secondary">终</span></div>
-                <input type="number" id="pose-interp-end-frame" class="form-control bg-dark text-light border-secondary" placeholder="结束帧">
+                <div class="input-group-prepend"><span class="input-group-text bg-dark text-info border-secondary" style="font-size: 0.75rem;">End</span></div>
+                <input type="number" id="pose-interp-end-frame" class="form-control bg-dark text-light border-secondary" placeholder="Frame">
             </div>
-            <button type="button" id="btn-set-pose-interp-end" class="btn btn-sm btn-outline-info" title="设当前帧为结束帧">📍设终</button>
+            <button type="button" id="btn-set-pose-interp-end" class="btn btn-sm btn-outline-info" style="font-size: 0.75rem;" title="Set current frame as end frame">📍Set End</button>
         </div>
         <button type="button" id="btn-exec-pose-interpolate" class="btn btn-sm btn-info font-weight-bold text-dark w-100">
-            <i class="bi bi-arrow-down-up mr-1"></i>执行关键点线性插值
+            <i class="bi bi-arrow-down-up mr-1"></i>Interpolate Keypoints
         </button>
     </div>
 
+    <!-- Manual Action Buttons -->
     <div class="d-flex mb-2" style="gap: 6px;">
         <button id="btn-add-skeleton" class="btn btn-sm btn-primary font-weight-bold flex-grow-1">
             <i class="bi bi-plus-lg mr-1"></i>Add Skeleton
         </button>
-        <button id="btn-edit-pose-schema" class="btn btn-sm btn-outline-info font-weight-bold" title="编辑当前类别的点位模板（可选）">
+        <button id="btn-edit-pose-schema" class="btn btn-sm btn-outline-info font-weight-bold" title="Edit Class Point Template (Optional)">
             <i class="bi bi-pencil-square"></i>
         </button>
     </div>
 
     <button id="btn-finish-pose-freeform" class="btn btn-sm btn-outline-success font-weight-bold w-100 mb-2" style="display:none;">
-        <i class="bi bi-check-lg mr-1"></i>完成骨架 (Enter / 右键)
+        <i class="bi bi-check-lg mr-1"></i>Finish Skeleton (Enter / Right Click)
     </button>
 
-
-    <div class="card bg-dark border-secondary p-2 mb-3">
-        <div class="small font-weight-bold text-muted mb-2">选中关键点的可见性：</div>
+    <!-- Keypoint Visibility Controls -->
+    <div class="card pose-card p-2 mb-3">
+        <div class="small font-weight-bold text-muted mb-2">Keypoint Visibility State:</div>
         <div class="btn-group btn-group-sm w-100" role="group">
-            <button type="button" class="btn btn-outline-success" data-v="2" title="Visible (按键 2)">🟢 Visible</button>
-            <button type="button" class="btn btn-outline-warning" data-v="1" title="Occluded (按键 1)">🟠 Occluded</button>
-            <button type="button" class="btn btn-outline-danger" data-v="0" title="Absent (按键 0)">⚪ Absent</button>
+            <button type="button" class="btn btn-outline-success" data-v="2" title="Visible (Key 2)">🟢 Visible</button>
+            <button type="button" class="btn btn-outline-warning" data-v="1" title="Occluded (Key 1)">🟠 Occluded</button>
+            <button type="button" class="btn btn-outline-danger" data-v="0" title="Absent (Key 0)">⚪ Absent</button>
         </div>
     </div>
 
+    <!-- Skeleton Instance List -->
     <div id="pose-object-list" class="annotation-object-list">
         <!-- Dynamically rendered Skeleton items -->
     </div>

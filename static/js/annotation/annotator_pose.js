@@ -158,17 +158,17 @@ class PoseAnnotator {
 
             if (self.isGkdtModeActive) {
                 $btn.removeClass('btn-outline-danger').addClass('btn-danger text-white')
-                    .html('<i class="bi bi-crosshair mr-1"></i>GKDT 智能点选 ON (点击图片物体)');
+                    .html('<i class="bi bi-crosshair mr-1"></i>GKDT Point-Click ON (Click Target)');
                 self.core.canvas.style.cursor = 'crosshair';
                 if (typeof window.showToast === 'function') {
-                    window.showToast('🎯 GKDT 智能点选已开启：点击图像中的目标主体（如某个人），SAM 2.1 + GKDT 将自动提取其独立姿态！', 3500);
+                    window.showToast('🎯 GKDT Point-Click Active: Click any target object in image, SAM 2.1 + GKDT will extract its pose!', 3500);
                 }
             } else {
                 $btn.removeClass('btn-danger text-white').addClass('btn-outline-danger')
-                    .html('<i class="bi bi-crosshair mr-1"></i>开启 GKDT 智能点选模式');
+                    .html('<i class="bi bi-crosshair mr-1"></i>Enable GKDT Point-Click Mode');
                 self.core.canvas.style.cursor = 'default';
                 if (typeof window.showToast === 'function') {
-                    window.showToast('⏸️ 已恢复默认手动姿态标注模式', 2000);
+                    window.showToast('⏸️ Switched to manual pose annotation mode', 2000);
                 }
             }
         });
@@ -192,7 +192,7 @@ class PoseAnnotator {
             }
 
             if (!cls) {
-                const warnMsg = '⚠️ 请先在右侧选择或创建一个类别，或在输入框中填入目标文本（如 person / dog）';
+                const warnMsg = '⚠️ Please select a class or enter target text (e.g. person, dog)';
                 if (typeof window.showToast === 'function') {
                     window.showToast(warnMsg, 3500);
                 } else {
@@ -203,10 +203,10 @@ class PoseAnnotator {
 
             const promptToUse = customPrompt || cls;
             const $btn = $(this);
-            $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm mr-1"></span> SAM3 盲扫 + GKDT 生成中...');
+            $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm mr-1"></span> SAM3 + GKDT Detecting...');
 
             if (typeof window.showToast === 'function') {
-                window.showToast(`🔍 正在使用 SAM3 盲扫全图检索 [${promptToUse}] 并生成 [${cls}] 姿态...`, 4000);
+                window.showToast(`🔍 Running SAM3 open-vocabulary detection [${promptToUse}] -> [${cls}] pose generation...`, 4000);
             }
 
             const currentFrame = (typeof self.core.currentFrame !== 'undefined') ? self.core.currentFrame : parseInt($('#frame-slider').val() || '0', 10);
@@ -224,10 +224,10 @@ class PoseAnnotator {
                     confidence: 0.25
                 }),
                 success: function(res) {
-                    $btn.prop('disabled', false).html('<i class="bi bi-magic mr-1"></i>TrueLAM 识别画面全量姿态');
+                    $btn.prop('disabled', false).html('<i class="bi bi-magic mr-1"></i>Detect Poses on Current Frame');
                     if (res.success && res.pose_objects && res.pose_objects.length > 0) {
                         if (typeof window.showToast === 'function') {
-                            window.showToast(`🎉 成功识别并自动挂载 ${res.pose_objects.length} 个 '${promptToUse}' 目标姿态！`, 3500);
+                            window.showToast(`🎉 Successfully detected & attached ${res.pose_objects.length} pose skeletons for '${promptToUse}'!`, 3500);
                         }
 
                         if (!self.core.annotations) self.core.annotations = { objects: [] };
@@ -247,7 +247,7 @@ class PoseAnnotator {
                             self.core.render();
                         }
                     } else {
-                        const warnMsg = `⚠️ SAM3 未能在当前画面检测到符合 '${promptToUse}' 的目标`;
+                        const warnMsg = `⚠️ SAM3 could not detect targets matching '${promptToUse}' in current frame`;
                         if (typeof window.showToast === 'function') {
                             window.showToast(warnMsg, 3500);
                         } else {
@@ -256,8 +256,8 @@ class PoseAnnotator {
                     }
                 },
                 error: function(err) {
-                    $btn.prop('disabled', false).html('<i class="bi bi-magic mr-1"></i>TrueLAM 识别画面全量姿态');
-                    const msg = (err.responseJSON && err.responseJSON.message) ? err.responseJSON.message : '识别服务出错，请检查日志';
+                    $btn.prop('disabled', false).html('<i class="bi bi-magic mr-1"></i>Detect Poses on Current Frame');
+                    const msg = (err.responseJSON && err.responseJSON.message) ? err.responseJSON.message : 'Pose detection service error';
                     if (typeof window.showToast === 'function') {
                         window.showToast('⚠️ ' + msg, 3500);
                     } else {
@@ -286,19 +286,19 @@ class PoseAnnotator {
             }
 
             if (!cls) {
-                const warnMsg = '⚠️ 请先选择或创建一个类别，或在输入框中填入目标文本（如 person）';
+                const warnMsg = '⚠️ Please select a class or enter target text (e.g. person, dog)';
                 if (typeof window.showToast === 'function') window.showToast(warnMsg, 3500);
                 else alert(warnMsg);
                 return;
             }
 
             const promptToUse = customPrompt || cls;
-            if (!confirm(`🚀 确定要开启 SAM3 + GKDT 自动姿态盲扫？\n\n目标类别: [${cls}]\n检索 Prompt: [${promptToUse}]\n\n系统将在后台自动为该数据集内的所有视频帧推理姿态骨架！`)) {
+            if (!confirm(`🚀 Start SAM3 + GKDT Pose Auto-Labeling for full dataset?\n\nTarget Class: [${cls}]\nSearch Prompt: [${promptToUse}]\n\nPose skeletons will be automatically generated for all video frames in the background.`)) {
                 return;
             }
 
             const $btn = $(this);
-            $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm mr-1"></span> 全数据集姿态推导中...');
+            $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm mr-1"></span> Processing Dataset...');
 
             let videoUuids = [self.core.videoUuid || (window.annotationCore ? window.annotationCore.videoUuid : '')];
             if (window.datasetVideoUuids && Array.isArray(window.datasetVideoUuids) && window.datasetVideoUuids.length > 0) {
@@ -316,22 +316,22 @@ class PoseAnnotator {
                     process_all_frames: true
                 }),
                 success: function(res) {
-                    $btn.prop('disabled', false).html('<i class="bi bi-collection-play mr-1"></i>推导姿态至【全数据集/所有视频】');
+                    $btn.prop('disabled', false).html('<i class="bi bi-collection-play mr-1"></i>Propagate Poses to Dataset (All Videos)');
                     if (res.success && res.task_uuid) {
                         if (typeof window.showToast === 'function') {
-                            window.showToast(`🚀 后台全数据集姿态自动推导任务已开启！(类别: ${cls})`, 4000);
+                            window.showToast(`🚀 Dataset pose auto-labeling task started in background! (Class: ${cls})`, 4000);
                         } else {
-                            alert(`🚀 后台全数据集姿态自动推导任务已开启！`);
+                            alert(`🚀 Dataset pose auto-labeling task started in background!`);
                         }
                     } else {
-                        const warnMsg = '⚠️ 启动全数据集任务失败: ' + (res.message || '未知错误');
+                        const warnMsg = '⚠️ Failed to start dataset task: ' + (res.message || 'Unknown error');
                         if (typeof window.showToast === 'function') window.showToast(warnMsg, 3500);
                         else alert(warnMsg);
                     }
                 },
                 error: function(err) {
-                    $btn.prop('disabled', false).html('<i class="bi bi-collection-play mr-1"></i>推导姿态至【全数据集/所有视频】');
-                    const msg = (err.responseJSON && err.responseJSON.message) ? err.responseJSON.message : '启动失败';
+                    $btn.prop('disabled', false).html('<i class="bi bi-collection-play mr-1"></i>Propagate Poses to Dataset (All Videos)');
+                    const msg = (err.responseJSON && err.responseJSON.message) ? err.responseJSON.message : 'Task launch failed';
                     if (typeof window.showToast === 'function') window.showToast('⚠️ ' + msg, 3500);
                     else alert('⚠️ ' + msg);
                 }
@@ -343,7 +343,7 @@ class PoseAnnotator {
             const currFrame = self.core.currentFrame;
             $('#pose-interp-start-frame').val(currFrame);
             if (typeof window.showToast === 'function') {
-                window.showToast(`📍 已将当前第 ${currFrame} 帧设为关键点插值起始帧`, 2000);
+                window.showToast(`📍 Set frame #${currFrame} as interpolation start frame`, 2000);
             }
         });
 
@@ -352,7 +352,7 @@ class PoseAnnotator {
             const currFrame = self.core.currentFrame;
             $('#pose-interp-end-frame').val(currFrame);
             if (typeof window.showToast === 'function') {
-                window.showToast(`📍 已将当前第 ${currFrame} 帧设为关键点插值结束帧`, 2000);
+                window.showToast(`📍 Set frame #${currFrame} as interpolation end frame`, 2000);
             }
         });
 
@@ -362,14 +362,14 @@ class PoseAnnotator {
             const endFrame = parseInt($('#pose-interp-end-frame').val());
 
             if (isNaN(startFrame) || isNaN(endFrame)) {
-                const msg = '⚠️ 请先设定插值的【起始帧】与【结束帧】！';
+                const msg = '⚠️ Please specify both Start Frame and End Frame for interpolation!';
                 if (typeof window.showToast === 'function') window.showToast(msg, 3000);
                 else alert(msg);
                 return;
             }
 
             if (startFrame >= endFrame) {
-                const msg = '⚠️ 结束帧必须大于起始帧！';
+                const msg = '⚠️ End frame must be greater than start frame!';
                 if (typeof window.showToast === 'function') window.showToast(msg, 3000);
                 else alert(msg);
                 return;
@@ -377,7 +377,7 @@ class PoseAnnotator {
 
             const selectedObjId = self.core.selectedObjectId;
             const $btn = $(this);
-            $btn.prop('disabled', true).html('<i class="spinner-border spinner-border-sm mr-1"></i>插值计算中...');
+            $btn.prop('disabled', true).html('<i class="spinner-border spinner-border-sm mr-1"></i>Interpolating...');
 
             $.ajax({
                 url: '/api/interpolatePoseKeypoints',
@@ -390,7 +390,7 @@ class PoseAnnotator {
                     end_frame_number: endFrame
                 }),
                 success: function (res) {
-                    $btn.prop('disabled', false).html('<i class="bi bi-arrow-down-up mr-1"></i>执行关键点线性插值');
+                    $btn.prop('disabled', false).html('<i class="bi bi-arrow-down-up mr-1"></i>Interpolate Keypoints');
                     if (res.success) {
                         if (typeof window.showToast === 'function') {
                             window.showToast(`✨ ${res.message}`, 4000);
@@ -399,14 +399,14 @@ class PoseAnnotator {
                         }
                         self.core.fetchAnnotations();
                     } else {
-                        const err = res.message || '姿态插值失败';
+                        const err = res.message || 'Keypoint interpolation failed';
                         if (typeof window.showToast === 'function') window.showToast(`❌ ${err}`, 3500);
                         else alert(err);
                     }
                 },
                 error: function (xhr) {
-                    $btn.prop('disabled', false).html('<i class="bi bi-arrow-down-up mr-1"></i>执行关键点线性插值');
-                    const err = xhr.responseJSON?.message || '服务器连接超时';
+                    $btn.prop('disabled', false).html('<i class="bi bi-arrow-down-up mr-1"></i>Interpolate Keypoints');
+                    const err = xhr.responseJSON?.message || 'Server timeout';
                     if (typeof window.showToast === 'function') window.showToast(`❌ ${err}`, 3500);
                     else alert(err);
                 }
