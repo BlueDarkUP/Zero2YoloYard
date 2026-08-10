@@ -38,6 +38,7 @@ DEFAULT_SETTINGS = {
     "default_eval_percent": 20.0,  # 默认验证集比例
     "default_test_percent": 10.0,  # 默认测试集比例
     "color_confusion_factor": 2.0,  # 一致性检查中，色彩偏离的警告系数
+    "color_veto_threshold": 1.0,  # 智能选择/One-shot中，颜色维度差异剔除阈值 (L1距离，0.0-2.0)
     # 一致性检查（SAM3 语义部分，见 ai_models.check_dataset_consistency）的两个阈值：
     # own_score 低于这个值 -> 直接判定语义可疑（SAM3 认为压根不像自己的类别描述）
     "consistency_semantic_threshold": 0.3,

@@ -141,7 +141,7 @@ class PoseAnnotator {
 
     getColorForClass(label) {
         if (typeof window.stringToColor === 'function') return window.stringToColor(label);
-        return '#00f0ff';
+        return '#e4e4e7';
     }
 
     // ============================================================
@@ -877,8 +877,8 @@ class PoseAnnotator {
 
     colorForVisibility(v) {
         if (v === 0) return 'rgba(160,160,170,0.9)';   // absent - 灰
-        if (v === 1) return '#ffb400';                  // occluded - 橙
-        return '#00ff88';                                // visible - 绿
+        if (v === 1) return '#b59656';                  // occluded - 柔和黄/橙
+        return '#5e9475';                                // visible - 鼠尾草绿
     }
 
     render(ctx, annotations, selectedId) {
@@ -985,7 +985,7 @@ class PoseAnnotator {
         // 放置模式下的准心预览
         if ((this.isPlacingNewInstance || this.isFreeformAdding || this.isGkdtModeActive) && this.hoverPoint) {
             ctx.save();
-            ctx.strokeStyle = this.isGkdtModeActive ? 'rgba(255, 42, 42, 0.9)' : 'rgba(0, 240, 255, 0.9)';
+            ctx.strokeStyle = this.isGkdtModeActive ? 'rgba(189, 99, 99, 0.9)' : 'rgba(244, 244, 245, 0.9)';
             ctx.lineWidth = 1.5 / zoom;
             const s = 10 / zoom;
             ctx.beginPath();
@@ -1030,7 +1030,7 @@ class PoseAnnotator {
             const isSelected = obj.id === this.core.selectedObjectId;
             const wrapper = document.createElement('div');
             wrapper.className = `mb-2 p-2 border rounded ${isSelected ? 'border-primary' : 'border-secondary'}`;
-            wrapper.style.background = isSelected ? 'rgba(0,240,255,0.08)' : 'rgba(255,255,255,0.02)';
+            wrapper.style.background = isSelected ? 'var(--bg-surface-secondary)' : 'transparent';
 
             const header = document.createElement('div');
             header.className = 'd-flex justify-content-between align-items-center';

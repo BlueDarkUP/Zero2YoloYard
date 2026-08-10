@@ -49,11 +49,15 @@ class FolderClassificationExporter(BaseExporter):
 
         splits = [('train', train_data), ('val', val_data), ('test', test_data)]
 
+        export_opts = options.get("export_options") or {}
+        include_unlabeled = bool(options.get("include_unlabeled", export_opts.get("include_unlabeled", False)))
+
         for split_name, split_frames in splits:
             split_dir = os.path.join(export_dir, split_name)
             for class_name in class_list:
                 os.makedirs(os.path.join(split_dir, _sanitize_class_name(class_name)), exist_ok=True)
-            os.makedirs(os.path.join(split_dir, "_unlabeled"), exist_ok=True)
+            if include_unlabeled:
+                os.makedirs(os.path.join(split_dir, "_unlabeled"), exist_ok=True)
 
             for frame_info in split_frames:
                 base_name = f"{frame_info['video_uuid']}_{frame_info['frame_number']:05d}.jpg"
@@ -66,7 +70,10 @@ class FolderClassificationExporter(BaseExporter):
                 tags = annotations.classifications if annotations.classifications else []
 
                 if not tags:
-                    shutil.copy(src_img_path, os.path.join(split_dir, "_unlabeled", base_name))
+                    if include_unlabeled:
+                        shutil.copy(src_img_path, os.path.join(split_dir, "_unlabeled", base_name))
+                    else:
+                        continue
                 elif len(tags) == 1:
                     target_cls = _sanitize_class_name(tags[0])
                     target_dir = os.path.join(split_dir, target_cls)

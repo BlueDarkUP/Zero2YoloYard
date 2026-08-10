@@ -7,29 +7,29 @@
         padding: 5px 10px;
         font-family: 'JetBrains Mono', monospace;
         font-size: 0.8rem;
-        background: #0d0f17;
-        color: #00f0ff;
-        border: 1px solid #00f0ff;
-        border-radius: 6px;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.7), 0 0 14px rgba(0,240,255,0.4);
+        background: var(--bg-surface);
+        color: var(--text-main);
+        border: 1px solid var(--border-active);
+        border-radius: var(--radius-sm);
+        box-shadow: 0 8px 24px rgba(0,0,0,0.6);
         outline: none;
     }
     .task-pose [data-v]:disabled { opacity: 0.35; cursor: not-allowed; }
 
     .pose-tool-btn {
         font-size: 0.72rem;
-        font-weight: 700;
+        font-weight: 600;
         padding: 0.35rem 0.2rem;
-        border-radius: 6px;
+        border-radius: var(--radius-sm);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
     }
 
     .pose-panel-box {
-        background: rgba(16, 20, 30, 0.75);
-        backdrop-filter: blur(12px);
-        border-radius: 6px;
+        background: var(--bg-surface-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-sm);
         padding: 8px 10px;
         margin-bottom: 10px;
         transition: all 0.2s ease-in-out;

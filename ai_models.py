@@ -313,14 +313,11 @@ def predict_from_one_shot(video_uuid, frame_number, positive_prompt_box, negativ
                 pos_hist = _calculate_region_color_hist(image_bgr, prompt_rect)
                 if pos_hist is not None:
                     filtered = []
-                    # 归一化直方图的 L1 距离理论范围是 [0, 2]；这个 1.0 的阈值是一个
-                    # 比较宽松的经验值(容忍光照/角度带来的颜色偏移，只挡明显不同色系
-                    # 的候选)，没有做过大规模统计调参，如果发现挡太多/挡太少，
-                    # 可以在这里调整。
-                    COLOR_VETO_L1_THRESHOLD = 1.0
+                    # 归一化直方图的 L1 距离理论范围是 [0, 2]；阈值可从系统设置中配置 (默认 1.0)
+                    color_veto_threshold = float(settings.get('color_veto_threshold', 1.0))
                     for r in results:
                         cand_hist = _calculate_region_color_hist(image_bgr, r['box'])
-                        if cand_hist is None or _color_hist_distance(cand_hist, pos_hist) < COLOR_VETO_L1_THRESHOLD:
+                        if cand_hist is None or _color_hist_distance(cand_hist, pos_hist) < color_veto_threshold:
                             filtered.append(r)
                     results = filtered
 

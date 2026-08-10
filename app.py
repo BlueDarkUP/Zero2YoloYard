@@ -2241,7 +2241,7 @@ def get_dataset_analysis_data(dataset_uuid):
 
     video_uuids = json.loads(dataset.get('video_uuids', '[]'))
     tasks_by_video = {vu: database.get_tasks_for_video(vu) for vu in video_uuids}
-    video_info_cache = {vu: database.get_video_entity(vu) for vu in video_uuids}
+    video_info_cache = {vu: (database.get_video_entity(vu) or {}) for vu in video_uuids}
 
     export_format = dataset.get('export_format', '')
     is_classification = (export_format in ['folder_classification', 'yolo_cls']) or any(

@@ -512,7 +512,7 @@ class SegmentationAnnotator {
         if (typeof window.stringToColor === 'function') {
             return window.stringToColor(label);
         }
-        return '#00ff88';
+        return '#e4e4e7';
     }
 
     render(ctx, annotations, selectedId) {
@@ -524,9 +524,9 @@ class SegmentationAnnotator {
             ctx.save();
             ctx.beginPath();
             ctx.arc(this.hoverPoint.x, this.hoverPoint.y, radiusOnScreen, 0, 2 * Math.PI);
-            ctx.strokeStyle = (this.activeTool === 'brush') ? '#00f0ff' : '#ff3366';
+            ctx.strokeStyle = (this.activeTool === 'brush') ? '#e4e4e7' : '#bd6363';
             ctx.lineWidth = 1.5 / this.core.zoom;
-            ctx.fillStyle = (this.activeTool === 'brush') ? 'rgba(0, 240, 255, 0.15)' : 'rgba(255, 51, 102, 0.15)';
+            ctx.fillStyle = (this.activeTool === 'brush') ? 'rgba(228, 228, 231, 0.15)' : 'rgba(189, 99, 99, 0.15)';
             ctx.fill();
             ctx.stroke();
             ctx.restore();
@@ -539,7 +539,7 @@ class SegmentationAnnotator {
             ctx.lineWidth = (this.brushRadius * 2);
             ctx.lineCap = 'round';
             ctx.lineJoin = 'round';
-            ctx.strokeStyle = (this.activeTool === 'brush') ? 'rgba(0, 255, 136, 0.4)' : 'rgba(255, 0, 85, 0.4)';
+            ctx.strokeStyle = (this.activeTool === 'brush') ? 'rgba(94, 148, 117, 0.4)' : 'rgba(189, 99, 99, 0.4)';
             ctx.moveTo(this.brushStrokePoints[0][0], this.brushStrokePoints[0][1]);
             for (let i = 1; i < this.brushStrokePoints.length; i++) {
                 ctx.lineTo(this.brushStrokePoints[i][0], this.brushStrokePoints[i][1]);
@@ -562,10 +562,10 @@ class SegmentationAnnotator {
             ctx.closePath();
 
             // Fill & Stroke
-            ctx.fillStyle = isSelected ? 'rgba(0, 240, 255, 0.35)' : 'rgba(0, 255, 136, 0.2)';
+            ctx.fillStyle = isSelected ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.05)';
             ctx.fill();
 
-            ctx.strokeStyle = isSelected ? '#00f0ff' : classColor;
+            ctx.strokeStyle = isSelected ? '#ffffff' : classColor;
             ctx.lineWidth = isSelected ? 3 / this.core.zoom : 2 / this.core.zoom;
             ctx.stroke();
 
@@ -575,7 +575,7 @@ class SegmentationAnnotator {
                 for (let i = 0; i < obj.polygon.length; i++) {
                     const pt = obj.polygon[i];
                     ctx.fillStyle = '#ffffff';
-                    ctx.strokeStyle = '#00f0ff';
+                    ctx.strokeStyle = '#09090b';
                     ctx.lineWidth = 1.5 / this.core.zoom;
 
                     ctx.beginPath();
@@ -596,7 +596,7 @@ class SegmentationAnnotator {
             if (this.hoverPoint) {
                 ctx.lineTo(this.hoverPoint.x, this.hoverPoint.y);
             }
-            ctx.strokeStyle = '#ff0077';
+            ctx.strokeStyle = '#bd6363';
             ctx.lineWidth = 2 / this.core.zoom;
             ctx.setLineDash([6 / this.core.zoom, 4 / this.core.zoom]);
             ctx.stroke();
@@ -606,7 +606,7 @@ class SegmentationAnnotator {
             const nodeRadius = 5 / this.core.zoom;
             for (let i = 0; i < this.currentPolygonPoints.length; i++) {
                 const pt = this.currentPolygonPoints[i];
-                ctx.fillStyle = (i === 0) ? '#00ff88' : '#ff0077'; // First vertex green for snap target
+                ctx.fillStyle = (i === 0) ? '#5e9475' : '#bd6363'; // First vertex sage green for snap target
                 ctx.beginPath();
                 ctx.arc(pt[0], pt[1], nodeRadius, 0, 2 * Math.PI);
                 ctx.fill();

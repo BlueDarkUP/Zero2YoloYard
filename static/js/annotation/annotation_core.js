@@ -412,7 +412,7 @@ class AnnotationCore {
         // 5. Draw Interactive Prompt BBoxes (Smart Select Drag-Prompt Inputs)
         if (window.isInteractiveMode) {
             if (typeof window.positiveExampleBboxes !== 'undefined' && window.positiveExampleBboxes.length > 0) {
-                this.ctx.strokeStyle = 'rgba(0, 255, 0, 0.9)';
+                this.ctx.strokeStyle = 'rgba(94, 148, 117, 0.9)';
                 this.ctx.lineWidth = 2 / this.zoom;
                 this.ctx.setLineDash([5 / this.zoom, 3 / this.zoom]);
                 window.positiveExampleBboxes.forEach(box => {

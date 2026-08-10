@@ -542,6 +542,7 @@ def pre_annotate_video_task(video_uuid, model_uuid, options):
             ann_data = AnnotationData()
             has_masks = False
 
+            has_probs = False
             if is_pt:
                 results = yolo_model(frame_rgb, conf=confidence_threshold, verbose=False)
                 if results and len(results) > 0:
@@ -549,11 +550,21 @@ def pre_annotate_video_task(video_uuid, model_uuid, options):
                     boxes_data = getattr(res0, 'boxes', None)
                     masks_data = getattr(res0, 'masks', None)
                     kpts_data = getattr(res0, 'keypoints', None)
+                    probs_data = getattr(res0, 'probs', None)
 
                     has_masks = masks_data is not None and getattr(masks_data, 'xy', None) is not None and len(masks_data.xy) > 0
                     has_kpts = kpts_data is not None and getattr(kpts_data, 'xy', None) is not None and len(kpts_data.xy) > 0
+                    has_probs = probs_data is not None and getattr(probs_data, 'top1', None) is not None
 
-                    if boxes_data is not None and len(boxes_data) > 0:
+                    if has_probs and (boxes_data is None or len(boxes_data) == 0):
+                        # YOLO Classification (.pt) Model
+                        top1_idx = int(probs_data.top1)
+                        top1_conf = float(probs_data.top1conf)
+                        if top1_conf >= confidence_threshold:
+                            c_name = labels[top1_idx] if top1_idx < len(labels) else f"class_{top1_idx}"
+                            if c_name not in ann_data.classifications:
+                                ann_data.classifications.append(c_name)
+                    elif boxes_data is not None and len(boxes_data) > 0:
                         xyxy = boxes_data.xyxy.cpu().numpy()
                         conf = boxes_data.conf.cpu().numpy()
                         cls = boxes_data.cls.cpu().numpy()
@@ -674,7 +685,7 @@ def pre_annotate_video_task(video_uuid, model_uuid, options):
                                 points=poly_pts
                             ))
 
-            if annotation_type == 'segmentation' or has_masks:
+            if annotation_type in ['classification', 'segmentation', 'pose'] or has_masks or has_kpts or has_probs or bool(ann_data.classifications):
                 json_str = ann_data.to_json()
                 database.save_frame_annotations(video_uuid, frame_info['frame_number'], json_str)
             else:

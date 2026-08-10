@@ -2,65 +2,62 @@
 
 {% block head %}
 <style>
-    body { background: #000; overflow-y: auto; }
+    body { background: var(--bg-body); overflow-y: auto; }
     .setup-container {
-        max-width: 1000px;
+        max-width: 960px;
         margin: 40px auto;
         color: var(--text-main);
     }
     .hardware-card {
-        background: rgba(0, 240, 255, 0.05);
-        border: 1px solid var(--color-primary);
+        background: var(--bg-surface);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-base);
         padding: 20px;
         margin-bottom: 25px;
         font-family: 'JetBrains Mono', monospace;
-        box-shadow: 0 0 15px rgba(0, 240, 255, 0.1);
     }
     .spec-item {
-        border-bottom: 1px dashed rgba(255,255,255,0.1);
+        border-bottom: 1px dashed var(--border-color);
         padding: 8px 0;
         display: flex;
         justify-content: space-between;
     }
-    .spec-value { color: var(--color-primary); font-weight: bold; }
+    .spec-value { color: var(--text-main); font-weight: bold; }
 
     .config-section {
-        background: rgba(10, 11, 16, 0.8);
+        background: var(--bg-surface);
         border: 1px solid var(--border-color);
         margin-bottom: 20px;
-        border-radius: 4px;
+        border-radius: var(--radius-base);
     }
     .config-header {
-        padding: 15px 20px;
-        font-family: 'Orbitron', sans-serif;
-        font-weight: bold;
-        letter-spacing: 0.1em;
-        background: rgba(255,255,255,0.02);
+        padding: 12px 20px;
+        font-family: 'Inter', sans-serif;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        background: var(--bg-surface-secondary);
         border-bottom: 1px solid var(--border-color);
+        font-size: 0.9rem;
     }
     .config-body { padding: 20px; }
 
     .over-limit-warning {
         color: var(--color-danger);
         font-size: 0.8rem;
-        font-family: 'JetBrains Mono';
+        font-family: 'JetBrains Mono', monospace;
         margin-top: 5px;
         display: none;
-        text-shadow: 0 0 5px var(--color-danger);
-        animation: pulse-danger 2s infinite;
     }
-    @keyframes pulse-danger { 0% { opacity: 0.7; } 50% { opacity: 1; } 100% { opacity: 0.7; } }
 
-    /* 调整滑动条样式以适应深色背景 */
     input[type=range].custom-range::-webkit-slider-thumb { background: var(--color-primary); }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container setup-container fade-in">
-    <div class="text-center mb-5">
-        <h2 class="font-weight-bold text-uppercase" style="font-family: 'Orbitron', sans-serif; letter-spacing: 0.1em; color: var(--color-primary);">ZERO 2 YOLO YARD INITIALIZATION</h2>
-        <p class="text-muted font-monospace small">ENVIRONMENT_DETECTION_AND_FULL_CONFIGURATION_PROTOCOL</p>
+    <div class="text-center mb-4">
+        <h2 class="font-weight-bold" style="font-family: 'Inter', sans-serif; letter-spacing: -0.02em; color: var(--text-main);">Zero2YoloYard Initialization</h2>
+        <p class="text-muted font-monospace small">Environment detection & system configuration</p>
     </div>
 
     <div class="hardware-card">
@@ -203,8 +200,8 @@
         </div>
 
         <div class="text-right mt-4 mb-5 pb-5">
-            <button type="submit" id="btn-complete-setup" class="btn btn-primary btn-lg font-weight-bold px-5 tracking-wider" style="font-family: 'Orbitron'; box-shadow: 0 0 15px rgba(0,240,255,0.4);">
-                SAVE & BOOT YARD CORE <i class="bi bi-rocket ml-2"></i>
+            <button type="submit" id="btn-complete-setup" class="btn btn-primary btn-lg font-weight-bold px-5">
+                Save & Boot Core <i class="bi bi-rocket ml-2"></i>
             </button>
         </div>
     </form>

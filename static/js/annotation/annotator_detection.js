@@ -60,25 +60,25 @@ class DetectionAnnotator {
             // 使用安全的标签文本，防止 null/undefined 传入 ctx.measureText 导致 TypeError
             const labelText = obj.label != null ? String(obj.label) : '(无类别)';
 
-            ctx.strokeStyle = isSelected ? '#00f0ff' : '#00ff88';
+            ctx.strokeStyle = isSelected ? '#ffffff' : '#e4e4e7';
             ctx.lineWidth = isSelected ? 3 : 2;
             ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
 
-            ctx.fillStyle = isSelected ? 'rgba(0, 240, 255, 0.2)' : 'rgba(0, 255, 136, 0.1)';
+            ctx.fillStyle = isSelected ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.05)';
             ctx.fillRect(x1, y1, x2 - x1, y2 - y1);
 
             // Label tag
             ctx.font = '12px "JetBrains Mono", monospace';
-            ctx.fillStyle = '#000';
+            ctx.fillStyle = isSelected ? '#ffffff' : '#e4e4e7';
             ctx.fillRect(x1, y1 - 20, ctx.measureText(labelText).width + 10, 20);
-            ctx.fillStyle = '#00ff88';
+            ctx.fillStyle = '#09090b';
             ctx.fillText(labelText, x1 + 5, y1 - 5);
         }
 
         // Draw active box
         if (this.currentBox) {
             const [x1, y1, x2, y2] = this.currentBox.bbox;
-            ctx.strokeStyle = '#ff0077';
+            ctx.strokeStyle = '#e4e4e7';
             ctx.lineWidth = 2;
             ctx.setLineDash([5, 5]);
             ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);

@@ -4,9 +4,14 @@
         <h6 class="font-weight-bold text-uppercase text-warning mb-0">
             <i class="bi bi-tags-fill mr-1"></i> Image Categories
         </h6>
-        <button id="btn-clear-classification" class="btn btn-xs btn-outline-danger" onclick="if(window.annotationCore && window.annotationCore.annotator) window.annotationCore.annotator.clearClassification();">
-            <i class="bi bi-x-circle"></i> Clear
-        </button>
+        <div>
+            <button id="btn-open-visual-clustering-side" class="btn btn-xs btn-outline-info mr-1" onclick="$('#btn-open-visual-clustering').click();">
+                <i class="bi bi-diagram-3"></i> Cluster
+            </button>
+            <button id="btn-clear-classification" class="btn btn-xs btn-outline-danger" onclick="if(window.annotationCore && window.annotationCore.annotator) window.annotationCore.annotator.clearClassification();">
+                <i class="bi bi-x-circle"></i> Clear
+            </button>
+        </div>
     </div>
 
     <div class="alert alert-dark p-2 small mb-3 border-secondary text-muted" style="font-size: 0.75rem;">

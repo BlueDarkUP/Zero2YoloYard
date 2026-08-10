@@ -194,7 +194,7 @@ class ClassificationAnnotator {
         const boxH = fontSize + paddingV * 2;
 
         // Draw Badge Background
-        ctx.fillStyle = isLabeled ? 'rgba(0, 255, 136, 0.9)' : 'rgba(255, 180, 0, 0.9)';
+        ctx.fillStyle = isLabeled ? 'rgba(94, 148, 117, 0.9)' : 'rgba(181, 150, 86, 0.9)';
         ctx.beginPath();
         ctx.roundRect ? ctx.roundRect(badgeX, badgeY, boxW, boxH, 6 / this.core.zoom) : ctx.rect(badgeX, badgeY, boxW, boxH);
         ctx.fill();

@@ -21,7 +21,7 @@
         flex-direction: column;
         position: relative;
         overflow: hidden;
-        background: radial-gradient(circle at center, rgba(0,240,255,0.02) 0%, transparent 70%);
+        background: var(--bg-body);
     }
     .ide-resizer {
         width: 6px;
@@ -48,7 +48,6 @@
     }
     .ide-resizer:hover::after, .ide-resizer.dragging::after {
         background-color: var(--color-primary);
-        box-shadow: 0 0 8px var(--color-primary-glow);
     }
     .ide-sidebar {
         width: 350px;
@@ -59,7 +58,7 @@
         flex-direction: column;
         overflow-y: auto;
         padding: 1.2rem;
-        box-shadow: -5px 0 20px rgba(0,0,0,0.5);
+        border-left: 1px solid var(--border-color);
         gap: 1.2rem;
         flex-shrink: 0;
     }
@@ -73,7 +72,6 @@
         justify-content: space-between;
         font-family: 'JetBrains Mono', monospace;
         z-index: 50;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.5);
     }
     .ide-canvas-wrapper {
         flex: 1;
@@ -82,44 +80,23 @@
         display: flex;
         justify-content: center;
         align-items: center;
-        background-image:
-            linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
-        background-size: 40px 40px;
-        background-position: center center;
+        background-color: var(--bg-body);
     }
     #canvas-container {
         position: relative;
         cursor: crosshair;
         display: inline-block;
-        box-shadow: 0 0 0 1px var(--border-color), 0 10px 40px rgba(0,0,0,0.8);
+        border: 1px solid var(--border-color);
         background: #000;
         margin: 20px;
-        transition: box-shadow 0.3s ease;
+        border-radius: var(--radius-sm);
+        overflow: hidden;
     }
-    #canvas-container::before, #canvas-container::after {
-        content: "";
-        position: absolute;
-        width: 20px;
-        height: 20px;
-        border: 2px solid var(--color-primary);
-        transition: all 0.3s ease;
-        pointer-events: none;
-        z-index: 20;
-        box-shadow: 0 0 8px var(--color-primary-glow);
-    }
-    #canvas-container::before {
-        top: -1px; left: -1px;
-        border-right: none; border-bottom: none;
-    }
-    #canvas-container::after {
-        bottom: -1px; right: -1px;
-        border-left: none; border-top: none;
-    }
+    #canvas-container::before, #canvas-container::after { display: none !important; }
     #canvas-container.sam-active,
     #canvas-container.lam-active {
         cursor: crosshair !important;
-        box-shadow: 0 0 0 1px var(--color-primary), 0 0 30px rgba(0, 240, 255, 0.15);
+        border-color: var(--text-main);
     }
     #canvas-container.sam-loading {
         cursor: wait !important;
@@ -147,19 +124,17 @@
     input[type=range].custom-range:focus { outline: none; }
     input[type=range].custom-range::-webkit-slider-thumb {
         -webkit-appearance: none;
-        height: 20px;
+        height: 16px;
         width: 8px;
         background: var(--color-primary);
         cursor: pointer;
-        margin-top: -8px;
-        border: 1px solid #000;
-        box-shadow: 0 0 10px var(--color-primary-glow);
+        margin-top: -6px;
+        border: 1px solid var(--bg-body);
         border-radius: 2px;
-        transition: background 0.2s, transform 0.1s;
+        transition: background 0.2s;
     }
     input[type=range].custom-range::-webkit-slider-thumb:hover {
         background: #fff;
-        transform: scale(1.1);
     }
     input[type=range].custom-range::-webkit-slider-runnable-track {
         width: 100%;
@@ -179,33 +154,31 @@
         font-family: 'JetBrains Mono', monospace;
         font-size: 0.7rem;
         color: var(--text-secondary);
-        background: rgba(255,255,255,0.03);
+        background: var(--bg-surface-secondary);
         padding: 4px 10px;
         border: 1px solid var(--border-color);
         text-transform: uppercase;
-        letter-spacing: 0.05em;
+        letter-spacing: 0.03em;
         transition: all 0.2s;
-        border-radius: 2px;
+        border-radius: var(--radius-sm);
     }
     .shortcut-key:hover {
-        color: var(--color-primary);
-        border-color: var(--color-primary);
-        background: rgba(0, 240, 255, 0.05);
+        color: var(--text-main);
+        border-color: rgba(255, 255, 255, 0.3);
     }
     .tool-section-title {
-        font-family: 'Orbitron', sans-serif;
-        font-size: 0.85rem;
-        font-weight: 700;
+        font-family: 'Inter', sans-serif;
+        font-size: 0.8rem;
+        font-weight: 600;
         text-transform: uppercase;
-        letter-spacing: 0.1em;
-        color: var(--color-primary);
+        letter-spacing: 0.04em;
+        color: var(--text-main);
         border-bottom: 1px solid var(--border-color);
-        padding-bottom: 8px;
+        padding-bottom: 6px;
         margin-bottom: 5px;
         display: flex;
         justify-content: space-between;
         align-items: center;
-        text-shadow: 0 0 8px rgba(0,240,255,0.3);
     }
     #class-list .list-group-item,
     #bbox-list .list-group-item {
@@ -237,13 +210,12 @@
     }
     #class-list .list-group-item.active,
     #bbox-list .list-group-item.selected {
-        background: rgba(0, 240, 255, 0.08);
-        border-top: 1px solid var(--color-primary-dim);
-        border-bottom: 1px solid var(--color-primary-dim);
-        border-left: 3px solid var(--color-primary);
+        background: var(--bg-surface-secondary);
+        border-top: 1px solid var(--border-color);
+        border-bottom: 1px solid var(--border-color);
+        border-left: 3px solid var(--text-main);
         color: var(--text-main);
         transform: translateX(4px);
-        box-shadow: inset 20px 0 30px -20px var(--color-primary-dim);
     }
     .delete-class-btn {
         opacity: 0.3;
@@ -254,7 +226,7 @@
     .class-count-badge {
         font-size: 0.65rem;
         padding: 2px 6px;
-        background: rgba(255,255,255,0.1);
+        background: rgba(255,255,255,0.08);
         border-radius: 10px;
         margin-left: auto;
     }
@@ -262,48 +234,39 @@
         display: inline-block;
         width: 12px;
         height: 12px;
-        margin-right: 12px;
-        border: 1px solid rgba(255,255,255,0.8);
+        margin-right: 10px;
+        border: 1px solid rgba(255,255,255,0.6);
         border-radius: 2px;
-        box-shadow: 0 0 5px currentColor;
     }
     .btn {
-        border-radius: 2px !important;
+        border-radius: var(--radius-sm) !important;
         transition: all 0.2s ease;
     }
     .btn:hover {
-        box-shadow: 0 0 10px rgba(255,255,255,0.1);
         transform: translateY(-1px);
     }
-    .btn-outline-primary:hover {
-        box-shadow: 0 0 15px var(--color-primary-glow);
-    }
-    
-    /* 3D Gaming Keycap Badge */
+
     .keybind-btn {
         display: inline-flex;
         align-items: center;
         justify-content: center;
         font-family: 'JetBrains Mono', monospace;
-        font-weight: 700;
+        font-weight: 600;
         font-size: 0.72rem;
         padding: 2px 7px;
-        min-width: 32px;
+        min-width: 30px;
         border-radius: 4px;
-        background: linear-gradient(180deg, #2b3040 0%, #171922 100%);
-        border: 1px solid #4a5168;
-        color: #00f0ff;
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.15), 0 2px 4px rgba(0,0,0,0.6);
-        transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        background: var(--bg-surface-secondary);
+        border: 1px solid var(--border-color);
+        color: var(--text-main);
+        transition: all 0.2s ease;
         cursor: pointer;
         user-select: none;
     }
     .keybind-btn:hover {
-        background: linear-gradient(180deg, #00f0ff 0%, #00a8ff 100%);
-        color: #000;
-        border-color: #00f0ff;
-        box-shadow: 0 0 12px rgba(0, 240, 255, 0.6);
-        transform: translateY(-1px) scale(1.08);
+        background: rgba(255, 255, 255, 0.12);
+        color: #ffffff;
+        border-color: rgba(255, 255, 255, 0.3);
     }
     .keybind-btn.empty-key {
         color: var(--text-muted);
@@ -311,32 +274,31 @@
         background: transparent;
     }
     .keybind-btn.empty-key:hover {
-        color: #fff;
-        background: rgba(0,240,255,0.2);
+        color: var(--text-main);
+        background: var(--bg-hover);
     }
 
-    /* Glassmorphism Keybind Modal */
     .keybind-modal-backdrop {
         position: fixed;
         top: 0; left: 0; right: 0; bottom: 0;
         z-index: 1050;
-        background: rgba(8, 10, 16, 0.75);
-        backdrop-filter: blur(10px);
+        background: rgba(9, 9, 11, 0.8);
+        backdrop-filter: blur(8px);
         display: flex;
         align-items: center;
         justify-content: center;
     }
     .keybind-modal-card {
-        width: 380px;
-        background: linear-gradient(145deg, rgba(25, 28, 42, 0.95), rgba(14, 16, 24, 0.98));
-        border: 1px solid rgba(0, 240, 255, 0.4);
-        border-radius: 12px;
-        box-shadow: 0 20px 50px rgba(0,0,0,0.8), 0 0 30px rgba(0, 240, 255, 0.25);
-        padding: 24px;
+        width: 360px;
+        background: var(--bg-surface);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-base);
+        box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+        padding: 20px;
         color: var(--text-main);
         text-align: center;
-        transform: scale(0.95);
-        animation: popIn 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        transform: scale(0.96);
+        animation: popIn 0.2s ease-out forwards;
     }
     @keyframes popIn {
         to { transform: scale(1); }
@@ -344,87 +306,78 @@
     .keybind-modal-header {
         display: flex;
         align-items: center;
-        font-family: 'Orbitron', sans-serif;
+        font-family: 'Inter', sans-serif;
         font-size: 0.85rem;
-        letter-spacing: 0.05em;
-        border-bottom: 1px solid rgba(255,255,255,0.08);
-        padding-bottom: 12px;
-        margin-bottom: 18px;
+        font-weight: 600;
+        border-bottom: 1px solid var(--border-color);
+        padding-bottom: 10px;
+        margin-bottom: 16px;
     }
     .target-class-pill {
         display: inline-block;
-        padding: 6px 16px;
-        border-radius: 20px;
+        padding: 4px 14px;
+        border-radius: 16px;
         font-family: 'JetBrains Mono', monospace;
-        font-weight: 700;
-        font-size: 1rem;
-        background: rgba(0, 240, 255, 0.1);
-        border: 1px solid rgba(0, 240, 255, 0.4);
-        color: #00f0ff;
-        box-shadow: 0 0 15px rgba(0, 240, 255, 0.2);
+        font-weight: 600;
+        font-size: 0.95rem;
+        background: var(--bg-surface-secondary);
+        border: 1px solid var(--border-color);
+        color: var(--text-main);
     }
     .key-press-box {
-        padding: 15px 0;
+        padding: 12px 0;
     }
     .key-display-ring {
-        width: 80px;
-        height: 80px;
+        width: 72px;
+        height: 72px;
         margin: 0 auto;
-        border-radius: 16px;
-        background: linear-gradient(180deg, #2b3044 0%, #171924 100%);
-        border: 2px solid #00f0ff;
-        box-shadow: 0 0 20px rgba(0, 240, 255, 0.4), inset 0 2px 4px rgba(255,255,255,0.2);
+        border-radius: 12px;
+        background: var(--bg-surface-secondary);
+        border: 1px solid var(--border-active);
         display: flex;
         align-items: center;
         justify-content: center;
         font-family: 'JetBrains Mono', monospace;
-        font-size: 2.2rem;
-        font-weight: 800;
-        color: #ffffff;
-        animation: keyPulse 1.5s infinite ease-in-out;
-    }
-    @keyframes keyPulse {
-        0%, 100% { box-shadow: 0 0 15px rgba(0, 240, 255, 0.4); transform: scale(1); }
-        50% { box-shadow: 0 0 30px rgba(0, 240, 255, 0.8); transform: scale(1.05); }
+        font-size: 2rem;
+        font-weight: 700;
+        color: var(--text-main);
     }
     .key-press-hint {
         font-size: 0.8rem;
         color: var(--text-muted);
     }
     .key-press-hint kbd {
-        background: rgba(255,255,255,0.1);
-        border: 1px solid rgba(255,255,255,0.2);
+        background: var(--bg-surface-secondary);
+        border: 1px solid var(--border-color);
         border-radius: 4px;
         padding: 2px 6px;
-        color: #00f0ff;
+        color: var(--text-main);
     }
     .keybind-modal-footer {
         display: flex;
         justify-content: flex-end;
-        border-top: 1px solid rgba(255,255,255,0.08);
-        padding-top: 14px;
-        margin-top: 14px;
+        border-top: 1px solid var(--border-color);
+        padding-top: 12px;
+        margin-top: 12px;
     }
     .btn-xs {
         padding: 0.2rem 0.5rem;
         font-size: 0.7rem;
         font-family: 'JetBrains Mono', monospace;
-        text-transform: uppercase;
     }
     .tool-input {
-        background: rgba(0,0,0,0.4);
+        background: var(--bg-input);
         border: 1px solid var(--border-color);
         color: var(--text-main);
-        border-radius: 2px;
-        font-family: 'JetBrains Mono';
+        border-radius: var(--radius-sm);
+        font-family: 'JetBrains Mono', monospace;
         font-size: 0.85rem;
         transition: all 0.2s;
     }
     .tool-input:focus {
-        background: rgba(0,0,0,0.6);
-        border-color: var(--color-primary);
-        color: #fff;
-        box-shadow: 0 0 8px var(--color-primary-glow);
+        background: var(--bg-input);
+        border-color: var(--border-active);
+        color: var(--text-main);
     }
     #dynamic-canvas.cursor-move { cursor: move; }
     #dynamic-canvas.cursor-nwse-resize { cursor: nwse-resize; }
@@ -433,49 +386,43 @@
     #dynamic-canvas.cursor-ew-resize { cursor: ew-resize; }
     .bbox-controls { opacity: 0; transition: opacity 0.2s; }
     #bbox-list .list-group-item:hover .bbox-controls { opacity: 1; }
-    @keyframes pulse-warning {
-        0% { box-shadow: 0 0 10px rgba(255, 208, 0, 0.2); }
-        50% { box-shadow: 0 0 25px rgba(255, 208, 0, 0.5); }
-        100% { box-shadow: 0 0 10px rgba(255, 208, 0, 0.2); }
-    }
+
     #interpolation-banner {
-        background: rgba(20, 15, 0, 0.95);
+        background: rgba(181, 150, 86, 0.12);
         border: 1px solid var(--color-warning);
         color: var(--color-warning);
-        font-family: 'JetBrains Mono';
-        padding: 12px 20px;
+        font-family: 'JetBrains Mono', monospace;
+        padding: 10px 16px;
         backdrop-filter: blur(5px);
-        animation: pulse-warning 2s infinite;
-        border-radius: 4px;
+        border-radius: var(--radius-sm);
     }
     #interactive-segment-controls,
     #suggestion-review-controls,
     #track-controls,
     #sam3-true-lam-controls {
-        background: rgba(0, 0, 0, 0.3);
-        border: 1px dashed var(--border-color);
-        padding: 15px;
+        background: var(--bg-surface-secondary);
+        border: 1px solid var(--border-color);
+        padding: 12px;
         margin-top: 10px;
-        border-radius: 4px;
+        border-radius: var(--radius-sm);
     }
     .target-frame-box {
-        background: rgba(0, 0, 0, 0.4);
+        background: var(--bg-input);
         border: 1px solid var(--border-color);
-        border-radius: 2px;
+        border-radius: var(--radius-sm);
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 5px 10px;
+        padding: 4px 8px;
         transition: all 0.2s ease;
     }
     .target-frame-box:focus-within {
-        border-color: #28a745;
-        box-shadow: 0 0 10px rgba(40, 167, 69, 0.25);
+        border-color: var(--color-success);
     }
     .target-frame-input {
         background: transparent;
         border: none;
-        color: #28a745;
+        color: var(--color-success);
         font-family: 'JetBrains Mono', monospace;
         font-size: 0.85rem;
         text-align: right;
@@ -499,52 +446,42 @@
         padding: 0 0 0 8px;
         border-left: 1px solid var(--border-color);
         margin-left: 8px;
-        transition: color 0.2s, transform 0.2s;
+        transition: color 0.2s;
         display: flex;
         align-items: center;
         outline: none;
     }
     .target-frame-btn:hover {
-        color: #28a745;
-        transform: scale(1.1);
+        color: var(--color-success);
     }
     .target-frame-btn:focus { outline: none; }
     .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
     .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-    .custom-scrollbar::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; transition: background 0.3s; }
-    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--color-primary); }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.3); }
     .info-trigger {
-        transition: opacity 0.2s, box-shadow 0.2s, text-shadow 0.2s;
-    }
-    .info-trigger:hover:not(:disabled) {
-        box-shadow: 0 0 15px rgba(0, 240, 255, 0.4);
+        transition: opacity 0.2s;
     }
     #sys-manual-panel {
         position: absolute;
         width: 360px;
-        background: rgba(10, 11, 16, 0.98);
-        border: 1px solid var(--color-primary);
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8), 0 0 15px rgba(0, 240, 255, 0.15);
+        background: var(--bg-surface);
+        border: 1px solid var(--border-color);
+        box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6);
         z-index: 99999;
         pointer-events: none;
         display: none;
-        border-radius: 4px;
+        border-radius: var(--radius-base);
         overflow: hidden;
     }
-    #sys-manual-panel::before {
-        content: "";
-        display: block;
-        height: 4px;
-        background: repeating-linear-gradient(90deg, var(--color-primary) 0, var(--color-primary) 10px, transparent 10px, transparent 15px);
-    }
     .manual-header {
-        background: rgba(255,255,255,0.05);
+        background: var(--bg-surface-secondary);
         padding: 10px 15px;
         border-bottom: 1px solid var(--border-color);
-        font-family: 'Orbitron', sans-serif;
+        font-family: 'Inter', sans-serif;
+        font-weight: 600;
         font-size: 0.85rem;
-        color: var(--color-primary);
-        letter-spacing: 0.05em;
+        color: var(--text-main);
     }
     .manual-body { padding: 15px; }
     .manual-section { margin-bottom: 12px; }
@@ -554,14 +491,14 @@
         font-size: 0.65rem;
         color: var(--text-muted);
         text-transform: uppercase;
-        letter-spacing: 0.1em;
+        letter-spacing: 0.05em;
         margin-bottom: 4px;
         display: block;
     }
     .manual-text {
         font-family: 'Inter', sans-serif;
         font-size: 0.8rem;
-        color: #e0e0e0;
+        color: var(--text-body);
         line-height: 1.5;
     }
     .manual-text.highlight-tune { color: var(--color-info); }
@@ -574,33 +511,36 @@
     <div class="ide-canvas-area">
         <div class="ide-toolbar">
             <div class="d-flex align-items-center" style="min-width: 0;">
-                <a href="/" class="btn btn-sm btn-outline-secondary mr-3 text-uppercase font-weight-bold" style="letter-spacing: 0.05em; border-color: transparent;">
+                <a href="/" class="btn btn-sm btn-outline-secondary mr-3 font-weight-medium" style="border-color: transparent;">
                     <i class="bi bi-chevron-left"></i> Return
                 </a>
                 <div class="pl-3 border-left border-secondary" style="overflow: hidden; white-space: nowrap;">
-                    <h6 class="mb-0 font-weight-bold text-uppercase text-white" style="font-family: 'Orbitron'; letter-spacing: 0.05em; text-shadow: 0 0 5px rgba(255,255,255,0.3);">{{ video_entity.description }}</h6>
+                    <h6 class="mb-0 font-weight-bold text-white" style="font-family: 'Inter', sans-serif;">{{ video_entity.description }}</h6>
                     <small class="text-muted text-monospace">TASK: <span class="text-primary">{{ task_entity.assigned_to }}</span> // FRAMES: {{ task_entity.start_frame }}-{{ task_entity.end_frame }}</small>
                 </div>
             </div>
-            <div class="d-flex align-items-center border border-secondary px-3 py-1 mx-2" style="background: rgba(0,0,0,0.6); border-radius: 20px;">
+            <div class="d-flex align-items-center border border-secondary px-3 py-1 mx-2" style="background: var(--bg-input); border-radius: var(--radius-sm);">
                 <button class="btn btn-sm btn-link text-secondary p-0 mr-2" onclick="document.getElementById('frame-slider').stepDown(); document.getElementById('frame-slider').dispatchEvent(new Event('input'));" style="transition: color 0.2s;"><i class="bi bi-caret-left-fill"></i></button>
-                <span class="font-weight-bold mx-2 text-monospace text-primary" style="min-width: 100px; text-align: center; font-size: 1.1em; text-shadow: 0 0 8px var(--color-primary-glow);">
+                <span class="font-weight-bold mx-2 text-monospace text-main" style="min-width: 100px; text-align: center; font-size: 1em;">
                     <span id="frame-number-display" class="text-white">{{ task_entity.start_frame }}</span> <span class="text-muted">/</span> {{ task_entity.end_frame }}
                 </span>
                 <button class="btn btn-sm btn-link text-secondary p-0 ml-2" onclick="document.getElementById('frame-slider').stepUp(); document.getElementById('frame-slider').dispatchEvent(new Event('input'));" style="transition: color 0.2s;"><i class="bi bi-caret-right-fill"></i></button>
             </div>
             <div class="d-flex align-items-center">
-                <button id="save-bboxes" class="btn btn-sm btn-primary font-weight-medium px-4" style="box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+                <button id="save-bboxes" class="btn btn-sm btn-primary font-weight-medium px-4">
                     Save Changes
                 </button>
-                <button id="btn-toggle-speedrun" class="btn btn-sm btn-warning text-dark font-weight-bold ml-2 px-3 font-monospace" style="box-shadow: 0 2px 4px rgba(0,0,0,0.2);" title="Toggle Speedrun Auto-Advance Mode (Global Setting)">
+                <button id="btn-toggle-speedrun" class="btn btn-sm btn-outline-warning font-weight-bold ml-2 px-3 font-monospace" title="Toggle Speedrun Auto-Advance Mode (Global Setting)">
                     <i class="bi bi-lightning-charge-fill"></i> <span id="speedrun-status-text">SPEEDRUN: ON</span>
                 </button>
                 {% if video_entity.annotation_type == 'classification' %}
-                <button id="btn-open-clip-zeroshot" class="btn btn-sm btn-primary text-white font-weight-bold ml-2 px-3 font-monospace" style="box-shadow: 0 2px 4px rgba(0,0,0,0.2);" title="Run CLIP Zero-Shot Pre-Annotation">
+                <button id="btn-open-clip-zeroshot" class="btn btn-sm btn-outline-primary font-weight-bold ml-2 px-3 font-monospace" title="Run CLIP Zero-Shot Pre-Annotation">
                     <i class="bi bi-robot"></i> CLIP ZERO-SHOT
                 </button>
-                <button id="btn-toggle-ambiguous-filter" class="btn btn-sm btn-outline-warning font-weight-bold ml-2 px-3 font-monospace" style="box-shadow: 0 2px 4px rgba(0,0,0,0.2);" title="Filter and review ambiguous frames">
+                <button id="btn-open-visual-clustering" class="btn btn-sm btn-outline-info font-weight-bold ml-2 px-3 font-monospace" title="K-Means Unsupervised Feature Clustering">
+                    <i class="bi bi-diagram-3"></i> VISUAL CLUSTERING
+                </button>
+                <button id="btn-toggle-ambiguous-filter" class="btn btn-sm btn-outline-warning font-weight-bold ml-2 px-3 font-monospace" title="Filter and review ambiguous frames">
                     <i class="bi bi-exclamation-diamond-fill"></i> DISAMBIGUATION (<span id="ambiguous-count-badge">0</span>)
                 </button>
                 {% endif %}
@@ -720,7 +660,7 @@
 </template>
 
 <template id="lam-suggestion-popup-template">
-    <div id="lam-suggestion-popup" class="card shadow-lg border-primary" style="position: absolute; z-index: 1000; width: 220px; background: rgba(0,0,0,0.95);">
+    <div id="lam-suggestion-popup" class="card shadow-lg border-secondary" style="position: absolute; z-index: 1000; width: 220px; background: var(--bg-surface);">
         <div class="list-group list-group-flush"></div>
     </div>
 </template>
@@ -765,7 +705,7 @@
 <!-- CLIP Zero-Shot Pre-Annotation Modal for labelVideo.html -->
 <div class="modal fade" id="labelVideoClipModal" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
-        <div class="modal-content bg-dark text-white border-primary" style="box-shadow: 0 0 25px rgba(0, 123, 255, 0.3);">
+        <div class="modal-content bg-dark text-white border-secondary" style="box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6);">
             <div class="modal-header border-secondary bg-black">
                 <h5 class="modal-title font-monospace text-primary font-weight-bold"><i class="bi bi-robot mr-2"></i> CLIP ZERO-SHOT AUTOMATIC PRE-ANNOTATION</h5>
                 <button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button>
@@ -819,6 +759,63 @@
                 <button type="button" id="clip-run-zeroshot-btn" class="btn btn-sm btn-primary font-monospace font-weight-bold px-4">
                     <i class="bi bi-magic mr-1"></i> RUN ZERO-SHOT PRE-ANNOTATION
                 </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Visual Feature Clustering Modal for Classification Tasks -->
+<div class="modal fade" id="labelVideoClusterModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered" role="document">
+        <div class="modal-content bg-dark text-white border-secondary" style="box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6);">
+            <div class="modal-header border-secondary bg-black">
+                <h5 class="modal-title font-monospace text-info font-weight-bold">
+                    <i class="bi bi-diagram-3-fill mr-2"></i> VISUAL FEATURE CLUSTERING (K-MEANS)
+                </h5>
+                <button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <div class="modal-body bg-dark">
+                <div class="form-row align-items-center mb-3">
+                    <div class="col-md-4">
+                        <label class="font-monospace small text-muted font-weight-bold mb-1">EMBEDDING MODEL:</label>
+                        <select id="lv-cluster-model-select" class="form-control form-control-sm bg-black text-info border-secondary font-monospace">
+                            <option value="clip-vit-base-patch32" selected>clip-vit-base-patch32 (Fastest)</option>
+                            <option value="clip-vit-base-patch16">clip-vit-base-patch16 (Balanced)</option>
+                            <option value="clip-vit-large-patch14">clip-vit-large-patch14 (High Precision)</option>
+                            <option value="hsv-color-fallback">HSV Color Features (Histogram)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="font-monospace small text-muted font-weight-bold mb-1">CLUSTERS (K = <span id="lv-cluster-k-val">6</span>):</label>
+                        <input type="range" class="custom-range" id="lv-cluster-num-input" min="2" max="20" value="6" oninput="$('#lv-cluster-k-val').text(this.value)">
+                    </div>
+                    <div class="col-md-3">
+                        <div class="custom-control custom-checkbox pt-3">
+                            <input type="checkbox" class="custom-control-input" id="lv-cluster-unlabeled-only" checked>
+                            <label class="custom-control-label small font-monospace text-warning" for="lv-cluster-unlabeled-only">UNLABELED FRAMES ONLY</label>
+                        </div>
+                    </div>
+                    <div class="col-md-2 text-right pt-3">
+                        <button type="button" id="lv-run-cluster-btn" class="btn btn-sm btn-info font-monospace font-weight-bold btn-block">
+                            <i class="bi bi-play-fill mr-1"></i> RUN CLUSTER
+                        </button>
+                    </div>
+                </div>
+
+                <div id="lv-cluster-loader" class="text-center my-4" style="display: none;">
+                    <div class="spinner-border text-info" role="status"></div>
+                    <p class="mt-2 text-info font-monospace small">Extracting CLIP embeddings & clustering image vectors...</p>
+                </div>
+
+                <div id="lv-cluster-results-container" class="custom-scrollbar p-2" style="max-height: 60vh; overflow-y: auto;">
+                    <div class="text-center text-muted p-5 font-monospace">
+                        <i class="bi bi-grid-3x3-gap-fill mb-2" style="font-size: 2.5rem; opacity: 0.3;"></i>
+                        <p>Select number of clusters (K) and click <strong>RUN CLUSTER</strong> to group similar unannotated images automatically.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-secondary bg-black">
+                <button type="button" class="btn btn-sm btn-secondary font-monospace" data-dismiss="modal">CLOSE</button>
             </div>
         </div>
     </div>
@@ -1021,20 +1018,7 @@
                 container.append(item);
             });
 
-            $.get('/api/getClipModels', function(res) {
-                if (res.success && res.models && res.models.length > 0) {
-                    const sel = $('#clip-model-select').empty();
-                    const selLv = $('#lv-cluster-model-select').empty();
-                    res.models.forEach(m => {
-                        sel.append(`<option value="${m}">${m}</option>`);
-                        selLv.append(`<option value="${m}">${m}</option>`);
-                    });
-                    if (res.active_model) {
-                        sel.val(res.active_model);
-                        selLv.val(res.active_model);
-                    }
-                }
-            });
+            loadClipModels();
         }
 
         $('#clip-add-class-btn').on('click', function() {
@@ -1121,6 +1105,185 @@
             });
         });
 
+        function loadClipModels() {
+            $.get('/api/getClipModels', function(res) {
+                if (res.success && res.models && res.models.length > 0) {
+                    const sel = $('#clip-model-select');
+                    const selLv = $('#lv-cluster-model-select');
+                    const curClip = sel.val();
+                    const curLv = selLv.val();
+
+                    sel.empty();
+                    selLv.empty();
+
+                    res.models.forEach(m => {
+                        sel.append(`<option value="${m}">${m}</option>`);
+                        selLv.append(`<option value="${m}">${m}</option>`);
+                    });
+                    selLv.append(`<option value="hsv-color-fallback">HSV Color Features (Histogram)</option>`);
+
+                    if (res.active_model) {
+                        if (!curClip) sel.val(res.active_model);
+                        if (!curLv) selLv.val(res.active_model);
+                    }
+                    if (curClip) sel.val(curClip);
+                    if (curLv) selLv.val(curLv);
+                }
+            });
+        }
+
+        // Auto-fetch CLIP models on page load
+        loadClipModels();
+
+        // Visual Clustering Modal Trigger & Execution
+        $('#btn-open-visual-clustering').on('click', function() {
+            loadClipModels();
+            $('#labelVideoClusterModal').modal('show');
+        });
+
+        $('#lv-run-cluster-btn').on('click', function() {
+            const numClusters = parseInt($('#lv-cluster-num-input').val() || 6);
+            const modelName = $('#lv-cluster-model-select').val();
+            const unlabeledOnly = $('#lv-cluster-unlabeled-only').is(':checked');
+
+            $('#lv-cluster-loader').show();
+            $('#lv-cluster-results-container').empty();
+            $('#lv-run-cluster-btn').prop('disabled', true);
+
+            $.ajax({
+                url: '/api/clusterClassificationImages',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    video_uuids: ["{{ video_entity.video_uuid }}"],
+                    num_clusters: numClusters,
+                    unlabeled_only: unlabeledOnly,
+                    model_name: modelName
+                }),
+                success: function(res) {
+                    $('#lv-cluster-loader').hide();
+                    $('#lv-run-cluster-btn').prop('disabled', false);
+
+                    if (res.success && res.clusters && res.clusters.length > 0) {
+                        renderClusterResultsUI(res.clusters);
+                    } else {
+                        $('#lv-cluster-results-container').html(`<div class="alert alert-warning font-monospace small">${res.message || 'No cluster results.'}</div>`);
+                    }
+                },
+                error: function(xhr) {
+                    $('#lv-cluster-loader').hide();
+                    $('#lv-run-cluster-btn').prop('disabled', false);
+                    const msg = xhr.responseJSON ? xhr.responseJSON.message : "Visual clustering failed.";
+                    $('#lv-cluster-results-container').html(`<div class="alert alert-danger font-monospace small">${msg}</div>`);
+                }
+            });
+        });
+
+        function renderClusterResultsUI(clusters) {
+            const container = $('#lv-cluster-results-container').empty();
+            const definedClasses = window.availableClasses || [];
+
+            clusters.forEach((cluster, idx) => {
+                const clusterId = cluster.cluster_id;
+                const images = cluster.images || [];
+                
+                let classOptionsHtml = '<option value="" selected disabled>Select Tag...</option>';
+                definedClasses.forEach(cls => {
+                    classOptionsHtml += `<option value="${cls}">${cls}</option>`;
+                });
+
+                const clusterCard = $(`
+                    <div class="card bg-black border-secondary mb-3">
+                        <div class="card-header bg-dark border-secondary d-flex justify-content-between align-items-center py-2">
+                            <span class="font-monospace small font-weight-bold text-info">
+                                <i class="bi bi-collection-fill mr-1"></i> CLUSTER #${idx + 1} (${images.length} images)
+                            </span>
+                            <div class="d-flex align-items-center">
+                                <select class="form-control form-control-sm bg-black text-white border-secondary font-monospace mr-2 cluster-tag-select" style="width: 180px;" data-cluster="${clusterId}">
+                                    ${classOptionsHtml}
+                                </select>
+                                <button class="btn btn-sm btn-info font-monospace btn-apply-cluster-tag mr-2" data-cluster="${clusterId}">
+                                    <i class="bi bi-check2-all"></i> TAG ALL
+                                </button>
+                                <button class="btn btn-sm btn-outline-warning font-monospace btn-flag-cluster-ambiguous" data-cluster="${clusterId}" title="Flag cluster images as Ambiguous">
+                                    <i class="bi bi-exclamation-triangle"></i> FLAG AMBIGUOUS
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-body p-2">
+                            <div class="d-flex flex-wrap" style="gap: 8px;">
+                                ${images.map(img => `
+                                    <div class="cluster-img-item position-relative border border-secondary rounded overflow-hidden" style="width: 110px; height: 110px; cursor: pointer;" title="Frame #${img.frame_number}" data-frame="${img.frame_number}">
+                                        <img src="${img.original_url}" style="width: 100%; height: 100%; object-fit: cover;">
+                                        <span class="position-absolute badge badge-dark font-monospace" style="bottom: 4px; left: 4px; opacity: 0.85;">#${img.frame_number}</span>
+                                        ${img.tags && img.tags.length ? `<span class="position-absolute badge badge-info font-monospace" style="top: 4px; right: 4px;">${img.tags.join(',')}</span>` : ''}
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+                `);
+
+                container.append(clusterCard);
+                clusterCard.data('images', images);
+            });
+
+            $('.btn-apply-cluster-tag').on('click', function() {
+                const card = $(this).closest('.card');
+                const tagName = card.find('.cluster-tag-select').val();
+                const images = card.data('images');
+
+                if (!tagName) {
+                    window.sysAlert('Please select a class tag to apply to this cluster!', 'warning');
+                    return;
+                }
+
+                $.ajax({
+                    url: '/api/batchTagClusterImages',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        target_images: images,
+                        tag_name: tagName
+                    }),
+                    success: function(res) {
+                        if (res.success) {
+                            window.showToast(`Tagged ${res.updated_count} images as [${tagName}]!`);
+                            card.find('.cluster-img-item').addClass('border-success');
+                            if (typeof window.reloadClassifications === 'function') window.reloadClassifications();
+                        }
+                    }
+                });
+            });
+
+            $('.btn-flag-cluster-ambiguous').on('click', function() {
+                const card = $(this).closest('.card');
+                const images = card.data('images');
+
+                $.ajax({
+                    url: '/api/flagAmbiguousCluster',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        target_images: images,
+                        flag_status: true
+                    }),
+                    success: function(res) {
+                        if (res.success) {
+                            window.showToast(`Flagged cluster images as Ambiguous.`);
+                            card.find('.cluster-img-item').addClass('border-warning');
+                        }
+                    }
+                });
+            });
+
+            $('.cluster-img-item').on('click', function() {
+                const frameNum = $(this).data('frame');
+                $('#frame-slider').val(frameNum).trigger('input');
+                $('#labelVideoClusterModal').modal('hide');
+            });
+        }
+
         $('#btn-toggle-speedrun').on('click', function() {
             if (!window.currentSettings) window.currentSettings = {};
             window.currentSettings.speedrun_auto_next = !(window.currentSettings.speedrun_auto_next !== false);
@@ -1144,20 +1307,20 @@
         let currentEditingFrame = parseInt($('#frame-slider').val());
 
         const themeColors = {
-            selectionShadow: 'rgba(0, 240, 255, 0.8)',
-            handleFill: '#00F0FF',
-            handleStroke: '#FFFFFF',
-            labelText: '#000000',
-            labelBg: '#00F0FF',
-            crosshair: 'rgba(0, 240, 255, 0.9)',
-            interpolationGhost: 'rgba(255, 208, 0, 0.5)',
-            interpolationConfirm: '#00FF94',
-            suggestionStroke: 'rgba(46, 154, 255, 0.8)',
-            suggestionFill: 'rgba(46, 154, 255, 0.2)',
-            suggestionHoverStroke: '#FFD000',
-            suggestionHoverFill: 'rgba(255, 208, 0, 0.3)',
-            positiveExampleStroke: '#00FF94',
-            negativeSampleStroke: '#FF2A2A'
+            selectionShadow: 'rgba(255, 255, 255, 0.3)',
+            handleFill: '#f4f4f5',
+            handleStroke: '#09090b',
+            labelText: '#09090b',
+            labelBg: '#e4e4e7',
+            crosshair: 'rgba(244, 244, 245, 0.7)',
+            interpolationGhost: 'rgba(181, 150, 86, 0.5)',
+            interpolationConfirm: '#5e9475',
+            suggestionStroke: 'rgba(86, 117, 148, 0.8)',
+            suggestionFill: 'rgba(86, 117, 148, 0.2)',
+            suggestionHoverStroke: '#b59656',
+            suggestionHoverFill: 'rgba(181, 150, 86, 0.25)',
+            positiveExampleStroke: '#5e9475',
+            negativeSampleStroke: '#bd6363'
         };
 
         function getColor(key) { return themeColors[key]; }
@@ -1790,7 +1953,7 @@
             if (customClassColors && customClassColors[str]) return customClassColors[str];
             let hash = 0;
             for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
-            return `hsl(${(hash % 360 + 360) % 360}, 80%, 55%)`;
+            return `hsl(${(hash % 360 + 360) % 360}, 35%, 65%)`;
         }
 
         function showToast(message, duration = 3000) {
@@ -3157,7 +3320,7 @@
                     });
                     customKeybindings[cls] = newKey;
                     saveCustomKeybindings();
-                    $('#keybind-live-display').text(newKey.toUpperCase()).css('color', '#00f0ff');
+                    $('#keybind-live-display').text(newKey.toUpperCase()).css('color', 'var(--text-main)');
                     showToast(`Bound key [${newKey.toUpperCase()}] to [${cls}]`, 2000);
                     setTimeout(() => {
                         closeKeybindModal();

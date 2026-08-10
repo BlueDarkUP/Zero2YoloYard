@@ -13,14 +13,22 @@
         background: rgba(0,0,0,0.3);
     }
 
-    /* HUD Card Header Override */
+    /* Chart Containers */
+    .chart-container {
+        position: relative;
+        height: 350px;
+        width: 100%;
+        border: 1px solid var(--border-color);
+        background: var(--bg-surface);
+        border-radius: var(--radius-base);
+    }
+
     .card-header {
-        background: rgba(255, 255, 255, 0.05);
+        background: var(--bg-surface-secondary);
         border-bottom: 1px solid var(--border-color);
-        font-family: 'Orbitron', sans-serif;
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
-        color: var(--color-primary);
+        font-family: 'Inter', sans-serif;
+        font-weight: 600;
+        color: var(--text-main);
         font-size: 0.85rem;
         padding: 0.75rem 1rem;
     }
@@ -29,28 +37,29 @@
     #gallery {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-        gap: 2px; /* Tight gap for grid look */
+        gap: 6px;
         max-height: 80vh;
         overflow-y: auto;
-        padding: 2px;
+        padding: 6px;
         background-color: var(--bg-body);
         border: 1px solid var(--border-color);
+        border-radius: var(--radius-base);
     }
 
     #gallery .gallery-item {
         position: relative;
-        background-color: #000;
+        background-color: var(--bg-surface);
         border: 1px solid var(--border-color);
         overflow: hidden;
         display: flex;
         flex-direction: column;
-        transition: border-color 0.1s;
+        transition: border-color 0.15s;
+        border-radius: var(--radius-sm);
     }
 
     #gallery .gallery-item:hover {
-        border-color: var(--color-primary);
+        border-color: rgba(255, 255, 255, 0.25);
         z-index: 10;
-        box-shadow: 0 0 10px var(--color-primary-dim);
     }
 
     #gallery img {
@@ -59,15 +68,11 @@
         object-fit: cover;
         display: block;
         cursor: pointer;
-        filter: grayscale(20%); /* Slight desat for industrial look */
-        transition: filter 0.2s;
-    }
-    #gallery .gallery-item:hover img {
-        filter: grayscale(0%);
+        transition: opacity 0.2s;
     }
 
     #gallery .caption {
-        background: rgba(0,0,0,0.8);
+        background: var(--bg-surface-secondary);
         padding: 0.5rem;
         font-size: 0.7rem;
         text-align: left;
@@ -93,8 +98,8 @@
         justify-content: center;
         align-items: center;
         text-align: center;
-        color: var(--color-primary);
-        font-family: 'Orbitron';
+        color: var(--text-main);
+        font-family: 'Inter', sans-serif;
     }
 
     /* Augmentation Previewer */
@@ -106,12 +111,13 @@
     #aug-preview-gallery img {
         width: 100%;
         border: 1px solid var(--border-color);
-        opacity: 0.8;
+        opacity: 0.85;
         transition: opacity 0.2s;
+        border-radius: var(--radius-sm);
     }
     #aug-preview-gallery img:hover {
         opacity: 1;
-        border-color: var(--color-primary);
+        border-color: rgba(255, 255, 255, 0.3);
     }
 
     .aug-preview-source-img {
@@ -120,13 +126,13 @@
         object-fit: cover;
         border: 1px solid var(--border-color);
         cursor: pointer;
-        opacity: 0.5;
+        opacity: 0.6;
         transition: all 0.2s;
+        border-radius: var(--radius-sm);
     }
     .aug-preview-source-img.active, .aug-preview-source-img:hover {
         opacity: 1;
         border-color: var(--color-primary);
-        box-shadow: 0 0 5px var(--color-primary-glow);
     }
 
     #preview-aug-controls {
@@ -137,34 +143,41 @@
 
     /* Summary Alerts */
     .summary-alert {
-        background: rgba(0, 240, 255, 0.05);
-        border: 1px solid var(--color-primary);
+        background: var(--bg-surface-secondary);
+        border: 1px solid var(--border-color);
         color: var(--text-main);
-        font-family: 'JetBrains Mono';
+        font-family: 'JetBrains Mono', monospace;
         padding: 1rem;
         margin-bottom: 1rem;
+        border-radius: var(--radius-sm);
     }
 
     .warning-item {
-        background: rgba(255, 208, 0, 0.05);
+        background: rgba(181, 150, 86, 0.08);
         border-left: 3px solid var(--color-warning);
-        color: #ddd;
-        font-family: 'JetBrains Mono';
+        color: var(--text-body);
+        font-family: 'JetBrains Mono', monospace;
         padding: 0.5rem;
         margin-bottom: 0.25rem;
+        border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid content-wrapper fade-in">
-    <div class="d-flex justify-content-between align-items-end mb-4 pb-2 border-bottom border-secondary">
-         <div>
-            <h3 class="mb-0 font-weight-bold" style="font-family: 'Inter', sans-serif; color: var(--text-main); letter-spacing: -0.02em;">Dataset Analytics</h3>
-            <p class="mb-0 text-muted font-monospace small">> {{ dataset.description }} <span class="badge badge-primary font-monospace ml-2">{{ dataset.export_format }}</span></p>
+<div class="container-fluid px-4 px-lg-5 py-4 content-wrapper fade-in">
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center page-header pb-3 mb-4 mt-2 border-bottom" style="border-color: var(--border-color) !important;">
+        <div class="mb-2 mb-md-0">
+            <div class="d-flex align-items-center mb-1.5 flex-wrap" style="gap: 0.6rem;">
+                <h3 class="font-weight-bold mb-0" style="font-family: 'Inter', sans-serif; color: var(--text-main); letter-spacing: -0.02em; font-size: 1.6rem;">Dataset Analytics</h3>
+                <span class="badge badge-secondary font-monospace" style="font-size: 0.75rem; padding: 0.35em 0.65em;">{{ dataset.export_format }}</span>
+            </div>
+            <p class="text-muted font-monospace small mb-0" style="opacity: 0.85;">
+                <i class="bi bi-card-text mr-1"></i> {{ dataset.description if dataset.description else 'No description provided' }}
+            </p>
         </div>
-        <a href="/" class="btn btn-outline-secondary text-uppercase btn-sm rounded-0">
-            <i class="bi bi-chevron-left"></i> Return to Base
+        <a href="/" class="btn btn-sm btn-outline-secondary font-weight-medium px-3">
+            <i class="bi bi-chevron-left mr-1"></i> Return to Projects
         </a>
     </div>
 
@@ -355,42 +368,42 @@ $(document).ready(function() {
         annotator: null
     };
 
-    // --- Core Color Palette (Abyssal Telemetry) ---
+    // --- Core Color Palette (Low Saturation) ---
     function getColor(type) {
         switch (type) {
-            case 'primary': return 'rgba(0, 240, 255, 0.6)'; // Cyan
-            case 'success': return 'rgba(0, 255, 148, 0.6)'; // Green
-            case 'warning': return 'rgba(255, 208, 0, 0.6)'; // Yellow
-            case 'info':    return 'rgba(46, 154, 255, 0.6)'; // Blue
-            case 'danger':  return 'rgba(255, 42, 42, 0.6)'; // Red
-            case 'scatter': return 'rgba(0, 240, 255, 0.8)'; // Bright Cyan
-            default:        return '#888';
+            case 'primary': return 'rgba(228, 228, 231, 0.7)';
+            case 'success': return 'rgba(94, 148, 117, 0.7)';  // Muted Sage
+            case 'warning': return 'rgba(181, 150, 86, 0.7)';  // Muted Amber
+            case 'info':    return 'rgba(86, 117, 148, 0.7)';  // Muted Slate Blue
+            case 'danger':  return 'rgba(189, 99, 99, 0.7)';   // Muted Brick Red
+            case 'scatter': return 'rgba(228, 228, 231, 0.85)';
+            default:        return 'rgba(161, 161, 170, 0.6)';
         }
     }
 
-    // --- Chart Theme Options (Industrial Terminal) ---
+    // --- Chart Theme Options ---
     function getChartThemeOptions() {
-        const gridColor = 'rgba(255, 255, 255, 0.03)';
-        const textColor = '#888';
+        const gridColor = 'rgba(255, 255, 255, 0.05)';
+        const textColor = '#71717a';
 
         return {
             maintainAspectRatio: false,
             responsive: true,
             animation: {
-                duration: 800,
-                easing: 'linear'
+                duration: 600,
+                easing: 'easeOutQuart'
             },
             plugins: {
                 legend: { labels: { color: textColor, font: { family: 'JetBrains Mono', size: 10 } } },
                 tooltip: {
-                    backgroundColor: 'rgba(10, 11, 16, 0.95)',
-                    titleColor: 'var(--color-primary)',
-                    bodyColor: '#fff',
-                    borderColor: 'var(--color-primary)',
+                    backgroundColor: 'rgba(18, 18, 21, 0.95)',
+                    titleColor: '#f4f4f5',
+                    bodyColor: '#a1a1aa',
+                    borderColor: 'rgba(255, 255, 255, 0.1)',
                     borderWidth: 1,
-                    padding: 12,
-                    cornerRadius: 0,
-                    titleFont: { family: 'Orbitron', size: 13 },
+                    padding: 10,
+                    cornerRadius: 6,
+                    titleFont: { family: 'Inter', size: 12, weight: 'bold' },
                     bodyFont: { family: 'JetBrains Mono', size: 11 },
                     displayColors: false
                 }
@@ -399,13 +412,13 @@ $(document).ready(function() {
                 x: {
                     grid: { color: gridColor, drawBorder: false },
                     ticks: { color: textColor, font: { family: 'JetBrains Mono', size: 10 } },
-                    title: { display: true, color: textColor, font: { family: 'Orbitron', size: 10 } }
+                    title: { display: true, color: textColor, font: { family: 'Inter', size: 10 } }
                 },
                 y: {
                     beginAtZero: true,
                     grid: { color: gridColor, drawBorder: false },
                     ticks: { color: textColor, font: { family: 'JetBrains Mono', size: 10 } },
-                    title: { display: true, color: textColor, font: { family: 'Orbitron', size: 10 } }
+                    title: { display: true, color: textColor, font: { family: 'Inter', size: 10 } }
                 }
             }
         };
@@ -691,7 +704,7 @@ $(document).ready(function() {
             let tagsHtml = '';
             if (image.tags && image.tags.length > 0) {
                 tagsHtml = '<div class="mt-1 d-flex flex-wrap" style="gap: 2px;">' +
-                    image.tags.map(t => `<span class="badge badge-info" style="font-size: 0.65rem; background: rgba(0, 240, 255, 0.15); border: 1px solid rgba(0, 240, 255, 0.4); color: #00f0ff; font-family: monospace;">${t}</span>`).join('') +
+                    image.tags.map(t => `<span class="badge badge-info" style="font-size: 0.65rem;">${t}</span>`).join('') +
                     '</div>';
             }
 
@@ -938,7 +951,7 @@ $(document).ready(function() {
                 if (response.success) {
                     // 使用空数组兜底，防止后端在0个异常值时省略该字段导致TypeError
                     consistencyOutlierIndices = response.outlier_image_indices ?? [];
-                    const resultMessage = $(`<div class="alert mt-3 rounded-0" style="background: rgba(0,255,148,0.1); border: 1px solid var(--color-success); color: #fff;">${response.message}</div>`);
+                    const resultMessage = $(`<div class="alert mt-3 rounded-0 alert-success">${response.message}</div>`);
                     $('#consistency-check-container').append(resultMessage);
 
                     if (consistencyOutlierIndices.length > 0) {

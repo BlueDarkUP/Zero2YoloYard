@@ -3,13 +3,12 @@
 
 {% block head %}
 <style>
-    /* ==================== DASHBOARD HUD STYLES ==================== */
+    /* ==================== DASHBOARD STYLES ==================== */
 
-    /* 雷达心跳指示器 (Telemetry Pulse) */
     .telemetry-pulse-container {
         display: inline-flex;
         align-items: center;
-        background: rgba(0, 240, 255, 0.05);
+        background: var(--bg-surface-secondary);
         border: 1px solid var(--border-color);
         padding: 4px 12px;
         border-radius: var(--radius-sm);
@@ -19,95 +18,79 @@
         width: 6px;
         height: 6px;
         background-color: var(--color-success);
-        box-shadow: 0 0 5px var(--color-success);
         border-radius: 50%;
         transition: all 0.15s ease-out;
         margin-right: 10px;
     }
 
     .pulse-dot.syncing {
-        background-color: var(--color-primary);
-        box-shadow: 0 0 12px var(--color-primary), 0 0 4px #fff;
-        transform: scale(1.5);
+        background-color: var(--text-main);
+        transform: scale(1.3);
     }
 
     .pulse-dot.error {
         background-color: var(--color-danger);
-        box-shadow: 0 0 10px var(--color-danger);
     }
 
     .tracking-wider {
-        letter-spacing: 0.05em;
+        letter-spacing: 0.03em;
     }
 
-    /* ==================== EMPTY STATE TUTORIAL (新手空状态引导) ==================== */
+    /* ==================== EMPTY STATE TUTORIAL ==================== */
     .empty-state-tutorial {
-        padding: 4rem 2rem;
+        padding: 3.5rem 2rem;
         text-align: center;
-        background: repeating-linear-gradient(
-            45deg,
-            rgba(0, 240, 255, 0.015),
-            rgba(0, 240, 255, 0.015) 10px,
-            transparent 10px,
-            transparent 20px
-        );
+        background: var(--bg-surface);
         border: 1px dashed var(--border-color);
+        border-radius: var(--radius-base);
         margin: 15px;
         display: none;
     }
 
     .empty-step-badge {
         display: inline-block;
-        font-family: 'Orbitron', sans-serif;
-        color: var(--color-primary);
-        border: 1px solid var(--color-primary);
-        padding: 4px 15px;
-        margin-bottom: 1.5rem;
-        letter-spacing: 0.1em;
-        font-size: 0.85rem;
-        background: rgba(0, 240, 255, 0.1);
-        box-shadow: 0 0 15px rgba(0, 240, 255, 0.1);
+        font-family: 'Inter', sans-serif;
+        font-weight: 500;
+        color: var(--text-main);
+        border: 1px solid var(--border-color);
+        padding: 3px 12px;
+        margin-bottom: 1.25rem;
+        font-size: 0.78rem;
+        background: var(--bg-surface-secondary);
+        border-radius: var(--radius-sm);
     }
 
-    /* ==================== SYS_MANUAL POPOVER (系统悬浮数据手册) ==================== */
+    /* ==================== SYS_MANUAL POPOVER ==================== */
     .info-trigger {
         cursor: help;
         opacity: 0.7;
-        transition: opacity 0.2s, text-shadow 0.2s;
+        transition: opacity 0.2s;
     }
     .info-trigger:hover {
         opacity: 1;
-        text-shadow: 0 0 10px var(--color-primary);
     }
 
     #sys-manual-panel {
         position: absolute;
         width: 360px;
-        background: rgba(10, 11, 16, 0.98);
-        border: 1px solid var(--color-primary);
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8), 0 0 15px rgba(0, 240, 255, 0.15);
+        background: var(--bg-surface);
+        border: 1px solid var(--border-color);
+        box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6);
         z-index: 99999;
         pointer-events: none;
         display: none;
-        border-radius: 4px;
+        border-radius: var(--radius-base);
         overflow: hidden;
     }
 
-    #sys-manual-panel::before {
-        content: "";
-        display: block;
-        height: 4px;
-        background: repeating-linear-gradient(90deg, var(--color-primary) 0, var(--color-primary) 10px, transparent 10px, transparent 15px);
-    }
-
     .manual-header {
-        background: rgba(255,255,255,0.05);
+        background: var(--bg-surface-secondary);
         padding: 10px 15px;
         border-bottom: 1px solid var(--border-color);
-        font-family: 'Orbitron', sans-serif;
+        font-family: 'Inter', sans-serif;
+        font-weight: 600;
         font-size: 0.85rem;
-        color: var(--color-primary);
-        letter-spacing: 0.05em;
+        color: var(--text-main);
     }
 
     .manual-body { padding: 15px; }
@@ -119,14 +102,14 @@
         font-size: 0.65rem;
         color: var(--text-muted);
         text-transform: uppercase;
-        letter-spacing: 0.1em;
+        letter-spacing: 0.05em;
         margin-bottom: 4px;
         display: block;
     }
     .manual-text {
         font-family: 'Inter', sans-serif;
         font-size: 0.8rem;
-        color: #e0e0e0;
+        color: var(--text-body);
         line-height: 1.5;
     }
     .manual-text.highlight-tune { color: var(--color-info); }
@@ -244,8 +227,8 @@
                     </table>
                 </div>
 
-                <div id="dataset-empty-state" class="empty-state-tutorial" style="border-color: rgba(255,208,0,0.3); background: repeating-linear-gradient(45deg, rgba(255,208,0,0.015), rgba(255,208,0,0.015) 10px, transparent 10px, transparent 20px);">
-                    <div class="empty-step-badge" style="color: var(--color-warning); border-color: var(--color-warning); background: rgba(255,208,0,0.1); box-shadow: 0 0 15px rgba(255,208,0,0.1);">PHASE 02 // COMPILATION</div>
+                <div id="dataset-empty-state" class="empty-state-tutorial">
+                    <div class="empty-step-badge">PHASE 02 // COMPILATION</div>
                     <h5 class="font-weight-bold text-white mb-3" style="font-family: 'Inter';">No Dataset Archives Found</h5>
                     <p class="text-muted font-monospace small mb-4" style="line-height: 1.8;">
                         > AWAITING ANNOTATED STREAMS...<br>
@@ -284,8 +267,8 @@
                     </table>
                 </div>
 
-                <div id="model-empty-state" class="empty-state-tutorial" style="border-color: rgba(0,255,148,0.3); background: repeating-linear-gradient(45deg, rgba(0,255,148,0.015), rgba(0,255,148,0.015) 10px, transparent 10px, transparent 20px);">
-                    <div class="empty-step-badge" style="color: var(--color-success); border-color: var(--color-success); background: rgba(0,255,148,0.1); box-shadow: 0 0 15px rgba(0,255,148,0.1);">PHASE 03 // DEPLOYMENT</div>
+                <div id="model-empty-state" class="empty-state-tutorial">
+                    <div class="empty-step-badge">PHASE 03 // DEPLOYMENT</div>
                     <h5 class="font-weight-bold text-white mb-3" style="font-family: 'Inter';">No Inference Engines Loaded</h5>
                     <p class="text-muted font-monospace small mb-4" style="line-height: 1.8;">
                         > AI CO-PILOT OFFLINE...<br>
