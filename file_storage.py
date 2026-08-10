@@ -262,8 +262,12 @@ def create_yolo_dataset_zip(dataset_uuid, frames_data, all_labels, eval_percent,
     with open(os.path.join(dataset_dir, 'data.yaml'), 'w') as f:
         yaml.dump(yaml_content, f, sort_keys=False)
     zip_path = get_dataset_zip_path(dataset_uuid)
-    shutil.make_archive(os.path.join(config.STORAGE_DIR, 'datasets', dataset_uuid), 'zip', dataset_dir)
-    shutil.rmtree(dataset_dir)
+    try:
+        shutil.make_archive(os.path.join(config.STORAGE_DIR, 'datasets', dataset_uuid), 'zip', dataset_dir)
+    finally:
+        # 无论打包是否成功都清理临时目录，防止磁盘泄漏
+        if os.path.isdir(dataset_dir):
+            shutil.rmtree(dataset_dir, ignore_errors=True)
     return zip_path
 
 
