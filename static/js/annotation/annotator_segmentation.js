@@ -285,8 +285,8 @@ class SegmentationAnnotator {
         if (!this.brushStrokePoints || this.brushStrokePoints.length === 0) return;
         if (!this.core.image) return;
 
-        const imgW = this.core.image.width;
-        const imgH = this.core.image.height;
+        const imgW = this.core.image.naturalWidth;
+        const imgH = this.core.image.naturalHeight;
         const currentClass = this.getSelectedClass() || 'object';
         const r = this.brushRadius;
 
