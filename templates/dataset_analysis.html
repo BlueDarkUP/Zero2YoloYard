@@ -936,7 +936,8 @@ $(document).ready(function() {
             data: JSON.stringify({ enable_color_check: isColorCheckEnabled }),
             success: function(response) {
                 if (response.success) {
-                    consistencyOutlierIndices = response.outlier_image_indices;
+                    // 使用空数组兜底，防止后端在0个异常值时省略该字段导致TypeError
+                    consistencyOutlierIndices = response.outlier_image_indices ?? [];
                     const resultMessage = $(`<div class="alert mt-3 rounded-0" style="background: rgba(0,255,148,0.1); border: 1px solid var(--color-success); color: #fff;">${response.message}</div>`);
                     $('#consistency-check-container').append(resultMessage);
 
