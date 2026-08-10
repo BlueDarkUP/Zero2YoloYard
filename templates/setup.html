@@ -10,43 +10,70 @@
     }
     .hardware-card {
         background: var(--bg-surface);
-        border: 1px solid var(--border-color);
+        border: 1px solid var(--border-highlight);
+        border-left: 4px solid var(--color-primary-accent);
         border-radius: var(--radius-base);
-        padding: 20px;
+        padding: 24px;
         margin-bottom: 25px;
         font-family: 'JetBrains Mono', monospace;
+        box-shadow: var(--shadow-md);
+        backdrop-filter: blur(8px);
+        transition: var(--transition-smooth);
+    }
+    .hardware-card:hover {
+        box-shadow: var(--shadow-lg), 0 0 20px var(--color-primary-accent-glow);
     }
     .spec-item {
         border-bottom: 1px dashed var(--border-color);
-        padding: 8px 0;
+        padding: 10px 0;
         display: flex;
         justify-content: space-between;
+        align-items: center;
     }
-    .spec-value { color: var(--text-main); font-weight: bold; }
+    .spec-item:last-of-type { border-bottom: none; }
+    .spec-value { color: var(--text-main); font-weight: 600; }
 
     .config-section {
         background: var(--bg-surface);
         border: 1px solid var(--border-color);
-        margin-bottom: 20px;
+        border-left: 4px solid var(--border-color);
+        margin-bottom: 24px;
         border-radius: var(--radius-base);
+        box-shadow: var(--shadow-sm);
+        transition: var(--transition-smooth);
+        overflow: hidden;
     }
+    .config-section:hover {
+        border-color: var(--border-highlight);
+        box-shadow: var(--shadow-md);
+    }
+    .config-section.section-ai { border-left-color: var(--color-info); }
+    .config-section.section-resource { border-left-color: var(--color-warning); }
+    .config-section.section-algo { border-left-color: var(--color-success); }
+
     .config-header {
-        padding: 12px 20px;
+        padding: 14px 20px;
         font-family: 'Inter', sans-serif;
         font-weight: 600;
         letter-spacing: -0.01em;
         background: var(--bg-surface-secondary);
         border-bottom: 1px solid var(--border-color);
         font-size: 0.9rem;
+        display: flex;
+        align-items: center;
     }
-    .config-body { padding: 20px; }
+    .config-body { padding: 22px; }
 
     .over-limit-warning {
-        color: var(--color-danger);
-        font-size: 0.8rem;
+        color: #e57373;
+        font-size: 0.78rem;
         font-family: 'JetBrains Mono', monospace;
-        margin-top: 5px;
+        margin-top: 6px;
         display: none;
+        background: rgba(189, 99, 99, 0.1);
+        padding: 4px 8px;
+        border-radius: 4px;
+        border: 1px solid rgba(189, 99, 99, 0.2);
     }
 
     input[type=range].custom-range::-webkit-slider-thumb { background: var(--color-primary); }

@@ -1,0 +1,1 @@
+"""Object detector adapters used by the real-world GKD demos."""

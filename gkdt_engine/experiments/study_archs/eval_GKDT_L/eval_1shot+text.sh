@@ -1,0 +1,527 @@
+#!/bin/bash
+#SBATCH --job-name=eval          # create a short name for your job
+#SBATCH --nodes=1                # node count
+#SBATCH --gpus-per-node=1        # number of GPUs per node(only valid under large/normal partition)
+#SBATCH --cpus-per-task=28       # number of CPUs (28, 56, 112, 224 for 1, 2, 4, 8 GPUs)
+#SBATCH --time=4:00:00           # total run time limit (HH:MM:SS)
+#SBATCH --partition=yours        # partition(large/normal/cpu) where you submit
+#SBATCH --account=yours          # only require for multiple projects
+
+module purge  # clear environment modules inherited from submission
+module load slurm cuda11.8/blas/11.8.0 cuda11.8/fft/11.8.0 cuda11.8/toolkit/11.8.0  # need Pytorch with at least cuda11.8 
+source /your/path/to/anaconda3/bin/activate gkd_env
+
+cd '/your/path/to/General-Keypoint-Detection'  # modify this to your path of General-Keypoint-Detection
+echo $(pwd)
+
+NUM_EPISODES=-1
+NUM_EPISODES_TEST=1000
+CONFIG_FILE=experiments/configs/gkd.yaml
+OUTPUT_DIR=output/GKDT-L
+LOAD_CHECKPOINT_TYPE=best
+
+echo "==> Test Animal pose dataset (cat, dog, cow, horse, sheep)(unseen species)"
+CUDA_VISIBLE_DEVICES=0 python3 main_gkd.py  \
+--cfg_file ${CONFIG_FILE} \
+--eval_only \
+OUTPUT_DIR ${OUTPUT_DIR} \
+    MODEL.DETECTION_HEAD.IM_FEAT_UPSAMPLER.TYPE 'bilinear' \
+    MODEL.KERNEL_GENERATION.NUM_BLOCKS 2 \
+    MODEL.KERNEL_GENERATION.DROPOUT 0.1 \
+    TRAIN.MIX_MODAL_TRAINING.TYPE 'episode' \
+    TRAIN.MIX_MODAL_TRAINING.RANGE 'tvm' \
+    DATASET.SAMPLING_STRATEGY.SHUFFLE True \
+    DATASET.SAMPLING_STRATEGY.DROP_LAST True \
+RESUME True \
+LOAD_CHECKPOINT_TYPE ${LOAD_CHECKPOINT_TYPE} \
+TRAIN.NUM_EPISODES ${NUM_EPISODES} \
+TEST.NUM_EPISODES ${NUM_EPISODES_TEST} \
+DATASET.SAMPLING_STRATEGY.TEST 'uniform' \
+TEST.NUM_TEST_SHOT 1 \
+TEST.TEXT_PROMPT_SETTING.NUM_TEXT 1 \
+DATASET.TEST_DATA [['animal_pose_dataset','animal_pose_dataset.json',[],['left ear','right ear','nose','left-front leg','right-front leg','left-back leg','right-back leg','left-front paw','right-front paw','left-back paw','right-back paw']]]
+
+echo ""
+echo "==> Test awa pose (unseen species)"
+CUDA_VISIBLE_DEVICES=0 python3 main_gkd.py  \
+--cfg_file ${CONFIG_FILE} \
+--eval_only \
+OUTPUT_DIR ${OUTPUT_DIR} \
+    MODEL.DETECTION_HEAD.IM_FEAT_UPSAMPLER.TYPE 'bilinear' \
+    MODEL.KERNEL_GENERATION.NUM_BLOCKS 2 \
+    MODEL.KERNEL_GENERATION.DROPOUT 0.1 \
+    TRAIN.MIX_MODAL_TRAINING.TYPE 'episode' \
+    TRAIN.MIX_MODAL_TRAINING.RANGE 'tvm' \
+    DATASET.SAMPLING_STRATEGY.SHUFFLE True \
+    DATASET.SAMPLING_STRATEGY.DROP_LAST True \
+RESUME True \
+LOAD_CHECKPOINT_TYPE ${LOAD_CHECKPOINT_TYPE} \
+TRAIN.NUM_EPISODES ${NUM_EPISODES} \
+TEST.NUM_EPISODES ${NUM_EPISODES_TEST} \
+DATASET.SAMPLING_STRATEGY.TEST 'uniform' \
+TEST.NUM_TEST_SHOT 1 \
+TEST.TEXT_PROMPT_SETTING.NUM_TEXT 1 \
+DATASET.TEST_DATA [['awa_pose','AwAPose_split_test.json',[],['nose','right_earbase','left_earbase','neck_base','neck_end','throat_base','throat_end','tail_base','front_left_thai','front_left_paw','front_right_thai','front_right_paw','back_left_paw','back_left_thai','back_right_thai','back_right_paw','belly_bottom','body_middle_right','body_middle_left']]]
+
+echo ""
+echo "==> Test cub (unseen species)"
+CUDA_VISIBLE_DEVICES=0 python3 main_gkd.py  \
+--cfg_file ${CONFIG_FILE} \
+--eval_only \
+OUTPUT_DIR ${OUTPUT_DIR} \
+    MODEL.DETECTION_HEAD.IM_FEAT_UPSAMPLER.TYPE 'bilinear' \
+    MODEL.KERNEL_GENERATION.NUM_BLOCKS 2 \
+    MODEL.KERNEL_GENERATION.DROPOUT 0.1 \
+    TRAIN.MIX_MODAL_TRAINING.TYPE 'episode' \
+    TRAIN.MIX_MODAL_TRAINING.RANGE 'tvm' \
+    DATASET.SAMPLING_STRATEGY.SHUFFLE True \
+    DATASET.SAMPLING_STRATEGY.DROP_LAST True \
+RESUME True \
+LOAD_CHECKPOINT_TYPE ${LOAD_CHECKPOINT_TYPE} \
+TRAIN.NUM_EPISODES ${NUM_EPISODES} \
+TEST.NUM_EPISODES ${NUM_EPISODES_TEST} \
+DATASET.SAMPLING_STRATEGY.TEST 'uniform' \
+TEST.NUM_TEST_SHOT 1 \
+TEST.TEXT_PROMPT_SETTING.NUM_TEXT 1 \
+DATASET.TEST_DATA [['cub','cub_split_test.json',[],['back','beak','belly','breast','crown','left leg','nape','right leg','tail','throat']]]
+
+echo ""
+echo "==> Test nab (unseen species)"
+CUDA_VISIBLE_DEVICES=0 python3 main_gkd.py  \
+--cfg_file ${CONFIG_FILE} \
+--eval_only \
+OUTPUT_DIR ${OUTPUT_DIR} \
+    MODEL.DETECTION_HEAD.IM_FEAT_UPSAMPLER.TYPE 'bilinear' \
+    MODEL.KERNEL_GENERATION.NUM_BLOCKS 2 \
+    MODEL.KERNEL_GENERATION.DROPOUT 0.1 \
+    TRAIN.MIX_MODAL_TRAINING.TYPE 'episode' \
+    TRAIN.MIX_MODAL_TRAINING.RANGE 'tvm' \
+    DATASET.SAMPLING_STRATEGY.SHUFFLE True \
+    DATASET.SAMPLING_STRATEGY.DROP_LAST True \
+RESUME True \
+LOAD_CHECKPOINT_TYPE ${LOAD_CHECKPOINT_TYPE} \
+TRAIN.NUM_EPISODES ${NUM_EPISODES} \
+TEST.NUM_EPISODES ${NUM_EPISODES_TEST} \
+DATASET.SAMPLING_STRATEGY.TEST 'uniform' \
+TEST.NUM_TEST_SHOT 1 \
+TEST.TEXT_PROMPT_SETTING.NUM_TEXT 1 \
+DATASET.TEST_DATA [['nabird','nabird_split_test.json',[],['bill','crown','nape','belly','breast','back','tail']]]
+
+echo ""
+echo "==> Test ap10k (unseen species)"
+CUDA_VISIBLE_DEVICES=0 python3 main_gkd.py  \
+--cfg_file ${CONFIG_FILE} \
+--eval_only \
+OUTPUT_DIR ${OUTPUT_DIR} \
+    MODEL.DETECTION_HEAD.IM_FEAT_UPSAMPLER.TYPE 'bilinear' \
+    MODEL.KERNEL_GENERATION.NUM_BLOCKS 2 \
+    MODEL.KERNEL_GENERATION.DROPOUT 0.1 \
+    TRAIN.MIX_MODAL_TRAINING.TYPE 'episode' \
+    TRAIN.MIX_MODAL_TRAINING.RANGE 'tvm' \
+    DATASET.SAMPLING_STRATEGY.SHUFFLE True \
+    DATASET.SAMPLING_STRATEGY.DROP_LAST True \
+RESUME True \
+LOAD_CHECKPOINT_TYPE ${LOAD_CHECKPOINT_TYPE} \
+TRAIN.NUM_EPISODES ${NUM_EPISODES} \
+TEST.NUM_EPISODES ${NUM_EPISODES_TEST} \
+DATASET.SAMPLING_STRATEGY.TEST 'uniform' \
+TEST.NUM_TEST_SHOT 1 \
+TEST.TEXT_PROMPT_SETTING.NUM_TEXT 1 \
+DATASET.TEST_DATA [['ap10k','ap10k_split_test.json',[],[]]]
+
+echo ""
+echo "==> Test vinegar fly"
+CUDA_VISIBLE_DEVICES=0 python3 main_gkd.py  \
+--cfg_file ${CONFIG_FILE} \
+--eval_only \
+OUTPUT_DIR ${OUTPUT_DIR} \
+    MODEL.DETECTION_HEAD.IM_FEAT_UPSAMPLER.TYPE 'bilinear' \
+    MODEL.KERNEL_GENERATION.NUM_BLOCKS 2 \
+    MODEL.KERNEL_GENERATION.DROPOUT 0.1 \
+    TRAIN.MIX_MODAL_TRAINING.TYPE 'episode' \
+    TRAIN.MIX_MODAL_TRAINING.RANGE 'tvm' \
+    DATASET.SAMPLING_STRATEGY.SHUFFLE True \
+    DATASET.SAMPLING_STRATEGY.DROP_LAST True \
+RESUME True \
+LOAD_CHECKPOINT_TYPE ${LOAD_CHECKPOINT_TYPE} \
+TRAIN.NUM_EPISODES ${NUM_EPISODES} \
+TEST.NUM_EPISODES ${NUM_EPISODES_TEST} \
+DATASET.SAMPLING_STRATEGY.TEST 'uniform' \
+TEST.NUM_TEST_SHOT 1 \
+TEST.TEXT_PROMPT_SETTING.NUM_TEXT 1 \
+DATASET.TEST_DATA [['vinegar_fly','fly0.20.json',[],[]]]
+
+echo ""
+echo "==> Test desert locust"
+CUDA_VISIBLE_DEVICES=0 python3 main_gkd.py  \
+--cfg_file ${CONFIG_FILE} \
+--eval_only \
+OUTPUT_DIR ${OUTPUT_DIR} \
+    MODEL.DETECTION_HEAD.IM_FEAT_UPSAMPLER.TYPE 'bilinear' \
+    MODEL.KERNEL_GENERATION.NUM_BLOCKS 2 \
+    MODEL.KERNEL_GENERATION.DROPOUT 0.1 \
+    TRAIN.MIX_MODAL_TRAINING.TYPE 'episode' \
+    TRAIN.MIX_MODAL_TRAINING.RANGE 'tvm' \
+    DATASET.SAMPLING_STRATEGY.SHUFFLE True \
+    DATASET.SAMPLING_STRATEGY.DROP_LAST True \
+RESUME True \
+LOAD_CHECKPOINT_TYPE ${LOAD_CHECKPOINT_TYPE} \
+TRAIN.NUM_EPISODES ${NUM_EPISODES} \
+TEST.NUM_EPISODES ${NUM_EPISODES_TEST} \
+DATASET.SAMPLING_STRATEGY.TEST 'uniform' \
+TEST.NUM_TEST_SHOT 1 \
+TEST.TEXT_PROMPT_SETTING.NUM_TEXT 1 \
+DATASET.TEST_DATA [['desert_locust','locust0.20.json',[],[]]]
+
+echo ""
+echo "==> Test topviewmouse5k"
+CUDA_VISIBLE_DEVICES=0 python3 main_gkd.py  \
+--cfg_file ${CONFIG_FILE} \
+--eval_only \
+OUTPUT_DIR ${OUTPUT_DIR} \
+    MODEL.DETECTION_HEAD.IM_FEAT_UPSAMPLER.TYPE 'bilinear' \
+    MODEL.KERNEL_GENERATION.NUM_BLOCKS 2 \
+    MODEL.KERNEL_GENERATION.DROPOUT 0.1 \
+    TRAIN.MIX_MODAL_TRAINING.TYPE 'episode' \
+    TRAIN.MIX_MODAL_TRAINING.RANGE 'tvm' \
+    DATASET.SAMPLING_STRATEGY.SHUFFLE True \
+    DATASET.SAMPLING_STRATEGY.DROP_LAST True \
+RESUME True \
+LOAD_CHECKPOINT_TYPE ${LOAD_CHECKPOINT_TYPE} \
+TRAIN.NUM_EPISODES ${NUM_EPISODES} \
+TEST.NUM_EPISODES ${NUM_EPISODES_TEST} \
+DATASET.SAMPLING_STRATEGY.TEST 'uniform' \
+TEST.NUM_TEST_SHOT 1 \
+TEST.TEXT_PROMPT_SETTING.NUM_TEXT 1 \
+DATASET.TEST_DATA [['topviewmouse5k','test.json',[],[]]]
+
+echo ""
+echo "==> Test macaque_pose"
+CUDA_VISIBLE_DEVICES=0 python3 main_gkd.py  \
+--cfg_file ${CONFIG_FILE} \
+--eval_only \
+OUTPUT_DIR ${OUTPUT_DIR} \
+    MODEL.DETECTION_HEAD.IM_FEAT_UPSAMPLER.TYPE 'bilinear' \
+    MODEL.KERNEL_GENERATION.NUM_BLOCKS 2 \
+    MODEL.KERNEL_GENERATION.DROPOUT 0.1 \
+    TRAIN.MIX_MODAL_TRAINING.TYPE 'episode' \
+    TRAIN.MIX_MODAL_TRAINING.RANGE 'tvm' \
+    DATASET.SAMPLING_STRATEGY.SHUFFLE True \
+    DATASET.SAMPLING_STRATEGY.DROP_LAST True \
+RESUME True \
+LOAD_CHECKPOINT_TYPE ${LOAD_CHECKPOINT_TYPE} \
+TRAIN.NUM_EPISODES ${NUM_EPISODES} \
+TEST.NUM_EPISODES ${NUM_EPISODES_TEST} \
+DATASET.SAMPLING_STRATEGY.TEST 'uniform' \
+TEST.NUM_TEST_SHOT 1 \
+TEST.TEXT_PROMPT_SETTING.NUM_TEXT 1 \
+DATASET.TEST_DATA [['macaque_pose','macaque_pose_coco0.20.json',[],[]]]
+
+echo ""
+echo "==> Test atrw_tiger"
+CUDA_VISIBLE_DEVICES=0 python3 main_gkd.py  \
+--cfg_file ${CONFIG_FILE} \
+--eval_only \
+OUTPUT_DIR ${OUTPUT_DIR} \
+    MODEL.DETECTION_HEAD.IM_FEAT_UPSAMPLER.TYPE 'bilinear' \
+    MODEL.KERNEL_GENERATION.NUM_BLOCKS 2 \
+    MODEL.KERNEL_GENERATION.DROPOUT 0.1 \
+    TRAIN.MIX_MODAL_TRAINING.TYPE 'episode' \
+    TRAIN.MIX_MODAL_TRAINING.RANGE 'tvm' \
+    DATASET.SAMPLING_STRATEGY.SHUFFLE True \
+    DATASET.SAMPLING_STRATEGY.DROP_LAST True \
+RESUME True \
+LOAD_CHECKPOINT_TYPE ${LOAD_CHECKPOINT_TYPE} \
+TRAIN.NUM_EPISODES ${NUM_EPISODES} \
+TEST.NUM_EPISODES ${NUM_EPISODES_TEST} \
+DATASET.SAMPLING_STRATEGY.TEST 'uniform' \
+TEST.NUM_TEST_SHOT 1 \
+TEST.TEXT_PROMPT_SETTING.NUM_TEXT 1 \
+DATASET.TEST_DATA [['atrw_tiger','test.json',[],[]]]
+
+echo ""
+echo "==> Test animal_kingdom"
+CUDA_VISIBLE_DEVICES=0 python3 main_gkd.py  \
+--cfg_file ${CONFIG_FILE} \
+--eval_only \
+OUTPUT_DIR ${OUTPUT_DIR} \
+    MODEL.DETECTION_HEAD.IM_FEAT_UPSAMPLER.TYPE 'bilinear' \
+    MODEL.KERNEL_GENERATION.NUM_BLOCKS 2 \
+    MODEL.KERNEL_GENERATION.DROPOUT 0.1 \
+    TRAIN.MIX_MODAL_TRAINING.TYPE 'episode' \
+    TRAIN.MIX_MODAL_TRAINING.RANGE 'tvm' \
+    DATASET.SAMPLING_STRATEGY.SHUFFLE True \
+    DATASET.SAMPLING_STRATEGY.DROP_LAST True \
+RESUME True \
+LOAD_CHECKPOINT_TYPE ${LOAD_CHECKPOINT_TYPE} \
+TRAIN.NUM_EPISODES ${NUM_EPISODES} \
+TEST.NUM_EPISODES ${NUM_EPISODES_TEST} \
+DATASET.SAMPLING_STRATEGY.TEST 'uniform' \
+TEST.NUM_TEST_SHOT 1 \
+TEST.TEXT_PROMPT_SETTING.NUM_TEXT 1 \
+DATASET.TEST_DATA [['animal_kingdom','test.json',[],[]]]
+
+echo ""
+echo "==> Test COCO val"
+CUDA_VISIBLE_DEVICES=0 python3 main_gkd.py  \
+--cfg_file ${CONFIG_FILE} \
+--eval_only \
+OUTPUT_DIR ${OUTPUT_DIR} \
+    MODEL.DETECTION_HEAD.IM_FEAT_UPSAMPLER.TYPE 'bilinear' \
+    MODEL.KERNEL_GENERATION.NUM_BLOCKS 2 \
+    MODEL.KERNEL_GENERATION.DROPOUT 0.1 \
+    TRAIN.MIX_MODAL_TRAINING.TYPE 'episode' \
+    TRAIN.MIX_MODAL_TRAINING.RANGE 'tvm' \
+    DATASET.SAMPLING_STRATEGY.SHUFFLE True \
+    DATASET.SAMPLING_STRATEGY.DROP_LAST True \
+RESUME True \
+LOAD_CHECKPOINT_TYPE ${LOAD_CHECKPOINT_TYPE} \
+TRAIN.NUM_EPISODES ${NUM_EPISODES} \
+TEST.NUM_EPISODES ${NUM_EPISODES_TEST} \
+DATASET.SAMPLING_STRATEGY.TEST 'uniform' \
+TEST.NUM_TEST_SHOT 1 \
+TEST.TEXT_PROMPT_SETTING.NUM_TEXT 1 \
+DATASET.TEST_DATA [['coco_val','person_keypoints_val2017.json',[],[]]]
+
+echo ""
+echo "==> Test human_art val"
+CUDA_VISIBLE_DEVICES=0 python3 main_gkd.py  \
+--cfg_file ${CONFIG_FILE} \
+--eval_only \
+OUTPUT_DIR ${OUTPUT_DIR} \
+    MODEL.DETECTION_HEAD.IM_FEAT_UPSAMPLER.TYPE 'bilinear' \
+    MODEL.KERNEL_GENERATION.NUM_BLOCKS 2 \
+    MODEL.KERNEL_GENERATION.DROPOUT 0.1 \
+    TRAIN.MIX_MODAL_TRAINING.TYPE 'episode' \
+    TRAIN.MIX_MODAL_TRAINING.RANGE 'tvm' \
+    DATASET.SAMPLING_STRATEGY.SHUFFLE True \
+    DATASET.SAMPLING_STRATEGY.DROP_LAST True \
+RESUME True \
+LOAD_CHECKPOINT_TYPE ${LOAD_CHECKPOINT_TYPE} \
+TRAIN.NUM_EPISODES ${NUM_EPISODES} \
+TEST.NUM_EPISODES ${NUM_EPISODES_TEST} \
+DATASET.SAMPLING_STRATEGY.TEST 'uniform' \
+TEST.NUM_TEST_SHOT 1 \
+TEST.TEXT_PROMPT_SETTING.NUM_TEXT 1 \
+DATASET.TEST_DATA [['human_art','validation_humanart.json',[],[]]]
+
+echo ""
+echo "==> Test human face w300"
+CUDA_VISIBLE_DEVICES=0 python3 main_gkd.py  \
+--cfg_file ${CONFIG_FILE} \
+--eval_only \
+OUTPUT_DIR ${OUTPUT_DIR} \
+    MODEL.DETECTION_HEAD.IM_FEAT_UPSAMPLER.TYPE 'bilinear' \
+    MODEL.KERNEL_GENERATION.NUM_BLOCKS 2 \
+    MODEL.KERNEL_GENERATION.DROPOUT 0.1 \
+    TRAIN.MIX_MODAL_TRAINING.TYPE 'episode' \
+    TRAIN.MIX_MODAL_TRAINING.RANGE 'tvm' \
+    DATASET.SAMPLING_STRATEGY.SHUFFLE True \
+    DATASET.SAMPLING_STRATEGY.DROP_LAST True \
+RESUME True \
+LOAD_CHECKPOINT_TYPE ${LOAD_CHECKPOINT_TYPE} \
+TRAIN.NUM_EPISODES ${NUM_EPISODES} \
+TEST.NUM_EPISODES ${NUM_EPISODES_TEST} \
+DATASET.SAMPLING_STRATEGY.TEST 'uniform' \
+TEST.NUM_TEST_SHOT 1 \
+TEST.TEXT_PROMPT_SETTING.NUM_TEXT 1 \
+DATASET.TEST_DATA [['human_face_300w','face_landmarks_300w_test.json',[],[]]]
+
+echo ""
+echo "==> Test animalweb (unseen species)"
+CUDA_VISIBLE_DEVICES=0 python3 main_gkd.py  \
+--cfg_file ${CONFIG_FILE} \
+--eval_only \
+OUTPUT_DIR ${OUTPUT_DIR} \
+    MODEL.DETECTION_HEAD.IM_FEAT_UPSAMPLER.TYPE 'bilinear' \
+    MODEL.KERNEL_GENERATION.NUM_BLOCKS 2 \
+    MODEL.KERNEL_GENERATION.DROPOUT 0.1 \
+    TRAIN.MIX_MODAL_TRAINING.TYPE 'episode' \
+    TRAIN.MIX_MODAL_TRAINING.RANGE 'tvm' \
+    DATASET.SAMPLING_STRATEGY.SHUFFLE True \
+    DATASET.SAMPLING_STRATEGY.DROP_LAST True \
+RESUME True \
+LOAD_CHECKPOINT_TYPE ${LOAD_CHECKPOINT_TYPE} \
+TRAIN.NUM_EPISODES ${NUM_EPISODES} \
+TEST.NUM_EPISODES ${NUM_EPISODES_TEST} \
+DATASET.SAMPLING_STRATEGY.TEST 'uniform' \
+TEST.NUM_TEST_SHOT 1 \
+TEST.TEXT_PROMPT_SETTING.NUM_TEXT 1 \
+DATASET.TEST_DATA [['animalweb','animalweb_split_test.json',[],[]]]
+
+echo ""
+echo "==> Test onehand10k"
+CUDA_VISIBLE_DEVICES=0 python3 main_gkd.py  \
+--cfg_file ${CONFIG_FILE} \
+--eval_only \
+OUTPUT_DIR ${OUTPUT_DIR} \
+    MODEL.DETECTION_HEAD.IM_FEAT_UPSAMPLER.TYPE 'bilinear' \
+    MODEL.KERNEL_GENERATION.NUM_BLOCKS 2 \
+    MODEL.KERNEL_GENERATION.DROPOUT 0.1 \
+    TRAIN.MIX_MODAL_TRAINING.TYPE 'episode' \
+    TRAIN.MIX_MODAL_TRAINING.RANGE 'tvm' \
+    DATASET.SAMPLING_STRATEGY.SHUFFLE True \
+    DATASET.SAMPLING_STRATEGY.DROP_LAST True \
+RESUME True \
+LOAD_CHECKPOINT_TYPE ${LOAD_CHECKPOINT_TYPE} \
+TRAIN.NUM_EPISODES ${NUM_EPISODES} \
+TEST.NUM_EPISODES ${NUM_EPISODES_TEST} \
+DATASET.SAMPLING_STRATEGY.TEST 'uniform' \
+TEST.NUM_TEST_SHOT 1 \
+TEST.TEXT_PROMPT_SETTING.NUM_TEXT 1 \
+DATASET.TEST_DATA [['onehand10k','Test.json',[],[]]]
+
+echo ""
+echo "==> Test HInt"
+CUDA_VISIBLE_DEVICES=0 python3 main_gkd.py  \
+--cfg_file ${CONFIG_FILE} \
+--eval_only \
+OUTPUT_DIR ${OUTPUT_DIR} \
+    MODEL.DETECTION_HEAD.IM_FEAT_UPSAMPLER.TYPE 'bilinear' \
+    MODEL.KERNEL_GENERATION.NUM_BLOCKS 2 \
+    MODEL.KERNEL_GENERATION.DROPOUT 0.1 \
+    TRAIN.MIX_MODAL_TRAINING.TYPE 'episode' \
+    TRAIN.MIX_MODAL_TRAINING.RANGE 'tvm' \
+    DATASET.SAMPLING_STRATEGY.SHUFFLE True \
+    DATASET.SAMPLING_STRATEGY.DROP_LAST True \
+RESUME True \
+LOAD_CHECKPOINT_TYPE ${LOAD_CHECKPOINT_TYPE} \
+TRAIN.NUM_EPISODES ${NUM_EPISODES} \
+TEST.NUM_EPISODES ${NUM_EPISODES_TEST} \
+DATASET.SAMPLING_STRATEGY.TEST 'uniform' \
+TEST.NUM_TEST_SHOT 1 \
+TEST.TEXT_PROMPT_SETTING.NUM_TEXT 1 \
+DATASET.TEST_DATA [['hint','TEST_all.json',[],[]]]
+
+echo ""
+echo "==> Test keypoint5 (bed, chair, sofa, swivelchair, table)"
+CUDA_VISIBLE_DEVICES=0 python3 main_gkd.py  \
+--cfg_file ${CONFIG_FILE} \
+--eval_only \
+OUTPUT_DIR ${OUTPUT_DIR} \
+    MODEL.DETECTION_HEAD.IM_FEAT_UPSAMPLER.TYPE 'bilinear' \
+    MODEL.KERNEL_GENERATION.NUM_BLOCKS 2 \
+    MODEL.KERNEL_GENERATION.DROPOUT 0.1 \
+    TRAIN.MIX_MODAL_TRAINING.TYPE 'episode' \
+    TRAIN.MIX_MODAL_TRAINING.RANGE 'tvm' \
+    DATASET.SAMPLING_STRATEGY.SHUFFLE True \
+    DATASET.SAMPLING_STRATEGY.DROP_LAST True \
+RESUME True \
+LOAD_CHECKPOINT_TYPE ${LOAD_CHECKPOINT_TYPE} \
+TRAIN.NUM_EPISODES ${NUM_EPISODES} \
+TEST.NUM_EPISODES ${NUM_EPISODES_TEST} \
+DATASET.SAMPLING_STRATEGY.TEST 'uniform' \
+TEST.NUM_TEST_SHOT 1 \
+TEST.TEXT_PROMPT_SETTING.NUM_TEXT 1 \
+DATASET.TEST_DATA [['keypoint5','keypoint5_test.json',[],[]]]
+
+echo ""
+echo "==> Test carfusion ('car', 'bus', 'truck')"
+CUDA_VISIBLE_DEVICES=0 python3 main_gkd.py  \
+--cfg_file ${CONFIG_FILE} \
+--eval_only \
+OUTPUT_DIR ${OUTPUT_DIR} \
+    MODEL.DETECTION_HEAD.IM_FEAT_UPSAMPLER.TYPE 'bilinear' \
+    MODEL.KERNEL_GENERATION.NUM_BLOCKS 2 \
+    MODEL.KERNEL_GENERATION.DROPOUT 0.1 \
+    TRAIN.MIX_MODAL_TRAINING.TYPE 'episode' \
+    TRAIN.MIX_MODAL_TRAINING.RANGE 'tvm' \
+    DATASET.SAMPLING_STRATEGY.SHUFFLE True \
+    DATASET.SAMPLING_STRATEGY.DROP_LAST True \
+RESUME True \
+LOAD_CHECKPOINT_TYPE ${LOAD_CHECKPOINT_TYPE} \
+TRAIN.NUM_EPISODES ${NUM_EPISODES} \
+TEST.NUM_EPISODES ${NUM_EPISODES_TEST} \
+DATASET.SAMPLING_STRATEGY.TEST 'uniform' \
+TEST.NUM_TEST_SHOT 1 \
+TEST.TEXT_PROMPT_SETTING.NUM_TEXT 1 \
+DATASET.TEST_DATA [['carfusion','car_keypoints_test.json',[],[]]]
+
+echo ""
+echo "==> Test deepfashion2_val"
+CUDA_VISIBLE_DEVICES=0 python3 main_gkd.py  \
+--cfg_file ${CONFIG_FILE} \
+--eval_only \
+OUTPUT_DIR ${OUTPUT_DIR} \
+    MODEL.DETECTION_HEAD.IM_FEAT_UPSAMPLER.TYPE 'bilinear' \
+    MODEL.KERNEL_GENERATION.NUM_BLOCKS 2 \
+    MODEL.KERNEL_GENERATION.DROPOUT 0.1 \
+    TRAIN.MIX_MODAL_TRAINING.TYPE 'episode' \
+    TRAIN.MIX_MODAL_TRAINING.RANGE 'tvm' \
+    DATASET.SAMPLING_STRATEGY.SHUFFLE True \
+    DATASET.SAMPLING_STRATEGY.DROP_LAST True \
+RESUME True \
+LOAD_CHECKPOINT_TYPE ${LOAD_CHECKPOINT_TYPE} \
+TRAIN.NUM_EPISODES ${NUM_EPISODES} \
+TEST.NUM_EPISODES ${NUM_EPISODES_TEST} \
+DATASET.SAMPLING_STRATEGY.TEST 'uniform' \
+TEST.NUM_TEST_SHOT 1 \
+TEST.TEXT_PROMPT_SETTING.NUM_TEXT 1 \
+DATASET.TEST_DATA [['deepfashion2_val','deepfashion2_validation.json',[],[]]]
+
+echo ""
+echo "==> Test cephalometric_landmark"
+CUDA_VISIBLE_DEVICES=0 python3 main_gkd.py  \
+--cfg_file ${CONFIG_FILE} \
+--eval_only \
+OUTPUT_DIR ${OUTPUT_DIR} \
+    MODEL.DETECTION_HEAD.IM_FEAT_UPSAMPLER.TYPE 'bilinear' \
+    MODEL.KERNEL_GENERATION.NUM_BLOCKS 2 \
+    MODEL.KERNEL_GENERATION.DROPOUT 0.1 \
+    TRAIN.MIX_MODAL_TRAINING.TYPE 'episode' \
+    TRAIN.MIX_MODAL_TRAINING.RANGE 'tvm' \
+    DATASET.SAMPLING_STRATEGY.SHUFFLE True \
+    DATASET.SAMPLING_STRATEGY.DROP_LAST True \
+RESUME True \
+LOAD_CHECKPOINT_TYPE ${LOAD_CHECKPOINT_TYPE} \
+TRAIN.NUM_EPISODES ${NUM_EPISODES} \
+TEST.NUM_EPISODES ${NUM_EPISODES_TEST} \
+DATASET.SAMPLING_STRATEGY.TEST 'uniform' \
+TEST.NUM_TEST_SHOT 1 \
+TEST.TEXT_PROMPT_SETTING.NUM_TEXT 1 \
+DATASET.TEST_DATA [['cephalometric_landmark','Test.json',[],[]]]
+
+echo ""
+echo "==> Test hand_xray (base kps detection)(unseen species)"
+CUDA_VISIBLE_DEVICES=0 python3 main_gkd.py  \
+--cfg_file ${CONFIG_FILE} \
+--eval_only \
+OUTPUT_DIR ${OUTPUT_DIR} \
+    MODEL.DETECTION_HEAD.IM_FEAT_UPSAMPLER.TYPE 'bilinear' \
+    MODEL.KERNEL_GENERATION.NUM_BLOCKS 2 \
+    MODEL.KERNEL_GENERATION.DROPOUT 0.1 \
+    TRAIN.MIX_MODAL_TRAINING.TYPE 'episode' \
+    TRAIN.MIX_MODAL_TRAINING.RANGE 'tvm' \
+    DATASET.SAMPLING_STRATEGY.SHUFFLE True \
+    DATASET.SAMPLING_STRATEGY.DROP_LAST True \
+RESUME True \
+LOAD_CHECKPOINT_TYPE ${LOAD_CHECKPOINT_TYPE} \
+TRAIN.NUM_EPISODES ${NUM_EPISODES} \
+TEST.NUM_EPISODES ${NUM_EPISODES_TEST} \
+DATASET.SAMPLING_STRATEGY.TEST 'uniform' \
+TEST.NUM_TEST_SHOT 1 \
+TEST.TEXT_PROMPT_SETTING.NUM_TEXT 1 \
+DATASET.TEST_DATA [['hand_xray','hand_xray_test0.50.json',[],['thumb_root',"thumb's first knuckle","thumb's second knuckle","thumb's tip","forefinger's first knuckle","forefinger's second knuckle","forefinger's third knuckle","forefinger's tip","middle_finger's first knuckle","middle_finger's second knuckle","middle_finger's third knuckle","middle_finger's tip","ring_finger's first knuckle","ring_finger's second knuckle","ring_finger's third knuckle","ring_finger's tip","pinky_finger's first knuckle","pinky_finger's second knuckle","pinky_finger's third knuckle","pinky_finger's tip"]]]
+
+
+echo ""
+echo "==> Test hand_xray (novel kps detection)(unseen species)"
+CUDA_VISIBLE_DEVICES=0 python3 main_gkd.py  \
+--cfg_file ${CONFIG_FILE} \
+--eval_only \
+OUTPUT_DIR ${OUTPUT_DIR} \
+    MODEL.DETECTION_HEAD.IM_FEAT_UPSAMPLER.TYPE 'bilinear' \
+    MODEL.KERNEL_GENERATION.NUM_BLOCKS 2 \
+    MODEL.KERNEL_GENERATION.DROPOUT 0.1 \
+    TRAIN.MIX_MODAL_TRAINING.TYPE 'episode' \
+    TRAIN.MIX_MODAL_TRAINING.RANGE 'tvm' \
+    DATASET.SAMPLING_STRATEGY.SHUFFLE True \
+    DATASET.SAMPLING_STRATEGY.DROP_LAST True \
+RESUME True \
+LOAD_CHECKPOINT_TYPE ${LOAD_CHECKPOINT_TYPE} \
+TRAIN.NUM_EPISODES ${NUM_EPISODES} \
+TEST.NUM_EPISODES ${NUM_EPISODES_TEST} \
+DATASET.SAMPLING_STRATEGY.TEST 'uniform' \
+TEST.NUM_TEST_SHOT 1 \
+TEST.TEXT_PROMPT_SETTING.NUM_TEXT 1 \
+DATASET.TEST_DATA [['hand_xray','hand_xray_test0.50.json',[],['styloid_process_of_ulna','Pisiform_bone','Distal_radio_ulnar_joint','Distal_radio_radius_joint','styloid_process_of_radius','Capitate_bone','Pisiform_bone','left_Capitate_bone','right_Capitate_bone','Hamate_bone','Scaphoid_bone','Trapezoid_bone','Trapezium_bone',"pinky_finger's root","ring_finger's root","middle_finger's root","forefinger's root"]]]

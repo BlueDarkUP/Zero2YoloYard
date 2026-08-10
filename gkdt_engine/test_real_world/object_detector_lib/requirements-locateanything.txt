@@ -1,0 +1,6 @@
+# Runtime dependencies for LocateAnythingDetector.
+# The LocateAnything model snapshot supplies its own trust_remote_code modules.
+transformers==4.57.1
+tokenizers==0.22.0
+sentencepiece==0.2.0
+accelerate==1.5.2

@@ -1,0 +1,203 @@
+RESUME: True
+LOAD_CHECKPOINT_TYPE: 'best'  # 'best' or 'last'
+MANUAL_SEED: 2
+OUTPUT_DIR: 'output'
+LOGGER: False  # save printed messages or not
+PRINT_FREQUENCY: 20  # if empty, default 2; if <=0, no print during training;
+TB_WRITER: False  # write values to tensorboard or not 
+MODEL:
+  ENCODER:
+    TRUNK: DINOv3  # DINOv3, CLIP
+    DINOv3:  # Note: SQUARE_IMAGE_LENGTH=224, 256, 384, then feature map is 14, 16, 24  Patch size is 16
+      DINOv3_REPO_DIR: network/dinov3_kd
+      WEIGHTS_ROOT: /your/path/to/pretrained_models/dinov3/
+      VISUAL_ENCODER: dinov3_vitl16  # 'dinov3_vits16', 'dinov3_vits16plus', 'dinov3_vitb16', 'dinov3_vitl16', 'dinov3_vith16plus'
+      VISUAL_LAYER_TO_TUNE: -1  #-1, all tune; 0, no layer to tune (all freeze); 1, final norm to tune; >=2, final norm + last n-1 block to tune 
+      TEXT_ENCODER: dinov3_vitl16_dinotxt
+      TEXT_LAYER_TO_TUNE: 0  # -1, all tune; 0, no layer to tune (all freeze); 1, proj to tune; >=2, proj + last n-1 layers to tune
+    CLIP:
+      NAME: 'ViT-B-16.pt'  # CLIP: 'ViT-B-32' (224), 'ViT-L-14-336px' (336), 'RN50' (224), 'RN101' (224), 'RN50x4' (288), 'RN50x16' (384), 'RN50x64' (448). All has downsize factor 32 except 'ViT-L-14-336px' has 14, 'ViT-B-16' has 16.
+      VISUAL_ENCODER:  # CLIP: None or same to CLIP.NAME; MAE_VIT: 'mae-vit-s/b/l/h' (all p is 16)
+      TEXT_LAYER_TO_TUNE: 0  # -1, all tune; 0, no layer to tune (all freeze); 1, proj to tune; >=2, the last n layers to tune
+      VISION_LAYER_TO_TUNE: -1  # -1, all tune; 0, no layer to tune (all freeze); 1, proj to tune; >=2, the last n layers to tune
+      CLIP_WEIGHTS_ROOT: '/your/path/to/pretrained_models/clip_weights'
+      MAE_WEIGHTS_ROOT: '/your/path/to/pretrained_models/mae_pretrained'
+  ADAPTATION_NET:  # Text Adaptation modules / Adapter (use residual blocks to refine features)
+    TEXT_ANET:
+      TYPE: 'transformer'  # 'transformer', 'bottleneck'
+      NUM_BLOCKS: 1
+  VISUAL_PROMPT_EXTRACTOR:
+    TYPE: 'weighted_sum'  # 'weighted_sum', 'feat_interpolate'
+  KERNEL_GENERATION:
+    NUM_BLOCKS: 2
+    USE_SA: True  # if use self-attention between T&V kp prompts
+    USE_CA: True  # if use cross-attention between prompts (Q) and visual features (K,V)
+    USE_MASK_TOKEN: True  # if True, use mask token, else use attention mask
+    AGGREGATE_CONTEXT: 'image'  # 'image' (use per query image) or 'episode'  (use all query images)
+    DROPOUT: 0.1  # 0.1 or 0
+  DETECTION_HEAD:
+    IM_FEAT_UPSAMPLER:
+      TYPE: 'bilinear'  # bilinear or deconv
+      BILINEAR:
+        UP_SCALE: 4  # suggest 2 or 4. up-sampling
+      DECONV:
+        NUM_BLOCKS: 2
+        HIDDEN_DIM: [256, 256]
+        KERNEL_SIZE: [4, 4]
+    KERNEL_EXPANDER:
+      RESO: 1  # 1, 3, 5
+      EXPANDER: 'layerwise_deconv'
+    KERNEL_NORMALIZE: True
+  PRETRAINED: ''
+LOSS:
+  TYPE: 'MSE'  # 'MSE', 'sigmoid-bce', 'cross-entropy', 'GM_GM_L2', 'direct_coord'
+  MSE:
+    CLAMP_HEATMAP: False  # clamp heatmaps_predict to be 0~1.0
+  DIRECT_COORD:
+    EDGE_LENGTH: 2  # 1: coord range is 0~1; 2: coord range is -1~1
+  MULTI_GROUP_SUPERVISION: True  # False, fuse multi-group predicted heatmap into one; True, supervise group-wisely
+  OBJ_KP_HEATMAP_FUSION: 'avg'  # 'avg' or 'prod'
+  WEIGHT_LOSS: [1, 0.002]  # loss weight main vs. align
+TRAIN:
+  NUM_EPISODES: -1  # if -1, sampled all episodes from data pool
+  NUM_ROLL_OUT: 4  # Number episodes rolled out a time (Important to domain alignment!) 
+  NUM_EPOCH: 200   # Total number of episodes = NUM_EPOCH * NUM_EPISODES
+  TEXT_PROMPT_SETTING:
+    OBJ_TEXT: 0  # 0, don't add object text; >=1, generate n text prompts for each object
+    NUM_TEXT: 1  # 0, no kp text prompt used; >=1, generate n text prompts for each keypoint
+  NUM_TRAIN_SHOT: 0  # 0, no visual prompt; >=1, has visual prompts
+  NUM_TRAIN_QUERY: 10
+  MIX_MODAL_TRAINING:  # Only has effect when NUM_TEXT>=1 and NUM_TRAIN_SHOT>=1
+    TYPE: null  # null, disable; 'episode', episode-level mixing; 'batch', batch-level mixing
+    RANGE: 'tvm'  # 't': text, 'v': visual, 'm': multimodal
+  OPTIMIZER: 'Adam'  # 'Adam' or 'SGD'
+  LR: 0.0001  # 0.0001
+  WEIGHT_DECAY: 0
+TEST:
+  NUM_EPISODES: -1  # if -1, sampled all episodes from data pool
+  TEXT_PROMPT_SETTING:
+    OBJ_TEXT: 0  # 0, don't add object text; >=1, generate n text prompts for each object
+    NUM_TEXT: 1  # 0, no kp text prompt used; >=1, generate n text prompts for each keypoint
+  NUM_TEST_SHOT: 0  # 0, no visual prompt; >=1, has visual prompts
+  NUM_TEST_QUERY: 12
+  FINETUNING_STEPS: 0
+  PCK_THRESH: [0.1]
+DATASET:
+  ROOT: '/your/path/to/keypoint_datasets'
+  TRAIN_DATA: 
+    # ===============
+    # [dataset_type, json_file, category_set, keypoint_set]; if category_set/keypoint_set==[] or null, all categories/kps in json used
+    # To check all dataset_type, see "dataset_splits.py"
+    # ===============
+    # - ['coco_train', 'person_keypoints_train2017.json', [], []]
+    # # - ['coco_val', 'person_keypoints_val2017.json', [], []]
+    - ['human_art', 'training_humanart.json', [], ["nose", "left_eye", "right_eye", "left_ear", "right_ear", "left_shoulder", "right_shoulder", "left_elbow", "right_elbow", "left_wrist", "right_wrist", "left_hip", "right_hip", "left_knee", "right_knee", "left_ankle", "right_ankle"]]
+    # # - ['human_art', 'validation_humanart.json', [], []]
+    # - ['human_face_300w', 'face_landmarks_300w_train.json', [], []]
+    # # - ['human_face_300w', 'face_landmarks_300w_valid.json', [], []]
+    # # - ['human_face_300w', 'face_landmarks_300w_test.json', [], []]
+    # - ['human_face_aflw', 'aflw_annotations.json', [], []]  # entire dataset to train
+    # - ['onehand10k', 'Train.json', [], []]
+    # # - ['onehand10k', 'Test.json', [], []]
+    # - ['hint', 'TRAIN_all.json', [], []]
+    # # - ['hint', 'VAL_all.json', [], []]
+    # # - ['hint', 'TEST_all.json', [], []]
+    # # - ['animal_pose_dataset','animal_pose_dataset.json', [], []]  # entire dataset to test
+    # - ['awa_pose', 'AwAPose_split_train.json', [], []]
+    # # - ['awa_pose', 'AwAPose_split_test.json', [], []]
+    # - ['cub', 'cub_split_train.json', [], []]
+    # # - ['cub', 'cub_split_val.json', [], []]
+    # # - ['cub', 'cub_split_test.json', [], []]
+    # - ['nabird', 'nabird_split_train.json', [], []]
+    # # - ['nabird', 'nabird_split_val.json', [], []]
+    # # - ['nabird', 'nabird_split_test.json', [], []]
+    # - ['ap10k', 'ap10k_split_train.json', [], []]
+    # # - ['ap10k', 'ap10k_split_test.json', [], []]  
+    # - ['apt36k', 'apt36k_annotations.json', [], []]  # entire dataset to train
+    # - ['macaque_pose', 'macaque_pose_coco0.80.json', [], []] 
+    # # - ['macaque_pose', 'macaque_pose_coco0.20.json', [], []] 
+    # - ['atrw_tiger', 'train.json', [], []]
+    # - ['atrw_tiger', 'test.json', [], []]
+    # - ['acinoset_cheetah', 'cheetah.json', [], []]  # entire dataset to train
+    # - ['animal_kingdom', 'train.json', [], []]
+    # # - ['animal_kingdom', 'test.json', [], []]    
+    # - ['topviewmouse5k', 'train.json', [], []]
+    # # - ['topviewmouse5k', 'test.json', [], []]    
+    # - ['vinegar_fly', 'fly0.80.json', [], []]  
+    # # - ['vinegar_fly', 'fly0.20.json', [], []]
+    # - ['desert_locust', 'locust0.80.json', [], []]  
+    # # - ['desert_locust', 'locust0.20.json', [], []]  
+    # - ['animalweb', 'animalweb_split_train.json', [], []]  
+    # # - ['animalweb', 'animalweb_split_test.json', [], []]  
+    # - ['keypoint5', 'keypoint5_train.json', [], []]
+    # # - ['keypoint5', 'keypoint5_test.json', [], []]
+    # - ['carfusion', 'car_keypoints_train.json', [], []]
+    # # - ['carfusion', 'car_keypoints_test.json', [], []]
+    # - ['deepfashion2_train', 'deepfashion2_train.json', [], []]
+    # # - ['deepfashion2_val', 'deepfashion2_validation.json', [], []]
+    # - ['cephalometric_landmark', 'Train.json', [], []]
+    # # - ['cephalometric_landmark', 'Test.json', [], []]
+    # # - ['hand_xray', 'hand_xray_train0.50.json', [], []]  # reserved to finetune
+    # # - ['hand_xray', 'hand_xray_test0.50.json', [], []]  # reserved to test
+  VAL_DATA:
+    # - ['coco_val', 'person_keypoints_val2017.json', [], []]
+    - ['human_art', 'validation_humanart.json', [], ["nose", "left_eye", "right_eye", "left_ear", "right_ear", "left_shoulder", "right_shoulder", "left_elbow", "right_elbow", "left_wrist", "right_wrist", "left_hip", "right_hip", "left_knee", "right_knee", "left_ankle", "right_ankle"]]
+    # - ['human_face_300w', 'face_landmarks_300w_valid.json', [], []]
+    # - ['onehand10k', 'Test.json', [], []]
+    # - ['hint', 'VAL_all.json', [], []]
+    # - ['animal_pose_dataset','animal_pose_dataset.json', [], []]  # entire dataset to test
+    # - ['awa_pose', 'AwAPose_split_test.json', [], []]
+    # - ['cub', 'cub_split_val.json', [], []]
+    # - ['nabird', 'nabird_split_val.json', [], []]
+    # - ['ap10k', 'ap10k_split_test.json', [], []]
+    # - ['macaque_pose', 'macaque_pose_coco0.20.json', [], []] 
+    # - ['atrw_tiger', 'test.json', [], []]
+    # - ['animal_kingdom', 'test.json', [], []]    
+    # - ['topviewmouse5k', 'test.json', [], []]  
+    # - ['vinegar_fly', 'fly0.20.json', [], []]
+    # - ['desert_locust', 'locust0.20.json', [], []] 
+    # - ['animalweb', 'animalweb_split_test.json', [], []]
+    # - ['keypoint5', 'keypoint5_test.json', [], []]
+    # - ['carfusion', 'car_keypoints_test.json', [], []]
+    # - ['deepfashion2_val', 'deepfashion2_validation.json', [], []]
+    # - ['cephalometric_landmark', 'Test.json', [], []]
+    # # - ['hand_xray', 'hand_xray_test0.50.json', [], []]  # reserved to test
+  TEST_DATA:
+    # - ['coco_val', 'person_keypoints_val2017.json', [], []]
+    - ['human_art', 'validation_humanart.json', [], ["nose", "left_eye", "right_eye", "left_ear", "right_ear", "left_shoulder", "right_shoulder", "left_elbow", "right_elbow", "left_wrist", "right_wrist", "left_hip", "right_hip", "left_knee", "right_knee", "left_ankle", "right_ankle"]]
+    # - ['human_face_300w', 'face_landmarks_300w_test.json', [], []]
+    # - ['onehand10k', 'Test.json', [], []]
+    # - ['hint', 'TEST_all.json', [], []]
+    # - ['animal_pose_dataset','animal_pose_dataset.json', [], []]  # entire dataset to test
+    # - ['awa_pose', 'AwAPose_split_test.json', [], []]
+    # - ['cub', 'cub_split_test.json', [], []]
+    # - ['nabird', 'nabird_split_test.json', [], []]
+    # - ['ap10k', 'ap10k_split_test.json', [], []]
+    # - ['macaque_pose', 'macaque_pose_coco0.20.json', [], []] 
+    # - ['atrw_tiger', 'test.json', [], []]
+    # - ['animal_kingdom', 'test.json', [], []]  
+    # - ['topviewmouse5k', 'test.json', [], []]  
+    # - ['vinegar_fly', 'fly0.20.json', [], []]
+    # - ['desert_locust', 'locust0.20.json', [], []] 
+    # - ['animalweb', 'animalweb_split_test.json', [], []] 
+    # - ['keypoint5', 'keypoint5_test.json', [], []]
+    # - ['carfusion', 'car_keypoints_test.json', [], []]
+    # - ['deepfashion2_val', 'deepfashion2_validation.json', [], []]
+    # - ['cephalometric_landmark', 'Test.json', [], []]
+    # # - ['hand_xray', 'hand_xray_test0.50.json', [], []]  # reserved to test
+  SAMPLING_STRATEGY:
+    TRAIN: 'dynamic_importance'  # 'importance', 'uniform', 'dynamic_importance'
+    TEST: 'importance'           # if null, same as TRAIN
+    DYNAMIC_IMPORTANCE:
+      TOPK: 0.5  # conditionally remove instances if being within topk supercategories
+    SHUFFLE: True
+    DROP_LAST: True
+  EPISODE_TYPE: 'one_class'  # "one_class", "mix_class"
+  PAD_KPS:
+    NUM_AT_TRAIN: 80  # Pad num of kps for parallel large-scale training
+    SAME_AT_TEST: True  # If True, padding as well when kps num < NUM_AT_TRAIN; if false, no padding at test/val. No matter if padding or not, it can be any num in testing/val.
+  SQUARE_IMAGE_LENGTH: 384  # 448, 384, 256, 224, 192
+  SIGMA: 14    # 13, 14
+AUTONAME:
+  KEYS: []   # pass string list like AUTONAME.KEYS ('LOSS.TYPE',)
+  LABELS: [] # pass string list like AUTONAME.LABELS ('A',)

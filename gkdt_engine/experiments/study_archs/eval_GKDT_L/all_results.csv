@@ -1,0 +1,4 @@
+Filename,Animal pose,AwA,CUB,NAB,ap10k test,vinegar fly,locust,topviewmouse5k,macaque,atrw tiger,ak test,coco val,human art,human face 300w,animalweb,onehand10k,HInt,keypoint-5,carfusion,df2 val,cephalometric,hand xray (base kp),hand xray (novel kp)
+eval_1shot.out,81.11,84.64,97.71,96.25,89.25,97.59,98.66,96.4,88.82,92.33,90.74,88.64,82.92,96.99,82.54,92.56,69.79,83.01,94.15,90.96,99.46,99.28,31.36
+eval_0shot.out,73.27,92.8,98.58,96.94,91.93,98.91,99.49,97.37,93.75,95.88,93.77,93.59,90.48,99.04,86.36,95.36,82.64,88.15,96.25,95.34,99.49,99.62,8.14
+eval_1shot+text.out,76.87,91.14,98.48,96.86,91.5,98.79,99.37,97.29,93.15,95.4,93.29,93.52,89.68,98.87,86.24,95.12,81.13,87.04,95.92,94.58,99.49,99.6,33.87

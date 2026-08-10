@@ -15,72 +15,107 @@
     }
 
     .pulse-dot {
-        width: 6px;
-        height: 6px;
+        width: 8px;
+        height: 8px;
         background-color: var(--color-success);
         border-radius: 50%;
-        transition: all 0.15s ease-out;
+        transition: all 0.2s ease-out;
         margin-right: 10px;
+        box-shadow: 0 0 8px var(--color-success);
+        position: relative;
+    }
+    .pulse-dot::after {
+        content: '';
+        position: absolute;
+        top: -2px; left: -2px; right: -2px; bottom: -2px;
+        border-radius: 50%;
+        border: 1px solid var(--color-success);
+        animation: pulseRing 2s infinite cubic-bezier(0.215, 0.61, 0.355, 1);
+    }
+    @keyframes pulseRing {
+        0% { transform: scale(0.9); opacity: 0.8; }
+        100% { transform: scale(2.2); opacity: 0; }
     }
 
     .pulse-dot.syncing {
-        background-color: var(--text-main);
-        transform: scale(1.3);
+        background-color: #3b82f6;
+        box-shadow: 0 0 10px #3b82f6;
+    }
+    .pulse-dot.syncing::after {
+        border-color: #3b82f6;
     }
 
     .pulse-dot.error {
         background-color: var(--color-danger);
+        box-shadow: 0 0 10px var(--color-danger);
+    }
+    .pulse-dot.error::after {
+        border-color: var(--color-danger);
     }
 
     .tracking-wider {
-        letter-spacing: 0.03em;
+        letter-spacing: 0.04em;
     }
 
     /* ==================== EMPTY STATE TUTORIAL ==================== */
     .empty-state-tutorial {
         padding: 3.5rem 2rem;
         text-align: center;
-        background: var(--bg-surface);
+        background: radial-gradient(circle at center, rgba(255,255,255,0.02) 0%, transparent 70%), var(--bg-surface);
         border: 1px dashed var(--border-color);
         border-radius: var(--radius-base);
         margin: 15px;
         display: none;
+        transition: var(--transition-smooth);
+    }
+
+    .empty-state-tutorial i {
+        animation: floatEmptyIcon 3.5s ease-in-out infinite;
+        display: inline-block;
+    }
+    @keyframes floatEmptyIcon {
+        0%, 100% { transform: translateY(0) scale(1); }
+        50% { transform: translateY(-8px) scale(1.05); }
     }
 
     .empty-step-badge {
         display: inline-block;
-        font-family: 'Inter', sans-serif;
-        font-weight: 500;
+        font-family: 'JetBrains Mono', monospace;
+        font-weight: 600;
         color: var(--text-main);
-        border: 1px solid var(--border-color);
-        padding: 3px 12px;
+        border: 1px solid var(--border-highlight);
+        padding: 4px 14px;
         margin-bottom: 1.25rem;
-        font-size: 0.78rem;
+        font-size: 0.75rem;
         background: var(--bg-surface-secondary);
         border-radius: var(--radius-sm);
+        box-shadow: var(--shadow-sm);
     }
 
     /* ==================== SYS_MANUAL POPOVER ==================== */
     .info-trigger {
         cursor: help;
         opacity: 0.7;
-        transition: opacity 0.2s;
+        transition: all 0.2s ease;
     }
     .info-trigger:hover {
         opacity: 1;
+        transform: scale(1.15);
     }
 
     #sys-manual-panel {
         position: absolute;
         width: 360px;
-        background: var(--bg-surface);
-        border: 1px solid var(--border-color);
-        box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6);
+        background: rgba(18, 18, 21, 0.95);
+        border: 1px solid var(--border-highlight);
+        box-shadow: 0 16px 36px rgba(0, 0, 0, 0.7);
+        backdrop-filter: blur(12px);
         z-index: 99999;
         pointer-events: none;
         display: none;
         border-radius: var(--radius-base);
         overflow: hidden;
+        animation: scaleIn 0.2s ease-out forwards;
     }
 
     .manual-header {
@@ -91,6 +126,9 @@
         font-weight: 600;
         font-size: 0.85rem;
         color: var(--text-main);
+        display: flex;
+        align-items: center;
+        gap: 6px;
     }
 
     .manual-body { padding: 15px; }
@@ -112,8 +150,8 @@
         color: var(--text-body);
         line-height: 1.5;
     }
-    .manual-text.highlight-tune { color: var(--color-info); }
-    .manual-text.highlight-when { color: var(--color-warning); }
+    .manual-text.highlight-tune { color: #64b5f6; }
+    .manual-text.highlight-when { color: #ffd54f; }
 </style>
 {% endblock %}
 

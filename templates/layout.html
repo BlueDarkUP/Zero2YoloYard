@@ -12,7 +12,7 @@
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 
     <style>
         /* 底部系统状态栏 */
@@ -21,8 +21,9 @@
             bottom: 0;
             left: 0;
             width: 100%;
-            height: 24px;
-            background-color: var(--bg-surface-secondary);
+            height: 26px;
+            background-color: var(--bg-glass);
+            backdrop-filter: blur(10px);
             border-top: 1px solid var(--border-color);
             display: flex;
             align-items: center;
@@ -46,6 +47,7 @@
             background-color: var(--color-success);
             margin-right: 8px;
             border-radius: 50%;
+            box-shadow: 0 0 8px var(--color-success);
         }
 
         main {
@@ -54,53 +56,131 @@
 
         .feed-alert { opacity: 0.8; }
 
+        /* Navbar Brand Hover Animation */
+        .navbar-brand-icon {
+            font-size: 1.4rem;
+            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.3s ease;
+        }
+        .navbar-brand:hover .navbar-brand-icon {
+            transform: rotate(90deg) scale(1.1);
+            color: #ffffff !important;
+        }
+
         /* ==================== SYSTEM INITIALIZATION SPLASH ==================== */
         .telemetry-splash-screen {
             position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
             background-color: var(--bg-body); z-index: 999999;
             display: flex; flex-direction: column; justify-content: center; align-items: center;
-            transition: opacity 0.4s ease-out;
+            transition: opacity 0.4s ease-out, visibility 0.4s ease-out;
         }
         .telemetry-splash-screen.boot-complete {
-            opacity: 0; pointer-events: none;
+            opacity: 0; 
+            visibility: hidden;
+            pointer-events: none;
         }
         .splash-center {
-            width: 320px; display: flex; flex-direction: column; align-items: center; text-align: center;
+            width: 360px; display: flex; flex-direction: column; align-items: center; text-align: center;
+            position: relative;
+        }
+        .splash-logo-glow {
+            position: absolute;
+            top: -40px;
+            width: 140px;
+            height: 140px;
+            background: radial-gradient(circle, rgba(255,255,255,0.08) 0%, transparent 70%);
+            border-radius: 50%;
+            pointer-events: none;
+            animation: pulseGlow 3s infinite ease-in-out;
+        }
+        .splash-icon {
+            font-size: 2.8rem;
+            color: var(--text-main);
+            margin-bottom: 12px;
+            animation: floatIcon 3s ease-in-out infinite;
+        }
+        @keyframes floatIcon {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-6px); }
         }
         .splash-title {
-            font-family: 'Inter', sans-serif; font-size: 1.4rem; font-weight: 600;
-            color: var(--text-main); margin-bottom: 4px; letter-spacing: -0.01em;
+            font-family: 'Inter', sans-serif; font-size: 1.5rem; font-weight: 700;
+            color: var(--text-main); margin-bottom: 4px; letter-spacing: -0.02em;
         }
         .splash-subtitle {
-            font-family: 'JetBrains Mono', monospace; font-size: 0.7rem;
+            font-family: 'JetBrains Mono', monospace; font-size: 0.72rem;
             color: var(--text-secondary); margin-bottom: 24px;
         }
         .splash-bar-container {
-            width: 100%; height: 2px; background: rgba(255, 255, 255, 0.08);
-            position: relative; overflow: hidden; border-radius: 1px;
+            width: 100%; height: 3px; background: rgba(255, 255, 255, 0.08);
+            position: relative; overflow: hidden; border-radius: 2px;
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.5);
         }
         .splash-bar-fill {
-            height: 100%; width: 0%; background-color: var(--text-main); transition: width 0.15s linear;
+            height: 100%; width: 0%; 
+            background: linear-gradient(90deg, #567594, #e4e4e7, #ffffff);
+            transition: width 0.15s linear;
+            box-shadow: 0 0 10px rgba(255,255,255,0.5);
         }
+        .splash-status {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            margin-top: 10px;
+            letter-spacing: 0.05em;
+        }
+
+        /* Toast Container & Animated Notifications */
+        #sys-toast-container {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .sys-toast {
+            background: rgba(18, 18, 21, 0.92);
+            border: 1px solid var(--border-color);
+            border-left: 4px solid var(--color-primary);
+            color: var(--text-main);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.7), 0 0 15px rgba(255,255,255,0.03);
+            backdrop-filter: blur(12px);
+            border-radius: var(--radius-sm);
+            animation: toastSlideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            overflow: hidden;
+            min-width: 280px;
+        }
+
+        @keyframes toastSlideIn {
+            from { opacity: 0; transform: translateX(40px) scale(0.95); }
+            to { opacity: 1; transform: translateX(0) scale(1); }
+        }
+
+        .sys-toast.toast-error { border-left-color: var(--color-danger); }
+        .sys-toast.toast-success { border-left-color: var(--color-success); }
+        .sys-toast.toast-warning { border-left-color: var(--color-warning); }
+        .sys-toast.toast-info { border-left-color: var(--color-info); }
     </style>
     {% block head %}{% endblock %}
 </head>
 <body class="d-flex flex-column min-vh-100">
 
     <div id="telemetry-splash" class="telemetry-splash-screen">
+        <div class="splash-logo-glow"></div>
         <div class="splash-center">
+            <i class="bi bi-bounding-box splash-icon"></i>
             <div class="splash-title">
                 <span>Zero2YoloYard</span>
             </div>
-            <div class="splash-subtitle">Initializing environment...</div>
+            <div class="splash-subtitle">AI Annotation & Model Operations Yard</div>
             <div class="splash-bar-container">
                 <div id="splash-bar" class="splash-bar-fill"></div>
             </div>
+            <div id="splash-status-text" class="splash-status">LOADING SYSTEM TELEMETRY...</div>
         </div>
     </div>
+
     <nav class="navbar navbar-expand-lg navbar-dark py-2 px-4 border-bottom">
         <a class="navbar-brand d-flex align-items-center" href="/">
-            <i class="bi bi-bounding-box text-light mr-3" style="font-size: 1.4rem; opacity: 0.9;"></i>
+            <i class="bi bi-bounding-box text-light mr-3 navbar-brand-icon" style="opacity: 0.9;"></i>
             <div class="d-flex flex-column justify-content-center">
                 <span class="font-weight-bold" style="font-family: 'Inter', sans-serif; letter-spacing: -0.01em; line-height: 1.2; font-size: 1.15rem;">Zero2YoloYard</span>
                 <span class="small text-muted" style="font-family: 'JetBrains Mono', monospace; font-size: 0.65rem;">by BlueDarkUP</span>
@@ -117,7 +197,9 @@
             <div class="d-flex align-items-center text-right">
                 <div class="d-none d-md-block mr-4 text-right">
                     <div class="small text-muted font-monospace" style="font-size: 0.7rem;">BE BASED ON FMLTC</div>
-                    <div class="small text-secondary font-monospace" style="font-size: 0.65rem;">Connected</div>
+                    <div class="small text-success font-monospace d-flex align-items-center justify-content-end" style="font-size: 0.65rem; gap: 4px;">
+                        <span class="status-indicator"></span> Connected
+                    </div>
                 </div>
                 <i class="bi bi-broadcast text-secondary" title="LIVE FEED"></i>
             </div>
@@ -138,30 +220,33 @@
             const splash = document.getElementById("telemetry-splash");
             if (!splash) return;
 
-            // 1. 获取 Flask 传过来的最新启动 ID（如果没有传，默认值为 'fallback'）
             const serverBootId = "{{ server_boot_id | default('fallback') }}";
-
-            // 2. 读取浏览器本地存储的上一次启动 ID
             const savedBootId = localStorage.getItem("z2y_last_boot_id");
 
-            // 3. 核心拦截：如果后端程序没有重启过（ID相同），直接秒删动画，用户感受不到遮挡
             if (serverBootId !== 'fallback' && savedBootId === serverBootId) {
                 splash.style.display = 'none';
                 splash.remove();
                 return;
             }
 
-            // ==================== 动画执行序列 ====================
             document.body.style.overflow = "hidden";
 
             const barFill = document.getElementById("splash-bar");
+            const statusText = document.getElementById("splash-status-text");
+            const steps = ["INITIALIZING SUBSYSTEMS...", "LOADING NEURAL PIPELINES...", "VERIFYING HARDWARE SPECS...", "SYSTEM READY"];
             let progress = 0;
+            let stepIdx = 0;
 
             const bootInterval = setInterval(() => {
                 progress += Math.random() * 12 + 8;
                 if (progress >= 100) progress = 100;
 
                 if (barFill) barFill.style.width = progress + "%";
+                
+                if (statusText) {
+                    stepIdx = Math.min(Math.floor((progress / 100) * steps.length), steps.length - 1);
+                    statusText.innerText = steps[stepIdx];
+                }
 
                 if (progress === 100) {
                     clearInterval(bootInterval);
@@ -174,7 +259,7 @@
                         splash.classList.add("boot-complete");
                         document.body.style.overflow = "auto";
                         setTimeout(() => splash.remove(), 400);
-                    }, 200);
+                    }, 250);
                 }
             }, 40);
         });
@@ -190,11 +275,11 @@
         }, 2000);
     </script>
 
-    <div class="modal fade" id="sysConfirmModal" tabindex="-1" role="dialog">
+    <div class="modal fade scale-in" id="sysConfirmModal" tabindex="-1" role="dialog">
         <div class="modal-dialog modal-dialog-centered modal-sm" role="document">
-            <div class="modal-content" style="background: var(--bg-surface); border: 1px solid var(--border-color);">
+            <div class="modal-content">
                 <div class="modal-body text-center pt-4 pb-3">
-                    <i class="bi bi-exclamation-triangle-fill text-danger" style="font-size: 1.8rem;"></i>
+                    <i class="bi bi-exclamation-triangle-fill text-danger" style="font-size: 2rem;"></i>
                     <p id="sysConfirmMessage" class="mt-3 font-weight-medium text-main small"></p>
                 </div>
                 <div class="modal-footer border-0 justify-content-center pb-4 pt-0">
@@ -205,9 +290,9 @@
         </div>
     </div>
 
-    <div class="modal fade" id="sysPromptModal" tabindex="-1" role="dialog">
+    <div class="modal fade scale-in" id="sysPromptModal" tabindex="-1" role="dialog">
         <div class="modal-dialog modal-dialog-centered" role="document">
-            <div class="modal-content" style="background: var(--bg-surface); border: 1px solid var(--border-color);">
+            <div class="modal-content">
                 <div class="modal-header border-0 pb-0 pt-3 px-4">
                     <h6 id="sysPromptTitle" class="modal-title font-weight-bold text-main text-uppercase">
                         <i class="bi bi-pencil mr-2"></i> Edit Prompt
@@ -230,33 +315,20 @@
         </div>
     </div>
 
-    <div aria-live="polite" aria-atomic="true" style="position: fixed; top: 80px; right: 20px; z-index: 99999;">
+    <div aria-live="polite" aria-atomic="true" style="position: fixed; top: 75px; right: 24px; z-index: 99999;">
         <div id="sys-toast-container"></div>
     </div>
-
-    <style>
-        .sys-toast {
-            background: var(--bg-surface);
-            border: 1px solid var(--border-color);
-            border-left: 3px solid var(--color-primary);
-            color: var(--text-main);
-            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
-            backdrop-filter: blur(8px);
-        }
-        .sys-toast.toast-error { border-left-color: var(--color-danger); }
-        .sys-toast.toast-success { border-left-color: var(--color-success); }
-    </style>
 
     <script>
         // 全局挂载：系统级提示函数
         window.sysAlert = function(message, type = 'success') {
             const toastId = 'toast-' + Date.now() + Math.floor(Math.random() * 1000);
-            const title = type === 'error' ? 'SYS_ERROR' : 'SYS_NOTICE';
-            const icon = type === 'error' ? 'bi-x-octagon-fill text-danger' : 'bi-info-circle-fill text-success';
-            const toastClass = type === 'error' ? 'toast-error' : 'toast-success';
+            const title = type === 'error' ? 'SYS_ERROR' : (type === 'warning' ? 'SYS_WARNING' : 'SYS_NOTICE');
+            const icon = type === 'error' ? 'bi-x-octagon-fill text-danger' : (type === 'warning' ? 'bi-exclamation-circle-fill text-warning' : 'bi-check-circle-fill text-success');
+            const toastClass = type === 'error' ? 'toast-error' : (type === 'warning' ? 'toast-warning' : 'toast-success');
 
             const toastHtml = `
-                <div id="${toastId}" class="toast sys-toast ${toastClass} mb-2" role="alert" aria-live="assertive" aria-atomic="true" data-delay="${type === 'error' ? '5000' : '3000'}">
+                <div id="${toastId}" class="toast sys-toast ${toastClass} mb-2" role="alert" aria-live="assertive" aria-atomic="true" data-delay="${type === 'error' ? '5000' : '3200'}">
                     <div class="toast-header border-0 bg-transparent text-white pb-0 pt-2 px-3">
                         <i class="bi ${icon} mr-2"></i>
                         <strong class="mr-auto font-monospace small tracking-wider">${title}</strong>
@@ -281,9 +353,6 @@
             $('#sysConfirmBtn').off('click').on('click', function() {
                 if (callback) {
                     $('#sysConfirmModal').one('hidden.bs.modal', function() {
-                        // 确保旧 backdrop 已被 Bootstrap 清除后再执行回调，
-                        // 避免 sysConfirmModal 的 backdrop 还在 DOM 里时又触发
-                        // apply-scope-modal 产生第二个 backdrop 造成灰色遮罩叠加。
                         callback();
                     });
                 }
@@ -291,7 +360,7 @@
             });
         };
 
-        // 全局挂载：系统级输入提示函数 (替代原生的 window.prompt)
+        // 全局挂载：系统级输入提示函数
         window.sysPrompt = function(options, callback) {
             let title = "EDIT PROMPT";
             let message = "Enter text description:";
@@ -337,22 +406,17 @@
             });
         };
 
-        // 多弹窗堆叠：保证最新显示的 modal 和其 backdrop 的 z-index 始终最高
+        // 多弹窗堆叠
         $(document).on('show.bs.modal', '.modal', function () {
-            // 当前已有多少弹窗可见（不含将要显示的这个）
             const openCount = $('.modal.show').length;
-            // 新弹窗的 z-index 递进（基准 1050，Bootstrap 默认值）
             const newZ = 1050 + openCount * 20;
             $(this).css('z-index', newZ);
-            // backdrop 在 show 之后才会由 Bootstrap 插入 DOM，稍后再设置
             setTimeout(function () {
-                // 取最后一个（最新的）backdrop
                 const $backdrop = $('.modal-backdrop').last();
                 $backdrop.css('z-index', newZ - 10);
             }, 10);
         });
 
-        // 弹窗关闭时若仍有其他弹窗开着，保持 body.modal-open
         $(document).on('hidden.bs.modal', '.modal', function () {
             if ($('.modal.show').length > 0) {
                 $('body').addClass('modal-open');
