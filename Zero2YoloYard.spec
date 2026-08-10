@@ -18,12 +18,14 @@ hidden_webview = [
 ]
 
 # ==============================================================
-# 精准隐式依赖导入 (包含 SAM2/SAM3/GKDT/CLIP/Albumentations 等)
+# 精准隐式依赖导入 (包含 PyTorch/TensorFlow/SAM2/SAM3/GKDT/CLIP 等)
 # ==============================================================
 my_hidden_imports = [
-    # Core PyTorch & CV Frameworks
+    # Core PyTorch & TensorFlow Frameworks (包含 FTC Machine Learning TFLite 解释器)
     'torch',
     'torchvision',
+    'tensorflow',
+    'tensorflow.lite.python.interpreter',
     'cv2',
     'numpy',
     'PIL',
@@ -134,7 +136,6 @@ a = Analysis(
     hooksconfig={},
     runtime_hooks=[],
     excludes=[
-        'tensorflow',
         'matplotlib',
         'PyQt5',
         'PyQt6',
