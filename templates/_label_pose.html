@@ -1,20 +1,55 @@
-<!-- COCO 17 Keypoints Pose Sidebar Sub-Template -->
+<!-- Pose / Keypoint Skeleton Sidebar Sub-Template
+     关键点数量与命名完全自由（不限定 COCO-17），详见 static/js/annotation/annotator_pose.js -->
+<style>
+    .pose-inline-name-input {
+        position: fixed;
+        z-index: 2000;
+        width: 180px;
+        padding: 4px 8px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.8rem;
+        background: #14161f;
+        color: #00f0ff;
+        border: 1px solid #00f0ff;
+        border-radius: 4px;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.6), 0 0 12px rgba(0,240,255,0.3);
+        outline: none;
+    }
+    .task-pose [data-v]:disabled { opacity: 0.4; cursor: not-allowed; }
+</style>
+
 <div class="task-panel task-pose">
-    <div class="d-flex justify-content-between align-items-center mb-3">
+    <div class="d-flex justify-content-between align-items-center mb-2">
         <h6 class="font-weight-bold text-uppercase text-danger mb-0">
-            <i class="fas fa-running mr-2"></i>Skeletons (<span id="pose-count">0</span>)
+            <i class="bi bi-diagram-3-fill mr-2"></i>Skeletons (<span id="pose-count">0</span>)
         </h6>
-        <button id="btn-add-skeleton" class="btn btn-sm btn-primary font-weight-bold">
-            <i class="fas fa-plus mr-1"></i>Add Person Skeleton
+    </div>
+
+    <div class="alert alert-dark p-2 small mb-3 border-secondary text-muted" style="font-size: 0.75rem;">
+        <i class="bi bi-info-circle mr-1"></i>选好类别后点 <b>Add Skeleton</b>，再点画布放置。
+        有模板就自动摆好一整套点，拖到正确位置即可；没模板就逐点点击 + 现场起名。<br>
+        <i class="bi bi-info-circle mr-1"></i>点位数量完全自由，不限定 17 点。
+    </div>
+
+    <div class="d-flex mb-2" style="gap: 6px;">
+        <button id="btn-add-skeleton" class="btn btn-sm btn-primary font-weight-bold flex-grow-1">
+            <i class="bi bi-plus-lg mr-1"></i>Add Skeleton
+        </button>
+        <button id="btn-edit-pose-schema" class="btn btn-sm btn-outline-info font-weight-bold" title="编辑当前类别的点位模板（可选）">
+            <i class="bi bi-pencil-square"></i>
         </button>
     </div>
 
+    <button id="btn-finish-pose-freeform" class="btn btn-sm btn-outline-success font-weight-bold w-100 mb-2" style="display:none;">
+        <i class="bi bi-check-lg mr-1"></i>完成骨架 (Enter / 右键)
+    </button>
+
     <div class="card bg-dark border-secondary p-2 mb-3">
-        <div class="small font-weight-bold text-muted mb-2">SELECTED JOINT STATUS:</div>
+        <div class="small font-weight-bold text-muted mb-2">选中关键点的可见性：</div>
         <div class="btn-group btn-group-sm w-100" role="group">
-            <button type="button" class="btn btn-outline-success active" data-v="2">Visible (v=2)</button>
-            <button type="button" class="btn btn-outline-warning" data-v="1">Occluded (v=1)</button>
-            <button type="button" class="btn btn-outline-danger" data-v="0">Absent (v=0)</button>
+            <button type="button" class="btn btn-outline-success" data-v="2" title="Visible (按键 2)">🟢 Visible</button>
+            <button type="button" class="btn btn-outline-warning" data-v="1" title="Occluded (按键 1)">🟠 Occluded</button>
+            <button type="button" class="btn btn-outline-danger" data-v="0" title="Absent (按键 0)">⚪ Absent</button>
         </div>
     </div>
 

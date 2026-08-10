@@ -63,6 +63,7 @@ def migrate_db():
         add_column('datasets', 'test_percent', 'REAL')
         # 补上下面这一行：自动为旧数据库补充 export_format 字段
         add_column('datasets', 'export_format', "TEXT DEFAULT 'yolo_v8_detect'")
+        add_column('datasets', 'export_options', "TEXT DEFAULT '{}'")
 
         add_column('models', 'label_filename', 'TEXT')
         add_column('models', 'model_type', 'TEXT')
@@ -70,6 +71,7 @@ def migrate_db():
         add_column('video_frames', 'tags', 'TEXT')
         add_column('video_frames', 'suggested_bboxes_text', 'TEXT')
         add_column('class_labels', 'sam3_prompt', 'TEXT')
+        add_column('class_labels', 'keypoint_schema', 'TEXT')
         add_column('video_frames', 'annotations_json', 'TEXT')
         add_column('videos', 'annotation_type', 'TEXT')
         add_column('videos', 'keypoint_schema', 'TEXT')
@@ -348,6 +350,8 @@ def init_db():
         conn.execute(text('CREATE INDEX IF NOT EXISTS idx_frame_labels_frame_id ON frame_labels (frame_id)'))
         conn.execute(text('CREATE INDEX IF NOT EXISTS idx_video_frames_uuid_frame ON video_frames (video_uuid, frame_number)'))
         conn.execute(text('CREATE INDEX IF NOT EXISTS idx_video_frames_uuid ON video_frames (video_uuid)'))
+
+    migrate_db()
 
 
 
@@ -807,6 +811,44 @@ def set_class_sam3_prompt(label_name, sam3_prompt):
         )
 
 
+def set_class_keypoint_schema(label_name, schema_json):
+    """
+    设置/更新某个类别的骨架点位与连线 Schema (JSON 字符串或 dict)。
+    """
+    if isinstance(schema_json, (dict, list)):
+        schema_json = json.dumps(schema_json)
+    cleaned = (schema_json or '').strip() or None
+    now_ms = int(time.time() * 1000)
+    with engine.begin() as conn:
+        conn.execute(
+            text('INSERT INTO class_labels (label_name, keypoint_schema, create_time_ms) VALUES (:ln, :ks, :c) '
+                 'ON CONFLICT(label_name) DO UPDATE SET keypoint_schema = :ks'),
+            {"ks": cleaned, "ln": label_name, "c": now_ms}
+        )
+
+
+def get_class_keypoint_schema(label_name):
+    with engine.connect() as conn:
+        res = conn.execute(
+            text('SELECT keypoint_schema FROM class_labels WHERE label_name = :ln'),
+            {"ln": label_name}
+        ).fetchone()
+        return res[0] if res else None
+
+
+def get_all_class_keypoint_schemas():
+    with engine.connect() as conn:
+        res = conn.execute(text('SELECT label_name, keypoint_schema FROM class_labels')).fetchall()
+        result_dict = {}
+        for row in res:
+            if row[1] and row[1].strip():
+                try:
+                    result_dict[row[0]] = json.loads(row[1])
+                except Exception:
+                    result_dict[row[0]] = row[1]
+        return result_dict
+
+
 def delete_class_label(label_name):
     with engine.begin() as conn:
         conn.execute(text('DELETE FROM class_labels WHERE label_name = :ln'), {"ln": label_name})
@@ -844,14 +886,17 @@ def delete_class_tag(tag_name):
         conn.execute(text('DELETE FROM class_tags WHERE tag_name = :tn'), {"tn": tag_name})
 
 
-def create_dataset_entry(description, video_uuids, create_time, eval_percent=20.0, test_percent=10.0, export_format='yolo_v8_detect'):
+def create_dataset_entry(description, video_uuids, create_time, eval_percent=20.0, test_percent=10.0, export_format='yolo_v8_detect', export_options=None):
     dataset_uuid = str(uuid.uuid4())
     video_uuids_json = json.dumps(video_uuids)
+    if export_options is None:
+        export_options = {}
+    export_options_json = json.dumps(export_options) if isinstance(export_options, dict) else str(export_options)
     with engine.connect() as conn:
         conn.execute(
             text("""
-                INSERT INTO datasets (dataset_uuid, description, video_uuids, create_time_ms, eval_percent, test_percent, export_format, status)
-                VALUES (:dataset_uuid, :description, :video_uuids, :create_time, :eval_percent, :test_percent, :export_format, 'PENDING')
+                INSERT INTO datasets (dataset_uuid, description, video_uuids, create_time_ms, eval_percent, test_percent, export_format, export_options, status)
+                VALUES (:dataset_uuid, :description, :video_uuids, :create_time, :eval_percent, :test_percent, :export_format, :export_options, 'PENDING')
             """),
             {
                 "dataset_uuid": dataset_uuid,
@@ -861,6 +906,7 @@ def create_dataset_entry(description, video_uuids, create_time, eval_percent=20.
                 "eval_percent": eval_percent,
                 "test_percent": test_percent,
                 "export_format": export_format,
+                "export_options": export_options_json,
             }
         )
         conn.commit()
@@ -885,7 +931,16 @@ def update_dataset_status(dataset_uuid, status, message="", zip_path="", sorted_
 def get_dataset_list():
     with engine.connect() as conn:
         result = conn.execute(text('SELECT * FROM datasets ORDER BY create_time_ms DESC'))
-        return _to_dict(result)
+        datasets = _to_dict(result)
+        for d in datasets:
+            if d.get('export_options') and isinstance(d['export_options'], str):
+                try:
+                    d['export_options'] = json.loads(d['export_options'])
+                except Exception:
+                    d['export_options'] = {}
+            elif not d.get('export_options'):
+                d['export_options'] = {}
+        return datasets
 
 
 get_all_datasets = get_dataset_list
@@ -894,7 +949,17 @@ get_all_datasets = get_dataset_list
 def get_dataset_entity(dataset_uuid):
     with engine.connect() as conn:
         result = conn.execute(text('SELECT * FROM datasets WHERE dataset_uuid = :du'), {"du": dataset_uuid}).fetchone()
-        return dict(result._mapping) if result else None
+        if not result:
+            return None
+        d = dict(result._mapping)
+        if d.get('export_options') and isinstance(d['export_options'], str):
+            try:
+                d['export_options'] = json.loads(d['export_options'])
+            except Exception:
+                d['export_options'] = {}
+        elif not d.get('export_options'):
+            d['export_options'] = {}
+        return d
 
 
 def delete_dataset(dataset_uuid):

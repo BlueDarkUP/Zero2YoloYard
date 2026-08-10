@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import threading
 from collections import defaultdict
 
@@ -361,143 +362,326 @@ def predict_by_class_text(video_uuid, frame_number, class_name, confidence_thres
 #        颜色直方图部分和 MobileNet 无关，原样保留。
 # ==============================================================================
 
+def _extract_crop_color_hist(image_bgr, rect=None):
+    """
+    Extract 48-dim color histogram, quad spatial color means, texture, and aspect ratio vector for an image or ROI crop.
+    """
+    if image_bgr is None or image_bgr.size == 0:
+        return np.zeros(48, dtype=np.float32)
+
+    if rect is not None:
+        h_img, w_img = image_bgr.shape[:2]
+        x1 = max(0, min(w_img - 1, int(rect[0])))
+        y1 = max(0, min(h_img - 1, int(rect[1])))
+        x2 = max(x1 + 1, min(w_img, int(rect[2])))
+        y2 = max(y1 + 1, min(h_img, int(rect[3])))
+        roi = image_bgr[y1:y2, x1:x2]
+    else:
+        roi = image_bgr
+
+    if roi.size == 0:
+        return np.zeros(48, dtype=np.float32)
+
+    hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
+    aspect_ratio = roi.shape[1] / max(1, roi.shape[0])
+
+    hist_h = cv2.calcHist([hsv], [0], None, [16], [0, 180])
+    hist_s = cv2.calcHist([hsv], [1], None, [8], [0, 256])
+    hist_v = cv2.calcHist([hsv], [2], None, [8], [0, 256])
+
+    cv2.normalize(hist_h, hist_h)
+    cv2.normalize(hist_s, hist_s)
+    cv2.normalize(hist_v, hist_v)
+
+    hist_h = hist_h.flatten()
+    hist_s = hist_s.flatten()
+    hist_v = hist_v.flatten()
+
+    h, w = hsv.shape[:2]
+    quads = [
+        hsv[0:h//2, 0:w//2], hsv[0:h//2, w//2:w],
+        hsv[h//2:h, 0:w//2], hsv[h//2:h, w//2:w]
+    ]
+    quad_means = []
+    for q in quads:
+        if q.size > 0:
+            quad_means.append(np.mean(q, axis=(0, 1)) / [180.0, 255.0, 255.0])
+        else:
+            quad_means.append(np.zeros(3, dtype=np.float32))
+    quad_feat = np.concatenate(quad_means).astype(np.float32)
+
+    gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+    edges = cv2.Canny(gray, 50, 150)
+    edge_density = np.float32([np.mean(edges) / 255.0])
+    mean_val = np.float32([np.mean(gray) / 255.0])
+    std_val = np.float32([np.std(gray) / 255.0])
+    ar_feat = np.float32([np.log10(aspect_ratio)])
+
+    vec = np.concatenate([hist_h, hist_s, hist_v, quad_feat, edge_density, mean_val, std_val, ar_feat])
+    norm = np.linalg.norm(vec)
+    return vec / norm if norm > 0 else vec
+
+
 def check_dataset_consistency(dataset_uuid, enable_color_check=True):
     """
-    返回: (outlier_image_indices: set[int], all_bboxes_info: list[dict], message: str)
-    outlier_image_indices 里的下标对应 all_bboxes_info 里 'image_index' 字段的值，
-    也就是"第几张涉及标注的图片"，和旧实现的返回结构保持一致，方便路由层复用。
+    Quality control and outlier detection for DET, SEG, and CLS datasets.
+    
+    Uses CLIP deep feature vectors + Category Prototype Centroid comparison + Strict Color Check.
+    Returns: (outlier_image_indices: set[int], all_bboxes_info: list[dict], message: str)
     """
-    if sam_tasks is None:
-        raise RuntimeError("SAM 功能未安装。")
-
     dataset = database.get_dataset_entity(dataset_uuid)
     if not dataset:
         return None, None, "Dataset not found."
 
     video_uuids = json.loads(dataset.get('video_uuids') or '[]')
-    all_frames = [
-        dict(frame) for vu in video_uuids for frame in database.get_video_frames(vu)
-        if (frame.get('bboxes_text') or '').strip()
-    ]
+    video_info_cache = {vu: database.get_video_entity(vu) for vu in video_uuids}
 
-    all_bboxes_info = []
-    frames_to_process = defaultdict(list)  # "video_uuid;frame_number" -> [(global_idx, rect, label), ...]
-    for i, frame in enumerate(all_frames):
-        rects, labels, _ = convert_text_to_rects_and_labels(frame['bboxes_text'])
-        for j, rect in enumerate(rects):
-            global_idx = len(all_bboxes_info)
-            all_bboxes_info.append({
-                'image_index': i, 'rect': rect, 'label': labels[j],
-                'video_uuid': frame['video_uuid'], 'frame_number': frame['frame_number'],
-                'color_hist': None,
-            })
-            frames_to_process[f"{frame['video_uuid']};{frame['frame_number']}"].append((global_idx, rect, labels[j]))
+    export_format = dataset.get('export_format', '')
+    is_classification = (export_format in ['folder_classification', 'yolo_cls']) or any(
+        video_info_cache.get(vu, {}).get('annotation_type') == 'classification' for vu in video_uuids
+    )
 
-    if not all_bboxes_info:
-        return set(), all_bboxes_info, "No labeled boxes found in this dataset."
-
-    settings = settings_manager.load_settings()
-    color_confusion_factor = float(settings.get('color_confusion_factor', 2.0))
-    semantic_low_threshold = float(settings.get('consistency_semantic_threshold', 0.3))
-    confusion_margin = float(settings.get('consistency_confusion_margin', 0.15))
-
-    color_prototype_hists = defaultdict(list)
     outlier_image_indices = set()
+    all_bboxes_info = []
 
-    # 第一遍: 颜色直方图 (纯 OpenCV，和 SAM3 无关，先算完不占 GPU/锁)
-    if enable_color_check:
-        for frame_key, rect_data in frames_to_process.items():
-            video_uuid, frame_number_str = frame_key.split(';')
-            image_path = file_storage.get_frame_path(video_uuid, int(frame_number_str))
-            image_bgr = cv2.imread(image_path)
-            if image_bgr is None:
+    use_clip = True
+    try:
+        import clip_model
+    except Exception as e:
+        logging.warning(f"CLIP model import failed: {e}")
+        use_clip = False
+
+    if is_classification:
+        # === CLASSIFICATION (CLS) DATASET QUALITY SCAN ===
+        all_frames = []
+        for vu in video_uuids:
+            frames = database.get_video_frames(vu)
+            for f in frames:
+                ann_json = (f.get('annotations_json') or '').strip()
+                tags = []
+                if ann_json:
+                    try:
+                        from annotation_model import AnnotationData
+                        ann_data = AnnotationData.from_json(ann_json)
+                        tags = ann_data.classifications or []
+                    except Exception:
+                        pass
+                if not tags and (f.get('bboxes_text') or '').strip():
+                    from app import extract_labels
+                    tags = extract_labels(f['bboxes_text'])
+                if tags:
+                    all_frames.append({
+                        'video_uuid': vu,
+                        'frame_number': f['frame_number'],
+                        'tags': tags
+                    })
+
+        if not all_frames:
+            return set(), [], "No labeled classification images found in this dataset."
+
+        items = []
+        for i, f_item in enumerate(all_frames):
+            img_path = file_storage.get_frame_path(f_item['video_uuid'], f_item['frame_number'])
+            if not os.path.exists(img_path):
                 continue
-            for global_idx, rect, label in rect_data:
-                hist = _calculate_region_color_hist(image_bgr, rect)
-                all_bboxes_info[global_idx]['color_hist'] = hist
-                if hist is not None:
-                    color_prototype_hists[label].append(hist)
+            img_bgr = cv2.imread(img_path)
+            if img_bgr is None or img_bgr.size == 0:
+                continue
 
-        color_prototype_mean = {
-            label: np.mean(np.array(hists), axis=0)
-            for label, hists in color_prototype_hists.items() if hists
-        }
-    else:
-        color_prototype_mean = {}
-
-    # 第二遍: 逐帧跑 SAM3 语义一致性检查。同一帧涉及到的每个类别各查一次，
-    # backbone 只算一次(帧级缓存)，一帧内该类别的所有框共用这一次查询结果。
-    with AI_MODEL_LOCK:
-        for frame_key, rect_data in frames_to_process.items():
-            video_uuid, frame_number_str = frame_key.split(';')
-            frame_number = int(frame_number_str)
-            labels_in_frame = sorted({label for _, _, label in rect_data})
-
-            per_class_results = {}
-            for label in labels_in_frame:
-                retrieval_text = get_retrieval_text_for_class(label)
+            if use_clip:
                 try:
-                    per_class_results[label] = sam_tasks.sam3_query_frame(
-                        video_uuid, frame_number, text_prompt=retrieval_text, confidence=0.05
-                    )
-                except Exception as e:
-                    logging.warning(f"Consistency check: SAM3 query failed for '{label}' in {frame_key}: {e}")
-                    per_class_results[label] = []
+                    sem_vec = clip_model.clip_manager.extract_image_feature_vector(img_bgr)
+                except Exception:
+                    sem_vec = _extract_crop_color_hist(img_bgr)
+            else:
+                sem_vec = _extract_crop_color_hist(img_bgr)
 
-            for global_idx, rect, label in rect_data:
-                is_outlier = False
-                own_score, _ = _best_iou_match(rect, per_class_results.get(label, []))
+            sem_norm = np.linalg.norm(sem_vec)
+            if sem_norm > 0:
+                sem_vec = sem_vec / sem_norm
 
-                if own_score < semantic_low_threshold:
-                    is_outlier = True
-                    logging.info(
-                        f"[Consistency] SEMANTIC outlier: '{label}' own_score={own_score:.2f} "
-                        f"(SAM3 认为这块区域不太像它自己的类别描述). image_index={all_bboxes_info[global_idx]['image_index']}"
-                    )
-                else:
-                    for other_label in labels_in_frame:
-                        if other_label == label:
-                            continue
-                        other_score, _ = _best_iou_match(rect, per_class_results.get(other_label, []))
-                        if other_score > own_score + confusion_margin:
-                            is_outlier = True
-                            logging.info(
-                                f"[Consistency] SEMANTIC outlier: '{label}' (own={own_score:.2f}) looks more "
-                                f"like '{other_label}' (other={other_score:.2f}). "
-                                f"image_index={all_bboxes_info[global_idx]['image_index']}"
-                            )
+            if enable_color_check:
+                color_vec = _extract_crop_color_hist(img_bgr)
+                combined_vec = np.concatenate([sem_vec * 0.7, color_vec * 0.3])
+            else:
+                combined_vec = sem_vec
+
+            c_norm = np.linalg.norm(combined_vec)
+            if c_norm > 0:
+                combined_vec = combined_vec / c_norm
+
+            items.append({
+                'index': i,
+                'tags': f_item['tags'],
+                'vector': combined_vec
+            })
+
+        class_vectors = defaultdict(list)
+        for it in items:
+            for tag in it['tags']:
+                class_vectors[tag].append(it['vector'])
+
+        class_centroids = {}
+        for tag, vecs in class_vectors.items():
+            mean_v = np.mean(vecs, axis=0)
+            norm_v = np.linalg.norm(mean_v)
+            class_centroids[tag] = mean_v / norm_v if norm_v > 0 else mean_v
+
+        in_class_sims = defaultdict(list)
+        for it in items:
+            for tag in it['tags']:
+                if tag in class_centroids:
+                    sim = float(np.dot(it['vector'], class_centroids[tag]))
+                    in_class_sims[tag].append(sim)
+
+        class_stats = {}
+        for tag, sims in in_class_sims.items():
+            class_stats[tag] = {
+                'mean': float(np.mean(sims)),
+                'std': float(np.std(sims)) if len(sims) > 1 else 0.0
+            }
+
+        for it in items:
+            idx = it['index']
+            vec = it['vector']
+            tags_set = set(it['tags'])
+            is_anomaly = False
+
+            for tag in tags_set:
+                if tag not in class_centroids:
+                    continue
+                own_sim = float(np.dot(vec, class_centroids[tag]))
+                stats = class_stats.get(tag, {'mean': 0.8, 'std': 0.1})
+
+                thresh = max(0.50, stats['mean'] - 2.0 * stats['std'])
+                if own_sim < thresh:
+                    is_anomaly = True
+
+                for other_tag, centroid in class_centroids.items():
+                    if other_tag not in tags_set:
+                        other_sim = float(np.dot(vec, centroid))
+                        if other_sim > own_sim + 0.06 and other_sim > 0.65:
+                            is_anomaly = True
                             break
 
-                if is_outlier:
-                    outlier_image_indices.add(all_bboxes_info[global_idx]['image_index'])
+            if is_anomaly:
+                outlier_image_indices.add(idx)
+
+    else:
+        # === OBJECT DETECTION & SEGMENTATION (DET / SEG) QUALITY SCAN ===
+        all_frames = [
+            dict(frame) for vu in video_uuids for frame in database.get_video_frames(vu)
+            if (frame.get('bboxes_text') or '').strip()
+        ]
+
+        if not all_frames:
+            return set(), [], "No labeled bounding boxes found in this dataset."
+
+        for i, frame in enumerate(all_frames):
+            rects, labels, _ = convert_text_to_rects_and_labels(frame['bboxes_text'])
+            img_path = file_storage.get_frame_path(frame['video_uuid'], frame['frame_number'])
+            if not os.path.exists(img_path):
+                continue
+            img_bgr = cv2.imread(img_path)
+            if img_bgr is None or img_bgr.size == 0:
+                continue
+
+            h_img, w_img = img_bgr.shape[:2]
+            for j, rect in enumerate(rects):
+                label = labels[j]
+                x1 = max(0, min(w_img - 1, int(rect[0])))
+                y1 = max(0, min(h_img - 1, int(rect[1])))
+                x2 = max(x1 + 1, min(w_img, int(rect[2])))
+                y2 = max(y1 + 1, min(h_img, int(rect[3])))
+
+                crop = img_bgr[y1:y2, x1:x2]
+                if crop.size == 0 or crop.shape[0] < 3 or crop.shape[1] < 3:
                     continue
 
-                if enable_color_check:
-                    hist = all_bboxes_info[global_idx]['color_hist']
-                    if hist is None or label not in color_prototype_mean or len(color_prototype_mean) < 2:
-                        continue
-                    dist_to_own = _color_hist_distance(hist, color_prototype_mean[label])
-                    min_dist_other, closest_other = float('inf'), None
-                    for other_label, other_hist in color_prototype_mean.items():
-                        if other_label == label:
-                            continue
-                        dist = _color_hist_distance(hist, other_hist)
-                        if dist < min_dist_other:
-                            min_dist_other, closest_other = dist, other_label
-                    if closest_other and min_dist_other * color_confusion_factor < dist_to_own:
-                        logging.info(
-                            f"[Consistency] COLOR outlier: '{label}' color profile closer to '{closest_other}'. "
-                            f"image_index={all_bboxes_info[global_idx]['image_index']}"
-                        )
-                        outlier_image_indices.add(all_bboxes_info[global_idx]['image_index'])
+                if use_clip:
+                    try:
+                        sem_vec = clip_model.clip_manager.extract_image_feature_vector(crop)
+                    except Exception:
+                        sem_vec = _extract_crop_color_hist(crop)
+                else:
+                    sem_vec = _extract_crop_color_hist(crop)
 
-    keyword = "**category or color**" if enable_color_check else "**category**"
+                sem_norm = np.linalg.norm(sem_vec)
+                if sem_norm > 0:
+                    sem_vec = sem_vec / sem_norm
+
+                if enable_color_check:
+                    color_vec = _extract_crop_color_hist(crop)
+                    combined_vec = np.concatenate([sem_vec * 0.7, color_vec * 0.3])
+                else:
+                    combined_vec = sem_vec
+
+                c_norm = np.linalg.norm(combined_vec)
+                if c_norm > 0:
+                    combined_vec = combined_vec / c_norm
+
+                global_idx = len(all_bboxes_info)
+                all_bboxes_info.append({
+                    'image_index': i,
+                    'rect': rect,
+                    'label': label,
+                    'video_uuid': frame['video_uuid'],
+                    'frame_number': frame['frame_number'],
+                    'vector': combined_vec
+                })
+
+        if not all_bboxes_info:
+            return set(), all_bboxes_info, "No valid object crops found in this dataset."
+
+        class_vectors = defaultdict(list)
+        for bbox in all_bboxes_info:
+            class_vectors[bbox['label']].append(bbox['vector'])
+
+        class_centroids = {}
+        for label, vecs in class_vectors.items():
+            mean_v = np.mean(vecs, axis=0)
+            norm_v = np.linalg.norm(mean_v)
+            class_centroids[label] = mean_v / norm_v if norm_v > 0 else mean_v
+
+        in_class_sims = defaultdict(list)
+        for bbox in all_bboxes_info:
+            label = bbox['label']
+            sim = float(np.dot(bbox['vector'], class_centroids[label]))
+            in_class_sims[label].append(sim)
+
+        class_stats = {
+            lbl: {'mean': float(np.mean(sims)), 'std': float(np.std(sims)) if len(sims) > 1 else 0.0}
+            for lbl, sims in in_class_sims.items()
+        }
+
+        for bbox in all_bboxes_info:
+            label = bbox['label']
+            vec = bbox['vector']
+            idx = bbox['image_index']
+            own_sim = float(np.dot(vec, class_centroids[label]))
+            stats = class_stats.get(label, {'mean': 0.8, 'std': 0.1})
+
+            is_outlier = False
+            thresh = max(0.48, stats['mean'] - 2.0 * stats['std'])
+            if own_sim < thresh:
+                is_outlier = True
+
+            for other_label, centroid in class_centroids.items():
+                if other_label != label:
+                    other_sim = float(np.dot(vec, centroid))
+                    if other_sim > own_sim + 0.05 and other_sim > 0.65:
+                        is_outlier = True
+                        break
+
+            if is_outlier:
+                outlier_image_indices.add(idx)
+
     count = len(outlier_image_indices)
+    mode_str = "CLS" if is_classification else "DET/SEG"
+    color_str = " (Semantic + Color)" if enable_color_check else " (Semantic)"
     if count == 0:
-        message = "AI review completed. No obvious labeling confusion issues were found."
-    elif count == 1:
-        message = f"AI review complete. Found {count} image with potential instances of {keyword} confusion."
+        message = f"AI {mode_str} quality scan completed{color_str}. No obvious labeling confusion issues found."
     else:
-        message = f"AI review complete. Found {count} images with potential instances of {keyword} confusion."
+        message = f"AI {mode_str} quality scan complete{color_str}. Found {count} images with potential labeling anomalies."
 
     return outlier_image_indices, all_bboxes_info, message

@@ -68,6 +68,16 @@ class AnnotationData:
         self.objects = objects if objects is not None else []
         self.classifications = classifications if classifications is not None else []
         self.is_ambiguous = is_ambiguous
+        self.sanitize_classifications()
+
+    def sanitize_classifications(self) -> None:
+        cleaned = []
+        for cls in self.classifications:
+            if isinstance(cls, str):
+                c = cls.strip()
+                if c and c not in cleaned:
+                    cleaned.append(c)
+        self.classifications = cleaned
 
     @staticmethod
     def from_dict(data: Dict[str, Any]) -> 'AnnotationData':
@@ -97,6 +107,7 @@ class AnnotationData:
         return AnnotationData(version=1, objects=[], classifications=[], is_ambiguous=False)
 
     def to_json(self) -> str:
+        self.sanitize_classifications()
         return json.dumps({
             "version": self.version,
             "objects": [obj.to_dict() for obj in self.objects],

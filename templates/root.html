@@ -641,6 +641,18 @@
             <option value="yolo_v8_detect">YOLO Detection (v5/v7/v8/v9/v11)</option>
         </select>
     </div>
+    <div class="form-group" id="multilabel-strategy-group" style="display: none;">
+        <label class="font-weight-bold small text-muted">MULTI-LABEL STRATEGY (多标签导出策略)</label>
+        <select class="form-control custom-select" id="dataset-multilabel-strategy">
+            <option value="first" selected>first (首选主标签模式 - 默认推荐)</option>
+            <option value="composite">composite (组合类别模式 - 拼为如 cat+dog)</option>
+            <option value="skip">skip (严格过滤模式 - 忽略多标签图片)</option>
+            <option value="duplicate">duplicate (复制多份模式 - 维持旧逻辑)</option>
+        </select>
+        <small class="form-text text-muted" id="multilabel-strategy-desc">
+            对于一帧包含多个标签的图片，仅取首个标签，符合标准 Softmax 单标签分类范式。
+        </small>
+    </div>
     <div class="card mb-3 border-secondary" style="background: rgba(255,255,255,0.02);">
         <div class="card-body p-3">
             <div class="d-flex justify-content-between align-items-center">
@@ -1106,17 +1118,44 @@
                 context.find('#' + controlsId).toggle($(this).is(':checked'));
             });
         }
+        function updateMultilabelVisibility() {
+            const selectedOpt = $('#dataset-export-format option:selected');
+            const fmtKey = $('#dataset-export-format').val() || '';
+            const typesStr = selectedOpt.attr('data-types') || '';
+            const isClassification = typesStr.includes('classification') || fmtKey.includes('cls') || fmtKey.includes('class');
+            $('#multilabel-strategy-group').slideToggle(isClassification);
+        }
+
+        $('#dataset-export-format').on('change', updateMultilabelVisibility);
+
+        const multilabelDescriptions = {
+            'first': '对于一帧打了多个标签的图片，仅取其第一个标签放入对应文件夹，保证符合严格 Softmax 单标签分类范式。',
+            'composite': '将多个标签按字母排序拼接成一个新的独立组合类（如 cat+dog），适合多目标共存形态训练。',
+            'skip': '遇到包含多个标签的图片直接跳过不导出，确保导出数据集的纯净度。',
+            'duplicate': '将同一张图片复制进每一个命中的类别文件夹（旧版逻辑），仅供特殊多重样本扩展需求开启。'
+        };
+
+        $('#dataset-multilabel-strategy').on('change', function() {
+            const val = $(this).val();
+            $('#multilabel-strategy-desc').text(multilabelDescriptions[val] || multilabelDescriptions['first']);
+        });
+
         $('#createDatasetModal').on('show.bs.modal', function() {
             $.get('/api/export_formats', function(res) {
                 if (res.success && res.formats) {
                     const formatSelect = $('#dataset-export-format');
                     formatSelect.empty();
                     res.formats.forEach(function(fmt) {
-                        formatSelect.append($('<option>', {
+                        const opt = $('<option>', {
                             value: fmt.key,
                             text: fmt.name
-                        }));
+                        });
+                        if (fmt.types && Array.isArray(fmt.types)) {
+                            opt.attr('data-types', fmt.types.join(','));
+                        }
+                        formatSelect.append(opt);
                     });
+                    updateMultilabelVisibility();
                 }
             });
         });
@@ -1160,6 +1199,9 @@
                 eval_percent: $('#eval-percent').val(),
                 test_percent: $('#test-percent').val(),
                 export_format: $('#dataset-export-format').val(),
+                export_options: {
+                    multilabel_strategy: $('#dataset-multilabel-strategy').val() || 'first'
+                },
                 augmentation_options: augmentation_options
             };
             $.ajax({

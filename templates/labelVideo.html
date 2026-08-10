@@ -600,9 +600,6 @@
                 <button id="btn-open-clip-zeroshot" class="btn btn-sm btn-primary text-white font-weight-bold ml-2 px-3 font-monospace" style="box-shadow: 0 2px 4px rgba(0,0,0,0.2);" title="Run CLIP Zero-Shot Pre-Annotation">
                     <i class="bi bi-robot"></i> CLIP ZERO-SHOT
                 </button>
-                <button id="btn-open-cls-clustering" class="btn btn-sm btn-info text-dark font-weight-bold ml-2 px-3 font-monospace" style="box-shadow: 0 2px 4px rgba(0,0,0,0.2);" title="Open Visual Vector Clustering & Batch Tagging">
-                    <i class="bi bi-diagram-3-fill"></i> VISUAL CLUSTERING
-                </button>
                 <button id="btn-toggle-ambiguous-filter" class="btn btn-sm btn-outline-warning font-weight-bold ml-2 px-3 font-monospace" style="box-shadow: 0 2px 4px rgba(0,0,0,0.2);" title="Filter and review ambiguous frames">
                     <i class="bi bi-exclamation-diamond-fill"></i> DISAMBIGUATION (<span id="ambiguous-count-badge">0</span>)
                 </button>
@@ -630,10 +627,21 @@
             <div class="shortcut-keys-container">
                 <span class="shortcut-key">[S] SAVE</span>
                 <span class="shortcut-key">[A/D] PREV/NEXT</span>
+                {% if video_entity.annotation_type == 'pose' %}
+                <span class="shortcut-key">[CLICK] PLACE / SELECT POINT</span>
+                <span class="shortcut-key">[DRAG] MOVE POINT</span>
+                <span class="shortcut-key">[0/1/2] ABSENT/OCCLUDED/VISIBLE</span>
+                <span class="shortcut-key">[RIGHT-CLICK] DELETE POINT</span>
+                <span class="shortcut-key">[ENTER] FINISH SKELETON</span>
+                <span class="shortcut-key">[ESC] CANCEL</span>
+                <span class="shortcut-key">[CTRL+Z] UNDO</span>
+                <span class="shortcut-key">[DEL] DELETE SELECTED</span>
+                {% else %}
                 <span class="shortcut-key">[C] CYCLE OVERLAP</span>
                 <span class="shortcut-key">[ESC] CANCEL</span>
                 <span class="shortcut-key">[CTRL+Z] UNDO</span>
                 <span class="shortcut-key">[DEL] DELETE</span>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -753,46 +761,6 @@
     <button type="button" id="confirm-apply-scope-btn" class="btn btn-primary rounded-0 text-uppercase font-weight-bold"><i class="bi bi-check2-circle"></i> Apply</button>
 </div>
 {% endcall %}
-
-<!-- Visual Clustering Modal for labelVideo.html -->
-<div class="modal fade" id="labelVideoClusteringModal" tabindex="-1" role="dialog" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable" role="document">
-        <div class="modal-content bg-dark text-white border-secondary">
-            <div class="modal-header border-secondary bg-black">
-                <h5 class="modal-title font-monospace text-primary"><i class="bi bi-diagram-3-fill mr-2"></i> VISUAL VECTOR CLUSTERING & BATCH TAGGING</h5>
-                <button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button>
-            </div>
-            <div class="modal-body bg-dark">
-                <div class="d-flex align-items-center justify-content-between mb-3 p-3 bg-black border border-secondary flex-wrap">
-                    <div class="d-flex align-items-center flex-wrap mb-2 mb-md-0">
-                        <label class="mr-2 mb-0 small text-muted font-weight-bold font-monospace">MODEL:</label>
-                        <select id="lv-cluster-model-select" class="form-control form-control-sm mr-3 bg-dark text-white border-secondary font-monospace" style="width: 220px;">
-                            <option value="clip-vit-base-patch32">clip-vit-base-patch32</option>
-                            <option value="clip-vit-base-patch16">clip-vit-base-patch16</option>
-                            <option value="clip-vit-large-patch14">clip-vit-large-patch14</option>
-                        </select>
-                        <label class="mr-2 mb-0 small text-muted font-weight-bold font-monospace">CLUSTERS (K):</label>
-                        <input type="number" id="lv-cluster-k-select" class="form-control form-control-sm mr-3 bg-dark text-white border-secondary font-monospace" min="2" max="100" value="6" style="width: 90px;" placeholder="K值...">
-                        <div class="custom-control custom-checkbox mr-3">
-                            <input type="checkbox" class="custom-control-input" id="lv-cluster-unlabeled-only">
-                            <label class="custom-control-label small font-monospace text-warning" for="lv-cluster-unlabeled-only">UNLABELED FRAMES ONLY</label>
-                        </div>
-                    </div>
-                    <button id="lv-run-clustering-btn" class="btn btn-sm btn-primary font-monospace font-weight-bold">
-                        <i class="bi bi-play-fill mr-1"></i> RUN CLUSTERING SCAN
-                    </button>
-                </div>
-
-                <div id="lv-clustering-loader" class="text-center my-5" style="display: none;">
-                    <div class="spinner-border text-primary" role="status"></div>
-                    <p class="mt-2 text-primary font-monospace small">Extracting CLIP visual feature vectors and performing K-Means clustering...</p>
-                </div>
-
-                <div id="lv-clustering-results-container" class="custom-scrollbar" style="max-height: 600px; overflow-y: auto;"></div>
-            </div>
-        </div>
-    </div>
-</div>
 
 <!-- CLIP Zero-Shot Pre-Annotation Modal for labelVideo.html -->
 <div class="modal fade" id="labelVideoClipModal" tabindex="-1" role="dialog" aria-hidden="true">
@@ -998,242 +966,16 @@
 
         $('#btn-toggle-ambiguous-filter').on('click', function() {
             if (ambiguousFramesList.length === 0) {
-                window.sysAlert('No ambiguous frames flagged yet! Mark a cluster as ⚠️ AMBIGUOUS in Visual Clustering first.', 'info');
+                window.sysAlert('当前没有需要消歧义的图片！可在【可视化聚类】中标记类别歧义。', 'info');
                 return;
             }
-            ambiguousIndex = (ambiguousIndex + 1) % ambiguousFramesList.length;
-            const targetFrame = ambiguousFramesList[ambiguousIndex];
+            const currentFrame = parseInt($('#frame-slider').val());
+            let targetFrame = ambiguousFramesList.find(f => f !== currentFrame);
+            if (targetFrame === undefined) {
+                targetFrame = ambiguousFramesList[0];
+            }
             $('#frame-slider').val(targetFrame).trigger('input');
-            showToast(`⚠️ DISAMBIGUATION REVIEW (${ambiguousIndex + 1}/${ambiguousFramesList.length}): Frame #${targetFrame}`, 3000);
         });
-
-        $('#btn-open-cls-clustering').on('click', function() {
-            $('#labelVideoClusteringModal').modal('show');
-            if ($('#lv-clustering-results-container').is(':empty')) {
-                fetchLvVisualClusters();
-            }
-        });
-
-        $('#lv-run-clustering-btn').on('click', function() {
-            fetchLvVisualClusters();
-        });
-
-        function fetchLvVisualClusters() {
-            const numClusters = parseInt($('#lv-cluster-k-select').val() || 6);
-            const unlabeledOnly = $('#lv-cluster-unlabeled-only').is(':checked');
-
-            $('#lv-clustering-loader').show();
-            $('#lv-clustering-results-container').empty();
-            $('#lv-run-clustering-btn').prop('disabled', true);
-
-            $.ajax({
-                url: '/api/clusterClassificationImages',
-                type: 'POST',
-                contentType: 'application/json',
-                data: JSON.stringify({
-                    video_uuids: ["{{ video_entity.video_uuid }}"],
-                    num_clusters: numClusters,
-                    unlabeled_only: unlabeledOnly
-                }),
-                success: function(res) {
-                    $('#lv-clustering-loader').hide();
-                    $('#lv-run-clustering-btn').prop('disabled', false);
-
-                    if (res.success) {
-                        renderLvClusters(res.clusters);
-                    } else {
-                        $('#lv-clustering-results-container').html(`<div class="alert alert-warning font-monospace small m-3">${res.message}</div>`);
-                    }
-                },
-                error: function(xhr) {
-                    $('#lv-clustering-loader').hide();
-                    $('#lv-run-clustering-btn').prop('disabled', false);
-                    const msg = xhr.responseJSON ? xhr.responseJSON.message : "Visual clustering failed.";
-                    $('#lv-clustering-results-container').html(`<div class="alert alert-danger font-monospace small m-3">${msg}</div>`);
-                }
-            });
-        }
-
-        function renderClusterGridThumbnails(cluster, grid) {
-            grid.empty();
-            cluster.images.forEach(img => {
-                const hasTag = img.tags && img.tags.length > 0;
-                const tagText = hasTag ? img.tags.join(', ') : '';
-                const isAmbiguous = img.is_ambiguous;
-                
-                const ambBadge = isAmbiguous 
-                    ? `<span class="badge badge-warning text-dark font-monospace position-absolute" style="top: 4px; right: 4px; z-index: 5; font-size: 10px; font-weight: bold; box-shadow: 0 0 6px rgba(255, 193, 7, 0.9);"><i class="bi bi-exclamation-triangle-fill mr-1"></i>AMBIGUOUS</span>` 
-                    : '';
-                const tagBadge = hasTag 
-                    ? `<span class="badge badge-info font-monospace position-absolute cluster-thumb-badge" style="top: 4px; left: 4px; z-index: 5; background: rgba(23, 162, 184, 0.9); font-size: 11px; max-width: 80%; overflow: hidden; text-overflow: ellipsis;" title="${tagText}">${tagText}</span>` 
-                    : '';
-                const borderStyle = isAmbiguous ? 'border: 2px solid #ffc107; box-shadow: 0 0 12px rgba(255, 193, 7, 0.8);' : 'border: 1px solid #444;';
-                
-                const thumbCol = $(`
-                    <div class="col-4 col-sm-3 col-md-2 p-1 position-relative cluster-thumb-col" data-vu="${img.video_uuid}" data-fn="${img.frame_number}">
-                        ${tagBadge}
-                        ${ambBadge}
-                        <img src="${img.original_url}" class="img-fluid rounded" style="height: 90px; width: 100%; object-fit: cover; ${borderStyle}" title="Frame #${img.frame_number} | Tags: ${tagText || 'None'} ${isAmbiguous ? '| ⚠️ Flagged Ambiguous' : ''}">
-                    </div>
-                `);
-                grid.append(thumbCol);
-            });
-        }
-
-        function renderLvClusters(clusters) {
-            const container = $('#lv-clustering-results-container').empty();
-
-            if (!clusters || clusters.length === 0) {
-                container.html('<div class="alert alert-info font-monospace small m-3">No images found for visual clustering.</div>');
-                return;
-            }
-
-            let classesList = [];
-            if (typeof availableClasses !== 'undefined' && Array.isArray(availableClasses) && availableClasses.length > 0) {
-                classesList = availableClasses.slice();
-            } else if (window.availableClassifications && Array.isArray(window.availableClassifications) && window.availableClassifications.length > 0) {
-                classesList = window.availableClassifications.slice();
-            }
-
-            $('#class-list li[data-class-name]').each(function() {
-                const c = $(this).attr('data-class-name');
-                if (c && !classesList.includes(c)) classesList.push(c);
-            });
-            $('#category-chips .category-chip').each(function() {
-                const c = $(this).data('class-name') || $(this).text().trim();
-                if (c && !classesList.includes(c)) classesList.push(c);
-            });
-
-            let classOptionsHtml = '<option value="">-- SELECT CLASS --</option>';
-            let quickButtonsHtml = '';
-            classesList.forEach(c => {
-                classOptionsHtml += `<option value="${c}">${c}</option>`;
-                const color = typeof stringToColor === 'function' ? stringToColor(c) : '#007bff';
-                quickButtonsHtml += `<button type="button" class="btn btn-xs btn-outline-light mr-1 mb-1 quick-cluster-tag-btn" data-class="${c}" style="border-color:${color}; color:${color}; background: rgba(0,0,0,0.4);" title="Add tag '${c}' to all images in this cluster"><i class="bi bi-plus-circle mr-1"></i>${c}</button>`;
-            });
-
-            clusters.forEach((cluster, idx) => {
-                const anyAmbiguous = cluster.images.some(img => img.is_ambiguous);
-                const ambBtnStyle = anyAmbiguous ? 'btn-warning text-dark font-weight-bold' : 'btn-outline-warning text-warning';
-                
-                const card = $(`
-                    <div class="card mb-4 border-secondary bg-black">
-                        <div class="card-header bg-dark d-flex justify-content-between align-items-center flex-wrap p-2 border-secondary">
-                            <div class="font-monospace text-primary font-weight-bold">
-                                <i class="bi bi-collection-fill mr-1"></i> CLUSTER #${cluster.cluster_id + 1} (${cluster.count} IMAGES)
-                            </div>
-                            <div class="d-flex align-items-center flex-wrap mt-2 mt-md-0">
-                                <div class="quick-tag-bar mr-2 d-flex align-items-center flex-wrap">
-                                    ${quickButtonsHtml}
-                                </div>
-                                <select class="form-control form-control-sm mr-2 bg-dark text-white border-secondary font-monospace cluster-tag-select" style="width: 130px;">
-                                    ${classOptionsHtml}
-                                </select>
-                                <input type="text" class="form-control form-control-sm mr-2 bg-dark text-white border-secondary font-monospace cluster-custom-tag" placeholder="Or new..." style="width: 100px;">
-                                <button class="btn btn-sm btn-success font-monospace font-weight-bold batch-tag-cluster-btn mr-2">
-                                    <i class="bi bi-tag-fill mr-1"></i> LABEL ALL (${cluster.count})
-                                </button>
-                                <button class="btn btn-sm ${ambBtnStyle} font-monospace flag-cluster-ambiguous-btn" title="Flag/Unflag all images in this cluster as ambiguous / needs review">
-                                    <i class="bi bi-exclamation-diamond-fill mr-1"></i> ⚠️ AMBIGUOUS
-                                </button>
-                            </div>
-                        </div>
-                        <div class="card-body p-2">
-                            <div class="row no-gutters cluster-grid-${idx}"></div>
-                        </div>
-                    </div>
-                `);
-
-                const grid = card.find(`.cluster-grid-${idx}`);
-                renderClusterGridThumbnails(cluster, grid);
-
-                card.find('.quick-cluster-tag-btn').on('click', function() {
-                    const chosenTag = $(this).data('class');
-                    card.find('.cluster-tag-select').val(chosenTag);
-                    card.find('.batch-tag-cluster-btn').click();
-                });
-
-                card.find('.flag-cluster-ambiguous-btn').on('click', function() {
-                    const $btn = $(this);
-                    const targetState = !cluster.images.some(img => img.is_ambiguous);
-                    $btn.prop('disabled', true);
-
-                    $.ajax({
-                        url: '/api/flagAmbiguousCluster',
-                        type: 'POST',
-                        contentType: 'application/json',
-                        data: JSON.stringify({
-                            target_images: cluster.images,
-                            is_ambiguous: targetState
-                        }),
-                        success: function(res) {
-                            $btn.prop('disabled', false);
-                            if (res.success) {
-                                cluster.images.forEach(img => img.is_ambiguous = targetState);
-                                renderClusterGridThumbnails(cluster, grid);
-                                if (typeof window.updateAmbiguousCountBadge === 'function') window.updateAmbiguousCountBadge();
-                                if (targetState) {
-                                    $btn.removeClass('btn-outline-warning text-warning').addClass('btn-warning text-dark font-weight-bold');
-                                    window.sysAlert(`Flagged Cluster #${cluster.cluster_id + 1} (${res.updated_count} frames) as ⚠️ AMBIGUOUS!`, 'warning');
-                                } else {
-                                    $btn.removeClass('btn-warning text-dark font-weight-bold').addClass('btn-outline-warning text-warning');
-                                    window.sysAlert(`Unflagged Cluster #${cluster.cluster_id + 1} ambiguity.`, 'info');
-                                }
-                            }
-                        },
-                        error: function() {
-                            $btn.prop('disabled', false);
-                            window.sysAlert('Failed to update ambiguity flag.', 'error');
-                        }
-                    });
-                });
-
-                card.find('.batch-tag-cluster-btn').on('click', function() {
-                    const $btn = $(this);
-                    const selectVal = card.find('.cluster-tag-select').val();
-                    const customVal = card.find('.cluster-custom-tag').val().trim();
-                    const tagName = customVal || selectVal;
-
-                    if (!tagName) {
-                        window.sysAlert('Please select or enter a class name first!', 'warning');
-                        return;
-                    }
-
-                    $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> Tagging...');
-
-                    $.ajax({
-                        url: '/api/batchTagClusterImages',
-                        type: 'POST',
-                        contentType: 'application/json',
-                        data: JSON.stringify({
-                            target_images: cluster.images,
-                            tag_name: tagName
-                        }),
-                        success: function(tagRes) {
-                            if (tagRes.success) {
-                                window.sysAlert(`Successfully added tag '${tagName}' to ${tagRes.updated_count} images in Cluster #${cluster.cluster_id + 1}!`, 'success');
-                                $btn.removeClass('btn-success').addClass('btn-secondary').html(`<i class="bi bi-check-lg mr-1"></i> Labeled '${tagName}'`);
-                                
-                                cluster.images.forEach(img => {
-                                    if (!img.tags.includes(tagName)) img.tags.push(tagName);
-                                });
-                                renderClusterGridThumbnails(cluster, grid);
-                                if (typeof window.reloadClassifications === 'function') window.reloadClassifications();
-                            } else {
-                                window.sysAlert('Tagging failed: ' + tagRes.message, 'error');
-                                $btn.prop('disabled', false).html('<i class="bi bi-tag-fill mr-1"></i> LABEL ALL');
-                            }
-                        },
-                        error: function(xhr) {
-                            window.sysAlert('Tagging request failed: ' + (xhr.responseJSON ? xhr.responseJSON.message : xhr.statusText), 'error');
-                            $btn.prop('disabled', false).html('<i class="bi bi-tag-fill mr-1"></i> LABEL ALL');
-                        }
-                    });
-                });
-
-                container.append(card);
-            });
-        }
 
         // CLIP Zero-Shot Pre-Annotation Logic
         $('#btn-open-clip-zeroshot').on('click', function() {
@@ -1282,10 +1024,15 @@
             $.get('/api/getClipModels', function(res) {
                 if (res.success && res.models && res.models.length > 0) {
                     const sel = $('#clip-model-select').empty();
+                    const selLv = $('#lv-cluster-model-select').empty();
                     res.models.forEach(m => {
                         sel.append(`<option value="${m}">${m}</option>`);
+                        selLv.append(`<option value="${m}">${m}</option>`);
                     });
-                    if (res.active_model) sel.val(res.active_model);
+                    if (res.active_model) {
+                        sel.val(res.active_model);
+                        selLv.val(res.active_model);
+                    }
                 }
             });
         }
@@ -1533,6 +1280,40 @@
                 $('#sidebar-resizer').removeClass('dragging');
                 $('body').css({ 'cursor': '', 'user-select': '' });
                 resizeCanvas();
+            }
+        });
+
+        window.reloadClassifications = function() {
+            $.get('/listClasses', function(response) {
+                if (response.success && Array.isArray(response.labels)) {
+                    response.labels.forEach(label => {
+                        const trimmed = (label || '').trim();
+                        if (trimmed && !availableClasses.includes(trimmed)) {
+                            availableClasses.push(trimmed);
+                        }
+                    });
+                    window.availableClasses = availableClasses;
+                    renderClassList();
+                }
+            });
+
+            $.get('/api/getClassKeypointSchemas', function(res) {
+                if (res.success && res.schemas) {
+                    window.classKeypointSchemas = res.schemas;
+                }
+            });
+
+            const currentFrame = parseInt($('#frame-slider').val());
+            if (window.annotationCore) {
+                window.annotationCore.fetchAnnotations();
+            } else if (typeof loadBboxesForFrame === 'function') {
+                loadBboxesForFrame(currentFrame);
+            }
+        };
+
+        $.get('/api/getClassKeypointSchemas', function(res) {
+            if (res.success && res.schemas) {
+                window.classKeypointSchemas = res.schemas;
             }
         });
 
@@ -3491,6 +3272,7 @@
 <script src="{{ url_for('static', filename='js/annotation/annotator_detection.js') }}"></script>
 <script src="{{ url_for('static', filename='js/annotation/annotator_segmentation.js') }}"></script>
 <script src="{{ url_for('static', filename='js/annotation/annotator_classification.js') }}"></script>
+<script src="{{ url_for('static', filename='js/annotation/annotator_pose.js') }}"></script>
 
 <script>
     $(document).ready(function() {
@@ -3505,6 +3287,8 @@
                 window.annotationCore.setAnnotator(new SegmentationAnnotator(window.annotationCore));
             } else if ("{{ video_entity.annotation_type }}" === "classification") {
                 window.annotationCore.setAnnotator(new ClassificationAnnotator(window.annotationCore));
+            } else if ("{{ video_entity.annotation_type }}" === "pose") {
+                window.annotationCore.setAnnotator(new PoseAnnotator(window.annotationCore));
             }
 
             $('#frame-slider').on('input', function() {

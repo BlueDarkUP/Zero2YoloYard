@@ -518,12 +518,26 @@ def pre_annotate_video_task(video_uuid, model_uuid, options):
                     res0 = results[0]
                     boxes_data = getattr(res0, 'boxes', None)
                     masks_data = getattr(res0, 'masks', None)
+                    kpts_data = getattr(res0, 'keypoints', None)
+
                     has_masks = masks_data is not None and getattr(masks_data, 'xy', None) is not None and len(masks_data.xy) > 0
+                    has_kpts = kpts_data is not None and getattr(kpts_data, 'xy', None) is not None and len(kpts_data.xy) > 0
 
                     if boxes_data is not None and len(boxes_data) > 0:
                         xyxy = boxes_data.xyxy.cpu().numpy()
                         conf = boxes_data.conf.cpu().numpy()
                         cls = boxes_data.cls.cpu().numpy()
+
+                        kpts_xy = kpts_data.xy.cpu().numpy() if has_kpts else None
+                        kpts_conf = getattr(kpts_data, 'conf', None) if has_kpts else None
+                        kpts_conf_np = kpts_conf.cpu().numpy() if kpts_conf is not None and hasattr(kpts_conf, 'cpu') else None
+
+                        coco_names = [
+                            "nose", "left_eye", "right_eye", "left_ear", "right_ear",
+                            "left_shoulder", "right_shoulder", "left_elbow", "right_elbow",
+                            "left_wrist", "right_wrist", "left_hip", "right_hip",
+                            "left_knee", "right_knee", "left_ankle", "right_ankle"
+                        ]
 
                         for j in range(len(xyxy)):
                             xmin = int(max(0, xyxy[j][0]))
@@ -536,22 +550,47 @@ def pre_annotate_video_task(video_uuid, model_uuid, options):
 
                             bboxes_text_lines.append(f"{xmin},{ymin},{xmax},{ymax},{object_name}")
 
-                            poly_pts = []
-                            if has_masks and j < len(masks_data.xy):
+                            if has_kpts and j < len(kpts_xy):
+                                instance_kpts = kpts_xy[j]
+                                kpt_objects = []
+                                for k_idx, pt in enumerate(instance_kpts):
+                                    kx, ky = float(pt[0]), float(pt[1])
+                                    kp_name = coco_names[k_idx] if k_idx < len(coco_names) else f"point_{k_idx+1}"
+                                    kp_v = 2
+                                    if kx == 0 and ky == 0:
+                                        kp_v = 0
+                                    elif kpts_conf_np is not None and k_idx < len(kpts_conf_np[j]):
+                                        if float(kpts_conf_np[j][k_idx]) < 0.3:
+                                            kp_v = 1
+                                    kpt_objects.append({'name': kp_name, 'x': round(kx, 2), 'y': round(ky, 2), 'v': kp_v})
+
+                                ann_data.objects.append(AnnotationObject(
+                                    id=f"pose_{int(time.time()*1000)}_{j}",
+                                    type='keypoint',
+                                    label=object_name,
+                                    bbox=[xmin, ymin, xmax, ymax],
+                                    keypoints=kpt_objects
+                                ))
+                            elif has_masks and j < len(masks_data.xy):
                                 pts = masks_data.xy[j]
+                                poly_pts = []
                                 if len(pts) >= 3:
                                     poly_pts = [[float(max(0, min(imW, pt[0]))), float(max(0, min(imH, pt[1])))] for pt in pts]
-
-                            if not poly_pts:
-                                poly_pts = [[float(xmin), float(ymin)], [float(xmax), float(ymin)], [float(xmax), float(ymax)], [float(xmin), float(ymax)]]
-
-                            obj_id = f"poly_{int(time.time()*1000)}_{j}"
-                            ann_data.objects.append(AnnotationObject(
-                                id=obj_id,
-                                type='polygon',
-                                label=object_name,
-                                points=poly_pts
-                            ))
+                                else:
+                                    poly_pts = [[float(xmin), float(ymin)], [float(xmax), float(ymin)], [float(xmax), float(ymax)], [float(xmin), float(ymax)]]
+                                ann_data.objects.append(AnnotationObject(
+                                    id=f"poly_{int(time.time()*1000)}_{j}",
+                                    type='polygon',
+                                    label=object_name,
+                                    points=poly_pts
+                                ))
+                            else:
+                                ann_data.objects.append(AnnotationObject(
+                                    id=f"bbox_{int(time.time()*1000)}_{j}",
+                                    type='bbox',
+                                    label=object_name,
+                                    bbox=[xmin, ymin, xmax, ymax]
+                                ))
 
             else:
                 image_resized = cv2.resize(frame_rgb, (width, height))
@@ -700,15 +739,17 @@ def start_tracking_task(video_uuid, tracker_uuid, tracker_name, scale, init_fram
 from exporters.detection.yolo_detect import build_augmentation_pipeline, build_augmentation_pipeline_for_keypoints
 
 
-def create_dataset_task(dataset_uuid, video_uuids, eval_percent, test_percent, export_format="yolo_v8_detect", augmentation_options=None):
+def create_dataset_task(dataset_uuid, video_uuids, eval_percent, test_percent, export_format="yolo_v8_detect", augmentation_options=None, export_options=None):
     from exporters import ExporterRegistry
     import json
     from annotation_model import AnnotationData
 
     if augmentation_options is None:
         augmentation_options = {}
+    if export_options is None:
+        export_options = {}
 
-    logging.info(f"Starting dataset creation task for UUID: {dataset_uuid} with format: {export_format}, augmentations: {augmentation_options}")
+    logging.info(f"Starting dataset creation task for UUID: {dataset_uuid} with format: {export_format}, augmentations: {augmentation_options}, export_options: {export_options}")
     try:
         if eval_percent is None: eval_percent = 20.0
         if test_percent is None: test_percent = 10.0
@@ -761,7 +802,9 @@ def create_dataset_task(dataset_uuid, video_uuids, eval_percent, test_percent, e
             dataset_uuid=dataset_uuid,
             eval_percent=eval_percent,
             test_percent=test_percent,
-            augmentation_options=augmentation_options
+            augmentation_options=augmentation_options,
+            export_options=export_options,
+            multilabel_strategy=export_options.get('multilabel_strategy', 'first')
         )
 
         database.update_dataset_status(dataset_uuid, status="PROCESSING", message="Creating ZIP archive...")

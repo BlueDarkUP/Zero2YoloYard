@@ -548,8 +548,14 @@ def save_frame_annotations():
     frame_number = int(data.get('frame_number'))
     annotations_json = data.get('annotations_json')
 
-    if not video_uuid or frame_number is None:
-        return jsonify({'success': False, 'message': 'Missing video_uuid or frame_number'}), 400
+    if annotations_json:
+        try:
+            from annotation_model import AnnotationData
+            ann = AnnotationData.from_json(annotations_json)
+            ann.sanitize_classifications()
+            annotations_json = ann.to_json()
+        except Exception:
+            pass
 
     database.save_frame_annotations(video_uuid, frame_number, annotations_json)
     return jsonify({'success': True})
@@ -658,6 +664,24 @@ def set_class_sam3_prompt_route():
 @app.route('/api/listClassSam3Prompts', methods=['GET'])
 def list_class_sam3_prompts_route():
     return jsonify({'success': True, 'classes': database.get_all_class_labels_with_prompts()})
+
+
+@app.route('/api/saveClassKeypointSchema', methods=['POST'])
+def save_class_keypoint_schema_route():
+    data = request.json or {}
+    label = data.get('label')
+    schema = data.get('schema')
+    if not label or schema is None:
+        return jsonify({'success': False, 'message': 'label and schema are required.'}), 400
+
+    database.set_class_keypoint_schema(label, schema)
+    return jsonify({'success': True})
+
+
+@app.route('/api/getClassKeypointSchemas', methods=['GET'])
+def get_class_keypoint_schemas_route():
+    schemas = database.get_all_class_keypoint_schemas()
+    return jsonify({'success': True, 'schemas': schemas})
 
 
 @app.route('/api/interpolateBboxes', methods=['POST'])
@@ -1799,6 +1823,9 @@ def create_dataset():
     test_percent = float(data.get('test_percent', 10.0))
     export_format = data.get('export_format', 'yolo_v8_detect')
     augmentation_options = data.get('augmentation_options', {})
+    export_options = data.get('export_options', {})
+    if 'multilabel_strategy' in data and 'multilabel_strategy' not in export_options:
+        export_options['multilabel_strategy'] = data['multilabel_strategy']
 
     is_valid, message = validate_description(desc, [d['description'] for d in database.get_dataset_list()])
     if not is_valid:
@@ -1807,10 +1834,10 @@ def create_dataset():
         return jsonify({'success': False, 'message': 'Please select at least one video.'}), 400
 
     create_time = int(time.time() * 1000)
-    dataset_uuid = database.create_dataset_entry(desc, video_uuids, create_time, eval_percent, test_percent, export_format)
+    dataset_uuid = database.create_dataset_entry(desc, video_uuids, create_time, eval_percent, test_percent, export_format, export_options)
 
     threading.Thread(target=background_tasks.create_dataset_task, args=(
-        dataset_uuid, video_uuids, eval_percent, test_percent, export_format, augmentation_options
+        dataset_uuid, video_uuids, eval_percent, test_percent, export_format, augmentation_options, export_options
     ), name=f"Dataset-{dataset_uuid[:6]}").start()
 
     return jsonify({'success': True, 'dataset_uuid': dataset_uuid})
@@ -1832,10 +1859,11 @@ def regenerate_dataset():
     eval_percent = dataset.get('eval_percent')
     test_percent = dataset.get('test_percent')
     export_format = dataset.get('export_format', 'yolo_v8_detect')
+    export_options = dataset.get('export_options', {})
     augmentation_options = {'enabled': False}
 
     threading.Thread(target=background_tasks.create_dataset_task, args=(
-        dataset_uuid, video_uuids, eval_percent, test_percent, export_format, augmentation_options
+        dataset_uuid, video_uuids, eval_percent, test_percent, export_format, augmentation_options, export_options
     ), name=f"Dataset-Regen-{dataset_uuid[:6]}").start()
 
     return jsonify({'success': True, 'message': 'Dataset regeneration started.'})
@@ -2003,6 +2031,9 @@ def get_dataset_analysis_data(dataset_uuid):
     is_classification = (export_format in ['folder_classification', 'yolo_cls']) or any(
         video_info_cache.get(vu, {}).get('annotation_type') == 'classification' for vu in video_uuids
     )
+    is_pose = (export_format in ['coco_pose', 'yolo_pose']) or any(
+        video_info_cache.get(vu, {}).get('annotation_type') == 'pose' for vu in video_uuids
+    )
 
     def get_task_for_frame(video_uuid, frame_number):
         for task in tasks_by_video.get(video_uuid, []):
@@ -2026,6 +2057,8 @@ def get_dataset_analysis_data(dataset_uuid):
     class_counts = Counter()
     labels_per_image_counts = Counter()
     co_occurrence_counts = Counter()
+    keypoint_visibility_counts = Counter()
+    keypoint_coords = []
     aspect_ratios, objects_per_image, center_points, brightness_levels = [], [], [], []
     all_bboxes_for_outliers = []
     suspicious_pairs = []
@@ -2055,6 +2088,30 @@ def get_dataset_analysis_data(dataset_uuid):
                             rect = [min(xs), min(ys), max(xs), max(ys)]
                     elif obj.type == 'bbox' and obj.bbox:
                         rect = obj.bbox
+                    elif obj.type == 'keypoint':
+                        if obj.bbox and len(obj.bbox) == 4:
+                            rect = obj.bbox
+                        elif obj.keypoints:
+                            v_pts = [p for p in obj.keypoints if p.get('v', 2) > 0]
+                            pts = v_pts if v_pts else obj.keypoints
+                            if pts:
+                                rect = [min(p['x'] for p in pts), min(p['y'] for p in pts), max(p['x'] for p in pts), max(p['y'] for p in pts)]
+
+                        if obj.keypoints:
+                            v_info = video_info_cache.get(video_uuid, {})
+                            img_w = float(v_info.get('width') or 1920)
+                            img_h = float(v_info.get('height') or 1080)
+                            for kp in obj.keypoints:
+                                v_stat = kp.get('v', 2)
+                                keypoint_visibility_counts[v_stat] += 1
+                                if v_stat > 0:
+                                    keypoint_coords.append({
+                                        'name': kp.get('name', 'kpt'),
+                                        'x': round(kp.get('x', 0) / img_w, 4),
+                                        'y': round(kp.get('y', 0) / img_h, 4),
+                                        'v': v_stat
+                                    })
+
                     if rect and label:
                         rects.append(rect)
                         labels.append(label)
@@ -2069,23 +2126,19 @@ def get_dataset_analysis_data(dataset_uuid):
         image_class_map[i] = unique_frame_labels
 
         if is_classification:
-            # Classification-specific metrics
             for cls_name in unique_frame_labels:
                 class_counts[cls_name] += 1
             
             labels_per_image_counts[len(unique_frame_labels)] += 1
 
-            # Multi-label co-occurrence pairs
             if len(unique_frame_labels) > 1:
                 for c1, c2 in itertools.combinations(sorted(unique_frame_labels), 2):
                     co_occurrence_counts[f"{c1} + {c2}"] += 1
             
-            # Raw image aspect ratio calculation
             v_info = video_info_cache.get(video_uuid, {})
             if v_info.get('width', 0) > 0 and v_info.get('height', 0) > 0:
                 aspect_ratios.append(round(float(v_info['width']) / float(v_info['height']), 2))
         else:
-            # Detection/Segmentation metrics
             objects_per_image.append(len(labels))
             if len(rects) > 1:
                 for (idx1, rect1), (idx2, rect2) in itertools.combinations(enumerate(rects), 2):
@@ -2111,7 +2164,6 @@ def get_dataset_analysis_data(dataset_uuid):
                         {'id': f'{video_uuid}_{frame_number}_{j}', 'image_index': i, 'area': width * height,
                          'aspect_ratio': width / height})
 
-    # 随机抽样计算亮度分布 (最多200帧)
     if all_frames:
         sample_size = min(len(all_frames), 200)
         sampled_frames = random.sample(all_frames, sample_size)
@@ -2171,20 +2223,12 @@ def get_dataset_analysis_data(dataset_uuid):
         for class_name, count in class_counts.items():
             if count < 10 or count < avg_instances * 0.1:
                 warnings.append(
-                    f"<b>Class Imbalance:</b> Class '{class_name}' has very few images ({count}), which may affect classification performance.")
+                    f"<b>Class Imbalance:</b> Class '{class_name}' has very few images ({count}), which may affect training performance.")
 
-    if not is_classification:
-        small_object_threshold = 100
-        small_object_count = sum(1 for bbox in all_bboxes_for_outliers if bbox['area'] < small_object_threshold)
-        if small_object_count > 0:
-            warnings.append(
-                f"<b>Small Object Warning:</b> Found {small_object_count} objects with an area smaller than {small_object_threshold} pixels. Please check if they are labeling errors.")
-
-        if suspicious_pairs:
-            warnings.append(
-                f"<b>Potential Duplicate Warning:</b> Found {len(suspicious_pairs)} pairs of bounding boxes with high overlap (IoU > 0.95), which might be duplicate labels.")
-
-    if is_classification:
+    if is_pose:
+        total_kpts = sum(keypoint_visibility_counts.values())
+        summary_text = f"This Pose / Keypoint dataset contains <strong>{total_instances}</strong> skeleton instances with <strong>{total_kpts}</strong> keypoints across <strong>{len(all_frames)}</strong> labeled images."
+    elif is_classification:
         multi_label_images = sum(c for k, c in labels_per_image_counts.items() if k > 1)
         summary_text = f"This Classification dataset contains <strong>{len(class_counts)}</strong> unique classes across <strong>{len(all_frames)}</strong> labeled images. (Multi-label images: <strong>{multi_label_images}</strong>)"
     else:
@@ -2193,11 +2237,14 @@ def get_dataset_analysis_data(dataset_uuid):
     return jsonify({
         'success': True,
         'is_classification': is_classification,
+        'is_pose': is_pose,
         'summary_text': summary_text,
         'warnings': warnings,
         'class_counts': dict(class_counts),
         'labels_per_image': dict(labels_per_image_counts),
         'co_occurrence': dict(co_occurrence_counts),
+        'keypoint_visibility': dict(keypoint_visibility_counts),
+        'keypoint_coords': keypoint_coords,
         'aspect_ratios': aspect_ratios,
         'objects_per_image': objects_per_image,
         'center_points': center_points,

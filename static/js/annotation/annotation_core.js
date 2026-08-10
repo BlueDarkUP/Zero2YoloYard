@@ -230,9 +230,17 @@ class AnnotationCore {
                 }
                 if (this.annotations && this.annotations.is_ambiguous) {
                     this.annotations.is_ambiguous = false;
-                    this.saveAnnotations(false); // 静默保存到数据库，不入历史栈
-                    if (typeof window.updateAmbiguousCountBadge === 'function') {
-                        window.updateAmbiguousCountBadge();
+                    const savePromise = this.saveAnnotations(false);
+                    if (savePromise && typeof savePromise.then === 'function') {
+                        savePromise.then(() => {
+                            if (typeof window.updateAmbiguousCountBadge === 'function') {
+                                window.updateAmbiguousCountBadge();
+                            }
+                        });
+                    } else {
+                        if (typeof window.updateAmbiguousCountBadge === 'function') {
+                            window.updateAmbiguousCountBadge();
+                        }
                     }
                     if (typeof window.showToast === 'function') {
                         window.showToast(`✅ 帧 #${this.currentFrame} 已完成消歧义复核`, 2000);
@@ -251,7 +259,8 @@ class AnnotationCore {
         if (recordHistory) {
             this.saveStateToHistory();
         }
-        fetch('/saveFrameAnnotations', {
+        this.updateSidebarList();
+        return fetch('/saveFrameAnnotations', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -260,7 +269,6 @@ class AnnotationCore {
                 annotations_json: JSON.stringify(this.annotations)
             })
         });
-        this.updateSidebarList();
     }
 
     updateSidebarList() {
@@ -308,8 +316,8 @@ class AnnotationCore {
     render() {
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         this.ctx.save();
-        this.ctx.translate(this.panX, this.panY);
-        this.ctx.scale(this.zoom, this.zoom);
+        // NOTE: Viewport panning & zooming is handled by CSS transform on #canvas-container.
+        // Do not apply ctx.translate / ctx.scale here to avoid double-transforming canvas drawings.
 
         // 2. Delegate Saved Shape Rendering to Active Annotator Plugin
         if (this.annotator && this.annotator.render) {

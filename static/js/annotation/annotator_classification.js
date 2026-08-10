@@ -72,7 +72,11 @@ class ClassificationAnnotator {
             this.core.annotations.classifications = [];
         }
 
+        className = (className || '').trim();
+        if (!className) return;
+
         const idx = this.core.annotations.classifications.indexOf(className);
+        let isAdding = false;
         if (idx !== -1) {
             this.core.annotations.classifications.splice(idx, 1);
             if (typeof window.showToast === 'function') {
@@ -80,6 +84,7 @@ class ClassificationAnnotator {
             }
         } else {
             this.core.annotations.classifications.push(className);
+            isAdding = true;
             if (typeof window.showToast === 'function') {
                 window.showToast(`🏷️ Classified as [${className}]`, 1200);
             }
@@ -89,7 +94,7 @@ class ClassificationAnnotator {
         this.renderSidebarTags();
         this.core.render();
 
-        if (typeof window.triggerSpeedrunAutoNext === 'function') {
+        if (isAdding && typeof window.triggerSpeedrunAutoNext === 'function') {
             window.triggerSpeedrunAutoNext();
         }
     }

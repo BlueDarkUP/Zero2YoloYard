@@ -16,6 +16,14 @@ class FolderClassificationExporter(BaseExporter):
         eval_percent = options.get("eval_percent", 20.0)
         test_percent = options.get("test_percent", 10.0)
 
+        # Multi-label export strategy: 'first' (default), 'composite', 'skip', 'duplicate'
+        multilabel_strategy = options.get("multilabel_strategy")
+        if not multilabel_strategy:
+            export_opts = options.get("export_options") or {}
+            multilabel_strategy = export_opts.get("multilabel_strategy", "first")
+        if multilabel_strategy not in ["first", "composite", "skip", "duplicate"]:
+            multilabel_strategy = "first"
+
         if os.path.exists(export_dir):
             shutil.rmtree(export_dir)
 
@@ -46,13 +54,37 @@ class FolderClassificationExporter(BaseExporter):
                     continue
 
                 annotations: AnnotationData = frame_info["annotations"]
-                if annotations.classifications:
-                    for target_cls in annotations.classifications:
+                tags = annotations.classifications if annotations.classifications else []
+
+                if not tags:
+                    shutil.copy(src_img_path, os.path.join(split_dir, "_unlabeled", base_name))
+                elif len(tags) == 1:
+                    target_cls = tags[0]
+                    target_dir = os.path.join(split_dir, target_cls)
+                    os.makedirs(target_dir, exist_ok=True)
+                    shutil.copy(src_img_path, os.path.join(target_dir, base_name))
+                else:
+                    # Multi-label (>1 tags)
+                    if multilabel_strategy == "first":
+                        target_cls = tags[0]
                         target_dir = os.path.join(split_dir, target_cls)
                         os.makedirs(target_dir, exist_ok=True)
                         shutil.copy(src_img_path, os.path.join(target_dir, base_name))
-                else:
-                    shutil.copy(src_img_path, os.path.join(split_dir, "_unlabeled", base_name))
+                    elif multilabel_strategy == "composite":
+                        sorted_tags = sorted(tags)
+                        composite_cls = "+".join(sorted_tags)
+                        target_dir = os.path.join(split_dir, composite_cls)
+                        os.makedirs(target_dir, exist_ok=True)
+                        shutil.copy(src_img_path, os.path.join(target_dir, base_name))
+                    elif multilabel_strategy == "skip":
+                        # Skip image with multiple labels entirely
+                        continue
+                    elif multilabel_strategy == "duplicate":
+                        # Legacy behavior: copy into each label directory
+                        for target_cls in tags:
+                            target_dir = os.path.join(split_dir, target_cls)
+                            os.makedirs(target_dir, exist_ok=True)
+                            shutil.copy(src_img_path, os.path.join(target_dir, base_name))
 
         # Clean up empty directories in splits
         for split_name, _ in splits:

@@ -185,8 +185,10 @@
 
                 {% if is_feature_extractor_enabled %}
                 <div id="consistency-check-container" class="mt-4 pt-3 border-top border-secondary">
-                    <h6 class="font-weight-bold mb-2 text-uppercase text-info"><i class="bi bi-cpu mr-1"></i> AI Consistency Scan</h6>
-                    <p class="text-muted small mb-3 font-monospace">Detect anomalies using embedding vectors.</p>
+                    <div id="consistency-check-header" class="d-flex align-items-center mb-2">
+                        <h6 id="consistency-title" class="font-weight-bold mb-0 text-uppercase font-monospace text-info"><i class="bi bi-cpu mr-1"></i> AI CONSISTENCY SCAN</h6>
+                    </div>
+                    <p id="consistency-desc" class="text-muted small mb-3 font-monospace">Detect labeling anomalies using feature vectors and prototype centroids.</p>
 
                     <div class="d-flex align-items-center flex-wrap">
                         <div class="custom-control custom-switch mr-4 mb-2">
@@ -199,52 +201,6 @@
                     </div>
                 </div>
                 {% endif %}
-
-                <div id="cls-clustering-action-card" class="mt-4 pt-3 border-top border-secondary" style="display: none;">
-                    <div class="d-flex justify-content-between align-items-center flex-wrap bg-black p-3 border border-secondary">
-                        <div>
-                            <h6 class="font-weight-bold text-primary font-monospace mb-1"><i class="bi bi-diagram-3-fill mr-2"></i> VISUAL VECTOR CLUSTERING & BATCH TAGGING</h6>
-                            <p class="text-muted small mb-0 font-monospace">Automatically group visually similar images into clusters based on color, spatial layout, and texture for 1-click batch classification tagging.</p>
-                        </div>
-                        <button id="open-clustering-modal-btn" class="btn btn-sm btn-primary font-monospace font-weight-bold mt-2 mt-md-0">
-                            <i class="bi bi-magic mr-1"></i> OPEN VISUAL CLUSTERING PANEL
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Visual Clustering Modal -->
-        <div class="modal fade" id="clusteringModal" tabindex="-1" role="dialog" aria-hidden="true">
-            <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable" role="document">
-                <div class="modal-content bg-dark text-white border-secondary">
-                    <div class="modal-header border-secondary bg-black">
-                        <h5 class="modal-title font-monospace text-primary"><i class="bi bi-diagram-3-fill mr-2"></i> VISUAL VECTOR CLUSTERING & BATCH TAGGING</h5>
-                        <button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button>
-                    </div>
-                    <div class="modal-body bg-dark">
-                        <div class="d-flex align-items-center justify-content-between mb-3 p-3 bg-black border border-secondary flex-wrap">
-                            <div class="d-flex align-items-center flex-wrap mb-2 mb-md-0">
-                                <label class="mr-2 mb-0 small text-muted font-weight-bold font-monospace">NUM CLUSTERS (K):</label>
-                                <input type="number" id="cluster-k-select" class="form-control form-control-sm mr-3 bg-dark text-white border-secondary font-monospace" min="2" max="100" value="6" style="width: 90px;" placeholder="K值...">
-                                <div class="custom-control custom-checkbox mr-3">
-                                    <input type="checkbox" class="custom-control-input" id="cluster-unlabeled-only">
-                                    <label class="custom-control-label small font-monospace text-warning" for="cluster-unlabeled-only">UNLABELED IMAGES ONLY</label>
-                                </div>
-                            </div>
-                            <button id="run-clustering-btn" class="btn btn-sm btn-primary font-monospace font-weight-bold">
-                                <i class="bi bi-play-fill mr-1"></i> RUN CLUSTERING SCAN
-                            </button>
-                        </div>
-
-                        <div id="clustering-loader" class="text-center my-5" style="display: none;">
-                            <div class="spinner-border text-primary" role="status"></div>
-                            <p class="mt-2 text-primary font-monospace small">Extracting visual feature vectors and performing K-Means clustering...</p>
-                        </div>
-
-                        <div id="clustering-results-container" class="custom-scrollbar" style="max-height: 600px; overflow-y: auto;"></div>
-                    </div>
-                </div>
             </div>
         </div>
 
@@ -371,8 +327,6 @@
                         <div id="gallery" class="custom-scrollbar border-0"></div>
                     </div>
                  </div>
-            </div>
-        </div>
     </div>
 </div>
 {% endblock %}
@@ -604,6 +558,33 @@ $(document).ready(function() {
         charts.classCounts = new Chart(ctx, { type: 'bar', data: chartData, options: options });
     }
 
+    function renderKeypointVisibility(visibilityCounts) {
+        const labels = ['Visible (v=2)', 'Occluded (v=1)', 'Absent (v=0)'];
+        const values = [visibilityCounts[2] || 0, visibilityCounts[1] || 0, visibilityCounts[0] || 0];
+        const colors = [getColor('success'), getColor('warning'), getColor('danger')];
+        const chartData = { labels: labels, datasets: [{ label: 'Keypoints', data: values, backgroundColor: colors }] };
+        if(charts.objectsPerImage) charts.objectsPerImage.destroy();
+        const options = getChartThemeOptions();
+        options.scales.x.title.text = 'Keypoint State';
+        charts.objectsPerImage = new Chart($('#objects-per-image-chart'), { type: 'bar', data: chartData, options: options });
+    }
+
+    function renderKeypointScatterPlot(coords) {
+        if(charts.centerScatter) charts.centerScatter.destroy();
+        const options = getChartThemeOptions();
+        $.extend(true, options.scales, {
+            x: { type: 'linear', position: 'bottom', min: 0, max: 1, title: { display: true, text: 'NORM X' }},
+            y: { min: 0, max: 1, reverse: true, title: { display: true, text: 'NORM Y' }}
+        });
+        options.plugins.legend.display = false;
+        const pts = (coords || []).map(c => ({ x: c.x, y: c.y }));
+        charts.centerScatter = new Chart(document.getElementById('bbox-center-scatter-plot').getContext('2d'), {
+            type: 'scatter',
+            data: { datasets: [{ label: 'Keypoint', data: pts, backgroundColor: getColor('scatter'), pointRadius: 2, pointHoverRadius: 4 }] },
+            options: options
+        });
+    }
+
     function renderLabelsPerImage(labelsPerImage) {
         const labels = Object.keys(labelsPerImage).map(k => `${k} Tag(s)`);
         const chartData = { labels: labels, datasets: [{ label: 'Images', data: Object.values(labelsPerImage), backgroundColor: getColor('success') }] };
@@ -812,13 +793,66 @@ $(document).ready(function() {
                 renderSummaryAndWarnings(response.summary_text, response.warnings);
                 renderClassCounts(response.class_counts);
 
-                if (response.is_classification) {
+                if (response.is_pose) {
+                    $('#consistency-title').html('<i class="bi bi-person-lines-fill mr-2 text-warning"></i> POSE SKELETON AI CONSISTENCY SCAN');
+                    $('#consistency-desc').text('Extracts pose ROI feature vectors and keypoint geometric ratios to detect mislabeled skeletons, inverted joint connections, and posture anomalies.');
+                    $('#run-consistency-check-btn').html('<i class="bi bi-search mr-1"></i> RUN POSE SCAN');
+
+                    $('#card1-header').text('POSE INSTANCE DISTRIBUTION');
+                    $('#card2-header').text('KEYPOINT VISIBILITY SPECTRUM');
+                    $('#card3-header').text('LUMINOSITY SPECTRUM');
+                    $('#card4-header').text('ASPECT RATIO (SKELETON BBOX W/H)');
+                    $('#card5-header').text('KEYPOINT SPATIAL POSTURE SCATTER');
+
+                    $('#spatial-heatmap-card-col').show();
+                    $('#aug-simulation-row').show();
+
+                    renderKeypointVisibility(response.keypoint_visibility || {});
+                    renderKeypointScatterPlot(response.keypoint_coords || []);
+
+                    const select = $('#outlier-filter');
+                    select.empty();
+                    select.append('<option value="none">SHOW_ALL</option>');
+                    if (response.class_counts) {
+                        Object.keys(response.class_counts).forEach(cls => {
+                            select.append(`<option value="class_${cls}">CLASS: ${cls} (${response.class_counts[cls]})</option>`);
+                        });
+                    }
+                    select.append('<option value="consistency_outliers" hidden style="color: var(--color-danger); font-weight: bold;">AI_REVIEW_OUTLIERS (骨架离群者)</option>');
+
+                    setupAugmentationListeners('#preview-aug-controls');
+                    const sourceSelector = $('#aug-preview-source-selector');
+                    sourceSelector.empty();
+                    const sampleImages = fullGalleryData.slice(0, 5);
+                    samplePoolData = sampleImages.map(img => ({ video_uuid: img.video_uuid, frame_number: img.frame }));
+
+                    sampleImages.forEach((img, index) => {
+                        const thumb = $(`<img src="${img.original_url}" class="aug-preview-source-img" data-video-uuid="${img.video_uuid}" data-frame-number="${img.frame}">`);
+                        if (index === 0) thumb.addClass('active');
+                        sourceSelector.append(thumb);
+                    });
+
+                    if (sampleImages.length > 0) { triggerAugmentationPreview(); }
+                    else { $('#aug-preview-gallery-container').html('<p class="text-muted text-center pt-5 font-monospace">NO SOURCE IMAGES</p>'); }
+
+                    sourceSelector.on('click', 'img', function() {
+                        sourceSelector.find('img').removeClass('active');
+                        $(this).addClass('active');
+                        triggerAugmentationPreview();
+                    });
+                } else if (response.is_classification) {
+                    $('#consistency-title').html('<i class="bi bi-tag-fill mr-2 text-info"></i> CLIP CLASSIFICATION AI CONSISTENCY SCAN');
+                    $('#consistency-desc').text('Extracts full-image CLIP feature vectors and category prototype centroids to detect mislabeled images, conflicting category tags, and visual outliers across classification images.');
+                    $('#run-consistency-check-btn').html('<i class="bi bi-search mr-1"></i> RUN CLS CLIP SCAN');
+
                     $('#card1-header').text('CLASS SAMPLE DISTRIBUTION');
                     $('#card2-header').text('LABEL CARDINALITY (TAGS / IMAGE)');
                     $('#card3-header').text('LUMINOSITY SPECTRUM');
                     $('#card4-header').text('IMAGE ASPECT RATIO (W/H)');
                     $('#card5-header').text('MULTI-LABEL CO-OCCURRENCE PAIRS');
-                    $('#aug-simulation-row').show();
+
+                    $('#spatial-heatmap-card-col').hide();
+                    $('#aug-simulation-row').hide();
 
                     renderLabelsPerImage(response.labels_per_image || {});
                     renderCoOccurrence(response.co_occurrence || {});
@@ -833,42 +867,53 @@ $(document).ready(function() {
                             select.append(`<option value="class_${cls}">CLASS: ${cls} (${response.class_counts[cls]})</option>`);
                         });
                     }
+                    select.append('<option value="consistency_outliers" hidden style="color: var(--color-danger); font-weight: bold;">AI_REVIEW_OUTLIERS (CLIP 标签死角)</option>');
                 } else {
+                    $('#consistency-title').html('<i class="bi bi-bounding-box-circles mr-2 text-primary"></i> OBJECT INSTANCE AI CONSISTENCY SCAN');
+                    $('#consistency-desc').text('Crops each annotated ROI region and extracts CLIP deep feature vectors + 3D HSV color profiles to detect class label swaps and instance color outliers.');
+                    $('#run-consistency-check-btn').html('<i class="bi bi-search mr-1"></i> RUN INSTANCE SCAN');
+
+                    $('#spatial-heatmap-card-col').show();
+                    $('#aug-simulation-row').show();
+
                     renderObjectsPerImage(response.objects_per_image);
                     renderCenterScatterPlot(response.center_points);
+
+                    const select = $('#outlier-filter');
+                    select.empty();
+                    select.append('<option value="none">SHOW_ALL</option>');
+                    select.append('<option value="area_smallest">SMALLEST_OBJECTS (TOP 10)</option>');
+                    select.append('<option value="area_largest">LARGEST_OBJECTS (TOP 10)</option>');
+                    select.append('<option value="ar_smallest">SQUARISH_AR (TOP 10)</option>');
+                    select.append('<option value="ar_largest">EXTREME_AR (TOP 10)</option>');
+                    select.append('<option value="iou_high">HIGH_OVERLAP (IoU > 0.95)</option>');
+                    select.append('<option value="consistency_outliers" hidden style="color: var(--color-danger); font-weight: bold;">AI_REVIEW_OUTLIERS (实例标签离群)</option>');
+
+                    setupAugmentationListeners('#preview-aug-controls');
+                    const sourceSelector = $('#aug-preview-source-selector');
+                    sourceSelector.empty();
+                    const sampleImages = fullGalleryData.slice(0, 5);
+                    samplePoolData = sampleImages.map(img => ({ video_uuid: img.video_uuid, frame_number: img.frame }));
+
+                    sampleImages.forEach((img, index) => {
+                        const thumb = $(`<img src="${img.original_url}" class="aug-preview-source-img" data-video-uuid="${img.video_uuid}" data-frame-number="${img.frame}">`);
+                        if (index === 0) thumb.addClass('active');
+                        sourceSelector.append(thumb);
+                    });
+
+                    if (sampleImages.length > 0) { triggerAugmentationPreview(); }
+                    else { $('#aug-preview-gallery-container').html('<p class="text-muted text-center pt-5 font-monospace">NO SOURCE IMAGES</p>'); }
+
+                    sourceSelector.on('click', 'img', function() {
+                        sourceSelector.find('img').removeClass('active');
+                        $(this).addClass('active');
+                        triggerAugmentationPreview();
+                    });
                 }
-
-                // Setup live Data Augmentation simulation preview for both CLS and DET/SEG modes
-                setupAugmentationListeners('#preview-aug-controls');
-                const sourceSelector = $('#aug-preview-source-selector');
-                sourceSelector.empty();
-                const sampleImages = fullGalleryData.slice(0, 5);
-                samplePoolData = sampleImages.map(img => ({ video_uuid: img.video_uuid, frame_number: img.frame }));
-
-                sampleImages.forEach((img, index) => {
-                    const thumb = $(`<img src="${img.original_url}" class="aug-preview-source-img" data-video-uuid="${img.video_uuid}" data-frame-number="${img.frame}">`);
-                    if (index === 0) thumb.addClass('active');
-                    sourceSelector.append(thumb);
-                });
-
-                if (sampleImages.length > 0) { triggerAugmentationPreview(); }
-                else { $('#aug-preview-gallery-container').html('<p class="text-muted text-center pt-5 font-monospace">NO SOURCE IMAGES</p>'); }
-
-                sourceSelector.on('click', 'img', function() {
-                    sourceSelector.find('img').removeClass('active');
-                    $(this).addClass('active');
-                    triggerAugmentationPreview();
-                });
 
                 renderAspectRatio(response.aspect_ratios, response.is_classification);
                 if (response.brightness_levels) renderBrightness(response.brightness_levels);
                 if (response.annotator_stats) renderAnnotatorStats(response.annotator_stats);
-
-                // Show visual clustering action card if classification dataset
-                if (response.is_classification) {
-                    $('#cls-clustering-action-card').show();
-                    window.datasetClassNames = Object.keys(response.class_counts || {});
-                }
 
                 // Render gallery with thumbnail tags
                 renderGallery(fullGalleryData);
@@ -876,182 +921,6 @@ $(document).ready(function() {
         },
         error: function() { $('#loading-indicator').html('<div class="alert alert-danger shadow-sm rounded-0">SERVER COMMUNICATION FAILED</div>'); }
     });
-
-    // Visual Clustering Modal Handlers
-    $('#open-clustering-modal-btn').on('click', function() {
-        $('#clusteringModal').modal('show');
-        if ($('#clustering-results-container').is(':empty')) {
-            fetchVisualClusters();
-        }
-    });
-
-    $('#run-clustering-btn').on('click', function() {
-        fetchVisualClusters();
-    });
-
-    function fetchVisualClusters() {
-        const numClusters = parseInt($('#cluster-k-select').val() || 6);
-        const unlabeledOnly = $('#cluster-unlabeled-only').is(':checked');
-
-        $('#clustering-loader').show();
-        $('#clustering-results-container').empty();
-        $('#run-clustering-btn').prop('disabled', true);
-
-        $.ajax({
-            url: '/api/clusterClassificationImages',
-            type: 'POST',
-            contentType: 'application/json',
-            data: JSON.stringify({
-                dataset_uuid: datasetUuid,
-                num_clusters: numClusters,
-                unlabeled_only: unlabeledOnly
-            }),
-            success: function(res) {
-                $('#clustering-loader').hide();
-                $('#run-clustering-btn').prop('disabled', false);
-
-                if (res.success) {
-                    renderClusters(res.clusters);
-                } else {
-                    $('#clustering-results-container').html(`<div class="alert alert-warning font-monospace small m-3">${res.message}</div>`);
-                }
-            },
-            error: function(xhr) {
-                $('#clustering-loader').hide();
-                $('#run-clustering-btn').prop('disabled', false);
-                const msg = xhr.responseJSON ? xhr.responseJSON.message : "Visual clustering failed.";
-                $('#clustering-results-container').html(`<div class="alert alert-danger font-monospace small m-3">${msg}</div>`);
-            }
-        });
-    }
-
-    function renderClusterGridThumbnails(cluster, grid) {
-        grid.empty();
-        cluster.images.forEach(img => {
-            const hasTag = img.tags && img.tags.length > 0;
-            const tagText = hasTag ? img.tags.join(', ') : '';
-            const tagBadge = hasTag 
-                ? `<span class="badge badge-info font-monospace position-absolute cluster-thumb-badge" style="top: 4px; left: 4px; z-index: 5; background: rgba(23, 162, 184, 0.9); font-size: 11px; max-width: 92%; overflow: hidden; text-overflow: ellipsis;" title="${tagText}">${tagText}</span>` 
-                : '';
-            const thumbCol = $(`
-                <div class="col-4 col-sm-3 col-md-2 p-1 position-relative cluster-thumb-col" data-vu="${img.video_uuid}" data-fn="${img.frame_number}">
-                    ${tagBadge}
-                    <img src="${img.original_url}" class="img-fluid border border-secondary rounded" style="height: 90px; width: 100%; object-fit: cover;" title="Frame #${img.frame_number} | Tags: ${tagText || 'None'}">
-                </div>
-            `);
-            grid.append(thumbCol);
-        });
-    }
-
-    function renderClusters(clusters) {
-        const container = $('#clustering-results-container').empty();
-
-        if (!clusters || clusters.length === 0) {
-            container.html('<div class="alert alert-info font-monospace small m-3">No images found for visual clustering.</div>');
-            return;
-        }
-
-        let classesList = [];
-        if (window.datasetClassNames && Array.isArray(window.datasetClassNames)) {
-            classesList = window.datasetClassNames.slice();
-        }
-        clusters.forEach(cl => {
-            cl.images.forEach(img => {
-                if (img.tags && Array.isArray(img.tags)) {
-                    img.tags.forEach(t => {
-                        if (t && !classesList.includes(t)) classesList.push(t);
-                    });
-                }
-            });
-        });
-
-        let classOptionsHtml = '<option value="">-- SELECT CLASS --</option>';
-        let quickButtonsHtml = '';
-        classesList.forEach(c => {
-            classOptionsHtml += `<option value="${c}">${c}</option>`;
-            quickButtonsHtml += `<button type="button" class="btn btn-xs btn-outline-info mr-1 mb-1 quick-cluster-tag-btn" data-class="${c}" title="Add tag '${c}' to all images in this cluster"><i class="bi bi-plus-circle mr-1"></i>${c}</button>`;
-        });
-
-        clusters.forEach((cluster, idx) => {
-            const card = $(`
-                <div class="card mb-4 border-secondary bg-black">
-                    <div class="card-header bg-dark d-flex justify-content-between align-items-center flex-wrap p-2 border-secondary">
-                        <div class="font-monospace text-primary font-weight-bold">
-                            <i class="bi bi-collection-fill mr-1"></i> CLUSTER #${cluster.cluster_id + 1} (${cluster.count} IMAGES)
-                        </div>
-                        <div class="d-flex align-items-center flex-wrap mt-2 mt-md-0">
-                            <div class="quick-tag-bar mr-2 d-flex align-items-center flex-wrap">
-                                ${quickButtonsHtml}
-                            </div>
-                            <select class="form-control form-control-sm mr-2 bg-dark text-white border-secondary font-monospace cluster-tag-select" style="width: 140px;">
-                                ${classOptionsHtml}
-                            </select>
-                            <input type="text" class="form-control form-control-sm mr-2 bg-dark text-white border-secondary font-monospace cluster-custom-tag" placeholder="Or new class..." style="width: 120px;">
-                            <button class="btn btn-sm btn-success font-monospace font-weight-bold batch-tag-cluster-btn">
-                                <i class="bi bi-tag-fill mr-1"></i> LABEL ALL (${cluster.count})
-                            </button>
-                        </div>
-                    </div>
-                    <div class="card-body p-2">
-                        <div class="row no-gutters cluster-grid-${idx}"></div>
-                    </div>
-                </div>
-            `);
-
-            const grid = card.find(`.cluster-grid-${idx}`);
-            renderClusterGridThumbnails(cluster, grid);
-
-            card.find('.quick-cluster-tag-btn').on('click', function() {
-                const chosenTag = $(this).data('class');
-                card.find('.cluster-tag-select').val(chosenTag);
-                card.find('.batch-tag-cluster-btn').click();
-            });
-
-            card.find('.batch-tag-cluster-btn').on('click', function() {
-                const $btn = $(this);
-                const selectVal = card.find('.cluster-tag-select').val();
-                const customVal = card.find('.cluster-custom-tag').val().trim();
-                const tagName = customVal || selectVal;
-
-                if (!tagName) {
-                    window.sysAlert('Please select or enter a class name first!', 'warning');
-                    return;
-                }
-
-                $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> Tagging...');
-
-                $.ajax({
-                    url: '/api/batchTagClusterImages',
-                    type: 'POST',
-                    contentType: 'application/json',
-                    data: JSON.stringify({
-                        target_images: cluster.images,
-                        tag_name: tagName
-                    }),
-                    success: function(tagRes) {
-                        if (tagRes.success) {
-                            window.sysAlert(`Successfully added tag '${tagName}' to ${tagRes.updated_count} images in Cluster #${cluster.cluster_id + 1}!`, 'success');
-                            $btn.removeClass('btn-success').addClass('btn-secondary').html(`<i class="bi bi-check-lg mr-1"></i> Labeled '${tagName}'`);
-                            
-                            cluster.images.forEach(img => {
-                                if (!img.tags.includes(tagName)) img.tags.push(tagName);
-                            });
-                            renderClusterGridThumbnails(cluster, grid);
-                        } else {
-                            window.sysAlert('Tagging failed: ' + tagRes.message, 'error');
-                            $btn.prop('disabled', false).html('<i class="bi bi-tag-fill mr-1"></i> LABEL ALL');
-                        }
-                    },
-                    error: function(xhr) {
-                        window.sysAlert('Tagging request failed: ' + (xhr.responseJSON ? xhr.responseJSON.message : xhr.statusText), 'error');
-                        $btn.prop('disabled', false).html('<i class="bi bi-tag-fill mr-1"></i> LABEL ALL');
-                    }
-                });
-            });
-
-            container.append(card);
-        });
-    }
 
     // AI Consistency Check Button
     $('#run-consistency-check-btn').on('click', function() {
