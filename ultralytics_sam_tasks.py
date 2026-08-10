@@ -613,7 +613,7 @@ def track_pose_video_sam2(video_uuid, start_frame, end_frame, init_pose_objects,
             scale_x = orig_w / inference_size
             scale_y = orig_h / inference_size
 
-            # 1. 注册 Top-Down 实例 BBox 给 SAM2 跟踪整体包围框
+            # 1. 向 SAM2 注册实例 BBox 提示
             for internal_id, inst_info in active_instances.items():
                 b = inst_info['last_bbox']
                 box_resized = np.array([
@@ -627,12 +627,29 @@ def track_pose_video_sam2(video_uuid, start_frame, end_frame, init_pose_objects,
                     box=box_resized
                 )
 
-            # 2. 获取 SAM2 的包围框序列，并配合 OpenCV 光流进行 亚像素点追踪
-            # 按顺序加载图像帧用于双向光流计算
-            sorted_frame_indices = sorted(frame_map.keys())
-            prev_gray_img = None
+            # 2. 全 Chunk 预提取 SAM2 实例包围框
+            chunk_sam2_bboxes = {}
+            for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(inference_state):
+                if session.get('stop_requested', False): break
+                frame_boxes = {}
+                for i, out_obj_id in enumerate(out_obj_ids):
+                    internal_id = int(out_obj_id)
+                    mask_np = (out_mask_logits[i] > 0.0).squeeze().cpu().numpy().astype(np.uint8)
+                    cnts, _ = cv2.findContours(mask_np, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                    if cnts:
+                        c = max(cnts, key=cv2.contourArea)
+                        x, y, w, h = cv2.boundingRect(c)
+                        frame_boxes[internal_id] = [
+                            max(0, int(x * scale_x)),
+                            max(0, int(y * scale_y)),
+                            min(orig_w, int((x + w) * scale_x)),
+                            min(orig_h, int((y + h) * scale_y))
+                        ]
+                chunk_sam2_bboxes[out_frame_idx] = frame_boxes
 
-            for local_idx in sorted_frame_indices:
+            # 3. 按顺序进行帧间亚像素级双向光流关键点精准追踪
+            prev_gray_img = None
+            for local_idx in range(len(frame_map)):
                 if session.get('stop_requested', False): break
                 global_frame_num = frame_map[local_idx]
 
@@ -641,31 +658,11 @@ def track_pose_video_sam2(video_uuid, start_frame, end_frame, init_pose_objects,
                 if curr_img_bgr is None: continue
                 curr_gray_img = cv2.cvtColor(curr_img_bgr, cv2.COLOR_BGR2GRAY)
 
-                if global_frame_num == start_frame:
+                if local_idx == 0:
                     prev_gray_img = curr_gray_img
                     continue
 
-                # 查询 SAM2 在当前帧为每个实例预测的包围框
-                sam2_bboxes = {}
-                try:
-                    out_frame_idx, out_obj_ids, out_mask_logits = predictor.propagate_in_video(
-                        inference_state, start_frame_idx=local_idx, max_frame_num_to_track=1
-                    ).__next__()
-                    for i, out_obj_id in enumerate(out_obj_ids):
-                        internal_id = int(out_obj_id)
-                        mask_np = (out_mask_logits[i] > 0.0).squeeze().cpu().numpy().astype(np.uint8)
-                        cnts, _ = cv2.findContours(mask_np, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-                        if cnts:
-                            c = max(cnts, key=cv2.contourArea)
-                            x, y, w, h = cv2.boundingRect(c)
-                            sam2_bboxes[internal_id] = [
-                                max(0, int(x * scale_x)),
-                                max(0, int(y * scale_y)),
-                                min(orig_w, int((x + w) * scale_x)),
-                                min(orig_h, int((y + h) * scale_y))
-                            ]
-                except Exception:
-                    pass
+                sam2_bboxes = chunk_sam2_bboxes.get(local_idx, {})
 
                 frame_updated_objects = []
 
