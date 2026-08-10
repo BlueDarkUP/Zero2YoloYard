@@ -290,24 +290,12 @@ def sam3_query_frame(video_uuid, frame_number, text_prompt=None, positive_boxes=
                     cnts, _ = cv2.findContours(mask_np, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
                     if cnts:
                         c = max(cnts, key=cv2.contourArea)
-                        if sam2_pred is not None and img_cv is not None:
-                            try:
-                                m, _, _ = sam2_pred.predict(box=np.array([x1, y1, x2, y2]), multimask_output=False)
-                                if m is not None and m.size > 0:
-                                    mask_np = m[0].astype(np.uint8)
-                                    cnts, _ = cv2.findContours(mask_np, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-                                    if cnts:
-                                        c = max(cnts, key=cv2.contourArea)
-                                        # 修复：将系数从 0.004 缩小到 0.0015，提取更精细、贴合物体真实轮廓的多边形
-                                        eps = 0.0015 * cv2.arcLength(c, True)
-                                        approx = cv2.approxPolyDP(c, eps, True)
-                                        polygon = approx.reshape(-1, 2).tolist()
-                            except Exception as e:
-                                logging.error(f"[SAM2 Polygon Refinement Failed]: {e}")
+                        # 将系数从 0.004 缩小到 0.0015，提取更精细、贴合物体真实轮廓的多边形
+                        eps = 0.0015 * cv2.arcLength(c, True)
                         approx = cv2.approxPolyDP(c, eps, True)
                         polygon = approx.reshape(-1, 2).tolist()
-            except Exception:
-                pass
+            except Exception as e:
+                logging.error(f"[SAM2 多边形精细化失败]: {e}")
 
         results.append({"box": [x1, y1, x2, y2], "polygon": polygon, "score": score})
 
