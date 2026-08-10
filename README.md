@@ -207,9 +207,9 @@ cd ..
 ### 3.2 SAM3 开放词汇与提示框 IoU 匹配算法
 在 `ai_models.py` 的 `_best_iou_match` 中，针对 SAM3 预测的候选框集与目标参考框进行重叠度匹配：
 
-$$\text{IoU}(A, B) = \frac{\text{Area}(A \cap B)}{\text{Area}(A \cup B)} = \frac{\max(0, x_2^i - x_1^i) \times \max(0, y_2^i - y_1^i)}{\text{Area}(A) + \text{Area}(B) - \text{Area}(A \cap B)}$$
+$$\text{IoU}(A, B) = \frac{\text{Area}(A \cap B)}{\text{Area}(A \cup B)} = \frac{\max(0, x_2 - x_1) \times \max(0, y_2 - y_1)}{\text{Area}(A) + \text{Area}(B) - \text{Area}(A \cap B)}$$
 
-当 $\max(\text{IoU}) < \text{min\_iou}$ (阈值设为 0.1) 时，认为候选框无实际匹配，系统强行输出匹配得分 `0.0`，杜绝假阳性。
+当 $\max(\text{IoU}) < \text{min-iou}$ (阈值设为 0.1) 时，认为候选框无实际匹配，系统强行输出匹配得分 `0.0`，杜绝假阳性。
 
 ### 3.3 SAM2 视频记忆机制与 LRU 帧状态缓存
 SAM 2.1 引入了 Memory Bank 机制。在 `ultralytics_sam_tasks.py` 中，采用 `sam3_frame_state_cache` 保持预处理好的视频帧特征：
@@ -223,7 +223,7 @@ def _sam3_frame_cache_put(key, value):
 ```
 在视频跟踪任务中，利用拆分机制分块计算显存占用：
 
-$$\text{chunk\_end} = \min(\text{chunk\_start} + \text{chunk\_size}, \text{end\_frame} + 1)$$
+$$\text{chunk-end} = \min(\text{chunk-start} + \text{chunk-size}, \text{end-frame} + 1)$$
 
 ### 3.4 CLIP 零样本分类与 8 模板 Prompt Ensembling
 `clip_model.py` 实现了 OpenAI/FiftyOne 标准的 Prompt 组装算法：
@@ -240,7 +240,7 @@ $$\vec{w}_c = \text{Normalize}\left( \frac{1}{T} \sum_{t=1}^T \text{CLIP}_{\text
 
 计算最终 Softmax 概率矩阵：
 
-$$\text{Probability}_c = \frac{\exp(\text{logit\_scale} \cdot \vec{f}_{\text{img}} \cdot \vec{w}_c^T)}{\sum_{k} \exp(\text{logit\_scale} \cdot \vec{f}_{\text{img}} \cdot \vec{w}_k^T)}$$
+$$\text{Probability}_c = \frac{\exp(\text{logit-scale} \cdot \vec{f}_{\text{img}} \cdot \vec{w}_c^T)}{\sum_{k} \exp(\text{logit-scale} \cdot \vec{f}_{\text{img}} \cdot \vec{w}_k^T)}$$
 
 当类别数 $N=1$ 时，自动引入背景负类 `"other background, floor or irrelevant object"` 防止过拟合。
 
@@ -267,8 +267,8 @@ $$Y(t) = Y_{\text{start}} + t \cdot (Y_{\text{end}} - Y_{\text{start}})$$
 $$\begin{aligned}
 x_{\min} &= \max(0.0, \min(1.0 - \epsilon, cx - w/2)) \\
 x_{\max} &= \max(\epsilon, \min(1.0, cx + w/2)) \\
-new\_cx &= x_{\min} + (x_{\max} - x_{\min}) / 2 \\
-new\_w &= x_{\max} - x_{\min}
+cx_{\text{new}} &= x_{\min} + (x_{\max} - x_{\min}) / 2 \\
+w_{\text{new}} &= x_{\max} - x_{\min}
 \end{aligned}$$
 其中 $\epsilon = 10^{-6}$，防止因为数据增强产生溢出阻断后续训练。
 

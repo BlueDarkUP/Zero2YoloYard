@@ -207,9 +207,9 @@ Located inside `gkdt_engine/`, the end-to-end keypoint detection pipeline operat
 ### 3.2 SAM3 Open-Vocabulary & Bounding Box IoU Matching
 In `ai_models.py` (`_best_iou_match`), candidate bounding boxes predicted by SAM3 are matched against a reference target box:
 
-$$\text{IoU}(A, B) = \frac{\text{Area}(A \cap B)}{\text{Area}(A \cup B)} = \frac{\max(0, x_2^i - x_1^i) \times \max(0, y_2^i - y_1^i)}{\text{Area}(A) + \text{Area}(B) - \text{Area}(A \cap B)}$$
+$$\text{IoU}(A, B) = \frac{\text{Area}(A \cap B)}{\text{Area}(A \cup B)} = \frac{\max(0, x_2 - x_1) \times \max(0, y_2 - y_1)}{\text{Area}(A) + \text{Area}(B) - \text{Area}(A \cap B)}$$
 
-If $\max(\text{IoU}) < \text{min\_iou}$ (threshold set to 0.1), candidate boxes are rejected and assigned a score of `0.0` to eliminate false positives.
+If $\max(\text{IoU}) < \text{min-iou}$ (threshold set to 0.1), candidate boxes are rejected and assigned a score of `0.0` to eliminate false positives.
 
 ### 3.3 SAM2 Video Memory Mechanism & LRU Frame State Cache
 SAM 2.1 introduces a Memory Bank architecture. In `ultralytics_sam_tasks.py`, `sam3_frame_state_cache` caches preprocessed frame features in memory using an LRU eviction strategy:
@@ -223,7 +223,7 @@ def _sam3_frame_cache_put(key, value):
 ```
 Chunking prevents GPU Out-Of-Memory (OOM) errors during long video tracking tasks:
 
-$$\text{chunk\_end} = \min(\text{chunk\_start} + \text{chunk\_size}, \text{end\_frame} + 1)$$
+$$\text{chunk-end} = \min(\text{chunk-start} + \text{chunk-size}, \text{end-frame} + 1)$$
 
 ### 3.4 CLIP Zero-Shot Classification & 8-Template Prompt Ensembling
 `clip_model.py` implements prompt ensembling standard in OpenAI and FiftyOne benchmarks:
@@ -240,7 +240,7 @@ $$\vec{w}_c = \text{Normalize}\left( \frac{1}{T} \sum_{t=1}^T \text{CLIP}_{\text
 
 Softmax probabilities are computed as:
 
-$$\text{Probability}_c = \frac{\exp(\text{logit\_scale} \cdot \vec{f}_{\text{img}} \cdot \vec{w}_c^T)}{\sum_{k} \exp(\text{logit\_scale} \cdot \vec{f}_{\text{img}} \cdot \vec{w}_k^T)}$$
+$$\text{Probability}_c = \frac{\exp(\text{logit-scale} \cdot \vec{f}_{\text{img}} \cdot \vec{w}_c^T)}{\sum_{k} \exp(\text{logit-scale} \cdot \vec{f}_{\text{img}} \cdot \vec{w}_k^T)}$$
 
 When single-class $N=1$ classification is requested, a negative background prompt `"other background, floor or irrelevant object"` is automatically appended.
 
@@ -267,8 +267,8 @@ In `file_storage.py` (`_clip_yolo_bbox`), normalized coordinates $(cx, cy, w, h)
 $$\begin{aligned}
 x_{\min} &= \max(0.0, \min(1.0 - \epsilon, cx - w/2)) \\
 x_{\max} &= \max(\epsilon, \min(1.0, cx + w/2)) \\
-new\_cx &= x_{\min} + (x_{\max} - x_{\min}) / 2 \\
-new\_w &= x_{\max} - x_{\min}
+cx_{\text{new}} &= x_{\min} + (x_{\max} - x_{\min}) / 2 \\
+w_{\text{new}} &= x_{\max} - x_{\min}
 \end{aligned}$$
 where $\epsilon = 10^{-6}$ prevents bounding box coordinates from overflowing image boundaries.
 
