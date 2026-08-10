@@ -1435,9 +1435,11 @@ def cluster_classification_images_route():
             if not (unlabeled_only and has_label):
                 frames_to_cluster.append(f_item)
 
-    # Fallback to all images if unlabeled_only resulted in 0 images
-    if not frames_to_cluster and all_valid_frames:
-        frames_to_cluster = all_valid_frames
+    # 不再静默回退：若 unlabeled_only=True 但结果为空，明确告知用户，
+    # 而不是意外处理已标注帧（可能覆盖已有标注数据）
+    if not frames_to_cluster:
+        if unlabeled_only and all_valid_frames:
+            return jsonify({'success': False, 'message': '当前视频中没有未标注的帧。如需对全部帧执行聚类，请取消"仅未标注帧"选项。'}), 400
 
     if not frames_to_cluster:
         return jsonify({'success': False, 'message': 'No images found for visual clustering.'}), 400
@@ -1591,9 +1593,10 @@ def apply_clip_zero_shot_route():
             if not (unlabeled_only and has_label):
                 target_frames.append(f_obj)
 
-    # Fallback to all frames if unlabeled_only resulted in 0 frames
-    if not target_frames and all_frames_list:
-        target_frames = all_frames_list
+    # 不再静默回退：若 unlabeled_only=True 但结果为空，明确告知用户
+    if not target_frames:
+        if unlabeled_only and all_frames_list:
+            return jsonify({'success': False, 'message': '当前选定视频中没有未标注的帧。如需处理全部帧，请取消"仅未标注帧"选项。'}), 400
 
     if not target_frames:
         return jsonify({'success': False, 'message': 'No matching frames found for zero-shot pre-annotation.'}), 404
