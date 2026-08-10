@@ -98,9 +98,12 @@ APP_BOOT_ID = uuid.uuid4().hex
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(threadName)s - %(message)s')
 
 with app.app_context():
-    database.init_db()
-    database.migrate_db()
-    file_storage.init_storage()
+    try:
+        database.init_db()   # 内部已包含 migrate_db()，无需再次调用
+        file_storage.init_storage()
+    except Exception as _startup_err:
+        logging.critical(f"数据库初始化或迁移失败，应用无法安全启动：{_startup_err}", exc_info=True)
+        raise SystemExit(1) from _startup_err
 
 
 def validate_description(desc, existing_descriptions):
