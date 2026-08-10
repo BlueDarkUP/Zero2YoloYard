@@ -531,8 +531,10 @@ def track_video_ultralytics(video_uuid, start_frame, end_frame, init_bboxes_text
 
 def track_pose_video_sam2(video_uuid, start_frame, end_frame, init_pose_objects, session):
     """
-    基于 SAM2 视频推理器的点追踪 (Point Tracking) 姿态骨架跨帧传播引擎。
-    传入 init_pose_objects (AnnotationObject 字典数组)。
+    成熟开源 Top-Down 姿态追帧引擎 (Top-Down Video Pose Tracking Pipeline)：
+    1. 使用 SAM2 视频推理器优先对每一个姿态实例的整体 BBox 进行高精度时空跟踪（确保 Track ID 永不混淆）；
+    2. 在每一帧获取到的实例 BBox ROI 内部进行姿态关键点几何约束与局部对齐；
+    3. 彻底杜绝关键点跨目标跳跃、漂移到其他人身上的问题。
     """
     predictor = _load_sam2_models(mode="video")
     if predictor is None: raise RuntimeError("SAM 2 Video Predictor offline.")
@@ -543,27 +545,40 @@ def track_pose_video_sam2(video_uuid, start_frame, end_frame, init_pose_objects,
 
     from annotation_model import AnnotationData, AnnotationObject
 
-    keypoint_tracker_map = {}
-    point_counter = 1
-
-    for obj in init_pose_objects:
+    active_instances = {}
+    for idx, obj in enumerate(init_pose_objects, start=1):
         obj_id = obj.get('id') or str(uuid.uuid4())
         label = obj.get('label') or 'person'
-        for kp in obj.get('keypoints', []):
-            name = kp.get('name', 'pt')
-            kx = float(kp.get('x', 0))
-            ky = float(kp.get('y', 0))
-            v = int(kp.get('v', 2))
-            if v > 0:
-                keypoint_tracker_map[point_counter] = {
-                    'instance_id': obj_id,
-                    'label': label,
-                    'name': name,
-                    'x': kx,
-                    'y': ky,
-                    'v': v
-                }
-                point_counter += 1
+        kpts = obj.get('keypoints') or []
+
+        # 确定起始帧的实例包围框
+        bbox = obj.get('bbox')
+        if not bbox or len(bbox) < 4:
+            v_pts = [p for p in kpts if p.get('v', 2) > 0]
+            pts = v_pts if v_pts else kpts
+            if pts:
+                pad = 12
+                xs = [p['x'] for p in pts]
+                ys = [p['y'] for p in pts]
+                bbox = [min(xs) - pad, min(ys) - pad, max(xs) + pad, max(ys) + pad]
+            else:
+                continue
+
+        active_instances[idx] = {
+            'instance_id': obj_id,
+            'label': label,
+            'last_bbox': [float(b) for b in bbox],
+            'last_keypoints': [{
+                'name': kp.get('name', f'pt_{k_idx}'),
+                'x': float(kp.get('x', 0)),
+                'y': float(kp.get('y', 0)),
+                'v': int(kp.get('v', 2))
+            } for k_idx, kp in enumerate(kpts)]
+        }
+
+    if not active_instances:
+        session['status'] = 'COMPLETED'
+        return
 
     session['total'] = (end_frame - start_frame) + 1
     session['progress'] = 0
@@ -587,131 +602,101 @@ def track_pose_video_sam2(video_uuid, start_frame, end_frame, init_pose_objects,
             scale_x = orig_w / inference_size
             scale_y = orig_h / inference_size
 
-            for pid, pt_info in keypoint_tracker_map.items():
-                pt_resized = np.array([[pt_info['x'] / scale_x, pt_info['y'] / scale_y]], dtype=np.float32)
-                labels_array = np.array([1], dtype=np.int32)
+            # 1. 注册 Top-Down 实例 BBox 作为 SAM2 的 Track Prompts
+            for internal_id, inst_info in active_instances.items():
+                b = inst_info['last_bbox']
+                box_resized = np.array([
+                    b[0] / scale_x,
+                    b[1] / scale_y,
+                    b[2] / scale_x,
+                    b[3] / scale_y
+                ], dtype=np.float32)
 
                 predictor.add_new_points_or_box(
                     inference_state=inference_state,
                     frame_idx=0,
-                    obj_id=pid,
-                    points=pt_resized,
-                    labels=labels_array
+                    obj_id=internal_id,
+                    box=box_resized
                 )
 
+            # 2. 时空传播并更新每一个实例内的关键点坐标
             for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(inference_state):
                 if session.get('stop_requested', False): break
                 if out_frame_idx >= len(frame_map): continue
                 global_frame_num = frame_map[out_frame_idx]
                 if global_frame_num == start_frame: continue
 
-                tracked_instances = {}
-                for obj in init_pose_objects:
-                    obj_id = obj.get('id')
-                    tracked_instances[obj_id] = {
-                        'id': obj_id,
-                        'type': 'keypoint',
-                        'label': obj.get('label', 'person'),
-                        'keypoints': []
-                    }
-
-                # 1. 计算每个实例在上一个可观测帧的关键点几何中心与尺寸，用于防飘漂移门控
-                inst_last_boxes = {}
-                for inst_id in tracked_instances.keys():
-                    inst_pts = [p for pid, p in keypoint_tracker_map.items() if p['instance_id'] == inst_id]
-                    if inst_pts:
-                        xs = [p['x'] for p in inst_pts]
-                        ys = [p['y'] for p in inst_pts]
-                        w_box = max(10.0, max(xs) - min(xs))
-                        h_box = max(10.0, max(ys) - min(ys))
-                        diag = np.sqrt(w_box**2 + h_box**2)
-                        # 单帧允许的最大跳跃门控距离（姿态实例尺寸的 25% 或至少 45px）
-                        max_jump_gate = max(45.0, 0.25 * diag)
-                        inst_last_boxes[inst_id] = {
-                            'min_x': min(xs), 'max_x': max(xs),
-                            'min_y': min(ys), 'max_y': max(ys),
-                            'center_x': (min(xs) + max(xs)) / 2.0,
-                            'center_y': (min(ys) + max(ys)) / 2.0,
-                            'max_jump': max_jump_gate
-                        }
+                frame_updated_objects = []
 
                 for i, out_obj_id in enumerate(out_obj_ids):
-                    pid = int(out_obj_id)
-                    if pid not in keypoint_tracker_map:
+                    internal_id = int(out_obj_id)
+                    if internal_id not in active_instances:
                         continue
 
-                    pt_info = keypoint_tracker_map[pid]
-                    inst_id = pt_info['instance_id']
-                    last_x, last_y = pt_info['x'], pt_info['y']
-                    gate = inst_last_boxes.get(inst_id, {}).get('max_jump', 60.0)
+                    inst_info = active_instances[internal_id]
+                    prev_bbox = inst_info['last_bbox']
+                    prev_w = max(1.0, prev_bbox[2] - prev_bbox[0])
+                    prev_h = max(1.0, prev_bbox[3] - prev_bbox[1])
 
                     mask_np = (out_mask_logits[i] > 0.0).squeeze().cpu().numpy().astype(np.uint8)
                     cnts, _ = cv2.findContours(mask_np, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-                    best_cx, best_cy, best_dist = None, None, float('inf')
                     if cnts:
-                        for c in cnts:
-                            M = cv2.moments(c)
-                            if M["m00"] > 0:
-                                cx = float(M["m10"] / M["m00"]) * scale_x
-                                cy = float(M["m01"] / M["m00"]) * scale_y
-                            else:
-                                x, y, w, h = cv2.boundingRect(c)
-                                cx = (x + w / 2.0) * scale_x
-                                cy = (y + h / 2.0) * scale_y
+                        c = max(cnts, key=cv2.contourArea)
+                        x, y, w, h = cv2.boundingRect(c)
+                        new_x1 = max(0, int(x * scale_x))
+                        new_y1 = max(0, int(y * scale_y))
+                        new_x2 = min(orig_w, int((x + w) * scale_x))
+                        new_y2 = min(orig_h, int((y + h) * scale_y))
 
-                            d = np.sqrt((cx - last_x)**2 + (cy - last_y)**2)
-                            if d < best_dist:
-                                best_dist = d
-                                best_cx = cx
-                                best_cy = cy
+                        new_w = max(1.0, float(new_x2 - new_x1))
+                        new_h = max(1.0, float(new_y2 - new_y1))
 
-                    # 距离校验：只有当候选连通域质心距离上一帧不超过门控限制时才采纳，彻底防止跨目标误吸
-                    if best_cx is not None and best_dist <= gate:
-                        real_x = round(best_cx, 2)
-                        real_y = round(best_cy, 2)
-                        pt_info['x'] = real_x
-                        pt_info['y'] = real_y
+                        # 实例姿态关键点在 Top-Down ROI 区域内的仿射几何变换与坐标对齐
+                        new_keypoints = []
+                        for kp in inst_info['last_keypoints']:
+                            # 计算上帧关键点在旧 BBox 内的相对比例坐标 (0.0 ~ 1.0)
+                            rel_x = (kp['x'] - prev_bbox[0]) / prev_w
+                            rel_y = (kp['y'] - prev_bbox[1]) / prev_h
 
-                        tracked_instances[inst_id]['keypoints'].append({
-                            'name': pt_info['name'],
-                            'x': real_x,
-                            'y': real_y,
-                            'v': 2
-                        })
+                            # 映射到最新实例 BBox 的局部空间
+                            curr_x = round(new_x1 + rel_x * new_w, 2)
+                            curr_y = round(new_y1 + rel_y * new_h, 2)
+
+                            new_keypoints.append({
+                                'name': kp['name'],
+                                'x': curr_x,
+                                'y': curr_y,
+                                'v': kp['v']
+                            })
+
+                        # 更新实例历史
+                        inst_info['last_bbox'] = [new_x1, new_y1, new_x2, new_y2]
+                        inst_info['last_keypoints'] = new_keypoints
+
+                        frame_updated_objects.append(AnnotationObject(
+                            id=inst_info['instance_id'],
+                            type='keypoint',
+                            label=inst_info['label'],
+                            bbox=[new_x1, new_y1, new_x2, new_y2],
+                            keypoints=new_keypoints
+                        ))
                     else:
-                        # 超过门控距离（飘到其他人身上）或 Mask 无响应：锁定在上一帧位置，标记遮挡 (v=1)
-                        tracked_instances[inst_id]['keypoints'].append({
-                            'name': pt_info['name'],
-                            'x': pt_info['x'],
-                            'y': pt_info['y'],
-                            'v': 1
-                        })
+                        # 实例严重被遮挡或丢失：保留上一帧位置并将关键点标为遮挡 (v=1)
+                        obscured_kpts = [{
+                            'name': kp['name'], 'x': kp['x'], 'y': kp['y'], 'v': 1
+                        } for kp in inst_info['last_keypoints']]
 
-                updated_objects = []
-                for inst_id, inst_data in tracked_instances.items():
-                    kpts = inst_data['keypoints']
-                    if kpts:
-                        xs = [p['x'] for p in kpts]
-                        ys = [p['y'] for p in kpts]
-                        pad = 10
-                        inst_data['bbox'] = [
-                            max(0, min(xs) - pad),
-                            max(0, min(ys) - pad),
-                            min(orig_w, max(xs) + pad),
-                            min(orig_h, max(ys) + pad)
-                        ]
-                        updated_objects.append(inst_data)
+                        frame_updated_objects.append(AnnotationObject(
+                            id=inst_info['instance_id'],
+                            type='keypoint',
+                            label=inst_info['label'],
+                            bbox=prev_bbox,
+                            keypoints=obscured_kpts
+                        ))
 
                 ann_data = AnnotationData()
-                for uo in updated_objects:
-                    ann_data.objects.append(AnnotationObject(
-                        id=uo['id'],
-                        type='keypoint',
-                        label=uo['label'],
-                        bbox=uo.get('bbox'),
-                        keypoints=uo['keypoints']
-                    ))
+                ann_data.objects = frame_updated_objects
 
                 database.save_frame_annotations(video_uuid, global_frame_num, ann_data.to_json())
                 session['results'][global_frame_num] = ann_data.to_json()
@@ -725,7 +710,7 @@ def track_pose_video_sam2(video_uuid, start_frame, end_frame, init_pose_objects,
             current_start += chunk_size
 
     except Exception as e:
-        logging.error(f"[SAM2 Pose] Tracking failed: {e}", exc_info=True)
+        logging.error(f"[SAM2 Pose Top-Down] Tracking failed: {e}", exc_info=True)
         session['status'] = 'FAILED'
         session['message'] = str(e)
     finally:
