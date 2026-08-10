@@ -343,6 +343,7 @@ def extract_frames_task(video_uuid, frame_interval=1):
     active_tasks[video_uuid] = 'EXTRACTING'
     logging.info(f"Starting frame extraction for {video_uuid} (Frame Interval: {frame_interval})")
     video_path = file_storage.get_video_path(video_uuid)
+    vid = None
 
     try:
         vid = cv2.VideoCapture(video_path)
@@ -398,7 +399,6 @@ def extract_frames_task(video_uuid, frame_interval=1):
                     extracted_index += 1
 
             native_count += 1
-        vid.release()
         database.update_video_status(video_uuid, 'READY')
         logging.info(
             f"Frame extraction for {video_uuid} completed. Kept {exact_frame_count} out of {total_native_frames} frames.")
@@ -407,6 +407,9 @@ def extract_frames_task(video_uuid, frame_interval=1):
         logging.error(f"Error extracting frames for {video_uuid}: {e}")
         database.update_video_status(video_uuid, 'FAILED', str(e))
     finally:
+        # 无论是否异常都释放视频句柄，防止文件句柄泄漏
+        if vid is not None:
+            vid.release()
         if active_tasks.get(video_uuid) == 'EXTRACTING':
             del active_tasks[video_uuid]
 
