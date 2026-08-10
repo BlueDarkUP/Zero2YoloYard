@@ -151,6 +151,31 @@ class PoseAnnotator {
     initDOM() {
         const self = this;
 
+        // 顶部姿态工具卡片按需展开/收起 (Accordion Tab Toggle)
+        $(document).off('click', '#btn-show-gkdt-panel').on('click', '#btn-show-gkdt-panel', function () {
+            $('#btn-show-gkdt-panel').removeClass('btn-outline-secondary').addClass('btn-outline-danger active');
+            $('#btn-show-truelam-panel').removeClass('btn-outline-warning active').addClass('btn-outline-secondary');
+            $('#btn-show-interp-panel').removeClass('btn-outline-info active').addClass('btn-outline-secondary');
+            $('#gkdt-panel-controls').show();
+            $('#truelam-panel-controls, #interp-panel-controls').hide();
+        });
+
+        $(document).off('click', '#btn-show-truelam-panel').on('click', '#btn-show-truelam-panel', function () {
+            $('#btn-show-truelam-panel').removeClass('btn-outline-secondary').addClass('btn-outline-warning active');
+            $('#btn-show-gkdt-panel').removeClass('btn-outline-danger active').addClass('btn-outline-secondary');
+            $('#btn-show-interp-panel').removeClass('btn-outline-info active').addClass('btn-outline-secondary');
+            $('#truelam-panel-controls').show();
+            $('#gkdt-panel-controls, #interp-panel-controls').hide();
+        });
+
+        $(document).off('click', '#btn-show-interp-panel').on('click', '#btn-show-interp-panel', function () {
+            $('#btn-show-interp-panel').removeClass('btn-outline-secondary').addClass('btn-outline-info active');
+            $('#btn-show-gkdt-panel').removeClass('btn-outline-danger active').addClass('btn-outline-secondary');
+            $('#btn-show-truelam-panel').removeClass('btn-outline-warning active').addClass('btn-outline-secondary');
+            $('#interp-panel-controls').show();
+            $('#gkdt-panel-controls, #truelam-panel-controls').hide();
+        });
+
         // GKDT + SAM2.1 开关切换逻辑
         $(document).off('click', '#btn-toggle-gkdt-interactive').on('click', '#btn-toggle-gkdt-interactive', function () {
             self.isGkdtModeActive = !self.isGkdtModeActive;

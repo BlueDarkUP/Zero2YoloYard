@@ -1,5 +1,4 @@
-<!-- Pose / Keypoint Skeleton Sidebar Sub-Template
-     Custom keypoint schema & agnostic object topology support -->
+<!-- Pose / Keypoint Skeleton Sidebar Sub-Template -->
 <style>
     .pose-inline-name-input {
         position: fixed;
@@ -17,24 +16,23 @@
     }
     .task-pose [data-v]:disabled { opacity: 0.35; cursor: not-allowed; }
 
-    .task-pose .pose-card {
-        background: rgba(15, 18, 28, 0.7);
+    .pose-tool-btn {
+        font-size: 0.72rem;
+        font-weight: 700;
+        padding: 0.35rem 0.2rem;
+        border-radius: 6px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .pose-panel-box {
+        background: rgba(16, 20, 30, 0.75);
         backdrop-filter: blur(12px);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 8px;
+        border-radius: 6px;
+        padding: 8px 10px;
+        margin-bottom: 10px;
         transition: all 0.2s ease-in-out;
-    }
-    .task-pose .pose-card:hover {
-        border-color: rgba(0, 240, 255, 0.25);
-    }
-    .task-pose .pose-card-gkdt {
-        border-left: 3px solid #ff2a5f;
-    }
-    .task-pose .pose-card-truelam {
-        border-left: 3px solid #ffb400;
-    }
-    .task-pose .pose-card-interp {
-        border-left: 3px solid #00f0ff;
     }
 </style>
 
@@ -46,89 +44,98 @@
         </h6>
     </div>
 
-    <!-- Quick Instruction Banner -->
-    <div class="alert alert-dark p-2 small mb-3 border-secondary text-muted" style="font-size: 0.75rem; background: rgba(20, 24, 36, 0.6); border-radius: 6px;">
-        <i class="bi bi-info-circle text-cyan mr-1"></i>Select a class and click <b>Add Skeleton</b>, or use <b>GKDT Point-Click Mode</b> for instant pose extraction.<br>
-        <i class="bi bi-info-circle text-cyan mr-1"></i>Keypoint names & topology are fully agnostic (unlimited pts).
+    <!-- Tool Selector Toggle Buttons (Compact Row like DET/SEG) -->
+    <div class="row no-gutters mb-2" style="gap: 4px;">
+        <div class="col">
+            <button id="btn-show-gkdt-panel" class="btn btn-sm btn-outline-danger w-100 pose-tool-btn active" title="GKDT Interactive Click Mode">
+                <i class="bi bi-crosshair"></i> GKDT
+            </button>
+        </div>
+        <div class="col">
+            <button id="btn-show-truelam-panel" class="btn btn-sm btn-outline-warning w-100 pose-tool-btn" title="TrueLAM Auto-Detection Mode">
+                <i class="bi bi-lightning-fill"></i> TrueLAM
+            </button>
+        </div>
+        <div class="col">
+            <button id="btn-show-interp-panel" class="btn btn-sm btn-outline-info w-100 pose-tool-btn" title="Keypoint Linear Interpolation Mode">
+                <i class="bi bi-graph-up"></i> Interp
+            </button>
+        </div>
     </div>
 
-    <!-- GKDT Interactive Generation (SAM 2.1 + GKDT) -->
-    <div class="card pose-card pose-card-gkdt p-2 mb-2">
+    <!-- Panel 1: GKDT Interactive (Default Shown) -->
+    <div id="gkdt-panel-controls" class="pose-panel-box border border-danger">
         <div class="small font-weight-bold text-danger mb-1 d-flex justify-content-between align-items-center">
-            <span><i class="bi bi-crosshair mr-1"></i>GKDT Interactive (SAM 2.1 + GKDT)</span>
-            <span class="badge badge-danger" style="font-size: 0.65rem;">ECCV 2026</span>
+            <span><i class="bi bi-crosshair mr-1"></i>GKDT Click Mode</span>
+            <span class="badge badge-danger" style="font-size: 0.6rem;">ECCV 26</span>
         </div>
-        <button id="btn-toggle-gkdt-interactive" class="btn btn-sm btn-outline-danger font-weight-bold w-100 mt-1">
-            <i class="bi bi-crosshair mr-1"></i>Enable GKDT Point-Click Mode
+        <button id="btn-toggle-gkdt-interactive" class="btn btn-sm btn-outline-danger font-weight-bold w-100 mt-1" style="font-size: 0.75rem;">
+            <i class="bi bi-crosshair mr-1"></i>Enable Point-Click
         </button>
     </div>
 
-    <!-- TrueLAM Open-Vocabulary Pose Auto-Detect (SAM3 + GKDT) -->
-    <div class="card pose-card pose-card-truelam p-2 mb-3">
+    <!-- Panel 2: TrueLAM Auto-Detect (Hidden by Default) -->
+    <div id="truelam-panel-controls" class="pose-panel-box border border-warning" style="display: none;">
         <div class="small font-weight-bold text-warning mb-1 d-flex justify-content-between align-items-center">
-            <span><i class="bi bi-lightning-charge-fill mr-1"></i>TrueLAM Pose Auto-Detect (SAM3 + GKDT)</span>
-            <span class="badge badge-warning text-dark" style="font-size: 0.65rem; font-weight: 700;">AI Auto</span>
+            <span><i class="bi bi-lightning-fill mr-1"></i>TrueLAM Pose</span>
+            <span class="badge badge-warning text-dark" style="font-size: 0.6rem; font-weight: 700;">AI Auto</span>
         </div>
         <div class="input-group input-group-sm my-1">
-            <div class="input-group-prepend">
-                <span class="input-group-text bg-dark text-warning border-secondary"><i class="bi bi-search"></i></span>
-            </div>
-            <input type="text" id="pose-truelam-prompt-input" class="form-control bg-dark text-light border-secondary" placeholder="Enter prompt (e.g. person, robot arm)" title="SAM3 Open-Vocabulary Text Prompt">
+            <input type="text" id="pose-truelam-prompt-input" class="form-control bg-dark text-light border-secondary" placeholder="Prompt (e.g. person)" style="font-size: 0.75rem;">
         </div>
-        <button type="button" id="btn-truelam-pose-batch" class="btn btn-sm btn-warning font-weight-bold w-100 text-dark mt-1">
-            <i class="bi bi-magic mr-1"></i>Detect Poses on Current Frame
+        <button type="button" id="btn-truelam-pose-batch" class="btn btn-sm btn-warning font-weight-bold w-100 text-dark mt-1" style="font-size: 0.75rem;">
+            <i class="bi bi-magic mr-1"></i>Detect Current Frame
         </button>
-        <button type="button" id="btn-truelam-pose-dataset-batch" class="btn btn-sm btn-outline-warning font-weight-bold w-100 mt-2" title="Automatically apply SAM3 + GKDT pose detection to all frames across the dataset">
-            <i class="bi bi-collection-play mr-1"></i>Propagate Poses to Dataset (All Videos)
+        <button type="button" id="btn-truelam-pose-dataset-batch" class="btn btn-sm btn-outline-warning font-weight-bold w-100 mt-1" style="font-size: 0.75rem;">
+            <i class="bi bi-collection-play mr-1"></i>Apply to Dataset
         </button>
     </div>
 
-    <!-- Keypoint Frame Interpolation Card -->
-    <div class="card pose-card pose-card-interp p-2 mb-3">
+    <!-- Panel 3: Keypoint Interpolation (Hidden by Default) -->
+    <div id="interp-panel-controls" class="pose-panel-box border border-info" style="display: none;">
         <div class="small font-weight-bold text-info mb-1 d-flex justify-content-between align-items-center">
-            <span><i class="bi bi-graph-up-arrow mr-1"></i>Keypoint Frame Interpolation</span>
-            <span class="badge badge-info text-dark" style="font-size: 0.65rem; font-weight: 700;">Linear</span>
+            <span><i class="bi bi-graph-up mr-1"></i>Keypoint Interpolation</span>
+            <span class="badge badge-info text-dark" style="font-size: 0.6rem; font-weight: 700;">Linear</span>
         </div>
         <div class="d-flex mb-1" style="gap: 4px;">
             <div class="input-group input-group-sm flex-fill">
-                <div class="input-group-prepend"><span class="input-group-text bg-dark text-info border-secondary" style="font-size: 0.75rem;">Start</span></div>
-                <input type="number" id="pose-interp-start-frame" class="form-control bg-dark text-light border-secondary" placeholder="Frame">
+                <div class="input-group-prepend"><span class="input-group-text bg-dark text-info border-secondary" style="font-size: 0.7rem;">Start</span></div>
+                <input type="number" id="pose-interp-start-frame" class="form-control bg-dark text-light border-secondary" placeholder="Frame" style="font-size: 0.75rem;">
             </div>
-            <button type="button" id="btn-set-pose-interp-start" class="btn btn-sm btn-outline-info" style="font-size: 0.75rem;" title="Set current frame as start frame">📍Set Start</button>
+            <button type="button" id="btn-set-pose-interp-start" class="btn btn-sm btn-outline-info" style="font-size: 0.7rem; padding: 0.2rem 0.4rem;">Set</button>
         </div>
         <div class="d-flex mb-2" style="gap: 4px;">
             <div class="input-group input-group-sm flex-fill">
-                <div class="input-group-prepend"><span class="input-group-text bg-dark text-info border-secondary" style="font-size: 0.75rem;">End</span></div>
-                <input type="number" id="pose-interp-end-frame" class="form-control bg-dark text-light border-secondary" placeholder="Frame">
+                <div class="input-group-prepend"><span class="input-group-text bg-dark text-info border-secondary" style="font-size: 0.7rem;">End</span></div>
+                <input type="number" id="pose-interp-end-frame" class="form-control bg-dark text-light border-secondary" placeholder="Frame" style="font-size: 0.75rem;">
             </div>
-            <button type="button" id="btn-set-pose-interp-end" class="btn btn-sm btn-outline-info" style="font-size: 0.75rem;" title="Set current frame as end frame">📍Set End</button>
+            <button type="button" id="btn-set-pose-interp-end" class="btn btn-sm btn-outline-info" style="font-size: 0.7rem; padding: 0.2rem 0.4rem;">Set</button>
         </div>
-        <button type="button" id="btn-exec-pose-interpolate" class="btn btn-sm btn-info font-weight-bold text-dark w-100">
-            <i class="bi bi-arrow-down-up mr-1"></i>Interpolate Keypoints
+        <button type="button" id="btn-exec-pose-interpolate" class="btn btn-sm btn-info font-weight-bold text-dark w-100" style="font-size: 0.75rem;">
+            <i class="bi bi-arrow-down-up mr-1"></i>Execute Interpolation
         </button>
     </div>
 
     <!-- Manual Action Buttons -->
     <div class="d-flex mb-2" style="gap: 6px;">
-        <button id="btn-add-skeleton" class="btn btn-sm btn-primary font-weight-bold flex-grow-1">
+        <button id="btn-add-skeleton" class="btn btn-sm btn-primary font-weight-bold flex-grow-1" style="font-size: 0.75rem;">
             <i class="bi bi-plus-lg mr-1"></i>Add Skeleton
         </button>
-        <button id="btn-edit-pose-schema" class="btn btn-sm btn-outline-info font-weight-bold" title="Edit Class Point Template (Optional)">
+        <button id="btn-edit-pose-schema" class="btn btn-sm btn-outline-info font-weight-bold" title="Edit Schema">
             <i class="bi bi-pencil-square"></i>
         </button>
     </div>
 
-    <button id="btn-finish-pose-freeform" class="btn btn-sm btn-outline-success font-weight-bold w-100 mb-2" style="display:none;">
-        <i class="bi bi-check-lg mr-1"></i>Finish Skeleton (Enter / Right Click)
+    <button id="btn-finish-pose-freeform" class="btn btn-sm btn-outline-success font-weight-bold w-100 mb-2" style="display:none; font-size: 0.75rem;">
+        <i class="bi bi-check-lg mr-1"></i>Finish (Enter / Right Click)
     </button>
 
-    <!-- Keypoint Visibility Controls -->
-    <div class="card pose-card p-2 mb-3">
-        <div class="small font-weight-bold text-muted mb-2">Keypoint Visibility State:</div>
+    <!-- Keypoint Visibility Status Buttons -->
+    <div class="pose-panel-box border border-secondary p-1 mb-2">
         <div class="btn-group btn-group-sm w-100" role="group">
-            <button type="button" class="btn btn-outline-success" data-v="2" title="Visible (Key 2)">🟢 Visible</button>
-            <button type="button" class="btn btn-outline-warning" data-v="1" title="Occluded (Key 1)">🟠 Occluded</button>
-            <button type="button" class="btn btn-outline-danger" data-v="0" title="Absent (Key 0)">⚪ Absent</button>
+            <button type="button" class="btn btn-outline-success py-1" data-v="2" style="font-size: 0.7rem;">🟢 Vis (2)</button>
+            <button type="button" class="btn btn-outline-warning py-1" data-v="1" style="font-size: 0.7rem;">🟠 Occ (1)</button>
+            <button type="button" class="btn btn-outline-danger py-1" data-v="0" style="font-size: 0.7rem;">⚪ Abs (0)</button>
         </div>
     </div>
 
