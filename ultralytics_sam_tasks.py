@@ -615,6 +615,26 @@ def track_pose_video_sam2(video_uuid, start_frame, end_frame, init_pose_objects,
                         'keypoints': []
                     }
 
+                # 1. 计算每个实例在上一个可观测帧的关键点几何中心与尺寸，用于防飘漂移门控
+                inst_last_boxes = {}
+                for inst_id in tracked_instances.keys():
+                    inst_pts = [p for pid, p in keypoint_tracker_map.items() if p['instance_id'] == inst_id]
+                    if inst_pts:
+                        xs = [p['x'] for p in inst_pts]
+                        ys = [p['y'] for p in inst_pts]
+                        w_box = max(10.0, max(xs) - min(xs))
+                        h_box = max(10.0, max(ys) - min(ys))
+                        diag = np.sqrt(w_box**2 + h_box**2)
+                        # 单帧允许的最大跳跃门控距离（姿态实例尺寸的 25% 或至少 45px）
+                        max_jump_gate = max(45.0, 0.25 * diag)
+                        inst_last_boxes[inst_id] = {
+                            'min_x': min(xs), 'max_x': max(xs),
+                            'min_y': min(ys), 'max_y': max(ys),
+                            'center_x': (min(xs) + max(xs)) / 2.0,
+                            'center_y': (min(ys) + max(ys)) / 2.0,
+                            'max_jump': max_jump_gate
+                        }
+
                 for i, out_obj_id in enumerate(out_obj_ids):
                     pid = int(out_obj_id)
                     if pid not in keypoint_tracker_map:
@@ -622,21 +642,34 @@ def track_pose_video_sam2(video_uuid, start_frame, end_frame, init_pose_objects,
 
                     pt_info = keypoint_tracker_map[pid]
                     inst_id = pt_info['instance_id']
+                    last_x, last_y = pt_info['x'], pt_info['y']
+                    gate = inst_last_boxes.get(inst_id, {}).get('max_jump', 60.0)
 
                     mask_np = (out_mask_logits[i] > 0.0).squeeze().cpu().numpy().astype(np.uint8)
                     cnts, _ = cv2.findContours(mask_np, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-                    if cnts:
-                        c = max(cnts, key=cv2.contourArea)
-                        M = cv2.moments(c)
-                        if M["m00"] > 0:
-                            cx = float(M["m10"] / M["m00"])
-                            cy = float(M["m01"] / M["m00"])
-                        else:
-                            x, y, w, h = cv2.boundingRect(c)
-                            cx, cy = x + w / 2.0, y + h / 2.0
 
-                        real_x = round(cx * scale_x, 2)
-                        real_y = round(cy * scale_y, 2)
+                    best_cx, best_cy, best_dist = None, None, float('inf')
+                    if cnts:
+                        for c in cnts:
+                            M = cv2.moments(c)
+                            if M["m00"] > 0:
+                                cx = float(M["m10"] / M["m00"]) * scale_x
+                                cy = float(M["m01"] / M["m00"]) * scale_y
+                            else:
+                                x, y, w, h = cv2.boundingRect(c)
+                                cx = (x + w / 2.0) * scale_x
+                                cy = (y + h / 2.0) * scale_y
+
+                            d = np.sqrt((cx - last_x)**2 + (cy - last_y)**2)
+                            if d < best_dist:
+                                best_dist = d
+                                best_cx = cx
+                                best_cy = cy
+
+                    # 距离校验：只有当候选连通域质心距离上一帧不超过门控限制时才采纳，彻底防止跨目标误吸
+                    if best_cx is not None and best_dist <= gate:
+                        real_x = round(best_cx, 2)
+                        real_y = round(best_cy, 2)
                         pt_info['x'] = real_x
                         pt_info['y'] = real_y
 
@@ -647,6 +680,7 @@ def track_pose_video_sam2(video_uuid, start_frame, end_frame, init_pose_objects,
                             'v': 2
                         })
                     else:
+                        # 超过门控距离（飘到其他人身上）或 Mask 无响应：锁定在上一帧位置，标记遮挡 (v=1)
                         tracked_instances[inst_id]['keypoints'].append({
                             'name': pt_info['name'],
                             'x': pt_info['x'],
