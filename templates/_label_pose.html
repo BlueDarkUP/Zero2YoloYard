@@ -61,6 +61,31 @@
         </button>
     </div>
 
+    <!-- 关键点帧间线性插值卡片 -->
+    <div class="card bg-dark border-info p-2 mb-3">
+        <div class="small font-weight-bold text-info mb-1 d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-graph-up-arrow mr-1"></i>关键点帧间线性插值</span>
+            <span class="badge badge-info">Interpolation</span>
+        </div>
+        <div class="d-flex mb-1" style="gap: 4px;">
+            <div class="input-group input-group-sm flex-fill">
+                <div class="input-group-prepend"><span class="input-group-text bg-dark text-info border-secondary">起</span></div>
+                <input type="number" id="pose-interp-start-frame" class="form-control bg-dark text-light border-secondary" placeholder="起始帧">
+            </div>
+            <button type="button" id="btn-set-pose-interp-start" class="btn btn-sm btn-outline-info" title="设当前帧为起始帧">📍设起</button>
+        </div>
+        <div class="d-flex mb-2" style="gap: 4px;">
+            <div class="input-group input-group-sm flex-fill">
+                <div class="input-group-prepend"><span class="input-group-text bg-dark text-info border-secondary">终</span></div>
+                <input type="number" id="pose-interp-end-frame" class="form-control bg-dark text-light border-secondary" placeholder="结束帧">
+            </div>
+            <button type="button" id="btn-set-pose-interp-end" class="btn btn-sm btn-outline-info" title="设当前帧为结束帧">📍设终</button>
+        </div>
+        <button type="button" id="btn-exec-pose-interpolate" class="btn btn-sm btn-info font-weight-bold text-dark w-100">
+            <i class="bi bi-arrow-down-up mr-1"></i>执行关键点线性插值
+        </button>
+    </div>
+
     <div class="d-flex mb-2" style="gap: 6px;">
         <button id="btn-add-skeleton" class="btn btn-sm btn-primary font-weight-bold flex-grow-1">
             <i class="bi bi-plus-lg mr-1"></i>Add Skeleton

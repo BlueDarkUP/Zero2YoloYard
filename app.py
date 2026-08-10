@@ -786,6 +786,139 @@ def interpolate_bboxes():
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
+@app.route('/api/interpolatePoseKeypoints', methods=['POST'])
+def interpolate_pose_keypoints():
+    """
+    对跨帧关键点姿态进行线性插值 (Linear Interpolation for Pose Keypoints across frames)
+    """
+    data = request.json
+    video_uuid = data.get('video_uuid')
+    object_id = data.get('object_id')
+    start_frame_num = data.get('start_frame_number')
+    end_frame_num = data.get('end_frame_number')
+
+    if not all([video_uuid, start_frame_num is not None, end_frame_num is not None]):
+        return jsonify({'success': False, 'message': '缺少必要参数 (video_uuid, start_frame_number, end_frame_number)'}), 400
+
+    try:
+        start_frame_num = int(start_frame_num)
+        end_frame_num = int(end_frame_num)
+
+        if start_frame_num >= end_frame_num:
+            start_frame_num, end_frame_num = end_frame_num, start_frame_num
+
+        total_steps = end_frame_num - start_frame_num
+        if total_steps <= 1:
+            return jsonify({'success': True, 'message': '中间没有需要插值的帧'})
+
+        start_ann_dict = database.get_frame_annotations(video_uuid, start_frame_num)
+        end_ann_dict = database.get_frame_annotations(video_uuid, end_frame_num)
+
+        if not start_ann_dict or not end_ann_dict:
+            return jsonify({'success': False, 'message': '起始帧或结束帧缺少包含姿态的数据'}), 400
+
+        from annotation_model import AnnotationData, AnnotationObject
+        start_data = AnnotationData.from_dict(start_ann_dict)
+        end_data = AnnotationData.from_dict(end_ann_dict)
+
+        start_objs = [o for o in start_data.objects if o.type == 'keypoint']
+        end_objs = [o for o in end_data.objects if o.type == 'keypoint']
+
+        if not start_objs or not end_objs:
+            return jsonify({'success': False, 'message': '起始帧或结束帧中未找到关键点姿态对象'}), 400
+
+        pairs = []
+        if object_id:
+            s_match = next((o for o in start_objs if o.id == object_id), None)
+            e_match = next((o for o in end_objs if o.id == object_id), None)
+            if s_match and e_match:
+                pairs.append((s_match, e_match))
+        else:
+            for s_o in start_objs:
+                e_match = next((o for o in end_objs if o.id == s_o.id), None)
+                if not e_match:
+                    e_match = next((o for o in end_objs if o.label == s_o.label), None)
+                if e_match:
+                    pairs.append((s_o, e_match))
+
+        if not pairs:
+            return jsonify({'success': False, 'message': '未能匹配到跨帧的同名或同 ID 姿态对象'}), 400
+
+        interpolated_count = 0
+        for i in range(1, total_steps):
+            curr_frame_num = start_frame_num + i
+            alpha = i / float(total_steps)
+
+            curr_ann_dict = database.get_frame_annotations(video_uuid, curr_frame_num)
+            curr_data = AnnotationData.from_dict(curr_ann_dict) if curr_ann_dict else AnnotationData()
+
+            for s_obj, e_obj in pairs:
+                target_id = s_obj.id
+
+                # 1. 姿态包围框 BBox 线性插值
+                interp_bbox = None
+                if s_obj.bbox and e_obj.bbox and len(s_obj.bbox) == 4 and len(e_obj.bbox) == 4:
+                    bx1 = float(s_obj.bbox[0]) + (float(e_obj.bbox[0]) - float(s_obj.bbox[0])) * alpha
+                    by1 = float(s_obj.bbox[1]) + (float(e_obj.bbox[1]) - float(s_obj.bbox[1])) * alpha
+                    bx2 = float(s_obj.bbox[2]) + (float(e_obj.bbox[2]) - float(s_obj.bbox[2])) * alpha
+                    by2 = float(s_obj.bbox[3]) + (float(e_obj.bbox[3]) - float(s_obj.bbox[3])) * alpha
+                    interp_bbox = [round(bx1, 2), round(by1, 2), round(bx2, 2), round(by2, 2)]
+
+                # 2. 关键点坐标 (x, y) 与可见性 (v) 线性插值
+                s_kps = s_obj.keypoints or []
+                e_kps = e_obj.keypoints or []
+                e_kp_map = {k.get('name', f"pt_{idx}"): k for idx, k in enumerate(e_kps)}
+
+                interp_kps = []
+                for idx, skp in enumerate(s_kps):
+                    kp_name = skp.get('name', f"pt_{idx}")
+                    ekp = e_kp_map.get(kp_name)
+                    if not ekp and idx < len(e_kps):
+                        ekp = e_kps[idx]
+
+                    if ekp:
+                        kx = float(skp.get('x', 0)) + (float(ekp.get('x', 0)) - float(skp.get('x', 0))) * alpha
+                        ky = float(skp.get('y', 0)) + (float(ekp.get('y', 0)) - float(skp.get('y', 0))) * alpha
+                        sv = int(skp.get('v', 2))
+                        ev = int(ekp.get('v', 2))
+                        if sv == 2 and ev == 2:
+                            kv = 2
+                        elif sv == 0 and ev == 0:
+                            kv = 0
+                        else:
+                            kv = 1 if (sv == 1 or ev == 1) else (2 if alpha < 0.5 else int(ev))
+
+                        interp_kps.append({
+                            'name': kp_name,
+                            'x': round(kx, 2),
+                            'y': round(ky, 2),
+                            'v': kv
+                        })
+                    else:
+                        interp_kps.append(skp)
+
+                curr_data.objects = [o for o in curr_data.objects if o.id != target_id]
+                curr_data.objects.append(AnnotationObject(
+                    id=target_id,
+                    type='keypoint',
+                    label=s_obj.label,
+                    bbox=interp_bbox,
+                    keypoints=interp_kps
+                ))
+
+            database.save_frame_annotations(video_uuid, curr_frame_num, curr_data.to_json())
+            interpolated_count += 1
+
+        return jsonify({
+            'success': True,
+            'message': f'成功在第 {start_frame_num} 帧至第 {end_frame_num} 帧间对 {len(pairs)} 个姿态对象完成了 {interpolated_count} 帧关键点线性插值！'
+        })
+
+    except Exception as e:
+        logging.error(f"Pose keypoints interpolation failed: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': f'关键点线性插值失败: {e}'}), 500
+
+
 @app.route('/addClass', methods=['POST'])
 def add_class():
     data = request.json

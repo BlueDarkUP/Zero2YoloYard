@@ -338,6 +338,81 @@ class PoseAnnotator {
             });
         });
 
+        // 姿态关键点线性插值：设置起始帧
+        $(document).off('click', '#btn-set-pose-interp-start').on('click', '#btn-set-pose-interp-start', function () {
+            const currFrame = self.core.currentFrame;
+            $('#pose-interp-start-frame').val(currFrame);
+            if (typeof window.showToast === 'function') {
+                window.showToast(`📍 已将当前第 ${currFrame} 帧设为关键点插值起始帧`, 2000);
+            }
+        });
+
+        // 姿态关键点线性插值：设置结束帧
+        $(document).off('click', '#btn-set-pose-interp-end').on('click', '#btn-set-pose-interp-end', function () {
+            const currFrame = self.core.currentFrame;
+            $('#pose-interp-end-frame').val(currFrame);
+            if (typeof window.showToast === 'function') {
+                window.showToast(`📍 已将当前第 ${currFrame} 帧设为关键点插值结束帧`, 2000);
+            }
+        });
+
+        // 姿态关键点线性插值：执行插值
+        $(document).off('click', '#btn-exec-pose-interpolate').on('click', '#btn-exec-pose-interpolate', function () {
+            const startFrame = parseInt($('#pose-interp-start-frame').val());
+            const endFrame = parseInt($('#pose-interp-end-frame').val());
+
+            if (isNaN(startFrame) || isNaN(endFrame)) {
+                const msg = '⚠️ 请先设定插值的【起始帧】与【结束帧】！';
+                if (typeof window.showToast === 'function') window.showToast(msg, 3000);
+                else alert(msg);
+                return;
+            }
+
+            if (startFrame >= endFrame) {
+                const msg = '⚠️ 结束帧必须大于起始帧！';
+                if (typeof window.showToast === 'function') window.showToast(msg, 3000);
+                else alert(msg);
+                return;
+            }
+
+            const selectedObjId = self.core.selectedObjectId;
+            const $btn = $(this);
+            $btn.prop('disabled', true).html('<i class="spinner-border spinner-border-sm mr-1"></i>插值计算中...');
+
+            $.ajax({
+                url: '/api/interpolatePoseKeypoints',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    video_uuid: self.core.videoUuid,
+                    object_id: selectedObjId || null,
+                    start_frame_number: startFrame,
+                    end_frame_number: endFrame
+                }),
+                success: function (res) {
+                    $btn.prop('disabled', false).html('<i class="bi bi-arrow-down-up mr-1"></i>执行关键点线性插值');
+                    if (res.success) {
+                        if (typeof window.showToast === 'function') {
+                            window.showToast(`✨ ${res.message}`, 4000);
+                        } else {
+                            alert(res.message);
+                        }
+                        self.core.fetchAnnotations();
+                    } else {
+                        const err = res.message || '姿态插值失败';
+                        if (typeof window.showToast === 'function') window.showToast(`❌ ${err}`, 3500);
+                        else alert(err);
+                    }
+                },
+                error: function (xhr) {
+                    $btn.prop('disabled', false).html('<i class="bi bi-arrow-down-up mr-1"></i>执行关键点线性插值');
+                    const err = xhr.responseJSON?.message || '服务器连接超时';
+                    if (typeof window.showToast === 'function') window.showToast(`❌ ${err}`, 3500);
+                    else alert(err);
+                }
+            });
+        });
+
         $(document).off('click', '#btn-add-skeleton').on('click', '#btn-add-skeleton', function () {
             const cls = self.getSelectedClass();
             if (!cls) {

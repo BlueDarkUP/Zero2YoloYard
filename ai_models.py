@@ -568,17 +568,55 @@ def check_dataset_consistency(dataset_uuid, enable_color_check=True):
                 outlier_image_indices.add(idx)
 
     else:
-        # === OBJECT DETECTION & SEGMENTATION (DET / SEG) QUALITY SCAN ===
-        all_frames = [
-            dict(frame) for vu in video_uuids for frame in database.get_video_frames(vu)
-            if (frame.get('bboxes_text') or '').strip()
-        ]
+        # === OBJECT DETECTION, SEGMENTATION & POSE (DET / SEG / POSET) QUALITY SCAN ===
+        all_frames = []
+        for vu in video_uuids:
+            frames = database.get_video_frames(vu)
+            for f in frames:
+                has_bboxes = bool((f.get('bboxes_text') or '').strip())
+                has_ann_json = bool((f.get('annotations_json') or '').strip())
+                if has_bboxes or has_ann_json:
+                    all_frames.append(dict(f))
 
         if not all_frames:
-            return set(), [], "No labeled bounding boxes found in this dataset."
+            return set(), [], "No labeled bounding boxes or pose keypoint instances found in this dataset."
 
         for i, frame in enumerate(all_frames):
-            rects, labels, _ = convert_text_to_rects_and_labels(frame['bboxes_text'])
+            instances_list = []
+
+            # 1. 提取传统 bboxes_text
+            if (frame.get('bboxes_text') or '').strip():
+                rects, labels, _ = convert_text_to_rects_and_labels(frame['bboxes_text'])
+                for j, r in enumerate(rects):
+                    instances_list.append({'rect': r, 'label': labels[j], 'kpts': None})
+
+            # 2. 提取 JSON 注释中的 Keypoint/BBox/Polygon 实例
+            if (frame.get('annotations_json') or '').strip():
+                try:
+                    from annotation_model import AnnotationData
+                    ann_data = AnnotationData.from_json(frame['annotations_json'])
+                    for obj in ann_data.objects:
+                        r = None
+                        if obj.bbox and len(obj.bbox) == 4:
+                            r = [float(obj.bbox[0]), float(obj.bbox[1]), float(obj.bbox[2]), float(obj.bbox[3])]
+                        elif obj.keypoints:
+                            valid_kps = [k for k in obj.keypoints if (k.get('v', 2) > 0)]
+                            if valid_kps:
+                                min_x = min(float(k['x']) for k in valid_kps)
+                                min_y = min(float(k['y']) for k in valid_kps)
+                                max_x = max(float(k['x']) for k in valid_kps)
+                                max_y = max(float(k['y']) for k in valid_kps)
+                                r = [min_x, min_y, max_x, max_y]
+
+                        if r:
+                            instances_list.append({
+                                'rect': r,
+                                'label': obj.label,
+                                'kpts': obj.keypoints if obj.type == 'keypoint' else None
+                            })
+                except Exception as ex:
+                    logging.warning(f"Error parsing annotations_json for quality scan: {ex}")
+
             img_path = file_storage.get_frame_path(frame['video_uuid'], frame['frame_number'])
             if not os.path.exists(img_path):
                 continue
@@ -587,8 +625,11 @@ def check_dataset_consistency(dataset_uuid, enable_color_check=True):
                 continue
 
             h_img, w_img = img_bgr.shape[:2]
-            for j, rect in enumerate(rects):
-                label = labels[j]
+            for inst in instances_list:
+                label = inst['label']
+                rect = inst['rect']
+                kpts = inst['kpts']
+
                 x1 = max(0, min(w_img - 1, int(rect[0])))
                 y1 = max(0, min(h_img - 1, int(rect[1])))
                 x2 = max(x1 + 1, min(w_img, int(rect[2])))
@@ -620,14 +661,25 @@ def check_dataset_consistency(dataset_uuid, enable_color_check=True):
                 if c_norm > 0:
                     combined_vec = combined_vec / c_norm
 
-                global_idx = len(all_bboxes_info)
+                # 姿态关键点几何拓扑异常检查 (Keypoint Topology Anomaly Check)
+                topology_anomaly = False
+                if kpts:
+                    for kp in kpts:
+                        kx, ky = float(kp.get('x', 0)), float(kp.get('y', 0))
+                        kv = int(kp.get('v', 2))
+                        # 检查关节点是否严重越界（超出图像边界或超出包围框）
+                        if kv > 0 and (kx < -50 or kx > w_img + 50 or ky < -50 or ky > h_img + 50):
+                            topology_anomaly = True
+                            break
+
                 all_bboxes_info.append({
                     'image_index': i,
                     'rect': rect,
                     'label': label,
                     'video_uuid': frame['video_uuid'],
                     'frame_number': frame['frame_number'],
-                    'vector': combined_vec
+                    'vector': combined_vec,
+                    'topology_anomaly': topology_anomaly
                 })
 
         if not all_bboxes_info:
@@ -666,6 +718,9 @@ def check_dataset_consistency(dataset_uuid, enable_color_check=True):
             if own_sim < thresh:
                 is_outlier = True
 
+            if bbox.get('topology_anomaly'):
+                is_outlier = True
+
             for other_label, centroid in class_centroids.items():
                 if other_label != label:
                     other_sim = float(np.dot(vec, centroid))
@@ -677,7 +732,7 @@ def check_dataset_consistency(dataset_uuid, enable_color_check=True):
                 outlier_image_indices.add(idx)
 
     count = len(outlier_image_indices)
-    mode_str = "CLS" if is_classification else "DET/SEG"
+    mode_str = "CLS" if is_classification else "DET/SEG/POSE"
     color_str = " (Semantic + Color)" if enable_color_check else " (Semantic)"
     if count == 0:
         message = f"AI {mode_str} quality scan completed{color_str}. No obvious labeling confusion issues found."
