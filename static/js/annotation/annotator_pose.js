@@ -184,6 +184,51 @@ class PoseAnnotator {
             self.finishFreeformAdding();
         });
 
+        $(document).off('click', '#btn-sam2-track-pose').on('click', '#btn-sam2-track-pose', function () {
+            const currentFrame = self.core.currentFrame || parseInt($('#frame-slider').val() || '0', 10);
+            const allObjs = typeof self.core.getObjects === 'function' ? self.core.getObjects() : (self.core.annotations ? self.core.annotations.objects : []);
+            const poseObjs = (allObjs || []).filter(o => o.type === 'keypoint');
+
+            if (poseObjs.length === 0) {
+                if (typeof window.showToast === 'function') window.showToast('⚠️ 当前帧未找到任何骨架标注，请先放置骨架！', 3000);
+                return;
+            }
+
+            const maxFrame = parseInt($('#frame-slider').attr('max') || '9999', 10);
+            const trackCount = parseInt($('#pose-track-frames-count').val() || '30', 10);
+            const endFrame = Math.min(maxFrame, currentFrame + trackCount);
+
+            const $btn = $(this);
+            $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm mr-1"></span> AI 追帧中...');
+
+            $.ajax({
+                url: '/api/startSam2PoseTracking',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    video_uuid: self.core.videoUuid,
+                    start_frame: currentFrame,
+                    end_frame: endFrame,
+                    init_pose_objects: poseObjs
+                }),
+                success: function(res) {
+                    if (res.success && res.tracker_uuid) {
+                        if (typeof window.showToast === 'function') {
+                            window.showToast(`🚀 SAM2 已开启骨架追帧！(帧 ${currentFrame} -> ${endFrame})`, 2500);
+                        }
+                        self.pollSam2TrackingProgress(res.tracker_uuid, $btn);
+                    } else {
+                        if (typeof window.showToast === 'function') window.showToast('⚠️ 启动失败: ' + (res.message || '未知错误'), 3000);
+                        $btn.prop('disabled', false).html('<i class="bi bi-magic mr-1"></i>AI 时空自动追帧 (SAM2)');
+                    }
+                },
+                error: function() {
+                    if (typeof window.showToast === 'function') window.showToast('⚠️ 通信失败，请重试', 3000);
+                    $btn.prop('disabled', false).html('<i class="bi bi-magic mr-1"></i>AI 时空自动追帧 (SAM2)');
+                }
+            });
+        });
+
         // 关节可见性按钮（Visible / Occluded / Absent）
         $(document).off('click', '.task-pose [data-v]').on('click', '.task-pose [data-v]', function () {
             const v = parseInt($(this).data('v'));
@@ -191,6 +236,29 @@ class PoseAnnotator {
         });
 
         this.updateVisibilityButtonsUI();
+    }
+
+    pollSam2TrackingProgress(trackerUuid, $btn) {
+        const self = this;
+        const interval = setInterval(() => {
+            $.get(`/stream_sam2_tracking/${trackerUuid}`, function(res) {
+                if (res.status === 'PROCESSING' || res.status === 'COMPLETED') {
+                    if (self.core) {
+                        self.core.fetchAnnotations();
+                    }
+                }
+                if (res.status === 'COMPLETED' || res.status === 'FAILED' || res.status === 'STOPPED') {
+                    clearInterval(interval);
+                    $btn.prop('disabled', false).html('<i class="bi bi-magic mr-1"></i>AI 时空自动追帧 (SAM2)');
+                    if (res.status === 'COMPLETED' && typeof window.showToast === 'function') {
+                        window.showToast('✅ 姿态骨架 SAM2 追帧完成！', 2500);
+                    }
+                }
+            }).fail(() => {
+                clearInterval(interval);
+                $btn.prop('disabled', false).html('<i class="bi bi-magic mr-1"></i>AI 时空自动追帧 (SAM2)');
+            });
+        }, 800);
     }
 
     bindShortcuts() {

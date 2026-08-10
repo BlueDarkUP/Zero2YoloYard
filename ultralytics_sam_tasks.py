@@ -529,7 +529,180 @@ def track_video_ultralytics(video_uuid, start_frame, end_frame, init_bboxes_text
             session['status'] = 'COMPLETED'
 
 
+def track_pose_video_sam2(video_uuid, start_frame, end_frame, init_pose_objects, session):
+    """
+    基于 SAM2 视频推理器的点追踪 (Point Tracking) 姿态骨架跨帧传播引擎。
+    传入 init_pose_objects (AnnotationObject 字典数组)。
+    """
+    predictor = _load_sam2_models(mode="video")
+    if predictor is None: raise RuntimeError("SAM 2 Video Predictor offline.")
+
+    settings = settings_manager.load_settings()
+    inference_size = 1024
+    chunk_size = int(settings.get('batch_tracking_chunk_size', 200))
+
+    from annotation_model import AnnotationData, AnnotationObject
+
+    keypoint_tracker_map = {}
+    point_counter = 1
+
+    for obj in init_pose_objects:
+        obj_id = obj.get('id') or str(uuid.uuid4())
+        label = obj.get('label') or 'person'
+        for kp in obj.get('keypoints', []):
+            name = kp.get('name', 'pt')
+            kx = float(kp.get('x', 0))
+            ky = float(kp.get('y', 0))
+            v = int(kp.get('v', 2))
+            if v > 0:
+                keypoint_tracker_map[point_counter] = {
+                    'instance_id': obj_id,
+                    'label': label,
+                    'name': name,
+                    'x': kx,
+                    'y': ky,
+                    'v': v
+                }
+                point_counter += 1
+
+    session['total'] = (end_frame - start_frame) + 1
+    session['progress'] = 0
+
+    current_start = start_frame
+    base_temp_dir = os.path.join(config.STORAGE_DIR, "temp_sam2_pose_tracking", str(uuid.uuid4()))
+
+    try:
+        while current_start <= end_frame:
+            if session.get('stop_requested', False): break
+
+            chunk_end = min(current_start + chunk_size - 1, end_frame)
+            chunk_dir = os.path.join(base_temp_dir, f"chunk_{current_start}")
+
+            frame_map, orig_w, orig_h = prepare_chunk_images(video_uuid, current_start, chunk_end, chunk_dir,
+                                                             inference_size, session)
+            if not frame_map or session.get('stop_requested', False): break
+
+            inference_state = predictor.init_state(video_path=chunk_dir)
+
+            scale_x = orig_w / inference_size
+            scale_y = orig_h / inference_size
+
+            for pid, pt_info in keypoint_tracker_map.items():
+                pt_resized = np.array([[pt_info['x'] / scale_x, pt_info['y'] / scale_y]], dtype=np.float32)
+                labels_array = np.array([1], dtype=np.int32)
+
+                predictor.add_new_points_or_box(
+                    inference_state=inference_state,
+                    frame_idx=0,
+                    obj_id=pid,
+                    points=pt_resized,
+                    labels=labels_array
+                )
+
+            for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(inference_state):
+                if session.get('stop_requested', False): break
+                if out_frame_idx >= len(frame_map): continue
+                global_frame_num = frame_map[out_frame_idx]
+                if global_frame_num == start_frame: continue
+
+                tracked_instances = {}
+                for obj in init_pose_objects:
+                    obj_id = obj.get('id')
+                    tracked_instances[obj_id] = {
+                        'id': obj_id,
+                        'type': 'keypoint',
+                        'label': obj.get('label', 'person'),
+                        'keypoints': []
+                    }
+
+                for i, out_obj_id in enumerate(out_obj_ids):
+                    pid = int(out_obj_id)
+                    if pid not in keypoint_tracker_map:
+                        continue
+
+                    pt_info = keypoint_tracker_map[pid]
+                    inst_id = pt_info['instance_id']
+
+                    mask_np = (out_mask_logits[i] > 0.0).squeeze().cpu().numpy().astype(np.uint8)
+                    cnts, _ = cv2.findContours(mask_np, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                    if cnts:
+                        c = max(cnts, key=cv2.contourArea)
+                        M = cv2.moments(c)
+                        if M["m00"] > 0:
+                            cx = float(M["m10"] / M["m00"])
+                            cy = float(M["m01"] / M["m00"])
+                        else:
+                            x, y, w, h = cv2.boundingRect(c)
+                            cx, cy = x + w / 2.0, y + h / 2.0
+
+                        real_x = round(cx * scale_x, 2)
+                        real_y = round(cy * scale_y, 2)
+                        pt_info['x'] = real_x
+                        pt_info['y'] = real_y
+
+                        tracked_instances[inst_id]['keypoints'].append({
+                            'name': pt_info['name'],
+                            'x': real_x,
+                            'y': real_y,
+                            'v': 2
+                        })
+                    else:
+                        tracked_instances[inst_id]['keypoints'].append({
+                            'name': pt_info['name'],
+                            'x': pt_info['x'],
+                            'y': pt_info['y'],
+                            'v': 1
+                        })
+
+                updated_objects = []
+                for inst_id, inst_data in tracked_instances.items():
+                    kpts = inst_data['keypoints']
+                    if kpts:
+                        xs = [p['x'] for p in kpts]
+                        ys = [p['y'] for p in kpts]
+                        pad = 10
+                        inst_data['bbox'] = [
+                            max(0, min(xs) - pad),
+                            max(0, min(ys) - pad),
+                            min(orig_w, max(xs) + pad),
+                            min(orig_h, max(ys) + pad)
+                        ]
+                        updated_objects.append(inst_data)
+
+                ann_data = AnnotationData()
+                for uo in updated_objects:
+                    ann_data.objects.append(AnnotationObject(
+                        id=uo['id'],
+                        type='keypoint',
+                        label=uo['label'],
+                        bbox=uo.get('bbox'),
+                        keypoints=uo['keypoints']
+                    ))
+
+                database.save_frame_annotations(video_uuid, global_frame_num, ann_data.to_json())
+                session['results'][global_frame_num] = ann_data.to_json()
+                session['progress'] = global_frame_num - start_frame
+
+            predictor.reset_state(inference_state)
+            if os.path.exists(chunk_dir): shutil.rmtree(chunk_dir)
+            gc.collect()
+            torch.cuda.empty_cache()
+
+            current_start += chunk_size
+
+    except Exception as e:
+        logging.error(f"[SAM2 Pose] Tracking failed: {e}", exc_info=True)
+        session['status'] = 'FAILED'
+        session['message'] = str(e)
+    finally:
+        if os.path.exists(base_temp_dir):
+            shutil.rmtree(base_temp_dir, ignore_errors=True)
+        if session.get('stop_requested', False):
+            session['status'] = 'STOPPED'
+        elif session['status'] in ['PROCESSING', 'BATCH_PROCESSING']:
+            session['status'] = 'COMPLETED'
+
+
 def get_sam_model():
     settings = settings_manager.load_settings()
-    # 只要拥有其中一个引擎，SAM 核心就视为可用
     return settings.get('enable_sam_model', True) and (HAS_SAM2 or HAS_SAM3)

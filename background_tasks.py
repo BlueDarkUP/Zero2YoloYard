@@ -258,6 +258,57 @@ def start_sam2_tracking_task(video_uuid, tracker_uuid, start_frame, end_frame, i
         logging.info(f"Resource cleanup for task {tracker_uuid} complete.")
 
 
+def start_sam2_pose_tracking_task(video_uuid, tracker_uuid, start_frame, end_frame, init_pose_objects):
+    if active_tasks.get(video_uuid):
+        logging.warning(f"A task is already running for video {video_uuid}.")
+        tracking_sessions[tracker_uuid] = {'status': 'FAILED', 'message': 'Another task is active.'}
+        return
+
+    if ultralytics_sam_tasks is None:
+        logging.error("Ultralytics SAM Tasks module not available.")
+        tracking_sessions[tracker_uuid] = {'status': 'FAILED',
+                                           'message': 'Ultralytics library not installed or configured on server.'}
+        return
+
+    active_tasks[video_uuid] = tracker_uuid
+    session = {
+        'status': 'STARTING',
+        'progress': 0,
+        'total': (end_frame - start_frame) + 1,
+        'results': {},
+        'stop_requested': False,
+        'message': ''
+    }
+    tracking_sessions[tracker_uuid] = session
+
+    try:
+        logging.info(
+            f"Starting POSE SAM2 point tracking for video {video_uuid} from frame {start_frame} to {end_frame}")
+        session['status'] = 'PROCESSING'
+
+        ultralytics_sam_tasks.track_pose_video_sam2(
+            video_uuid,
+            start_frame,
+            end_frame,
+            init_pose_objects,
+            session
+        )
+
+        final_status = session.get('status', 'COMPLETED')
+        logging.info(f"POSE SAM2 tracking for {tracker_uuid} finished with status: {final_status}.")
+
+    except Exception as e:
+        logging.error(f"Error during POSE SAM2 tracking for {video_uuid}: {e}\n{traceback.format_exc()}")
+        session['status'] = 'FAILED'
+        session['message'] = str(e)
+    finally:
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+        if active_tasks.get(video_uuid) == tracker_uuid:
+            del active_tasks[video_uuid]
+
+
 def start_sam2_batch_tracking_task(video_uuid, tracker_uuid, start_frame, end_frame, init_bboxes_text):
     if active_tasks.get(video_uuid):
         logging.warning(f"A task is already running for video {video_uuid}.")

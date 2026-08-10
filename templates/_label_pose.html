@@ -45,6 +45,20 @@
     </button>
 
     <div class="card bg-dark border-secondary p-2 mb-3">
+        <div class="small font-weight-bold text-info mb-1 d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-cpu-fill mr-1"></i>SAM2 骨架 AI 追帧传播</span>
+        </div>
+        <div class="d-flex align-items-center mb-2" style="gap: 5px;">
+            <span class="small text-muted font-monospace">向前追:</span>
+            <input type="number" id="pose-track-frames-count" class="form-control form-control-sm bg-dark text-light border-secondary" value="30" min="1" max="500" style="width: 70px;">
+            <span class="small text-muted font-monospace">帧</span>
+        </div>
+        <button id="btn-sam2-track-pose" class="btn btn-sm btn-outline-warning font-weight-bold w-100">
+            <i class="bi bi-magic mr-1"></i>AI 时空自动追帧 (SAM2)
+        </button>
+    </div>
+
+    <div class="card bg-dark border-secondary p-2 mb-3">
         <div class="small font-weight-bold text-muted mb-2">选中关键点的可见性：</div>
         <div class="btn-group btn-group-sm w-100" role="group">
             <button type="button" class="btn btn-outline-success" data-v="2" title="Visible (按键 2)">🟢 Visible</button>

@@ -79,6 +79,10 @@ class AnnotationCore {
         this.annotator = annotatorInstance;
     }
 
+    getObjects() {
+        return (this.annotations && Array.isArray(this.annotations.objects)) ? this.annotations.objects : [];
+    }
+
     bindClassRegistry() {
         const self = this;
         // Listen for class selection from sidebar

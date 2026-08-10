@@ -1671,6 +1671,38 @@ def start_sam2_tracking():
     return jsonify({'success': True, 'tracker_uuid': tracker_uuid})
 
 
+@app.route('/api/startSam2PoseTracking', methods=['POST'])
+def start_sam2_pose_tracking():
+    try:
+        from ultralytics_sam_tasks import get_sam_model
+        if not get_sam_model():
+            return jsonify(
+                {'success': False, 'message': 'SAM model is disabled in system settings to save resources.'}), 501
+    except ImportError:
+        return jsonify({'success': False, 'message': 'SAM features are not installed on server.'}), 501
+
+    data = request.json or {}
+    video_uuid = data.get('video_uuid')
+    start_frame = int(data.get('start_frame', 0))
+    end_frame = int(data.get('end_frame', 0))
+    init_pose_objects = data.get('init_pose_objects', [])
+
+    if not video_uuid or not init_pose_objects:
+        return jsonify({'success': False, 'message': 'video_uuid and init_pose_objects are required.'}), 400
+
+    if background_tasks.active_tasks.get(video_uuid):
+        return jsonify(
+            {'success': False, 'message': 'Another task is already running for this video.'})
+
+    tracker_uuid = str(uuid.uuid4().hex)
+
+    threading.Thread(target=background_tasks.start_sam2_pose_tracking_task, args=(
+        video_uuid, tracker_uuid, start_frame, end_frame, init_pose_objects
+    ), name=f"SAM-PoseTracker-{video_uuid[:6]}").start()
+
+    return jsonify({'success': True, 'tracker_uuid': tracker_uuid})
+
+
 @app.route('/startSam2BatchTracking', methods=['POST'])
 def start_sam2_batch_tracking():
     try:
