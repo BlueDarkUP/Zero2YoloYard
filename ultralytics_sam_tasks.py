@@ -531,10 +531,11 @@ def track_video_ultralytics(video_uuid, start_frame, end_frame, init_bboxes_text
 
 def track_pose_video_sam2(video_uuid, start_frame, end_frame, init_pose_objects, session):
     """
-    成熟开源 Top-Down 姿态追帧引擎 (Top-Down Video Pose Tracking Pipeline)：
-    1. 使用 SAM2 视频推理器优先对每一个姿态实例的整体 BBox 进行高精度时空跟踪（确保 Track ID 永不混淆）；
-    2. 在每一帧获取到的实例 BBox ROI 内部进行姿态关键点几何约束与局部对齐；
-    3. 彻底杜绝关键点跨目标跳跃、漂移到其他人身上的问题。
+    工业级成熟 Top-Down 多目标姿态追帧与遮挡推演引擎：
+    1. SAM2 实例级 BBox 跟踪 + 点特征跟踪双通道；
+    2. 可见节点（v=2）使用高精度 Mask/Point 特征追踪；
+    3. 遮挡节点（v=1）融合“实例刚体运动向量”与“骨骼拓扑长度约束”动态推演外推；
+    4. 遮挡重现后自动复苏标记为可见（v=2）。
     """
     predictor = _load_sam2_models(mode="video")
     if predictor is None: raise RuntimeError("SAM 2 Video Predictor offline.")
@@ -551,7 +552,6 @@ def track_pose_video_sam2(video_uuid, start_frame, end_frame, init_pose_objects,
         label = obj.get('label') or 'person'
         kpts = obj.get('keypoints') or []
 
-        # 确定起始帧的实例包围框
         bbox = obj.get('bbox')
         if not bbox or len(bbox) < 4:
             v_pts = [p for p in kpts if p.get('v', 2) > 0]
@@ -568,7 +568,7 @@ def track_pose_video_sam2(video_uuid, start_frame, end_frame, init_pose_objects,
             'instance_id': obj_id,
             'label': label,
             'last_bbox': [float(b) for b in bbox],
-            'last_keypoints': [{
+            'keypoints': [{
                 'name': kp.get('name', f'pt_{k_idx}'),
                 'x': float(kp.get('x', 0)),
                 'y': float(kp.get('y', 0)),
@@ -579,6 +579,17 @@ def track_pose_video_sam2(video_uuid, start_frame, end_frame, init_pose_objects,
     if not active_instances:
         session['status'] = 'COMPLETED'
         return
+
+    # 从数据库获取该类别的骨骼连线图（用于遮挡时的拓扑约束）
+    schema_edges = []
+    try:
+        first_label = list(active_instances.values())[0]['label']
+        schema_raw = database.get_class_keypoint_schema(first_label)
+        if schema_raw:
+            schema_data = json.loads(schema_raw) if isinstance(schema_raw, str) else schema_raw
+            schema_edges = schema_data.get('edges', [])
+    except Exception as e:
+        logging.warning(f"Failed to load keypoint schema edges for occlusion constraints: {e}")
 
     session['total'] = (end_frame - start_frame) + 1
     session['progress'] = 0
@@ -602,14 +613,11 @@ def track_pose_video_sam2(video_uuid, start_frame, end_frame, init_pose_objects,
             scale_x = orig_w / inference_size
             scale_y = orig_h / inference_size
 
-            # 1. 注册 Top-Down 实例 BBox 作为 SAM2 的 Track Prompts
+            # 1. 向 SAM2 注册实例 BBox 提示与关键点 Prompt
             for internal_id, inst_info in active_instances.items():
                 b = inst_info['last_bbox']
                 box_resized = np.array([
-                    b[0] / scale_x,
-                    b[1] / scale_y,
-                    b[2] / scale_x,
-                    b[3] / scale_y
+                    b[0] / scale_x, b[1] / scale_y, b[2] / scale_x, b[3] / scale_y
                 ], dtype=np.float32)
 
                 predictor.add_new_points_or_box(
@@ -619,81 +627,142 @@ def track_pose_video_sam2(video_uuid, start_frame, end_frame, init_pose_objects,
                     box=box_resized
                 )
 
-            # 2. 时空传播并更新每一个实例内的关键点坐标
+                # 为可见关键点附加点 Prompt 跟踪
+                for k_idx, kp in enumerate(inst_info['keypoints']):
+                    if kp['v'] > 0:
+                        pt_obj_id = internal_id * 1000 + k_idx
+                        predictor.add_new_points_or_box(
+                            inference_state=inference_state,
+                            frame_idx=0,
+                            obj_id=pt_obj_id,
+                            points=np.array([[kp['x'] / scale_x, kp['y'] / scale_y]], dtype=np.float32),
+                            labels=np.array([1], dtype=np.int32)
+                        )
+
+            # 2. 视频帧跨帧推演
             for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(inference_state):
                 if session.get('stop_requested', False): break
                 if out_frame_idx >= len(frame_map): continue
                 global_frame_num = frame_map[out_frame_idx]
                 if global_frame_num == start_frame: continue
 
+                masks_by_id = {}
+                for i, out_obj_id in enumerate(out_obj_ids):
+                    masks_by_id[int(out_obj_id)] = out_mask_logits[i]
+
                 frame_updated_objects = []
 
-                for i, out_obj_id in enumerate(out_obj_ids):
-                    internal_id = int(out_obj_id)
-                    if internal_id not in active_instances:
-                        continue
-
-                    inst_info = active_instances[internal_id]
+                for internal_id, inst_info in active_instances.items():
                     prev_bbox = inst_info['last_bbox']
+                    prev_cx = (prev_bbox[0] + prev_bbox[2]) / 2.0
+                    prev_cy = (prev_bbox[1] + prev_bbox[3]) / 2.0
                     prev_w = max(1.0, prev_bbox[2] - prev_bbox[0])
                     prev_h = max(1.0, prev_bbox[3] - prev_bbox[1])
 
-                    mask_np = (out_mask_logits[i] > 0.0).squeeze().cpu().numpy().astype(np.uint8)
-                    cnts, _ = cv2.findContours(mask_np, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                    # 提取实例 BBox Mask
+                    inst_mask_logits = masks_by_id.get(internal_id)
+                    new_x1, new_y1, new_x2, new_y2 = prev_bbox
+                    if inst_mask_logits is not None:
+                        mask_np = (inst_mask_logits > 0.0).squeeze().cpu().numpy().astype(np.uint8)
+                        cnts, _ = cv2.findContours(mask_np, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                        if cnts:
+                            c = max(cnts, key=cv2.contourArea)
+                            x, y, w, h = cv2.boundingRect(c)
+                            new_x1 = max(0, int(x * scale_x))
+                            new_y1 = max(0, int(y * scale_y))
+                            new_x2 = min(orig_w, int((x + w) * scale_x))
+                            new_y2 = min(orig_h, int((y + h) * scale_y))
 
-                    if cnts:
-                        c = max(cnts, key=cv2.contourArea)
-                        x, y, w, h = cv2.boundingRect(c)
-                        new_x1 = max(0, int(x * scale_x))
-                        new_y1 = max(0, int(y * scale_y))
-                        new_x2 = min(orig_w, int((x + w) * scale_x))
-                        new_y2 = min(orig_h, int((y + h) * scale_y))
+                    new_cx = (new_x1 + new_x2) / 2.0
+                    new_cy = (new_y1 + new_y2) / 2.0
+                    new_w = max(1.0, float(new_x2 - new_x1))
+                    new_h = max(1.0, float(new_y2 - new_y1))
 
-                        new_w = max(1.0, float(new_x2 - new_x1))
-                        new_h = max(1.0, float(new_y2 - new_y1))
+                    # 运动平移与缩放因子
+                    dx = new_cx - prev_cx
+                    dy = new_cy - prev_cy
+                    scale_w = new_w / prev_w
+                    scale_h = new_h / prev_h
 
-                        # 实例姿态关键点在 Top-Down ROI 区域内的仿射几何变换与坐标对齐
-                        new_keypoints = []
-                        for kp in inst_info['last_keypoints']:
-                            # 计算上帧关键点在旧 BBox 内的相对比例坐标 (0.0 ~ 1.0)
-                            rel_x = (kp['x'] - prev_bbox[0]) / prev_w
-                            rel_y = (kp['y'] - prev_bbox[1]) / prev_h
+                    updated_kpts = []
+                    kp_dict_curr = {}
 
-                            # 映射到最新实例 BBox 的局部空间
-                            curr_x = round(new_x1 + rel_x * new_w, 2)
-                            curr_y = round(new_y1 + rel_y * new_h, 2)
+                    # A. 第一阶段：对各个关键点检查 Mask 可见性 (v=2 vs v=1 遮挡)
+                    for k_idx, kp in enumerate(inst_info['keypoints']):
+                        pt_obj_id = internal_id * 1000 + k_idx
+                        pt_mask_logits = masks_by_id.get(pt_obj_id)
 
-                            new_keypoints.append({
-                                'name': kp['name'],
-                                'x': curr_x,
-                                'y': curr_y,
-                                'v': kp['v']
-                            })
+                        is_visible = False
+                        best_x, best_y = kp['x'], kp['y']
 
-                        # 更新实例历史
-                        inst_info['last_bbox'] = [new_x1, new_y1, new_x2, new_y2]
-                        inst_info['last_keypoints'] = new_keypoints
+                        if pt_mask_logits is not None:
+                            p_mask = (pt_mask_logits > 0.0).squeeze().cpu().numpy().astype(np.uint8)
+                            p_cnts, _ = cv2.findContours(p_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                            if p_cnts:
+                                pc = max(p_cnts, key=cv2.contourArea)
+                                pM = cv2.moments(pc)
+                                if pM["m00"] > 0:
+                                    cx_pt = float(pM["m10"] / pM["m00"]) * scale_x
+                                    cy_pt = float(pM["m01"] / pM["m00"]) * scale_y
+                                    # 检查点是否落在当前实例包围框合理范围内
+                                    if new_x1 - 20 <= cx_pt <= new_x2 + 20 and new_y1 - 20 <= cy_pt <= new_y2 + 20:
+                                        best_x = round(cx_pt, 2)
+                                        best_y = round(cy_pt, 2)
+                                        is_visible = True
 
-                        frame_updated_objects.append(AnnotationObject(
-                            id=inst_info['instance_id'],
-                            type='keypoint',
-                            label=inst_info['label'],
-                            bbox=[new_x1, new_y1, new_x2, new_y2],
-                            keypoints=new_keypoints
-                        ))
-                    else:
-                        # 实例严重被遮挡或丢失：保留上一帧位置并将关键点标为遮挡 (v=1)
-                        obscured_kpts = [{
-                            'name': kp['name'], 'x': kp['x'], 'y': kp['y'], 'v': 1
-                        } for kp in inst_info['last_keypoints']]
+                        if is_visible:
+                            # 可见节点：采样 SAM2 准确特征，标记 v=2
+                            kp_entry = {'name': kp['name'], 'x': best_x, 'y': best_y, 'v': 2}
+                        else:
+                            # B. 第二阶段：遮挡节点（v=1）刚体运动向量外推
+                            rel_x = kp['x'] - prev_cx
+                            rel_y = kp['y'] - prev_cy
+                            pred_x = round(new_cx + rel_x * scale_w, 2)
+                            pred_y = round(new_cy + rel_y * scale_h, 2)
+                            kp_entry = {'name': kp['name'], 'x': pred_x, 'y': pred_y, 'v': 1}
 
-                        frame_updated_objects.append(AnnotationObject(
-                            id=inst_info['instance_id'],
-                            type='keypoint',
-                            label=inst_info['label'],
-                            bbox=prev_bbox,
-                            keypoints=obscured_kpts
-                        ))
+                        updated_kpts.append(kp_entry)
+                        kp_dict_curr[kp['name']] = kp_entry
+
+                    # C. 第三阶段：骨骼拓扑拓扑长度约束 (Kinematic Bone Constraint Adjustment)
+                    if schema_edges:
+                        prev_kp_dict = {p['name']: p for p in inst_info['keypoints']}
+                        for edge in schema_edges:
+                            if len(edge) >= 2:
+                                p1_name, p2_name = edge[0], edge[1]
+                                if p1_name in kp_dict_curr and p2_name in kp_dict_curr:
+                                    k1 = kp_dict_curr[p1_name]
+                                    k2 = kp_dict_curr[p2_name]
+
+                                    # 如果其中一点可见 (v=2) 另一点遮挡 (v=1)，通过上一帧骨骼原长校准遮挡点
+                                    if (k1['v'] == 2 and k2['v'] == 1) or (k1['v'] == 1 and k2['v'] == 2):
+                                        vis_k = k1 if k1['v'] == 2 else k2
+                                        occ_k = k2 if k1['v'] == 2 else k1
+
+                                        if p1_name in prev_kp_dict and p2_name in prev_kp_dict:
+                                            old_p1 = prev_kp_dict[p1_name]
+                                            old_p2 = prev_kp_dict[p2_name]
+                                            orig_len = np.sqrt((old_p1['x'] - old_p2['x'])**2 + (old_p1['y'] - old_p2['y'])**2)
+                                            if orig_len > 2.0:
+                                                dir_x = occ_k['x'] - vis_k['x']
+                                                dir_y = occ_k['y'] - vis_k['y']
+                                                curr_len = np.sqrt(dir_x**2 + dir_y**2)
+                                                if curr_len > 0.1:
+                                                    # 保持方向不变，将遮挡点拉回解剖学骨骼标准长度
+                                                    ratio = orig_len / curr_len
+                                                    occ_k['x'] = round(vis_k['x'] + dir_x * ratio, 2)
+                                                    occ_k['y'] = round(vis_k['y'] + dir_y * ratio, 2)
+
+                    inst_info['last_bbox'] = [new_x1, new_y1, new_x2, new_y2]
+                    inst_info['keypoints'] = updated_kpts
+
+                    frame_updated_objects.append(AnnotationObject(
+                        id=inst_info['instance_id'],
+                        type='keypoint',
+                        label=inst_info['label'],
+                        bbox=[new_x1, new_y1, new_x2, new_y2],
+                        keypoints=updated_kpts
+                    ))
 
                 ann_data = AnnotationData()
                 ann_data.objects = frame_updated_objects
@@ -710,7 +779,7 @@ def track_pose_video_sam2(video_uuid, start_frame, end_frame, init_pose_objects,
             current_start += chunk_size
 
     except Exception as e:
-        logging.error(f"[SAM2 Pose Top-Down] Tracking failed: {e}", exc_info=True)
+        logging.error(f"[SAM2 Pose Top-Down Kinematic] Tracking failed: {e}", exc_info=True)
         session['status'] = 'FAILED'
         session['message'] = str(e)
     finally:
