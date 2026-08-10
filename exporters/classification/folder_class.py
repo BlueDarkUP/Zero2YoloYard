@@ -1,10 +1,19 @@
 import os
+import re
 import shutil
 import random
 from ..base import BaseExporter
 from .. import ExporterRegistry
 from annotation_model import AnnotationData
 import file_storage
+
+
+def _sanitize_class_name(name: str) -> str:
+    """清洗类别名称，防止路径穿越攻击（如 '../../etc/passwd'）。"""
+    name = name.replace('/', '_').replace('\\', '_')
+    name = re.sub(r'\.{2,}', '_', name)
+    name = re.sub(r'[^\w\s\-+]', '_', name)
+    return name.strip() or '_unknown'
 
 @ExporterRegistry.register
 class FolderClassificationExporter(BaseExporter):
@@ -43,7 +52,7 @@ class FolderClassificationExporter(BaseExporter):
         for split_name, split_frames in splits:
             split_dir = os.path.join(export_dir, split_name)
             for class_name in class_list:
-                os.makedirs(os.path.join(split_dir, class_name), exist_ok=True)
+                os.makedirs(os.path.join(split_dir, _sanitize_class_name(class_name)), exist_ok=True)
             os.makedirs(os.path.join(split_dir, "_unlabeled"), exist_ok=True)
 
             for frame_info in split_frames:
@@ -59,20 +68,20 @@ class FolderClassificationExporter(BaseExporter):
                 if not tags:
                     shutil.copy(src_img_path, os.path.join(split_dir, "_unlabeled", base_name))
                 elif len(tags) == 1:
-                    target_cls = tags[0]
+                    target_cls = _sanitize_class_name(tags[0])
                     target_dir = os.path.join(split_dir, target_cls)
                     os.makedirs(target_dir, exist_ok=True)
                     shutil.copy(src_img_path, os.path.join(target_dir, base_name))
                 else:
                     # Multi-label (>1 tags)
                     if multilabel_strategy == "first":
-                        target_cls = tags[0]
+                        target_cls = _sanitize_class_name(tags[0])
                         target_dir = os.path.join(split_dir, target_cls)
                         os.makedirs(target_dir, exist_ok=True)
                         shutil.copy(src_img_path, os.path.join(target_dir, base_name))
                     elif multilabel_strategy == "composite":
                         sorted_tags = sorted(tags)
-                        composite_cls = "+".join(sorted_tags)
+                        composite_cls = "+".join(_sanitize_class_name(t) for t in sorted_tags)
                         target_dir = os.path.join(split_dir, composite_cls)
                         os.makedirs(target_dir, exist_ok=True)
                         shutil.copy(src_img_path, os.path.join(target_dir, base_name))
@@ -82,7 +91,7 @@ class FolderClassificationExporter(BaseExporter):
                     elif multilabel_strategy == "duplicate":
                         # Legacy behavior: copy into each label directory
                         for target_cls in tags:
-                            target_dir = os.path.join(split_dir, target_cls)
+                            target_dir = os.path.join(split_dir, _sanitize_class_name(target_cls))
                             os.makedirs(target_dir, exist_ok=True)
                             shutil.copy(src_img_path, os.path.join(target_dir, base_name))
 
