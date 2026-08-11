@@ -386,10 +386,14 @@
                                     </div>
                                     <div class="form-group col-md-6">
                                         <label class="small text-muted font-weight-bold">POSE ESTIMATION MODEL (KEYPOINTS) <i class="bi bi-info-square-fill ml-1 text-info info-trigger" data-key="enable_pose"></i></label>
-                                        <div class="custom-control custom-switch mt-2">
+                                        <div class="custom-control custom-switch mt-2 mb-2">
                                             <input type="checkbox" class="custom-control-input" id="setting-enable-pose">
                                             <label class="custom-control-label font-monospace" for="setting-enable-pose">ENABLE GROUNDED POSE / KEYPOINTS</label>
                                         </div>
+                                        <select id="setting-gkdt-model-type" class="form-control custom-select custom-select-sm mt-1 font-monospace">
+                                            <option value="GKDT-L">GKDT-L (Lightweight / DINOv3-L, ~6GB)</option>
+                                            <option value="GKDT-H">GKDT-H (High Precision / DINOv3-H, ~12GB)</option>
+                                        </select>
                                     </div>
                                 </div>
                             </div>
@@ -1120,6 +1124,7 @@
                     $('#setting-enable-feature-extractor').prop('checked', s.enable_feature_extractor !== false);
                     $('#setting-enable-cls').prop('checked', s.enable_cls_model !== false);
                     $('#setting-enable-pose').prop('checked', s.enable_pose_model !== false);
+                    $('#setting-gkdt-model-type').val(s.gkdt_model_type || 'GKDT-L');
 
                     $('#eval-percent').val(s.default_eval_percent || 20.0);
                     $('#test-percent').val(s.default_test_percent || 10.0);
@@ -1358,6 +1363,7 @@
                 enable_feature_extractor: $('#setting-enable-feature-extractor').is(':checked'),
                 enable_cls_model: $('#setting-enable-cls').is(':checked'),
                 enable_pose_model: $('#setting-enable-pose').is(':checked'),
+                gkdt_model_type: $('#setting-gkdt-model-type').val() || 'GKDT-L',
 
                 batch_tracking_conf: parseFloat($('#setting-batch-tracking-conf').val()),
                 default_preannotation_conf: parseFloat($('#setting-preannotation-conf').val()),

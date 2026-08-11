@@ -3,6 +3,10 @@ import sys
 import os
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
+# 修复 PyTorch 与 TensorFlow 同时加载引发的 OpenMP / C++ 0xC0000005 (-1073741819) 内存越界崩溃
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
+
 # 1. 突破 PyInstaller 深度递归解算限制
 sys.setrecursionlimit(10000)
 
@@ -17,8 +21,28 @@ hidden_webview = [
     'clr',
 ]
 
+# 动态将 gkdt_engine 及其子目录追加到 sys.path 末尾，避免子模块递归收集时找不到内部相对导入，且不影响根目录 config.py 优先导入
+gkdt_path = os.path.abspath('gkdt_engine')
+test_rw_path = os.path.join(gkdt_path, 'test_real_world')
+for p in [gkdt_path, test_rw_path]:
+    if p not in sys.path:
+        sys.path.append(p)
+
 # ==============================================================
-# 精准隐式依赖导入 (包含 PyTorch/TensorFlow/SAM2/SAM3/GKDT/CLIP 等)
+# 自动递归收集本地核心包与关键扩展模块子模块
+# ==============================================================
+submodules_to_collect = (
+    collect_submodules('sam2') +
+    collect_submodules('sam3') +
+    collect_submodules('gkdt_engine') +
+    collect_submodules('exporters') +
+    collect_submodules('ultralytics') +
+    collect_submodules('pycocotools') +
+    collect_submodules('skimage')
+)
+
+# ==============================================================
+# 精准隐式依赖导入 (包含 PyTorch/TensorFlow/SAM2/SAM3/GKDT/CLIP/DINOv3 等)
 # ==============================================================
 my_hidden_imports = [
     # Core PyTorch & TensorFlow Frameworks (包含 FTC Machine Learning TFLite 解释器)
@@ -37,23 +61,56 @@ my_hidden_imports = [
     'timm',
     'einops',
     'safetensors',
+    'accelerate',
+    'sentencepiece',
+    'tokenizers',
+    'peft',
 
     # SAM 2 & SAM 3 Foundation Models
     'ultralytics',
     'sam2',
-    'sam2.build_sam',
-    'sam2.automatic_mask_generator',
-    'sam2.sam2_image_predictor',
-    'sam2.sam2_video_predictor',
     'sam3',
-    'sam3.model_builder',
-    'sam3.visualization_utils',
 
-    # GKDT (Grounded Keypoint Transformer) & DINOv3 Engine
+    # GKDT (Grounded Keypoint Transformer) & DINOv3 Engine Dependencies
     'gkdt_engine',
     'albumentations',
     'hydra',
     'omegaconf',
+    'fairscale',
+    'shapely',
+    'tensorboardX',
+    'termcolor',
+    'torchmetrics',
+    'lmdb',
+    'h5py',
+
+    # Image Processing, Visualization & COCO Tools (解决 SAM3/GroundingDINO 可视化依赖)
+    'pycocotools',
+    'pycocotools.mask',
+    'pycocotools.coco',
+    'pycocotools.cocoeval',
+    'pandas',
+    'skimage',
+    'skimage.io',
+    'skimage.color',
+    'matplotlib',
+    'matplotlib.pyplot',
+    'matplotlib.patches',
+    'matplotlib.colors',
+
+    # Text Tokenizers & Path Managers for SAM3/DINOv3
+    'ftfy',
+    'regex',
+    'iopath',
+    'pkg_resources',
+    'setuptools',
+
+    # Video Decoding & Object Detection Utilities
+    'decord',
+    'supervision',
+    'addict',
+    'yacs',
+    'tqdm',
 
     # Scipy & Scikit-Learn Clustering Utilities
     'scipy',
@@ -79,22 +136,19 @@ my_hidden_imports = [
 
     # Exporters Engine Extensions
     'exporters',
-    'exporters.base',
-    'exporters.detection.yolo_detect',
-    'exporters.detection.coco_detect',
-    'exporters.detection.pascal_voc',
-    'exporters.segmentation.yolo_seg',
-    'exporters.segmentation.semantic_mask',
-    'exporters.pose.yolo_pose',
-    'exporters.pose.coco_pose',
-    'exporters.classification.yolo_cls',
-    'exporters.classification.folder_class',
-]
+] + submodules_to_collect
 
 final_hidden_imports = my_hidden_imports + hidden_webview
 
-# 收集 PyWebView 数据文件
-extra_datas = collect_data_files('webview')
+# 收集 PyWebView 及 AI 模型库数据文件
+extra_datas = (
+    collect_data_files('webview') +
+    collect_data_files('ultralytics') +
+    collect_data_files('transformers') +
+    collect_data_files('timm') +
+    collect_data_files('albumentations') +
+    collect_data_files('torchvision')
+)
 
 # 智能收集轻量配置，剔除超大权重 (.pt / .pth / .safetensors / .bin / .best)
 def collect_light_datas(src_dir, dst_dir):
@@ -113,6 +167,7 @@ def collect_light_datas(src_dir, dst_dir):
 project_datas = [
     ('templates', 'templates'),
     ('static', 'static'),
+    ('configs', 'configs'),
     ('sam2', 'sam2'),
     ('sam3', 'sam3'),
     ('gkdt_engine', 'gkdt_engine'),
@@ -136,7 +191,6 @@ a = Analysis(
     hooksconfig={},
     runtime_hooks=[],
     excludes=[
-        'matplotlib',
         'PyQt5',
         'PyQt6',
         'PySide2',

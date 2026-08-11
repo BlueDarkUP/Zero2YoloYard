@@ -11,19 +11,20 @@ import torch
 import cv2
 import numpy as np
 
-# 1. 动态将 gkdt_engine 及其子目录加入 Python 模块搜索路径
+# 1. 先导入根目录基础模块，确保 sys.modules['config'] 锁定为根目录配置
+import config
+import file_storage
+import database
+import settings_manager
+
+# 2. 动态将 gkdt_engine 及其子目录追加到 Python 模块搜索路径末尾
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 GKDT_ENGINE_DIR = os.path.join(PROJECT_ROOT, "gkdt_engine")
 TEST_REAL_WORLD_DIR = os.path.join(GKDT_ENGINE_DIR, "test_real_world")
 
 for p in [GKDT_ENGINE_DIR, TEST_REAL_WORLD_DIR]:
     if p not in sys.path:
-        sys.path.insert(0, p)
-
-import config
-import file_storage
-import database
-import settings_manager
+        sys.path.append(p)
 
 _gkdt_model_cache = {
     "model": None,
@@ -85,8 +86,10 @@ def _apply_dinov3_bpe_path_patch():
         logging.warning(f"Failed to apply DINOv3 BPE patch: {e}")
 
 
-def load_gkdt_model(model_type="GKDT-L"):
+def load_gkdt_model(model_type=None):
     """懒加载并缓存 GKDT 模型权重"""
+    if model_type is None:
+        model_type = settings_manager.load_settings().get("gkdt_model_type", "GKDT-L")
     device = settings_manager.get_device()
 
     if (_gkdt_model_cache["model"] is not None and
@@ -100,8 +103,10 @@ def load_gkdt_model(model_type="GKDT-L"):
 
     if "H" in model_type:
         ckpt_path = os.path.join(GKDT_ENGINE_DIR, "output", "GKDT-H_for_app", "model", "gkd_fullset.best")
+        opts = ["MODEL.ENCODER.DINOv3.VISUAL_ENCODER", "dinov3_vith16plus"]
     else:
         ckpt_path = os.path.join(GKDT_ENGINE_DIR, "output", "GKDT-L_for_app", "model", "gkd_fullset.best")
+        opts = ["MODEL.ENCODER.DINOv3.VISUAL_ENCODER", "dinov3_vitl16"]
 
     try:
         with WorkingDirContext(GKDT_ENGINE_DIR):
@@ -116,7 +121,8 @@ def load_gkdt_model(model_type="GKDT-L"):
 
             gkd_engine = GKDInference(
                 cfg_file=cfg_file,
-                checkpoint_path=ckpt_path
+                checkpoint_path=ckpt_path,
+                opts=opts
             )
 
         _gkdt_model_cache["model"] = gkd_engine
