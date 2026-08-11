@@ -596,6 +596,51 @@
                             </div>
                         </div>
 
+                        <!-- ═══════════════════════════════════════════════════
+                             LOCAL MODEL MANAGEMENT
+                             ═══════════════════════════════════════════════════ -->
+                        <div class="card settings-section mb-4" id="local-model-mgmt-card" style="border-color: #7c3aed; border-width: 2px;">
+                            <div class="card-header d-flex align-items-center justify-content-between" style="background: linear-gradient(90deg, rgba(124,58,237,0.18) 0%, rgba(124,58,237,0.06) 100%); border-bottom: 1px solid rgba(124,58,237,0.35);">
+                                <span style="color: #a78bfa; font-weight: 700; letter-spacing: 0.08em;">
+                                    <i class="bi bi-hdd-stack mr-2"></i>LOCAL MODEL MANAGEMENT
+                                </span>
+                                <button type="button" id="btn-refresh-models" class="btn btn-sm font-monospace" style="background: rgba(124,58,237,0.18); color: #a78bfa; border: 1px solid rgba(124,58,237,0.5); font-size: 0.75rem; letter-spacing: 0.06em;" title="重新扫描本地模型文件">
+                                    <i class="bi bi-arrow-clockwise mr-1"></i>REFRESH
+                                </button>
+                            </div>
+                            <div class="card-body p-0">
+                                <div class="px-3 pt-2 pb-1">
+                                    <div class="alert mb-2 py-2 small font-monospace" style="background: rgba(124,58,237,0.08); border: 1px solid rgba(124,58,237,0.25); color: #c4b5fd; border-radius: 4px;">
+                                        <i class="bi bi-shield-lock-fill mr-1" style="color: #7c3aed;"></i>
+                                        所有模型权重均已通过 <code class="text-warning">.gitignore</code> 规则排除在版本控制之外（含 <code class="text-warning">.best</code> 等小众格式）。
+                                        <span class="badge ml-2" style="background: rgba(124,58,237,0.25); color: #a78bfa; font-size: 0.7rem;">GIT_SAFE</span>
+                                    </div>
+                                    <div class="custom-control custom-switch mb-2">
+                                        <input type="checkbox" class="custom-control-input" id="use-mirror-switch" checked>
+                                        <label class="custom-control-label text-white small font-monospace" for="use-mirror-switch">启用国内镜像加速 (hf-mirror / ghproxy)</label>
+                                    </div>
+                                </div>
+                                <div id="local-model-table-wrap" class="px-3 pb-3">
+                                    <div id="local-model-loading" class="text-center py-4" style="color: #6b7280;">
+                                        <i class="bi bi-hourglass-split mr-1"></i><span class="font-monospace small">SCANNING LOCAL WEIGHTS...</span>
+                                    </div>
+                                    <table class="table table-sm mb-0" id="local-model-table" style="display:none; font-size: 0.8rem;">
+                                        <thead>
+                                            <tr style="color: #9ca3af; border-bottom: 1px solid rgba(124,58,237,0.2);">
+                                                <th class="font-monospace border-0 pl-0" style="font-size:0.72rem; letter-spacing:0.06em;">ENGINE</th>
+                                                <th class="font-monospace border-0" style="font-size:0.72rem; letter-spacing:0.06em;">MODEL</th>
+                                                <th class="font-monospace border-0" style="font-size:0.72rem; letter-spacing:0.06em;">FORMAT</th>
+                                                <th class="font-monospace border-0" style="font-size:0.72rem; letter-spacing:0.06em;">SIZE</th>
+                                                <th class="font-monospace border-0" style="font-size:0.72rem; letter-spacing:0.06em;">PURPOSE</th>
+                                                <th class="font-monospace border-0 pr-0 text-right" style="font-size:0.72rem; letter-spacing:0.06em;">STATUS</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="local-model-tbody"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="text-right pb-5">
                             <button type="submit" class="btn btn-primary px-5 font-weight-bold tracking-wider">
                                 <i class="bi bi-hdd-fill mr-2"></i>COMMIT_CHANGES
@@ -1574,8 +1619,129 @@
             });
         });
 
+        // 本地模型管理
+        function loadLocalModelsStatus() {
+            const btn = $('#btn-refresh-models');
+            const icon = btn.find('i');
+            icon.addClass('fa-spin');
+            $('#local-model-table').hide();
+            $('#local-model-loading').show();
+            $('#local-model-tbody').empty();
+
+            $.get('/api/local_models/status', function(res) {
+                if(res.success && res.models) {
+                    let html = '';
+                    res.models.forEach(m => {
+                        let statusHtml = '';
+                        if (m.present) {
+                            statusHtml = `<span class="badge badge-success font-monospace" style="background: rgba(16,185,129,0.2); color: #10b981; border: 1px solid rgba(16,185,129,0.5);">READY</span>`;
+                        } else {
+                            statusHtml = `
+                                <div id="dl-container-${m.id}" class="d-flex align-items-center justify-content-end w-100">
+                                    <button class="btn btn-sm font-monospace py-0 px-2 btn-download-model" data-id="${m.id}" style="background: rgba(14,165,233,0.15); color: #38bdf8; border: 1px solid rgba(14,165,233,0.4); font-size: 0.7rem; letter-spacing: 0.05em;"><i class="bi bi-cloud-arrow-down mr-1"></i>DOWNLOAD</button>
+                                </div>
+                            `;
+                        }
+
+                        const sizeStr = m.present ? `${m.size_mb} MB` : '--';
+                        const rareBadge = m.rare_format ? `<span class="badge ml-1 font-monospace" style="background: rgba(245,158,11,0.2); color: #f59e0b; font-size: 0.65rem;">小众格式</span>` : '';
+
+                        html += `
+                            <tr>
+                                <td class="align-middle font-weight-bold" style="color: #c4b5fd;">${m.engine}</td>
+                                <td class="align-middle text-white">${m.name}</td>
+                                <td class="align-middle text-muted small font-monospace">${m.ext}${rareBadge}</td>
+                                <td class="align-middle text-info font-monospace">${sizeStr}</td>
+                                <td class="align-middle text-muted small">${m.purpose}</td>
+                                <td class="align-middle text-right" style="width: 220px;">${statusHtml}</td>
+                            </tr>
+                        `;
+                    });
+                    $('#local-model-tbody').html(html);
+                }
+            }).always(function() {
+                icon.removeClass('fa-spin');
+                $('#local-model-loading').hide();
+                $('#local-model-table').fadeIn();
+            });
+        }
+
+        $('#btn-refresh-models').on('click', function() {
+            loadLocalModelsStatus();
+        });
+
+        let activePolls = {};
+        $(document).on('click', '.btn-download-model', function() {
+            const btn = $(this);
+            const modelId = btn.data('id');
+            const useMirror = $('#use-mirror-switch').is(':checked');
+            
+            btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin mr-1"></i>STARTING...');
+            
+            $.ajax({
+                url: '/api/local_models/download',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ model_id: modelId, use_mirror: useMirror }),
+                success: function(res) {
+                    if (res.success) {
+                        startDownloadPoll(modelId);
+                    } else {
+                        window.sysAlert(res.message, 'error');
+                        btn.prop('disabled', false).html('<i class="bi bi-cloud-arrow-down mr-1"></i>DOWNLOAD');
+                    }
+                },
+                error: function(err) {
+                    // It could be that the task is already running
+                    if (err.responseJSON && err.responseJSON.message === "Task already running") {
+                        startDownloadPoll(modelId);
+                    } else {
+                        window.sysAlert(err.responseJSON?.message || 'Download failed to start', 'error');
+                        btn.prop('disabled', false).html('<i class="bi bi-cloud-arrow-down mr-1"></i>DOWNLOAD');
+                    }
+                }
+            });
+        });
+
+        function startDownloadPoll(modelId) {
+            if (activePolls[modelId]) return;
+            const container = $(`#dl-container-${modelId}`);
+            
+            container.html(`
+                <div class="d-flex flex-column align-items-end w-100">
+                    <div class="small text-info font-monospace mb-1 dl-text-${modelId}" style="font-size: 0.65rem;">DOWNLOADING...</div>
+                    <div class="progress w-100" style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px;">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated bg-info dl-bar-${modelId}" role="progressbar" style="width: 100%"></div>
+                    </div>
+                </div>
+            `);
+            
+            activePolls[modelId] = setInterval(() => {
+                $.get('/api/local_models/download_status/' + modelId, function(res) {
+                    if (res.success && res.status) {
+                        if (res.status.status === 'downloading') {
+                            $(`.dl-text-${modelId}`).text(res.status.progress);
+                        } else if (res.status.status === 'ready') {
+                            clearInterval(activePolls[modelId]);
+                            delete activePolls[modelId];
+                            container.html(`<span class="badge badge-success font-monospace" style="background: rgba(16,185,129,0.2); color: #10b981; border: 1px solid rgba(16,185,129,0.5);">READY</span>`);
+                            setTimeout(loadLocalModelsStatus, 1000);
+                        } else if (res.status.status === 'error') {
+                            clearInterval(activePolls[modelId]);
+                            delete activePolls[modelId];
+                            window.sysAlert('Error downloading ' + modelId + ': ' + res.status.message, 'error');
+                            container.html(`
+                                <button class="btn btn-sm font-monospace py-0 px-2 btn-download-model" data-id="${modelId}" style="background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.4); font-size: 0.7rem;"><i class="bi bi-arrow-repeat mr-1"></i>RETRY</button>
+                            `);
+                        }
+                    }
+                });
+            }, 1000);
+        }
+
         // 初始加载
         loadSettings();
+        loadLocalModelsStatus();
         function runAllRefreshes() { refreshVideos(); refreshDatasets(); refreshModels(); }
         runAllRefreshes();
 

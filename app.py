@@ -23,6 +23,7 @@ import database
 import file_storage
 import background_tasks
 import ai_models
+import local_model_manager
 from bbox_writer import validate_bboxes_text, convert_text_to_rects_and_labels, extract_labels
 from concurrent.futures import ThreadPoolExecutor
 from colorama import Fore, Style, init
@@ -1029,6 +1030,84 @@ def clear_cache():
     except Exception as e:
         logging.error(f"Failed to clear cache: {e}")
         return jsonify({'success': False, 'message': 'An error occurred while clearing the cache.'}), 500
+
+
+@app.route('/api/local_models/status', methods=['GET'])
+def get_local_models_status():
+    """
+    扫描项目中所有已知的本地推理模型权重，返回各模型的存在状态和文件大小。
+    供前端 LOCAL MODEL MANAGEMENT 面板实时展示。
+    """
+    base = config.BASE_DIR
+
+    def _file_info(rel_path):
+        full = os.path.join(base, rel_path)
+        if os.path.isfile(full):
+            size_mb = round(os.path.getsize(full) / (1024 * 1024), 1)
+            return True, size_mb
+        return False, 0.0
+
+    def _clip_dir_info(rel_dir):
+        full_dir = os.path.join(base, rel_dir)
+        if not os.path.isdir(full_dir):
+            return False, 0.0
+        if not os.path.isfile(os.path.join(full_dir, 'config.json')):
+            return False, 0.0
+        total = 0
+        for root_d, _, files in os.walk(full_dir):
+            for f in files:
+                try:
+                    total += os.path.getsize(os.path.join(root_d, f))
+                except OSError:
+                    pass
+        return True, round(total / (1024 * 1024), 1)
+
+    MODEL_DEFS = local_model_manager.get_model_registry()
+
+    results = []
+    for m in MODEL_DEFS:
+        if m["type"] == "dir":
+            present, size_mb = _clip_dir_info(m["path"])
+        else:
+            present, size_mb = _file_info(m["path"])
+
+        results.append({
+            "id": m["id"],
+            "name": m["name"],
+            "engine": m["engine"],
+            "path": m["path"].replace("\\", "/"),
+            "ext": m["ext"],
+            "purpose": m["purpose"],
+            "present": present,
+            "size_mb": size_mb,
+            "rare_format": m.get("rare_format", False),
+        })
+
+    return jsonify({"success": True, "models": results})
+
+@app.route('/api/local_models/download', methods=['POST'])
+def download_local_model():
+    """触发模型下载"""
+    data = request.json or {}
+    model_id = data.get("model_id")
+    use_mirror = data.get("use_mirror", True)
+    
+    if not model_id:
+        return jsonify({"success": False, "message": "Missing model_id"}), 400
+        
+    success, msg = local_model_manager.start_download(model_id, use_mirror=use_mirror)
+    if success:
+        return jsonify({"success": True, "message": msg})
+    else:
+        return jsonify({"success": False, "message": msg}), 400
+
+@app.route('/api/local_models/download_status/<model_id>', methods=['GET'])
+def get_local_model_download_status(model_id):
+    """查询模型下载状态"""
+    status = local_model_manager.get_download_status(model_id)
+    if not status:
+        return jsonify({"success": False, "message": "No download task found"}), 404
+    return jsonify({"success": True, "status": status})
 
 
 @app.route('/samPredict', methods=['POST'])
