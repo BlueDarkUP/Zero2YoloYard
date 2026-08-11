@@ -22,7 +22,7 @@ def get_model_registry():
             "purpose": "Point / Tracking (Low Latency)",
             "type": "file",
             "download_type": "file",
-            "url": "https://dl.fbaipublicfiles.com/segment_anything_2/072824/sam2.1_t.pt"
+            "url": "https://github.com/ultralytics/assets/releases/download/v8.4.0/sam2.1_t.pt"
         },
         {
             "id": "sam2_small",
@@ -33,7 +33,7 @@ def get_model_registry():
             "purpose": "Point / Tracking (Balanced)",
             "type": "file",
             "download_type": "file",
-            "url": "https://dl.fbaipublicfiles.com/segment_anything_2/072824/sam2.1_s.pt"
+            "url": "https://github.com/ultralytics/assets/releases/download/v8.4.0/sam2.1_s.pt"
         },
         {
             "id": "sam2_base",
@@ -44,7 +44,7 @@ def get_model_registry():
             "purpose": "Point / Tracking (Standard)",
             "type": "file",
             "download_type": "file",
-            "url": "https://dl.fbaipublicfiles.com/segment_anything_2/072824/sam2.1_b.pt"
+            "url": "https://github.com/ultralytics/assets/releases/download/v8.4.0/sam2.1_b.pt"
         },
         {
             "id": "sam2_large",
@@ -55,7 +55,7 @@ def get_model_registry():
             "purpose": "Point / Tracking (High Precision)",
             "type": "file",
             "download_type": "file",
-            "url": "https://dl.fbaipublicfiles.com/segment_anything_2/072824/sam2.1_l.pt"
+            "url": "https://github.com/ultralytics/assets/releases/download/v8.4.0/sam2.1_l.pt"
         },
         # --- SAM 3 Series ---
         {
@@ -67,7 +67,7 @@ def get_model_registry():
             "purpose": "Open-Vocabulary Retrieval / Smart Select / LAM / Batch Apply",
             "type": "file",
             "download_type": "file",
-            "url": "https://dl.fbaipublicfiles.com/segment_anything_3/sam3.pt"
+            "url": "https://huggingface.co/1038lab/sam3/resolve/main/sam3.pt"
         },
         # --- CLIP Series ---
         {
@@ -158,9 +158,12 @@ def _download_file(url, dest_path, model_id):
     """ 流式下载单文件，并报告进度 """
     try:
         os.makedirs(os.path.dirname(dest_path), exist_ok=True)
-        # 如果启用国内镜像加速 (ghproxy)
-        if DOWNLOAD_TASKS[model_id].get("use_mirror") and url.startswith("https://github.com"):
-            url = url.replace("https://github.com", "https://ghproxy.net/https://github.com")
+        # 如果启用国内镜像加速 (ghproxy / hf-mirror)
+        if DOWNLOAD_TASKS[model_id].get("use_mirror"):
+            if url.startswith("https://github.com"):
+                url = url.replace("https://github.com", "https://ghproxy.net/https://github.com")
+            elif url.startswith("https://huggingface.co"):
+                url = url.replace("https://huggingface.co", "https://hf-mirror.com")
 
         logging.info(f"Downloading {url} to {dest_path}...")
         response = requests.get(url, stream=True, timeout=10)

@@ -146,21 +146,14 @@ gkdt_engine/
 # 安装 HuggingFace 极速下载 CLI 工具
 pip install -U huggingface_hub
 
-# 1. 下载 SAM 2.1 官方权重 (直接存放在 checkpoints/ 根目录下)
-hf download facebook/sam2.1-hiera-tiny sam2.1_hiera_tiny.pt --local-dir checkpoints --local-dir-use-symlinks False
-mv checkpoints/sam2.1_hiera_tiny.pt checkpoints/sam2.1_t.pt
+# 1. 下载 SAM 2.1 官方权重 (存放在 checkpoints/ 目录下)
+wget https://github.com/ultralytics/assets/releases/download/v8.4.0/sam2.1_t.pt -P checkpoints/
+wget https://github.com/ultralytics/assets/releases/download/v8.4.0/sam2.1_s.pt -P checkpoints/
+wget https://github.com/ultralytics/assets/releases/download/v8.4.0/sam2.1_b.pt -P checkpoints/
+wget https://github.com/ultralytics/assets/releases/download/v8.4.0/sam2.1_l.pt -P checkpoints/
 
-hf download facebook/sam2.1-hiera-small sam2.1_hiera_small.pt --local-dir checkpoints --local-dir-use-symlinks False
-mv checkpoints/sam2.1_hiera_small.pt checkpoints/sam2.1_s.pt
-
-hf download facebook/sam2.1-hiera-base-plus sam2.1_hiera_base_plus.pt --local-dir checkpoints --local-dir-use-symlinks False
-mv checkpoints/sam2.1_hiera_base_plus.pt checkpoints/sam2.1_b.pt
-
-hf download facebook/sam2.1-hiera-large sam2.1_hiera_large.pt --local-dir checkpoints --local-dir-use-symlinks False
-mv checkpoints/sam2.1_hiera_large.pt checkpoints/sam2.1_l.pt
-
-# 2. 下载 SAM 3 官方权重 (存放在 checkpoints/sam3/sam3.pt)
-hf download facebook/sam3 --local-dir checkpoints/sam3
+# 2. 下载 SAM 3 官方权重 (存放在 checkpoints/sam3/sam3.pt，只需下载 sam3.pt)
+hf download 1038lab/sam3 sam3.pt --local-dir checkpoints/sam3
 
 # 3. 下载 CLIP 多尺寸语义模型 (存放在 checkpoints/clip/ 下)
 hf download openai/clip-vit-base-patch16 --local-dir checkpoints/clip/clip-vit-base-patch16

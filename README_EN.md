@@ -146,21 +146,14 @@ gkdt_engine/
 # Install HuggingFace Hub CLI
 pip install -U huggingface_hub
 
-# 1. Download SAM 2.1 Checkpoints (Placed directly under checkpoints/)
-hf download facebook/sam2.1-hiera-tiny sam2.1_hiera_tiny.pt --local-dir checkpoints --local-dir-use-symlinks False
-mv checkpoints/sam2.1_hiera_tiny.pt checkpoints/sam2.1_t.pt
+# 1. Download SAM 2.1 Checkpoints (Placed under checkpoints/)
+wget https://github.com/ultralytics/assets/releases/download/v8.4.0/sam2.1_t.pt -P checkpoints/
+wget https://github.com/ultralytics/assets/releases/download/v8.4.0/sam2.1_s.pt -P checkpoints/
+wget https://github.com/ultralytics/assets/releases/download/v8.4.0/sam2.1_b.pt -P checkpoints/
+wget https://github.com/ultralytics/assets/releases/download/v8.4.0/sam2.1_l.pt -P checkpoints/
 
-hf download facebook/sam2.1-hiera-small sam2.1_hiera_small.pt --local-dir checkpoints --local-dir-use-symlinks False
-mv checkpoints/sam2.1_hiera_small.pt checkpoints/sam2.1_s.pt
-
-hf download facebook/sam2.1-hiera-base-plus sam2.1_hiera_base_plus.pt --local-dir checkpoints --local-dir-use-symlinks False
-mv checkpoints/sam2.1_hiera_base_plus.pt checkpoints/sam2.1_b.pt
-
-hf download facebook/sam2.1-hiera-large sam2.1_hiera_large.pt --local-dir checkpoints --local-dir-use-symlinks False
-mv checkpoints/sam2.1_hiera_large.pt checkpoints/sam2.1_l.pt
-
-# 2. Download SAM 3 Checkpoint (Placed under checkpoints/sam3/sam3.pt)
-hf download facebook/sam3 --local-dir checkpoints/sam3
+# 2. Download SAM 3 Checkpoint (Placed under checkpoints/sam3/sam3.pt, sam3.pt only)
+hf download 1038lab/sam3 sam3.pt --local-dir checkpoints/sam3
 
 # 3. Download CLIP Ensembling Models (Placed under checkpoints/clip/)
 hf download openai/clip-vit-base-patch16 --local-dir checkpoints/clip/clip-vit-base-patch16
