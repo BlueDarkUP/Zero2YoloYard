@@ -49,17 +49,14 @@ class ClassificationAnnotator {
         window.addEventListener('keydown', (e) => {
             if ($(e.target).is('input, textarea')) return;
 
-            // 'C' 清除所有分类标签
             if (e.key === 'c' || e.key === 'C') {
                 self.clearClassification();
                 return;
             }
 
-            // 数字键 1-9：快速标记第 N 个类别（或自定义按键绑定）
             const classes = self.getAvailableClasses();
             if (!classes.length) return;
 
-            // 优先检查自定义按键绑定 (window.customKeybindings = { className: 'key' })
             if (window.customKeybindings) {
                 for (const [cls, boundKey] of Object.entries(window.customKeybindings)) {
                     if (e.key.toLowerCase() === boundKey.toLowerCase()) {
@@ -69,7 +66,6 @@ class ClassificationAnnotator {
                 }
             }
 
-            // 默认：数字键 1-9 映射到类别列表索引 0-8
             const num = parseInt(e.key, 10);
             if (num >= 1 && num <= 9) {
                 const targetClass = classes[num - 1];

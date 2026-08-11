@@ -843,7 +843,7 @@ $(document).ready(function() {
                             select.append(`<option value="class_${cls}">CLASS: ${cls} (${response.class_counts[cls]})</option>`);
                         });
                     }
-                    select.append('<option value="consistency_outliers" hidden style="color: var(--color-danger); font-weight: bold;">AI_REVIEW_OUTLIERS (骨架离群者)</option>');
+                    select.append('<option value="consistency_outliers" hidden style="color: var(--color-danger); font-weight: bold;">AI_REVIEW_OUTLIERS (Skeleton Outliers)</option>');
 
                     setupAugmentationListeners('#preview-aug-controls');
                     const sourceSelector = $('#aug-preview-source-selector');
@@ -892,7 +892,7 @@ $(document).ready(function() {
                             select.append(`<option value="class_${cls}">CLASS: ${cls} (${response.class_counts[cls]})</option>`);
                         });
                     }
-                    select.append('<option value="consistency_outliers" hidden style="color: var(--color-danger); font-weight: bold;">AI_REVIEW_OUTLIERS (CLIP 标签死角)</option>');
+                    select.append('<option value="consistency_outliers" hidden style="color: var(--color-danger); font-weight: bold;">AI_REVIEW_OUTLIERS (CLIP Label Blind Spots)</option>');
                 } else {
                     $('#consistency-title').html('<i class="bi bi-bounding-box-circles mr-2 text-primary"></i> OBJECT INSTANCE AI CONSISTENCY SCAN');
                     $('#consistency-desc').text('Crops each annotated ROI region and extracts CLIP deep feature vectors + 3D HSV color profiles to detect class label swaps and instance color outliers.');
@@ -912,7 +912,7 @@ $(document).ready(function() {
                     select.append('<option value="ar_smallest">SQUARISH_AR (TOP 10)</option>');
                     select.append('<option value="ar_largest">EXTREME_AR (TOP 10)</option>');
                     select.append('<option value="iou_high">HIGH_OVERLAP (IoU > 0.95)</option>');
-                    select.append('<option value="consistency_outliers" hidden style="color: var(--color-danger); font-weight: bold;">AI_REVIEW_OUTLIERS (实例标签离群)</option>');
+                    select.append('<option value="consistency_outliers" hidden style="color: var(--color-danger); font-weight: bold;">AI_REVIEW_OUTLIERS (Instance Label Outliers)</option>');
 
                     setupAugmentationListeners('#preview-aug-controls');
                     const sourceSelector = $('#aug-preview-source-selector');
@@ -961,7 +961,6 @@ $(document).ready(function() {
             data: JSON.stringify({ enable_color_check: isColorCheckEnabled }),
             success: function(response) {
                 if (response.success) {
-                    // 使用空数组兜底，防止后端在0个异常值时省略该字段导致TypeError
                     consistencyOutlierIndices = response.outlier_image_indices ?? [];
                     const resultMessage = $(`<div class="alert mt-3 rounded-0 alert-success">${response.message}</div>`);
                     $('#consistency-check-container').append(resultMessage);

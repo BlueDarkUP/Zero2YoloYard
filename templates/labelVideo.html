@@ -973,7 +973,7 @@
 
         $('#btn-toggle-ambiguous-filter').on('click', function() {
             if (ambiguousFramesList.length === 0) {
-                window.sysAlert('当前没有需要消歧义的图片！可在【可视化聚类】中标记类别歧义。', 'info');
+                window.sysAlert('No images require disambiguation! Mark category ambiguities in [Visual Clustering].', 'info');
                 return;
             }
             const currentFrame = parseInt($('#frame-slider').val());

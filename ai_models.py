@@ -219,7 +219,7 @@ def clear_retrieval_engine_cache():
 def warm_frame_cache(video_uuid, frame_number):
     """给 /interactive_segment/preprocess、后台预处理路由用：提前跑掉最贵的 backbone 前向。"""
     if sam_tasks is None:
-        raise RuntimeError("SAM 功能未安装。")
+        raise RuntimeError("SAM feature is not installed.")
     return sam_tasks.warm_frame_cache(video_uuid, frame_number)
 
 
@@ -249,7 +249,7 @@ def lam_predict(video_uuid, frame_number, point_coords):
     等子集里，而不是每次都跑全量词表。
     """
     if sam_tasks is None:
-        return None, "SAM 功能未安装。"
+        return None, "SAM feature is not installed."
 
     with AI_MODEL_LOCK:
         frame_path = file_storage.get_frame_path(video_uuid, frame_number)
@@ -307,7 +307,7 @@ def predict_from_one_shot(video_uuid, frame_number, positive_prompt_box, negativ
         再筛一遍候选结果，颜色差异过大的会被剔除。
     """
     if sam_tasks is None:
-        raise RuntimeError("SAM 功能未安装。")
+        raise RuntimeError("SAM feature is not installed.")
 
     prompt_rect = [positive_prompt_box['x1'], positive_prompt_box['y1'],
                     positive_prompt_box['x2'], positive_prompt_box['y2']]
@@ -353,7 +353,7 @@ def predict_by_class_text(video_uuid, frame_number, class_name, confidence_thres
     "build_prototypes_for_class + predict_with_prototypes" 两步。
     """
     if sam_tasks is None:
-        raise RuntimeError("SAM 功能未安装。")
+        raise RuntimeError("SAM feature is not installed.")
 
     retrieval_text = get_retrieval_text_for_class(class_name)
     with AI_MODEL_LOCK:

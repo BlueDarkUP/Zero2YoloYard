@@ -15,7 +15,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 
     <style>
-        /* 底部系统状态栏 */
         .system-status-bar {
             position: fixed;
             bottom: 0;
@@ -264,7 +263,6 @@
             }, 40);
         });
 
-        // 模拟底层系统数据波动 (Telemetry Simulation)
         setInterval(() => {
             const latency = Math.floor(Math.random() * (18 - 8 + 1)) + 8;
             const memory = (40 + Math.random() * 5).toFixed(1);
@@ -320,7 +318,6 @@
     </div>
 
     <script>
-        // 全局挂载：系统级提示函数
         window.sysAlert = function(message, type = 'success') {
             const toastId = 'toast-' + Date.now() + Math.floor(Math.random() * 1000);
             const title = type === 'error' ? 'SYS_ERROR' : (type === 'warning' ? 'SYS_WARNING' : 'SYS_NOTICE');
@@ -346,7 +343,6 @@
             $('#' + toastId).on('hidden.bs.toast', function () { $(this).remove(); });
         };
 
-        // 全局挂载：系统级确认函数
         window.sysConfirm = function(message, callback) {
             $('#sysConfirmMessage').text(message);
             $('#sysConfirmModal').modal('show');
@@ -360,7 +356,6 @@
             });
         };
 
-        // 全局挂载：系统级输入提示函数
         window.sysPrompt = function(options, callback) {
             let title = "EDIT PROMPT";
             let message = "Enter text description:";
@@ -406,7 +401,6 @@
             });
         };
 
-        // 多弹窗堆叠
         $(document).on('show.bs.modal', '.modal', function () {
             const openCount = $('.modal.show').length;
             const newZ = 1050 + openCount * 20;

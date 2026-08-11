@@ -254,7 +254,6 @@
 {% block scripts %}
 <script>
 $(document).ready(function() {
-    // 监听所有范围滑块并更新显示的数值
     $('input[type="range"]').on('input', function() {
         const targetId = $(this).attr('id').replace('setup-', 'val-');
         let val = $(this).val();
@@ -264,7 +263,6 @@ $(document).ready(function() {
 
     let rec = { sam_level: 1, feature_level: 1, worker_level: 2 };
 
-    // 1. 获取硬件信息并计算推荐配置
     $.get('/api/detect_hardware', function(hw) {
         $('#hardware-loading').hide();
         $('#hardware-info').fadeIn();
@@ -277,7 +275,6 @@ $(document).ready(function() {
         let tierBadgeClass = 'badge-secondary';
         let tierLabel = 'LOW-END (RESTRICTED)';
 
-        // 智能推荐算法
         if (!hw.has_cuda || (hw.vram_gb > 0 && hw.vram_gb < 4)) {
             rec.sam_level = 0; rec.feature_level = 0; rec.worker_level = 1;
             tierBadgeClass = 'badge-danger';
@@ -291,7 +288,6 @@ $(document).ready(function() {
 
         $('#hw-tier').removeClass('badge-primary').addClass(tierBadgeClass).text(tierLabel);
 
-        // 应用推荐配置
         setSelectByLevel('#setup-sam-model', rec.sam_level);
         $('#setup-feature-extractor').val(rec.feature_level > 0 ? 'on' : 'off');
         setSelectByLevel('#setup-workers', rec.worker_level);
@@ -304,7 +300,6 @@ $(document).ready(function() {
         });
     }
 
-    // 2. 警告触发器
     $('#setup-sam-model, #setup-workers').on('change', function() {
         const id = $(this).attr('id');
         const level = parseInt($(this).find(':selected').data('level'));
@@ -322,7 +317,6 @@ $(document).ready(function() {
         else $('#warn-feature').slideUp();
     });
 
-    // 3. 提交全量配置
     $('#full-setup-form').on('submit', function(e) {
         e.preventDefault();
         const $btn = $('#btn-complete-setup');
@@ -330,16 +324,12 @@ $(document).ready(function() {
 
         const samSelection = $('#setup-sam-model').val();
 
-        // 收集表单中所有的配置项
         const configPayload = {
             gpu_device: $('#setup-gpu-device').val(),
 
             enable_sam_model: samSelection !== "none",
             sam_model_checkpoint: samSelection === "none" ? "sam2.1_t.pt" : samSelection,
 
-            // SAM3 迁移: 不再有"选哪个 MobileNet 变体"这个概念，enable_feature_extractor
-            // 现在是一个纯粹的开关，控制智能选择/LAM/批量应用/一致性检查这几个 SAM3
-            // 检索类功能是否启用。
             enable_feature_extractor: $('#setup-feature-extractor').val() === 'on',
             enable_cls_model: $('#setup-cls-model').val() === 'on',
             enable_pose_model: $('#setup-pose-model').val() === 'on',
@@ -368,7 +358,6 @@ $(document).ready(function() {
             data: JSON.stringify(configPayload),
             success: function(res) {
                 if (res.success) {
-                    // 等待半秒让后台线程启动模型加载，然后跳转主界面
                     setTimeout(() => { window.location.href = '/'; }, 500);
                 } else {
                     window.sysAlert('Error applying configuration.', 'error');

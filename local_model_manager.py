@@ -12,14 +12,14 @@ DOWNLOAD_TASKS = {}
 
 def get_model_registry():
     return [
-        # --- SAM 2.1 系列 ---
+        # --- SAM 2.1 Series ---
         {
             "id": "sam2_tiny",
             "name": "SAM 2.1 Tiny",
             "engine": "SAM 2.1",
             "path": os.path.join("checkpoints", "sam2.1_t.pt"),
             "ext": ".pt",
-            "purpose": "点选 / 追踪（低延迟）",
+            "purpose": "Point / Tracking (Low Latency)",
             "type": "file",
             "download_type": "file",
             "url": "https://dl.fbaipublicfiles.com/segment_anything_2/072824/sam2.1_t.pt"
@@ -30,7 +30,7 @@ def get_model_registry():
             "engine": "SAM 2.1",
             "path": os.path.join("checkpoints", "sam2.1_s.pt"),
             "ext": ".pt",
-            "purpose": "点选 / 追踪（均衡）",
+            "purpose": "Point / Tracking (Balanced)",
             "type": "file",
             "download_type": "file",
             "url": "https://dl.fbaipublicfiles.com/segment_anything_2/072824/sam2.1_s.pt"
@@ -41,7 +41,7 @@ def get_model_registry():
             "engine": "SAM 2.1",
             "path": os.path.join("checkpoints", "sam2.1_b.pt"),
             "ext": ".pt",
-            "purpose": "点选 / 追踪（标准）",
+            "purpose": "Point / Tracking (Standard)",
             "type": "file",
             "download_type": "file",
             "url": "https://dl.fbaipublicfiles.com/segment_anything_2/072824/sam2.1_b.pt"
@@ -52,31 +52,31 @@ def get_model_registry():
             "engine": "SAM 2.1",
             "path": os.path.join("checkpoints", "sam2.1_l.pt"),
             "ext": ".pt",
-            "purpose": "点选 / 追踪（高精度）",
+            "purpose": "Point / Tracking (High Precision)",
             "type": "file",
             "download_type": "file",
             "url": "https://dl.fbaipublicfiles.com/segment_anything_2/072824/sam2.1_l.pt"
         },
-        # --- SAM 3 系列 ---
+        # --- SAM 3 Series ---
         {
             "id": "sam3_image",
             "name": "SAM 3 (Image)",
             "engine": "SAM 3",
             "path": os.path.join("checkpoints", "sam3", "sam3.pt"),
             "ext": ".pt",
-            "purpose": "开放词汇检索 / 智能选择 / LAM / 批量应用",
+            "purpose": "Open-Vocabulary Retrieval / Smart Select / LAM / Batch Apply",
             "type": "file",
             "download_type": "file",
             "url": "https://dl.fbaipublicfiles.com/segment_anything_3/sam3.pt"
         },
-        # --- CLIP 系列 ---
+        # --- CLIP Series ---
         {
             "id": "clip_b32",
             "name": "CLIP ViT-B/32",
             "engine": "CLIP",
             "path": os.path.join("checkpoints", "clip", "clip-vit-base-patch32"),
-            "ext": "目录",
-            "purpose": "零样本分类 / 一致性检查（推荐首选）",
+            "ext": "Directory",
+            "purpose": "Zero-Shot Classification / Consistency Check (Recommended)",
             "type": "dir",
             "download_type": "hf_cli",
             "repo_id": "openai/clip-vit-base-patch32"
@@ -86,8 +86,8 @@ def get_model_registry():
             "name": "CLIP ViT-B/16",
             "engine": "CLIP",
             "path": os.path.join("checkpoints", "clip", "clip-vit-base-patch16"),
-            "ext": "目录",
-            "purpose": "零样本分类 / 一致性检查（精度更高）",
+            "ext": "Directory",
+            "purpose": "Zero-Shot Classification / Consistency Check (Higher Precision)",
             "type": "dir",
             "download_type": "hf_cli",
             "repo_id": "openai/clip-vit-base-patch16"
@@ -97,20 +97,20 @@ def get_model_registry():
             "name": "CLIP ViT-L/14",
             "engine": "CLIP",
             "path": os.path.join("checkpoints", "clip", "clip-vit-large-patch14"),
-            "ext": "目录",
-            "purpose": "零样本分类 / 一致性检查（最高精度）",
+            "ext": "Directory",
+            "purpose": "Zero-Shot Classification / Consistency Check (Highest Precision)",
             "type": "dir",
             "download_type": "hf_cli",
             "repo_id": "openai/clip-vit-large-patch14"
         },
-        # --- GKDT 姿态估计 ---
+        # --- GKDT Pose Estimation ---
         {
             "id": "gkdt_l",
             "name": "GKDT-L",
             "engine": "GKDT",
             "path": os.path.join("gkdt_engine", "output", "GKDT-L_for_app", "model", "gkd_fullset.best"),
             "ext": ".best",
-            "purpose": "姿态关键点估计（轻量版，~6 GB）",
+            "purpose": "Pose Keypoint Estimation (Lightweight, ~6 GB)",
             "type": "file",
             "rare_format": True,
             "download_type": "hf_cli",
@@ -122,20 +122,20 @@ def get_model_registry():
             "engine": "GKDT",
             "path": os.path.join("gkdt_engine", "output", "GKDT-H_for_app", "model", "gkd_fullset.best"),
             "ext": ".best",
-            "purpose": "姿态关键点估计（高精度版，~12 GB）",
+            "purpose": "Pose Keypoint Estimation (High Precision, ~12 GB)",
             "type": "file",
             "rare_format": True,
             "download_type": "hf_cli",
             "repo_id": "changshenglu/GKDT-H_for_App"
         },
-        # --- GKDT 依赖目标检测器 ---
+        # --- GKDT Object Detector Dependency ---
         {
             "id": "grounding_dino",
             "name": "Grounding DINO",
             "engine": "Object Detector",
             "path": os.path.join("gkdt_engine", "test_real_world", "object_detector_lib", "weights", "groundingdino_swint_ogc.pth"),
             "ext": ".pth",
-            "purpose": "GKDT 多目标检测依赖 (开集文本目标检测)",
+            "purpose": "GKDT Multi-Object Detection Dependency (Open-Set Text Object Detection)",
             "type": "file",
             "download_type": "file_ghproxy",
             "url": "https://github.com/IDEA-Research/GroundingDINO/releases/download/v0.1.0-alpha/groundingdino_swint_ogc.pth"
@@ -145,8 +145,8 @@ def get_model_registry():
             "name": "Locate Anything 3B",
             "engine": "Object Detector",
             "path": os.path.join("gkdt_engine", "test_real_world", "object_detector_lib", "weights", "LocateAnything-3B"),
-            "ext": "目录",
-            "purpose": "GKDT 多目标检测依赖 (高精度视觉定位)",
+            "ext": "Directory",
+            "purpose": "GKDT Multi-Object Detection Dependency (High-Precision Visual Grounding)",
             "type": "dir",
             "download_type": "hf_cli",
             "repo_id": "nvidia/LocateAnything-3B"

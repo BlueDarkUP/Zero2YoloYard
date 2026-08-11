@@ -62,7 +62,7 @@ def apply_class_to_videos_task(task_uuid, video_uuids, class_name, confidence_th
     busy_videos = [vu for vu in video_uuids if active_tasks.get(vu)]
     if busy_videos:
         session['status'] = 'FAILED'
-        session['message'] = f"以下视频当前有其它任务在运行，无法开始: {', '.join(v[:8] for v in busy_videos)}"
+        session['message'] = f"The following videos currently have other tasks running and cannot be started: {', '.join(v[:8] for v in busy_videos)}"
         return
 
     for vu in video_uuids:
@@ -908,7 +908,7 @@ def apply_pose_class_to_videos_task(task_uuid, video_uuids, class_name, confiden
     busy_videos = [vu for vu in video_uuids if active_tasks.get(vu)]
     if busy_videos:
         session['status'] = 'FAILED'
-        session['message'] = f"以下视频当前有其它任务在运行，无法开始: {', '.join(v[:8] for v in busy_videos)}"
+        session['message'] = f"The following videos currently have other tasks running and cannot be started: {', '.join(v[:8] for v in busy_videos)}"
         return
 
     for vu in video_uuids:

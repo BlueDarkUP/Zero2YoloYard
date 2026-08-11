@@ -137,7 +137,7 @@ def predict_pose_from_text(video_uuid, frame_number, class_label, custom_kps_tex
     """
     gkd_engine = load_gkdt_model()
     if gkd_engine is None:
-        raise RuntimeError("GKDT 模型未成功初始化，请检查日志。")
+        raise RuntimeError("GKDT model failed to initialize. Please check the logs.")
 
     # 0. 规范化 bbox 为 Python 原生 float list，防止 numpy array 导致的布尔隐式转换歧义
     if bbox is not None:
@@ -155,16 +155,16 @@ def predict_pose_from_text(video_uuid, frame_number, class_label, custom_kps_tex
             kps_texts = schema_data.get('points', [])
 
     if not kps_texts:
-        raise ValueError(f"类别 [{class_label}] 未配置点位 Schema，请先在右侧配置点位模板或输入关键点名称！")
+        raise ValueError(f"Class [{class_label}] has no keypoint schema configured. Please configure a keypoint template or enter keypoint names on the right panel!")
 
     # 2. 读取当前帧图像路径与尺寸
     image_path = file_storage.get_frame_path(video_uuid, frame_number)
     if not os.path.exists(image_path):
-        raise FileNotFoundError(f"图像不存在: {image_path}")
+        raise FileNotFoundError(f"Image does not exist: {image_path}")
 
     image_bgr = cv2.imread(image_path)
     if image_bgr is None:
-        raise ValueError(f"无法读取图片: {image_path}")
+        raise ValueError(f"Failed to read image: {image_path}")
 
     img_h, img_w = image_bgr.shape[:2]
 
@@ -279,12 +279,12 @@ def predict_pose_from_sam_point(video_uuid, frame_number, class_label, point_coo
 
     image_path = file_storage.get_frame_path(video_uuid, frame_number)
     if not os.path.exists(image_path):
-        raise FileNotFoundError(f"图像不存在: {image_path}")
+        raise FileNotFoundError(f"Image does not exist: {image_path}")
 
     # 1. SAM 2.1 点选分割，获取精准 Instance BBox
     sam_res = ultralytics_sam_tasks.predict_box_from_point_ultralytics(image_path, point_coords)
     if not sam_res:
-        raise ValueError("SAM 2.1 未能在点击位置识别到有效目标物体，请重新点击目标中心！")
+        raise ValueError("SAM 2.1 failed to detect a valid object at the click position. Please click near the object center!")
 
     sam_bbox = [sam_res['x1'], sam_res['y1'], sam_res['x2'], sam_res['y2']]
 

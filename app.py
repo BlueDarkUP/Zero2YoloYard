@@ -804,7 +804,7 @@ def interpolate_pose_keypoints():
     end_frame_num = data.get('end_frame_number')
 
     if not all([video_uuid, start_frame_num is not None, end_frame_num is not None]):
-        return jsonify({'success': False, 'message': '缺少必要参数 (video_uuid, start_frame_number, end_frame_number)'}), 400
+        return jsonify({'success': False, 'message': 'Missing required parameters (video_uuid, start_frame_number, end_frame_number)'}), 400
 
     try:
         start_frame_num = int(start_frame_num)
@@ -815,13 +815,13 @@ def interpolate_pose_keypoints():
 
         total_steps = end_frame_num - start_frame_num
         if total_steps <= 1:
-            return jsonify({'success': True, 'message': '中间没有需要插值的帧'})
+            return jsonify({'success': True, 'message': 'No intermediate frames require interpolation'})
 
         start_ann_dict = database.get_frame_annotations(video_uuid, start_frame_num)
         end_ann_dict = database.get_frame_annotations(video_uuid, end_frame_num)
 
         if not start_ann_dict or not end_ann_dict:
-            return jsonify({'success': False, 'message': '起始帧或结束帧缺少包含姿态的数据'}), 400
+            return jsonify({'success': False, 'message': 'Start or end frame is missing pose data'}), 400
 
         from annotation_model import AnnotationData, AnnotationObject
         start_data = AnnotationData.from_dict(start_ann_dict)
@@ -831,7 +831,7 @@ def interpolate_pose_keypoints():
         end_objs = [o for o in end_data.objects if o.type == 'keypoint']
 
         if not start_objs or not end_objs:
-            return jsonify({'success': False, 'message': '起始帧或结束帧中未找到关键点姿态对象'}), 400
+            return jsonify({'success': False, 'message': 'No keypoint pose objects found in start or end frame'}), 400
 
         pairs = []
         if object_id:
@@ -848,7 +848,7 @@ def interpolate_pose_keypoints():
                     pairs.append((s_o, e_match))
 
         if not pairs:
-            return jsonify({'success': False, 'message': '未能匹配到跨帧的同名或同 ID 姿态对象'}), 400
+            return jsonify({'success': False, 'message': 'Failed to match pose objects with the same name or ID across frames'}), 400
 
         interpolated_count = 0
         for i in range(1, total_steps):
@@ -917,12 +917,12 @@ def interpolate_pose_keypoints():
 
         return jsonify({
             'success': True,
-            'message': f'成功在第 {start_frame_num} 帧至第 {end_frame_num} 帧间对 {len(pairs)} 个姿态对象完成了 {interpolated_count} 帧关键点线性插值！'
+            'message': f'Successfully interpolated keypoints for {len(pairs)} pose object(s) across {interpolated_count} frame(s) between frame {start_frame_num} and {end_frame_num}!'
         })
 
     except Exception as e:
         logging.error(f"Pose keypoints interpolation failed: {e}", exc_info=True)
-        return jsonify({'success': False, 'message': f'关键点线性插值失败: {e}'}), 500
+        return jsonify({'success': False, 'message': f'Keypoint linear interpolation failed: {e}'}), 500
 
 
 @app.route('/addClass', methods=['POST'])
@@ -1269,8 +1269,8 @@ def predict_from_dataset_route():
         response = {'success': True, 'results': results}
         if not ai_models.class_has_labeled_examples(class_name):
             response['warning'] = (
-                f"类别 '{class_name}' 目前还没有任何标注样本，检索完全依赖 SAM3 描述文本，"
-                f"建议先手动标注几个样本或在类别设置里完善检索描述以提升准确率。"
+                f"Class '{class_name}' currently has no annotated samples, retrieval relies entirely on SAM3 description text. "
+                f"It is recommended to manually annotate a few samples first or improve the retrieval description in class settings."
             )
         return jsonify(response)
 
@@ -1348,7 +1348,7 @@ def apply_class_to_videos_route():
     if busy:
         return jsonify({
             'success': False,
-            'message': f"以下视频当前有其它任务在运行: {', '.join(v[:8] for v in busy)}"
+            'message': f"The following videos currently have other tasks running: {', '.join(v[:8] for v in busy)}"
         }), 409
 
     task_uuid = str(uuid.uuid4())
@@ -1379,7 +1379,7 @@ def apply_pose_class_to_videos_route():
     if busy:
         return jsonify({
             'success': False,
-            'message': f"以下视频当前有其它任务在运行: {', '.join(v[:8] for v in busy)}"
+            'message': f"The following videos currently have other tasks running: {', '.join(v[:8] for v in busy)}"
         }), 409
 
     task_uuid = str(uuid.uuid4())
@@ -1524,7 +1524,7 @@ def cluster_classification_images_route():
     # 而不是意外处理已标注帧（可能覆盖已有标注数据）
     if not frames_to_cluster:
         if unlabeled_only and all_valid_frames:
-            return jsonify({'success': False, 'message': '当前视频中没有未标注的帧。如需对全部帧执行聚类，请取消"仅未标注帧"选项。'}), 400
+            return jsonify({'success': False, 'message': 'There are no unlabeled frames in the current video. To perform clustering on all frames, uncheck the "Unlabeled Frames Only" option.'}), 400
 
     if not frames_to_cluster:
         return jsonify({'success': False, 'message': 'No images found for visual clustering.'}), 400
@@ -1685,7 +1685,7 @@ def apply_clip_zero_shot_route():
     # 不再静默回退：若 unlabeled_only=True 但结果为空，明确告知用户
     if not target_frames:
         if unlabeled_only and all_frames_list:
-            return jsonify({'success': False, 'message': '当前选定视频中没有未标注的帧。如需处理全部帧，请取消"仅未标注帧"选项。'}), 400
+            return jsonify({'success': False, 'message': 'There are no unlabeled frames in the selected videos. To process all frames, uncheck the "Unlabeled Frames Only" option.'}), 400
 
     if not target_frames:
         return jsonify({'success': False, 'message': 'No matching frames found for zero-shot pre-annotation.'}), 404
@@ -2599,7 +2599,7 @@ def run_consistency_check(dataset_uuid):
 
     except Exception as e:
         logging.error(f"On-demand consistency check failed: {e}", exc_info=True)
-        return jsonify({'success': False, 'message': f'审查失败: {e}'}), 500
+        return jsonify({'success': False, 'message': f'Review failed: {e}'}), 500
 
 # --- GKDT 姿态通用关键点 AI 识别接口 ---
 
@@ -2651,7 +2651,7 @@ def gkdt_sam_pose_predict_route():
 
     if not all([video_uuid, frame_number is not None, class_label, point_coords]):
         return jsonify(
-            {'success': False, 'message': '缺少必要参数 (video_uuid, frame_number, class_label, point)'}), 400
+            {'success': False, 'message': 'Missing required parameters (video_uuid, frame_number, class_label, point)'}), 400
 
     try:
         import gkdt_tasks
@@ -2687,7 +2687,7 @@ def gkdt_sam3_batch_pose_predict_route():
     if not video_uuid or frame_number is None or not class_label:
         return jsonify({
             'success': False,
-            'message': '缺少必要参数 (video_uuid, frame_number, class_label)'
+            'message': 'Missing required parameters (video_uuid, frame_number, class_label)'
         }), 400
 
     try:

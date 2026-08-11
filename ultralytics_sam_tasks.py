@@ -218,11 +218,11 @@ def sam3_query_frame(video_uuid, frame_number, text_prompt=None, positive_boxes=
     返回: [{"box": [x1,y1,x2,y2], "score": float}, ...]，按 score 降序排列
     """
     if not text_prompt and not positive_boxes:
-        raise ValueError("sam3_query_frame 至少需要 text_prompt 或 positive_boxes 中的一个。")
+        raise ValueError("sam3_query_frame requires at least text_prompt or positive_boxes.")
 
     processor = _load_sam3_models(mode="image")
     if processor is None:
-        raise RuntimeError("SAM 3.1 Image Processor is not initialized (checkpoint 未加载或已被设置禁用)。")
+        raise RuntimeError("SAM 3.1 Image Processor is not initialized (checkpoint not loaded or disabled in settings).")
 
     with _SAM3_QUERY_LOCK:
         state = _get_sam3_frame_state(processor, video_uuid, frame_number, image_path=image_path)

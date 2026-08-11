@@ -12,26 +12,20 @@ class PoseAnnotator {
     constructor(core) {
         this.core = core;
 
-        // 当前选中的骨架实例内部、被选中的关键点下标（null = 未选中任何点，只选中了整个实例）
         this.selectedKeypointIndex = null;
         this.draggedKeypointIndex = null;
         this.isDraggingPoint = false;
 
-        // "放置新骨架" armed 状态：点了 Add Skeleton 之后，等待用户在画布上点一下决定放在哪
         this.isPlacingNewInstance = false;
         this.armedClass = null;
 
-        // 无模板兜底：逐点点击 + 现场起名的模式
         this.isFreeformAdding = false;
         this.activeNewInstance = null;
 
-        // GKDT + SAM 2.1 交互点选模式开关
         this.isGkdtModeActive = false;
 
-        // 悬停/预览用
         this.hoverPoint = null;
 
-        // 内联命名输入框（用原生 DOM，避免用阻塞式 prompt()）
         this.nameInputEl = null;
 
         this.initDOM();
@@ -40,7 +34,6 @@ class PoseAnnotator {
     }
 
     // ============================================================
-    // Schema (点位模板) —— 全局持久化与数据库存储
     // ============================================================
 
     schemaStorageKey(label) {
@@ -69,7 +62,6 @@ class PoseAnnotator {
     getSchema(label) {
         if (!label) label = 'person';
 
-        // 1. 优先从内存全局缓存（从后端 DB 预加载）获取
         if (window.classKeypointSchemas && window.classKeypointSchemas[label]) {
             const s = typeof window.classKeypointSchemas[label] === 'string'
                 ? JSON.parse(window.classKeypointSchemas[label])
@@ -79,7 +71,6 @@ class PoseAnnotator {
             }
         }
 
-        // 2. 从 localStorage（优先全局 key，其次旧的 video 绑定 key）获取
         try {
             const raw = localStorage.getItem(this.schemaStorageKey(label)) ||
                         localStorage.getItem(`zyy_pose_schema::${this.core.videoUuid}::${label}`);
@@ -91,7 +82,6 @@ class PoseAnnotator {
             }
         } catch (e) { /* ignore */ }
 
-        // 3. 无自定义模板时，默认回退到标准 COCO-17 骨架连线模板
         return this.getDefaultCOCO17Schema();
     }
 
@@ -110,7 +100,6 @@ class PoseAnnotator {
             localStorage.setItem(`zyy_pose_schema::${this.core.videoUuid}::${label}`, JSON.stringify(schemaData));
         } catch (e) { /* ignore */ }
 
-        // 持久化保存至后端 SQLite 数据库
         $.ajax({
             url: '/api/saveClassKeypointSchema',
             type: 'POST',
@@ -125,7 +114,6 @@ class PoseAnnotator {
     }
 
     // ============================================================
-    // 选中类别（复用与其它模式一致的 Class Registry 逻辑）
     // ============================================================
 
     getSelectedClass() {
@@ -145,13 +133,11 @@ class PoseAnnotator {
     }
 
     // ============================================================
-    // DOM / 侧边栏初始化
     // ============================================================
 
     initDOM() {
         const self = this;
 
-        // 顶部姿态工具卡片按需展开/收起 (Accordion Tab Toggle)
         $(document).off('click', '#btn-show-gkdt-panel').on('click', '#btn-show-gkdt-panel', function () {
             $('#btn-show-gkdt-panel').removeClass('btn-outline-secondary').addClass('btn-outline-danger active');
             $('#btn-show-truelam-panel').removeClass('btn-outline-warning active').addClass('btn-outline-secondary');
@@ -176,7 +162,6 @@ class PoseAnnotator {
             $('#gkdt-panel-controls, #truelam-panel-controls').hide();
         });
 
-        // GKDT + SAM2.1 开关切换逻辑
         $(document).off('click', '#btn-toggle-gkdt-interactive').on('click', '#btn-toggle-gkdt-interactive', function () {
             self.isGkdtModeActive = !self.isGkdtModeActive;
             const $btn = $(this);
@@ -198,7 +183,6 @@ class PoseAnnotator {
             }
         });
 
-        // SAM3 TrueLAM 全图文本盲扫 + GKDT 姿态生成
         $(document).off('click', '#btn-truelam-pose-batch').on('click', '#btn-truelam-pose-batch', function (e) {
             if (e) { e.preventDefault(); e.stopPropagation(); }
 
@@ -292,7 +276,6 @@ class PoseAnnotator {
             });
         });
 
-        // SAM3 TrueLAM 姿态盲扫推导至全数据集 (Dataset-Wide Pose Auto-Labeling)
         $(document).off('click', '#btn-truelam-pose-dataset-batch').on('click', '#btn-truelam-pose-dataset-batch', function (e) {
             if (e) { e.preventDefault(); e.stopPropagation(); }
 
@@ -363,7 +346,6 @@ class PoseAnnotator {
             });
         });
 
-        // 姿态关键点线性插值：设置起始帧
         $(document).off('click', '#btn-set-pose-interp-start').on('click', '#btn-set-pose-interp-start', function () {
             const currFrame = self.core.currentFrame;
             $('#pose-interp-start-frame').val(currFrame);
@@ -372,7 +354,6 @@ class PoseAnnotator {
             }
         });
 
-        // 姿态关键点线性插值：设置结束帧
         $(document).off('click', '#btn-set-pose-interp-end').on('click', '#btn-set-pose-interp-end', function () {
             const currFrame = self.core.currentFrame;
             $('#pose-interp-end-frame').val(currFrame);
@@ -381,7 +362,6 @@ class PoseAnnotator {
             }
         });
 
-        // 姿态关键点线性插值：执行插值
         $(document).off('click', '#btn-exec-pose-interpolate').on('click', '#btn-exec-pose-interpolate', function () {
             const startFrame = parseInt($('#pose-interp-start-frame').val());
             const endFrame = parseInt($('#pose-interp-end-frame').val());
@@ -442,7 +422,7 @@ class PoseAnnotator {
             const cls = self.getSelectedClass();
             if (!cls) {
                 if (typeof window.showToast === 'function') {
-                    window.showToast('⚠️ 请先在右侧 Class Registry 选择/创建一个类别', 3000);
+                    window.showToast('⚠️ Please select/create a category in the right Class Registry first', 3000);
                 }
                 return;
             }
@@ -450,7 +430,7 @@ class PoseAnnotator {
             self.armedClass = cls;
             self.isFreeformAdding = false;
             if (typeof window.showToast === 'function') {
-                window.showToast(`🎯 点击画布任意位置放置 [${cls}] 骨架`, 2500);
+                window.showToast(`🎯 Click anywhere on canvas to place [${cls}] skeleton`, 2500);
             }
         });
 
@@ -458,7 +438,7 @@ class PoseAnnotator {
             const cls = self.getSelectedClass();
             if (!cls) {
                 if (typeof window.showToast === 'function') {
-                    window.showToast('⚠️ 请先在右侧 Class Registry 选择/创建一个类别', 3000);
+                    window.showToast('⚠️ Please select/create a category in the right Class Registry first', 3000);
                 }
                 return;
             }
@@ -469,7 +449,6 @@ class PoseAnnotator {
             self.finishFreeformAdding();
         });
 
-        // 关节可见性按钮（Visible / Occluded / Absent）
         $(document).off('click', '.task-pose [data-v]').on('click', '.task-pose [data-v]', function () {
             const v = parseInt($(this).data('v'));
             self.setSelectedKeypointVisibility(v);
@@ -488,7 +467,7 @@ class PoseAnnotator {
                 if (self.isPlacingNewInstance) {
                     self.isPlacingNewInstance = false;
                     self.armedClass = null;
-                    if (typeof window.showToast === 'function') window.showToast('已取消放置', 1200);
+                    if (typeof window.showToast === 'function') window.showToast('Placement cancelled', 1200);
                     return;
                 }
                 if (self.isFreeformAdding) {
@@ -519,7 +498,6 @@ class PoseAnnotator {
                 return;
             }
 
-            // 0 / 1 / 2 直接设置选中关键点的可见性（COCO 惯例：0=不存在 1=遮挡 2=可见）
             if (['0', '1', '2'].includes(e.key) && self.selectedKeypointIndex !== null) {
                 e.preventDefault();
                 self.setSelectedKeypointVisibility(parseInt(e.key));
@@ -528,7 +506,6 @@ class PoseAnnotator {
     }
 
     // ============================================================
-    // 内联命名输入框（无模板时，逐点现场起名）
     // ============================================================
 
     showNameInput(screenX, screenY, defaultName) {
@@ -536,7 +513,7 @@ class PoseAnnotator {
         const input = document.createElement('input');
         input.type = 'text';
         input.value = defaultName || '';
-        input.placeholder = '关键点名称，如 nose / joint_1 ...';
+        input.placeholder = 'Keypoint name, e.g. nose / joint_1 ...';
         input.className = 'pose-inline-name-input';
         input.style.left = `${screenX}px`;
         input.style.top = `${screenY}px`;
@@ -573,7 +550,6 @@ class PoseAnnotator {
 
     cancelNameInput() {
         if (!this.nameInputEl) return;
-        // 取消命名 = 撤销刚刚加的这个点
         const obj = this.activeNewInstance;
         if (obj && obj.keypoints.length > 0) {
             obj.keypoints.pop();
@@ -588,7 +564,6 @@ class PoseAnnotator {
         if (this.nameInputEl) this.confirmNameInput();
         const obj = this.activeNewInstance;
         if (obj && obj.keypoints.length === 0) {
-            // 什么都没加，直接把这个空实例删掉
             const idx = this.core.annotations.objects.findIndex(o => o.id === obj.id);
             if (idx >= 0) this.core.annotations.objects.splice(idx, 1);
             this.core.selectedObjectId = null;
@@ -599,11 +574,10 @@ class PoseAnnotator {
         this.core.saveAnnotations();
         this.updateSidebarList();
         this.core.render();
-        if (typeof window.showToast === 'function') window.showToast('✅ 骨架标注完成', 1500);
+        if (typeof window.showToast === 'function') window.showToast('✅ Skeleton annotation complete', 1500);
     }
 
     // ============================================================
-    // 增删改
     // ============================================================
 
     recomputeBbox(obj) {
@@ -646,7 +620,6 @@ class PoseAnnotator {
     deleteSelection() {
         const obj = this.getSelectedObject();
         if (obj && this.selectedKeypointIndex !== null) {
-            // 只删单个关键点
             obj.keypoints.splice(this.selectedKeypointIndex, 1);
             this.selectedKeypointIndex = null;
             this.recomputeBbox(obj);
@@ -655,7 +628,6 @@ class PoseAnnotator {
             this.updateSidebarList();
             this.core.render();
         } else if (this.core.selectedObjectId) {
-            // 删整个骨架实例
             const idx = (this.core.annotations.objects || []).findIndex(o => o.id === this.core.selectedObjectId);
             if (idx >= 0) {
                 this.core.annotations.objects.splice(idx, 1);
@@ -694,7 +666,7 @@ class PoseAnnotator {
             this.updateSidebarList();
             this.core.render();
             if (typeof window.showToast === 'function') {
-                window.showToast('📍 已按模板放置，拖拽各点到正确位置', 2500);
+                window.showToast('📍 Placed according to template, drag points to correct position', 2500);
             }
         } else {
             this.core.annotations.objects.push(obj);
@@ -708,13 +680,12 @@ class PoseAnnotator {
             this.updateSidebarList();
             this.core.render();
             if (typeof window.showToast === 'function') {
-                window.showToast('✏️ 未设置模板：依次点击画布添加关键点，Enter/右键/"完成"按钮结束', 3500);
+                window.showToast('✏️ No template set: Click canvas to add keypoints, Enter/Right-click/"Done" button to finish', 3500);
             }
         }
     }
 
     // ============================================================
-    // 鼠标事件（AnnotationCore 插件接口）
     // ============================================================
 
     hitTestKeypoint(pt, radiusPx) {
@@ -738,14 +709,12 @@ class PoseAnnotator {
     onMouseDown(pt, e) {
         if (e.button === 1 || e.button === 2 || this.core.isSpacePressed) return;
 
-        // 命名输入框弹出期间，画布点击一律忽略（先确认/取消命名）
         if (this.nameInputEl) return;
 
-        // 【新增】：如果 GKDT 智能点选模式开启，点击直接触发 SAM2.1 + GKDT 级联推理
         if (this.isGkdtModeActive) {
             const cls = this.getSelectedClass();
             if (!cls) {
-                if (typeof window.showToast === 'function') window.showToast('⚠️ 请先在右侧 Class Registry 选择/创建一个类别！', 3000);
+                if (typeof window.showToast === 'function') window.showToast('⚠️ Please select/create a category in the right Class Registry first!', 3000);
                 return;
             }
 
@@ -753,7 +722,7 @@ class PoseAnnotator {
             const self = this;
 
             if (typeof window.showToast === 'function') {
-                window.showToast('⚡ SAM 2.1 隔离目标中 -> GKDT 生成独立姿态...', 4000);
+                window.showToast('⚡ SAM 2.1 isolating target -> GKDT generating independent pose...', 4000);
             }
 
             $.ajax({
@@ -776,18 +745,18 @@ class PoseAnnotator {
                         self.updateSidebarList();
                         self.core.render();
                         if (typeof window.showToast === 'function') {
-                            window.showToast(`✨ SAM 2.1 目标隔离完成！已生成 [${cls}] 姿态`, 2500);
+                            window.showToast(`✨ SAM 2.1 target isolation complete! Generated [${cls}] pose`, 2500);
                         }
                     } else {
-                        if (typeof window.showToast === 'function') window.showToast('⚠️ 识别失败: ' + (res.message || '未知错误'), 3500);
+                        if (typeof window.showToast === 'function') window.showToast('⚠️ Recognition failed: ' + (res.message || 'Unknown error'), 3500);
                     }
                 },
                 error: function(xhr) {
-                    const msg = xhr.responseJSON ? xhr.responseJSON.message : '服务器通信失败';
-                    if (typeof window.showToast === 'function') window.showToast('⚠️ 错误: ' + msg, 3500);
+                    const msg = xhr.responseJSON ? xhr.responseJSON.message : 'Server communication failed';
+                    if (typeof window.showToast === 'function') window.showToast('⚠️ Error: ' + msg, 3500);
                 }
             });
-            return; // 拦截默认点击逻辑
+            return;
         }
 
         if (this.isFreeformAdding && this.activeNewInstance) {
@@ -814,7 +783,6 @@ class PoseAnnotator {
             return;
         }
 
-        // 空白处点击：取消选中
         if (this.core.selectedObjectId || this.selectedKeypointIndex !== null) {
             this.core.selectedObjectId = null;
             this.selectedKeypointIndex = null;
@@ -872,13 +840,12 @@ class PoseAnnotator {
     }
 
     // ============================================================
-    // 渲染
     // ============================================================
 
     colorForVisibility(v) {
-        if (v === 0) return 'rgba(160,160,170,0.9)';   // absent - 灰
-        if (v === 1) return '#b59656';                  // occluded - 柔和黄/橙
-        return '#5e9475';                                // visible - 鼠尾草绿
+        if (v === 0) return 'rgba(160,160,170,0.9)';   // absent - Gray
+        if (v === 1) return '#b59656';                  // occluded - Soft yellow/orange
+        return '#5e9475';                                // visible - Sage green
     }
 
     render(ctx, annotations, selectedId) {
@@ -889,7 +856,6 @@ class PoseAnnotator {
             const isSelectedInstance = obj.id === selectedId;
             const classColor = this.getColorForClass(obj.label);
 
-            // 1. 实例 Bounding Box 虚线框绘制
             if (obj.bbox && obj.bbox.length === 4) {
                 const bx1 = parseFloat(obj.bbox[0]);
                 const by1 = parseFloat(obj.bbox[1]);
@@ -907,7 +873,6 @@ class PoseAnnotator {
                 }
             }
 
-            // 2. 关键点数据预处理（转换为纯数字，避免字符串拼接导致的 Canvas 渲染失效）
             const kps = (obj.keypoints || []).map(k => ({
                 name: k.name || '',
                 x: parseFloat(k.x) || 0,
@@ -918,7 +883,6 @@ class PoseAnnotator {
             const byName = {};
             kps.forEach(k => { if (k.name) byName[k.name] = k; });
 
-            // 3. 骨架连线（按该类别的模板 edges，用名字匹配；双端都存在且都不是 absent 才画）
             const schema = this.getSchema(obj.label);
             let drewAnyEdge = false;
             if (schema && schema.edges && schema.edges.length > 0) {
@@ -939,7 +903,6 @@ class PoseAnnotator {
                 ctx.restore();
             }
 
-            // 如果类别模版中未配置 edges 连线（例如通用物体/机械臂），按顺序连接所有可见关节点
             if (!drewAnyEdge && kps.length > 1) {
                 ctx.save();
                 ctx.strokeStyle = classColor;
@@ -955,7 +918,6 @@ class PoseAnnotator {
                 ctx.restore();
             }
 
-            // 4. 关键点圆圈绘制
             kps.forEach((kp, idx) => {
                 const v = kp.v;
                 const isSelectedPoint = isSelectedInstance && idx === this.selectedKeypointIndex;
@@ -982,7 +944,6 @@ class PoseAnnotator {
             });
         });
 
-        // 放置模式下的准心预览
         if ((this.isPlacingNewInstance || this.isFreeformAdding || this.isGkdtModeActive) && this.hoverPoint) {
             ctx.save();
             ctx.strokeStyle = this.isGkdtModeActive ? 'rgba(189, 99, 99, 0.9)' : 'rgba(244, 244, 245, 0.9)';
@@ -1001,7 +962,6 @@ class PoseAnnotator {
     }
 
     // ============================================================
-    // 侧边栏骨架实例列表
     // ============================================================
 
     updateVisibilityButtonsUI() {
@@ -1110,7 +1070,6 @@ class PoseAnnotator {
     }
 
     // ============================================================
-    // 点位模板编辑器（可选的效率工具，不是标注数据的一部分）
     // ============================================================
 
     openSchemaEditor(label) {
@@ -1123,45 +1082,45 @@ class PoseAnnotator {
             <div id="pose-schema-modal" class="keybind-modal-backdrop">
                 <div class="keybind-modal-card" style="width: 480px; text-align: left; max-height: 82vh; overflow-y: auto;">
                     <div class="keybind-modal-header">
-                        <span>✏️ 点位模板 — <span class="target-class-pill" style="font-size:0.8rem;">${label}</span></span>
+                        <span>✏️ Point Template — <span class="target-class-pill" style="font-size:0.8rem;">${label}</span></span>
                         <button type="button" class="close text-light ml-auto" id="pose-schema-close-x">&times;</button>
                     </div>
                     <div class="small text-muted mb-2">
-                        这个模板只影响以后点"Add Skeleton"时自动放置哪些点，不是唯一格式限制——
-                        标注时随时可以手动加点/删点，数量完全不受限制。
+                        This template only affects which points are automatically placed when clicking "Add Skeleton", not the only format restriction—
+                        You can manually add/delete points at any time during annotation, the number is completely unlimited.
                     </div>
 
                     <div class="d-flex justify-content-between align-items-center mt-3 mb-1">
-                        <b class="small text-uppercase text-info">点位列表 (Points)</b>
-                        <button class="btn btn-xs btn-outline-success" id="pose-schema-load-coco17">载入 COCO-17 示例模板</button>
+                        <b class="small text-uppercase text-info">Point List (Points)</b>
+                        <button class="btn btn-xs btn-outline-success" id="pose-schema-load-coco17">Load COCO-17 example template</button>
                     </div>
                     <div id="pose-schema-points-list"></div>
                     <div class="input-group input-group-sm mt-2">
-                        <input type="text" id="pose-schema-new-point" class="form-control tool-input" placeholder="新点位名称，如 head / hinge_a ...">
+                        <input type="text" id="pose-schema-new-point" class="form-control tool-input" placeholder="New point name, e.g. head / hinge_a ...">
                         <div class="input-group-append">
-                            <button class="btn btn-sm btn-outline-info" id="pose-schema-add-point">+ 添加</button>
+                            <button class="btn btn-sm btn-outline-info" id="pose-schema-add-point">+ Add</button>
                         </div>
                     </div>
 
-                    <div class="mt-3 mb-1"><b class="small text-uppercase text-info">骨架连线 (Bones，可选)</b></div>
+                    <div class="mt-3 mb-1"><b class="small text-uppercase text-info">Skeleton Connections (Bones, Optional)</b></div>
                     <div id="pose-schema-edges-list"></div>
                     <div class="input-group input-group-sm mt-2">
                         <select id="pose-schema-edge-a" class="form-control tool-input"></select>
                         <select id="pose-schema-edge-b" class="form-control tool-input"></select>
                         <div class="input-group-append">
-                            <button class="btn btn-sm btn-outline-info" id="pose-schema-add-edge">+ 连接</button>
+                            <button class="btn btn-sm btn-outline-info" id="pose-schema-add-edge">+ Connect</button>
                         </div>
                     </div>
 
-                    <div class="mt-3 mb-1"><b class="small text-uppercase text-info">导入 / 导出 JSON</b></div>
+                    <div class="mt-3 mb-1"><b class="small text-uppercase text-info">Import / Export JSON</b></div>
                     <textarea id="pose-schema-json" class="form-control tool-input" rows="4" style="font-family: monospace; font-size: 0.75rem;"></textarea>
                     <div class="mt-1">
-                        <button class="btn btn-xs btn-outline-secondary" id="pose-schema-apply-json">应用上方 JSON</button>
+                        <button class="btn btn-xs btn-outline-secondary" id="pose-schema-apply-json">Apply JSON above</button>
                     </div>
 
                     <div class="keybind-modal-footer">
-                        <button class="btn btn-sm btn-secondary mr-2" id="pose-schema-cancel">关闭</button>
-                        <button class="btn btn-sm btn-primary" id="pose-schema-save">保存模板</button>
+                        <button class="btn btn-sm btn-secondary mr-2" id="pose-schema-cancel">Close</button>
+                        <button class="btn btn-sm btn-primary" id="pose-schema-save">Save Template</button>
                     </div>
                 </div>
             </div>
@@ -1174,7 +1133,7 @@ class PoseAnnotator {
             const list = $('#pose-schema-points-list');
             list.empty();
             if (working.points.length === 0) {
-                list.append('<div class="text-muted small">暂无点位，下面手动添加，或载入示例模板。</div>');
+                list.append('<div class="text-muted small">No points, manually add below, or load example template.</div>');
             }
             working.points.forEach((name, i) => {
                 const row = $(`
@@ -1222,7 +1181,7 @@ class PoseAnnotator {
             const list = $('#pose-schema-edges-list');
             list.empty();
             if (working.edges.length === 0) {
-                list.append('<div class="text-muted small">暂无连线（连线只影响显示效果，不影响标注数据）。</div>');
+                list.append('<div class="text-muted small">No connections (connections only affect display, not annotation data).</div>');
             }
             working.edges.forEach((edge, i) => {
                 const row = $(`
@@ -1254,7 +1213,7 @@ class PoseAnnotator {
             const val = input.val().trim();
             if (!val) return;
             if (working.points.includes(val)) {
-                if (typeof window.showToast === 'function') window.showToast('⚠️ 已存在同名点位', 2000);
+                if (typeof window.showToast === 'function') window.showToast('⚠️ Point with same name already exists', 2000);
                 return;
             }
             working.points.push(val);
@@ -1295,26 +1254,26 @@ class PoseAnnotator {
             renderEdgeSelectors();
             renderEdges();
             syncJsonBox();
-            if (typeof window.showToast === 'function') window.showToast('已载入 COCO-17 示例（还没保存，可继续编辑）', 2000);
+            if (typeof window.showToast === 'function') window.showToast('COCO-17 example loaded (not saved yet, can continue editing)', 2000);
         });
 
         $('#pose-schema-apply-json').on('click', function () {
             try {
                 const parsed = JSON.parse($('#pose-schema-json').val());
-                if (!Array.isArray(parsed.points)) throw new Error('points 必须是数组');
+                if (!Array.isArray(parsed.points)) throw new Error('points must be an array');
                 working = { points: parsed.points, edges: Array.isArray(parsed.edges) ? parsed.edges : [] };
                 renderPoints();
                 renderEdgeSelectors();
                 renderEdges();
-                if (typeof window.showToast === 'function') window.showToast('JSON 已应用（还没保存）', 1800);
+                if (typeof window.showToast === 'function') window.showToast('JSON applied (not saved yet)', 1800);
             } catch (e) {
-                if (typeof window.showToast === 'function') window.showToast('⚠️ JSON 格式错误：' + e.message, 3000);
+                if (typeof window.showToast === 'function') window.showToast('⚠️ JSON format error: ' + e.message, 3000);
             }
         });
 
         $('#pose-schema-save').on('click', () => {
             self.saveSchema(label, working);
-            if (typeof window.showToast === 'function') window.showToast(`✅ [${label}] 模板已保存（${working.points.length} 点）`, 2000);
+            if (typeof window.showToast === 'function') window.showToast(`✅ [${label}] template saved (${working.points.length} points)`, 2000);
             modal.remove();
             self.core.render();
         });

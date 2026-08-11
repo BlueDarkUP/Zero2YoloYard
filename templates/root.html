@@ -604,7 +604,7 @@
                                 <span style="color: #a78bfa; font-weight: 700; letter-spacing: 0.08em;">
                                     <i class="bi bi-hdd-stack mr-2"></i>LOCAL MODEL MANAGEMENT
                                 </span>
-                                <button type="button" id="btn-refresh-models" class="btn btn-sm font-monospace" style="background: rgba(124,58,237,0.18); color: #a78bfa; border: 1px solid rgba(124,58,237,0.5); font-size: 0.75rem; letter-spacing: 0.06em;" title="重新扫描本地模型文件">
+                                <button type="button" id="btn-refresh-models" class="btn btn-sm font-monospace" style="background: rgba(124,58,237,0.18); color: #a78bfa; border: 1px solid rgba(124,58,237,0.5); font-size: 0.75rem; letter-spacing: 0.06em;" title="Rescan local model files">
                                     <i class="bi bi-arrow-clockwise mr-1"></i>REFRESH
                                 </button>
                             </div>
@@ -612,12 +612,12 @@
                                 <div class="px-3 pt-2 pb-1">
                                     <div class="alert mb-2 py-2 small font-monospace" style="background: rgba(124,58,237,0.08); border: 1px solid rgba(124,58,237,0.25); color: #c4b5fd; border-radius: 4px;">
                                         <i class="bi bi-shield-lock-fill mr-1" style="color: #7c3aed;"></i>
-                                        所有模型权重均已通过 <code class="text-warning">.gitignore</code> 规则排除在版本控制之外（含 <code class="text-warning">.best</code> 等小众格式）。
+                                        All model weights have been excluded from version control via <code class="text-warning">.gitignore</code> rules (including niche formats like <code class="text-warning">.best</code> ).
                                         <span class="badge ml-2" style="background: rgba(124,58,237,0.25); color: #a78bfa; font-size: 0.7rem;">GIT_SAFE</span>
                                     </div>
                                     <div class="custom-control custom-switch mb-2">
                                         <input type="checkbox" class="custom-control-input" id="use-mirror-switch" checked>
-                                        <label class="custom-control-label text-white small font-monospace" for="use-mirror-switch">启用国内镜像加速 (hf-mirror / ghproxy)</label>
+                                        <label class="custom-control-label text-white small font-monospace" for="use-mirror-switch">Enable mirror acceleration (hf-mirror / ghproxy)</label>
                                     </div>
                                 </div>
                                 <div id="local-model-table-wrap" class="px-3 pb-3">
@@ -724,15 +724,15 @@
         </select>
     </div>
     <div class="form-group" id="multilabel-strategy-group" style="display: none;">
-        <label class="font-weight-bold small text-muted">MULTI-LABEL STRATEGY (多标签导出策略)</label>
+        <label class="font-weight-bold small text-muted">MULTI-LABEL STRATEGY</label>
         <select class="form-control custom-select" id="dataset-multilabel-strategy">
-            <option value="first" selected>first (首选主标签模式 - 默认推荐)</option>
-            <option value="composite">composite (组合类别模式 - 拼为如 cat+dog)</option>
-            <option value="skip">skip (严格过滤模式 - 忽略多标签图片)</option>
-            <option value="duplicate">duplicate (复制多份模式 - 维持旧逻辑)</option>
+            <option value="first" selected>first (Primary label mode - Default)</option>
+            <option value="composite">composite (Combined category mode - e.g. cat+dog)</option>
+            <option value="skip">skip (Strict filter mode - Ignore multi-label images)</option>
+            <option value="duplicate">duplicate (Duplicate copies mode - Old logic)</option>
         </select>
         <small class="form-text text-muted" id="multilabel-strategy-desc">
-            对于一帧包含多个标签的图片，仅取首个标签，符合标准 Softmax 单标签分类范式。
+            For images with multiple labels in a frame, only the first label is taken to comply with the standard Softmax single-label classification paradigm.
         </small>
     </div>
     <div class="card mb-3 border-secondary" style="background: rgba(255,255,255,0.02);">
@@ -904,12 +904,10 @@
             $('#sys-manual-panel').stop(true, true).fadeOut(150);
         });
 
-        // 存储上一次获取的数据快照，实现无损刷新 (消除DOM闪烁)
         let lastVideosSnapshot = "";
         let lastDatasetsSnapshot = "";
         let lastModelsSnapshot = "";
 
-        // UI 反馈：雷达心跳
         function triggerTelemetryPulse(isError = false) {
             const pulse = $('#sys-pulse');
             const statusText = $('#sys-status-text');
@@ -927,13 +925,11 @@
             }
         }
 
-        // 自定义文件上传输入框样式逻辑
         $('.custom-file-input').on('change', function() {
             let fileName = $(this).val().split('\\').pop();
             $(this).next('.custom-file-label').addClass("selected").html(fileName);
         });
 
-        // 状态徽章生成逻辑
         function getStatusBadge(status, message) {
             let badgeClass = 'secondary';
             let icon = '';
@@ -965,7 +961,6 @@
                 if (!forceRedraw && currentSnapshot === lastVideosSnapshot) return;
                 lastVideosSnapshot = currentSnapshot;
 
-                // ===== 空状态检测：Videos =====
                 if (data.all_videos.length === 0) {
                     $('#video-table-wrapper').hide();
                     $('#video-empty-state').fadeIn();
@@ -1026,7 +1021,6 @@
                 if (!forceRedraw && currentSnapshot === lastDatasetsSnapshot) return;
                 lastDatasetsSnapshot = currentSnapshot;
 
-                // ===== 空状态检测：Datasets =====
                 if (data.datasets.length === 0) {
                     $('#dataset-table-wrapper').hide();
                     $('#dataset-empty-state').fadeIn();
@@ -1070,7 +1064,6 @@
                 if (!forceRedraw && currentSnapshot === lastModelsSnapshot) return;
                 lastModelsSnapshot = currentSnapshot;
 
-                // ===== 空状态检测：Models =====
                 if (data.models.length === 0) {
                     $('#model-table-wrapper').hide();
                     $('#model-empty-state').fadeIn();
@@ -1111,7 +1104,6 @@
                     $('#setting-gpu-device').val(s.gpu_device);
                     $('#setting-sam-model').val(s.sam_model_checkpoint);
 
-                    // --- 读取新增配置开始 ---
                     $('#setting-max-workers').val(s.max_workers || '8');
                     $('#setting-max-cache-size').val(s.max_cache_size || 30).trigger('input');
                     $('#setting-use-autocast').prop('checked', s.use_autocast !== false);
@@ -1124,16 +1116,13 @@
                     $('#setting-auto-preprocess').prop('checked', s.auto_preprocess !== false);
                     $('#setting-auto-cleanup').prop('checked', s.auto_cleanup_frames === true);
 
-                    // 模型与功能开关
                     $('#setting-enable-sam').prop('checked', s.enable_sam_model !== false);
                     $('#setting-enable-feature-extractor').prop('checked', s.enable_feature_extractor !== false);
                     $('#setting-enable-cls').prop('checked', s.enable_cls_model !== false);
                     $('#setting-enable-pose').prop('checked', s.enable_pose_model !== false);
 
-                    // 如果需要在创建数据集页面体现默认比例
                     $('#eval-percent').val(s.default_eval_percent || 20.0);
                     $('#test-percent').val(s.default_test_percent || 10.0);
-                    // --- 读取新增配置结束 ---
 
                     // 2. Algorithm
                     $('#setting-sam-mask-confidence').val(s.sam_mask_confidence).trigger('input');
@@ -1212,10 +1201,10 @@
         $('#dataset-export-format').on('change', updateMultilabelVisibility);
 
         const multilabelDescriptions = {
-            'first': '对于一帧打了多个标签的图片，仅取其第一个标签放入对应文件夹，保证符合严格 Softmax 单标签分类范式。',
-            'composite': '将多个标签按字母排序拼接成一个新的独立组合类（如 cat+dog），适合多目标共存形态训练。',
-            'skip': '遇到包含多个标签的图片直接跳过不导出，确保导出数据集的纯净度。',
-            'duplicate': '将同一张图片复制进每一个命中的类别文件夹（旧版逻辑），仅供特殊多重样本扩展需求开启。'
+            'first': 'For images with multiple labels, only the first label is put into the corresponding folder, ensuring strict Softmax single-label classification paradigm.',
+            'composite': 'Combine multiple labels alphabetically into a new independent composite class (e.g. cat+dog), suitable for multi-target coexistence training.',
+            'skip': 'Skip images with multiple labels directly without exporting, ensuring the purity of the exported dataset.',
+            'duplicate': 'Copy the same image into every hit category folder (old logic), only for special multiple sample expansion needs.'
         };
 
         $('#dataset-multilabel-strategy').on('change', function() {
@@ -1397,14 +1386,12 @@
             });
         });
 
-        // 绑定普通浮点滑动条
         ['sam-mask-confidence', 'nms-iou-threshold', 'consistency-semantic-threshold', 'batch-tracking-conf', 'preannotation-conf', 'default-confidence'].forEach(id => {
             $(`#setting-${id}`).on('input', function() {
                 $(`#${id}-val`).text(parseFloat($(this).val()).toFixed(2));
             });
         });
 
-        // 绑定整数滑动条
         ['max-cache-size'].forEach(id => {
             $(`#setting-${id}`).on('input', function() {
                 $(`#${id}-val`).text(parseInt($(this).val()));
@@ -1619,7 +1606,6 @@
             });
         });
 
-        // 本地模型管理
         function loadLocalModelsStatus() {
             const btn = $('#btn-refresh-models');
             const icon = btn.find('i');
@@ -1644,7 +1630,7 @@
                         }
 
                         const sizeStr = m.present ? `${m.size_mb} MB` : '--';
-                        const rareBadge = m.rare_format ? `<span class="badge ml-1 font-monospace" style="background: rgba(245,158,11,0.2); color: #f59e0b; font-size: 0.65rem;">小众格式</span>` : '';
+                        const rareBadge = m.rare_format ? `<span class="badge ml-1 font-monospace" style="background: rgba(245,158,11,0.2); color: #f59e0b; font-size: 0.65rem;">Niche format</span>` : '';
 
                         html += `
                             <tr>
@@ -1739,13 +1725,11 @@
             }, 1000);
         }
 
-        // 初始加载
         loadSettings();
         loadLocalModelsStatus();
         function runAllRefreshes() { refreshVideos(); refreshDatasets(); refreshModels(); }
         runAllRefreshes();
 
-        // 后台静默监控循环
         setInterval(() => {
             if (document.hasFocus()) {
                 runAllRefreshes();

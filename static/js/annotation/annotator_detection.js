@@ -11,9 +11,8 @@ class DetectionAnnotator {
     }
 
     onMouseDown(pt, e) {
-        // 未选择类别时拒绝绘制，防止产生 null 标签的标注数据
         if (!this.core.selectedClass) {
-            alert('请先在左侧列表中选择一个类别，再绘制边界框。');
+            alert('Please select a category in the left list first before drawing bounding box.');
             return;
         }
         this.isDrawing = true;
@@ -57,8 +56,7 @@ class DetectionAnnotator {
             if (obj.type !== 'bbox' || !obj.bbox) continue;
             const [x1, y1, x2, y2] = obj.bbox;
             const isSelected = obj.id === selectedId;
-            // 使用安全的标签文本，防止 null/undefined 传入 ctx.measureText 导致 TypeError
-            const labelText = obj.label != null ? String(obj.label) : '(无类别)';
+            const labelText = obj.label != null ? String(obj.label) : '(No category)';
 
             ctx.strokeStyle = isSelected ? '#ffffff' : '#e4e4e7';
             ctx.lineWidth = isSelected ? 3 : 2;
