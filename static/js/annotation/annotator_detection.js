@@ -19,7 +19,7 @@ class DetectionAnnotator {
         this.startX = pt.x;
         this.startY = pt.y;
         this.currentBox = {
-            id: 'bbox_' + Date.now(),
+            id: 'bbox_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
             type: 'bbox',
             label: this.core.selectedClass,
             bbox: [pt.x, pt.y, pt.x, pt.y]
