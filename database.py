@@ -979,7 +979,7 @@ def create_dataset_entry(description, video_uuids, create_time, eval_percent=20.
     if export_options is None:
         export_options = {}
     export_options_json = json.dumps(export_options) if isinstance(export_options, dict) else str(export_options)
-    with engine.connect() as conn:
+    with engine.begin() as conn:
         conn.execute(
             text("""
                 INSERT INTO datasets (dataset_uuid, description, video_uuids, create_time_ms, eval_percent, test_percent, export_format, export_options, status)
@@ -996,7 +996,6 @@ def create_dataset_entry(description, video_uuids, create_time, eval_percent=20.
                 "export_options": export_options_json,
             }
         )
-        conn.commit()
     return dataset_uuid
 
 
