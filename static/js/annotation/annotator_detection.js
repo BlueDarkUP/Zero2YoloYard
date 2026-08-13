@@ -51,6 +51,7 @@ class DetectionAnnotator {
     }
 
     render(ctx, annotations, selectedId) {
+        const zoom = (this.core && this.core.zoom) ? this.core.zoom : 1.0;
         const objects = annotations.objects || [];
         for (let obj of objects) {
             if (obj.type !== 'bbox' || !obj.bbox) continue;
@@ -59,26 +60,29 @@ class DetectionAnnotator {
             const labelText = obj.label != null ? String(obj.label) : '(No category)';
 
             ctx.strokeStyle = isSelected ? '#ffffff' : '#e4e4e7';
-            ctx.lineWidth = isSelected ? 3 : 2;
+            ctx.lineWidth = (isSelected ? 3 : 2) / zoom;
             ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
 
             ctx.fillStyle = isSelected ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.05)';
             ctx.fillRect(x1, y1, x2 - x1, y2 - y1);
 
             // Label tag
-            ctx.font = '12px "JetBrains Mono", monospace';
+            const fontSize = 12 / zoom;
+            const tagH = 20 / zoom;
+            const padX = 5 / zoom;
+            ctx.font = `${fontSize}px "JetBrains Mono", monospace`;
             ctx.fillStyle = isSelected ? '#ffffff' : '#e4e4e7';
-            ctx.fillRect(x1, y1 - 20, ctx.measureText(labelText).width + 10, 20);
+            ctx.fillRect(x1, y1 - tagH, ctx.measureText(labelText).width + (padX * 2), tagH);
             ctx.fillStyle = '#09090b';
-            ctx.fillText(labelText, x1 + 5, y1 - 5);
+            ctx.fillText(labelText, x1 + padX, y1 - (padX));
         }
 
         // Draw active box
         if (this.currentBox) {
             const [x1, y1, x2, y2] = this.currentBox.bbox;
             ctx.strokeStyle = '#e4e4e7';
-            ctx.lineWidth = 2;
-            ctx.setLineDash([5, 5]);
+            ctx.lineWidth = 2 / zoom;
+            ctx.setLineDash([5 / zoom, 5 / zoom]);
             ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
             ctx.setLineDash([]);
         }
