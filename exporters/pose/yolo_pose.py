@@ -33,65 +33,77 @@ class YOLOPoseExporter(BaseExporter):
         # Track max keypoints per instance across dataset to define kpt_shape
         max_kpts_count = 17
 
-        for frame_info in frames_data:
-            split = frame_info.get('split', 'train')
-            video_uuid = frame_info['video_uuid']
-            frame_num = frame_info['frame_number']
-            width = frame_info['width']
-            height = frame_info['height']
+        eval_percent = options.get('eval_percent', 20.0)
+        test_percent = options.get('test_percent', 10.0)
+        total_count = len(frames_data)
+        val_count = int(total_count * eval_percent / 100.0)
+        test_count = int(total_count * test_percent / 100.0)
 
-            base_name = f"{video_uuid}_{frame_num:05d}"
-            img_filename = f"{base_name}.jpg"
-            txt_filename = f"{base_name}.txt"
+        val_data = frames_data[:val_count]
+        test_data = frames_data[val_count:val_count + test_count]
+        train_data = frames_data[val_count + test_count:]
 
-            src_img_path = file_storage.get_frame_path(video_uuid, frame_num)
-            dst_img_path = os.path.join(images_dir, split, img_filename)
-            dst_txt_path = os.path.join(labels_dir, split, txt_filename)
+        split_groups = [('val', val_data), ('test', test_data), ('train', train_data)]
 
-            if os.path.exists(src_img_path):
-                shutil.copy(src_img_path, dst_img_path)
+        for split, split_frames in split_groups:
+            for frame_info in split_frames:
+                video_uuid = frame_info['video_uuid']
+                frame_num = frame_info['frame_number']
+                width = frame_info['width']
+                height = frame_info['height']
 
-            annotations: AnnotationData = frame_info["annotations"]
-            lines = []
+                base_name = f"{video_uuid}_{frame_num:05d}"
+                img_filename = f"{base_name}.jpg"
+                txt_filename = f"{base_name}.txt"
 
-            for obj in annotations.get_keypoints():
-                cls_id = class_map.get(obj.label, 0)
-                
-                # Get or compute bbox
-                if obj.bbox and len(obj.bbox) == 4:
-                    x1, y1, x2, y2 = obj.bbox
-                else:
-                    # Compute bbox from visible keypoints
-                    v_kpts = [k for k in obj.keypoints if k.get('v', 2) > 0]
-                    pts = v_kpts if v_kpts else obj.keypoints
-                    if not pts:
-                        continue
-                    min_x = min(p['x'] for p in pts)
-                    max_x = max(p['x'] for p in pts)
-                    min_y = min(p['y'] for p in pts)
-                    max_y = max(p['y'] for p in pts)
-                    pad = 10
-                    x1, y1, x2, y2 = max(0, min_x - pad), max(0, min_y - pad), min(width, max_x + pad), min(height, max_y + pad)
+                src_img_path = file_storage.get_frame_path(video_uuid, frame_num)
+                dst_img_path = os.path.join(images_dir, split, img_filename)
+                dst_txt_path = os.path.join(labels_dir, split, txt_filename)
 
-                bw = max(1, x2 - x1)
-                bh = max(1, y2 - y1)
-                cx = (x1 + x2) / 2.0 / width
-                cy = (y1 + y2) / 2.0 / height
-                nw = bw / width
-                nh = bh / height
+                if os.path.exists(src_img_path):
+                    shutil.copy(src_img_path, dst_img_path)
 
-                # Format keypoints
-                kpt_str_list = []
-                for kp in obj.keypoints:
-                    kx = max(0.0, min(1.0, kp.get('x', 0) / width))
-                    ky = max(0.0, min(1.0, kp.get('y', 0) / height))
-                    kv = int(kp.get('v', 2))
-                    kpt_str_list.extend([f"{kx:.6f}", f"{ky:.6f}", str(kv)])
+                annotations: AnnotationData = frame_info["annotations"]
+                lines = []
 
-                lines.append(f"{cls_id} {cx:.6f} {cy:.6f} {nw:.6f} {nh:.6f} " + " ".join(kpt_str_list))
+                for obj in annotations.get_keypoints():
+                    cls_id = class_map.get(obj.label, 0)
+                    
+                    # Get or compute bbox
+                    if obj.bbox and len(obj.bbox) == 4:
+                        x1, y1, x2, y2 = obj.bbox
+                    else:
+                        # Compute bbox from visible keypoints
+                        v_kpts = [k for k in obj.keypoints if k.get('v', 2) > 0]
+                        pts = v_kpts if v_kpts else obj.keypoints
+                        if not pts:
+                            continue
+                        min_x = min(p['x'] for p in pts)
+                        max_x = max(p['x'] for p in pts)
+                        min_y = min(p['y'] for p in pts)
+                        max_y = max(p['y'] for p in pts)
+                        pad = 10
+                        x1, y1, x2, y2 = max(0, min_x - pad), max(0, min_y - pad), min(width, max_x + pad), min(height, max_y + pad)
 
-            with open(dst_txt_path, 'w', encoding='utf-8') as f:
-                f.write("\n".join(lines))
+                    bw = max(1, x2 - x1)
+                    bh = max(1, y2 - y1)
+                    cx = (x1 + x2) / 2.0 / width
+                    cy = (y1 + y2) / 2.0 / height
+                    nw = bw / width
+                    nh = bh / height
+
+                    # Format keypoints
+                    kpt_str_list = []
+                    for kp in obj.keypoints:
+                        kx = max(0.0, min(1.0, kp.get('x', 0) / width))
+                        ky = max(0.0, min(1.0, kp.get('y', 0) / height))
+                        kv = int(kp.get('v', 2))
+                        kpt_str_list.extend([f"{kx:.6f}", f"{ky:.6f}", str(kv)])
+
+                    lines.append(f"{cls_id} {cx:.6f} {cy:.6f} {nw:.6f} {nh:.6f} " + " ".join(kpt_str_list))
+
+                with open(dst_txt_path, 'w', encoding='utf-8') as f:
+                    f.write("\n".join(lines))
 
         # Generate data.yaml
         yaml_content = {
