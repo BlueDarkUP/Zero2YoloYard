@@ -201,7 +201,7 @@ def _download_file(url, dest_path, model_id):
 
 
 def _download_hf_cli(repo_id, dest_path, model_id):
-    """ 调用 huggingface-cli 下载仓库 """
+    """ 使用 huggingface_hub Python SDK 或 CLI 下载仓库 """
     try:
         model_def = next(m for m in get_model_registry() if m["id"] == model_id)
         if model_def["type"] == "file":
@@ -210,32 +210,84 @@ def _download_hf_cli(repo_id, dest_path, model_id):
             local_dir = dest_path
 
         os.makedirs(local_dir, exist_ok=True)
-        env = os.environ.copy()
-        if DOWNLOAD_TASKS[model_id].get("use_mirror"):
-            env["HF_ENDPOINT"] = "https://hf-mirror.com"
         
-        logging.info(f"Running huggingface-cli to download {repo_id} to {local_dir}")
-        DOWNLOAD_TASKS[model_id]["progress"] = "DOWNLOADING (HF CLI)..."
+        task_info = DOWNLOAD_TASKS.setdefault(model_id, {"status": "downloading", "progress": "0%", "message": "", "use_mirror": True})
+        use_mirror = task_info.get("use_mirror", True)
+        if use_mirror:
+            os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
+        else:
+            os.environ.pop("HF_ENDPOINT", None)
 
-        # 使用 huggingface-cli
-        process = subprocess.Popen(
-            ["huggingface-cli", "download", repo_id, "--local-dir", local_dir],
-            env=env,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True
-        )
+        logging.info(f"Downloading HF repo {repo_id} to {local_dir}")
+        task_info["progress"] = "DOWNLOADING (HF)..."
 
-        for line in process.stdout:
-            pass
+        # 优先使用 Python SDK (snapshot_download)
+        try:
+            from huggingface_hub import snapshot_download
+            
+            try:
+                snapshot_download(repo_id=repo_id, local_dir=local_dir)
+            except Exception as ssl_err:
+                # 针对 Windows SSL 证书问题，尝试带 SSL 校验忽略的重试
+                if "CERTIFICATE_VERIFY_FAILED" in str(ssl_err) or "ConnectError" in str(ssl_err):
+                    logging.warning(f"SSL verify failed during HF download, retrying with SSL fallback: {ssl_err}")
+                    try:
+                        import httpx
+                        from huggingface_hub.utils._http import set_client_factory
+                        set_client_factory(lambda: httpx.Client(verify=False))
+                    except Exception:
+                        pass
+                    snapshot_download(repo_id=repo_id, local_dir=local_dir)
+                else:
+                    raise ssl_err
 
-        process.wait()
-        if process.returncode == 0:
+            DOWNLOAD_TASKS[model_id]["status"] = "ready"
+            DOWNLOAD_TASKS[model_id]["progress"] = "DOWNLOAD COMPLETE"
+            logging.info(f"HF Download complete for {model_id}")
+            return
+        except ImportError:
+            logging.info("huggingface_hub SDK not directly importable, falling back to CLI subprocess...")
+
+        # CLI Fallback
+        env = os.environ.copy()
+        if use_mirror:
+            env["HF_ENDPOINT"] = "https://hf-mirror.com"
+
+        # 尝试使用的命令优先级：hf -> huggingface-cli
+        cli_cmds = [
+            ["hf", "download", repo_id, "--local-dir", local_dir],
+            ["huggingface-cli", "download", repo_id, "--local-dir", local_dir]
+        ]
+
+        last_output = ""
+        success = False
+        for cmd in cli_cmds:
+            try:
+                process = subprocess.Popen(
+                    cmd,
+                    env=env,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True
+                )
+                output_lines = []
+                for line in process.stdout:
+                    output_lines.append(line)
+                process.wait()
+                last_output = "".join(output_lines)
+                if process.returncode == 0:
+                    success = True
+                    break
+            except FileNotFoundError:
+                continue
+
+        if success:
             DOWNLOAD_TASKS[model_id]["status"] = "ready"
             DOWNLOAD_TASKS[model_id]["progress"] = "DOWNLOAD COMPLETE"
             logging.info(f"HF Download complete for {model_id}")
         else:
-            raise RuntimeError(f"huggingface-cli exited with code {process.returncode}")
+            err_msg = last_output.strip() if last_output else "CLI tool not found or failed."
+            raise RuntimeError(f"HF download failed: {err_msg}")
 
     except Exception as e:
         logging.error(f"HF Download failed for {model_id}: {e}")

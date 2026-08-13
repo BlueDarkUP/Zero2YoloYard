@@ -119,7 +119,15 @@ def get_yolo_bboxes(bboxes_text, width, height, class_map):
 
 
 def create_mosaic_image(image_infos, class_map):
-    output_dim = max(info['width'] for info in image_infos)
+    if not image_infos:
+        return np.full((640 * 2, 640 * 2, 3), 114, dtype=np.uint8), []
+
+    # Pad pool if less than 4 images
+    image_infos = list(image_infos)
+    while len(image_infos) < 4:
+        image_infos.append(random.choice(image_infos))
+
+    output_dim = max(info.get('width', 640) for info in image_infos)
     s = output_dim
     yc, xc = [int(random.uniform(s * 0.5, s * 1.5)) for _ in range(2)]
 
@@ -127,8 +135,13 @@ def create_mosaic_image(image_infos, class_map):
     mosaic_img = np.full((s * 2, s * 2, 3), 114, dtype=np.uint8)
     final_bboxes = []
 
-    for i, info in enumerate(image_infos):
-        img = cv2.imread(get_frame_path(info['video_uuid'], info['frame_number']))
+    for i, info in enumerate(image_infos[:4]):
+        img_path = get_frame_path(info['video_uuid'], info['frame_number'])
+        if not os.path.exists(img_path):
+            continue
+        img = cv2.imread(img_path)
+        if img is None:
+            continue
         h, w, _ = img.shape
 
         if i == 0:
@@ -148,7 +161,54 @@ def create_mosaic_image(image_infos, class_map):
         padw = x1a - x1b
         padh = y1a - y1b
 
-        yolo_boxes, class_indices = get_yolo_bboxes(info['bboxes_text'], w, h, class_map)
+        yolo_boxes = []
+        class_indices = []
+
+        if info.get('bboxes_text') and info['bboxes_text'].strip():
+            yolo_boxes, class_indices = get_yolo_bboxes(info['bboxes_text'], w, h, class_map)
+        else:
+            ann_data = None
+            if info.get('annotations_json'):
+                ann_json = info['annotations_json']
+                if isinstance(ann_json, str):
+                    from annotation_model import AnnotationData
+                    ann_data = AnnotationData.from_json(ann_json)
+                elif isinstance(ann_json, dict):
+                    from annotation_model import AnnotationData
+                    ann_data = AnnotationData.from_dict(ann_json)
+                elif hasattr(ann_json, 'objects'):
+                    ann_data = ann_json
+            elif info.get('annotations'):
+                ann_data = info['annotations']
+
+            if ann_data and hasattr(ann_data, 'objects'):
+                for obj in ann_data.objects:
+                    label = getattr(obj, 'label', None)
+                    if label in class_map:
+                        cls_idx = class_map[label]
+                        bbox_pts = None
+                        if getattr(obj, 'type', None) == 'bbox' and getattr(obj, 'bbox', None):
+                            bbox_pts = obj.bbox
+                        elif getattr(obj, 'type', None) == 'polygon' and getattr(obj, 'polygon', None):
+                            pts = obj.polygon
+                            xs = [p[0] for p in pts]
+                            ys = [p[1] for p in pts]
+                            bbox_pts = [min(xs), min(ys), max(xs), max(ys)]
+
+                        if bbox_pts:
+                            x1, y1, x2, y2 = bbox_pts
+                            norm_x1 = max(0.0, min(1.0, x1 / w))
+                            norm_y1 = max(0.0, min(1.0, y1 / h))
+                            norm_x2 = max(0.0, min(1.0, x2 / w))
+                            norm_y2 = max(0.0, min(1.0, y2 / h))
+                            box_w = norm_x2 - norm_x1
+                            box_h = norm_y2 - norm_y1
+                            x_center = norm_x1 + box_w / 2
+                            y_center = norm_y1 + box_h / 2
+                            if box_w > 0 and box_h > 0:
+                                x_center, y_center, box_w, box_h = _clip_yolo_bbox(x_center, y_center, box_w, box_h)
+                                yolo_boxes.append([x_center, y_center, box_w, box_h])
+                                class_indices.append(cls_idx)
 
         for j, box in enumerate(yolo_boxes):
             x_center, y_center, box_w, box_h = box
@@ -201,13 +261,17 @@ def create_yolo_dataset_zip(dataset_uuid, frames_data, all_labels, eval_percent,
         part_deque = deque(part_data)
 
         while part_deque:
-            use_mosaic = is_training_set and mosaic_options and mosaic_options.get('enabled') and random.random() < mosaic_options.get('p', 0) and len(part_deque) >= 4
+            use_mosaic = is_training_set and mosaic_options and mosaic_options.get('enabled') and random.random() < mosaic_options.get('p', 0) and len(part_deque) >= 1
 
             if use_mosaic:
-                indices = sorted(random.sample(range(len(part_deque)), 4), reverse=True)
-                mosaic_infos = [part_deque[idx] for idx in indices]
-                for idx in indices:
-                    del part_deque[idx]
+                if len(part_deque) >= 4:
+                    indices = sorted(random.sample(range(len(part_deque)), 4), reverse=True)
+                    mosaic_infos = [part_deque[idx] for idx in indices]
+                    for idx in indices:
+                        del part_deque[idx]
+                else:
+                    mosaic_infos = [random.choice(part_deque) for _ in range(4)]
+                    part_deque.clear()
                 base_filename = f"mosaic_{mosaic_infos[0]['video_uuid']}_{mosaic_infos[0]['frame_number']}"
                 image_aug, bboxes_aug_yolo = create_mosaic_image(mosaic_infos, class_map)
                 final_image_bgr = image_aug

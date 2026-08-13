@@ -151,54 +151,120 @@ def calculate_iou(boxA, boxB):
 
 
 def generate_mosaic_previews(sample_pool, selected_video_uuid, selected_frame_number):
-    if len(sample_pool) < 4:
-        sample_pool.extend(sample_pool * (4 - len(sample_pool)))
-
     all_labels = database.get_all_class_labels()
     class_map = {name: i for i, name in enumerate(all_labels)}
 
     image_infos = []
-    for sample in sample_pool:
-        video_info = database.get_video_entity(sample['video_uuid'])
-        frame_info = database.get_frame_bboxes(sample['video_uuid'], sample['frame_number'])
 
-        if video_info and frame_info and frame_info['bboxes_text']:
-            image_infos.append({
-                "video_uuid": sample['video_uuid'],
-                "frame_number": sample['frame_number'],
-                "bboxes_text": frame_info['bboxes_text'],
+    def get_info_for_frame(vid_uuid, frame_num):
+        video_info = database.get_video_entity(vid_uuid)
+        if not video_info:
+            return None
+        frame_bboxes = database.get_frame_bboxes(vid_uuid, frame_num)
+        bboxes_text = frame_bboxes.get('bboxes_text') if frame_bboxes else None
+        annotations_json = database.get_frame_annotations(vid_uuid, frame_num)
+
+        has_labels = False
+        if bboxes_text and bboxes_text.strip():
+            has_labels = True
+        elif annotations_json and isinstance(annotations_json, dict):
+            objs = annotations_json.get('objects', [])
+            if any(isinstance(obj, dict) and obj.get('label') in class_map for obj in objs):
+                has_labels = True
+        elif annotations_json and hasattr(annotations_json, 'objects'):
+            if any(getattr(obj, 'label', None) in class_map for obj in getattr(annotations_json, 'objects', [])):
+                has_labels = True
+
+        if has_labels:
+            return {
+                "video_uuid": vid_uuid,
+                "frame_number": frame_num,
+                "bboxes_text": bboxes_text,
+                "annotations_json": annotations_json,
                 "width": video_info['width'],
                 "height": video_info['height']
-            })
+            }
+        return None
 
-    if len(image_infos) < 4:
-        return None, 'Not enough labeled images in the sample pool to generate a mosaic preview.'
+    seen_keys = set()
+    if sample_pool and isinstance(sample_pool, list):
+        for sample in sample_pool:
+            if isinstance(sample, dict):
+                v_uuid = sample.get('video_uuid')
+                f_num = sample.get('frame_number')
+                if v_uuid and f_num is not None:
+                    key = (v_uuid, f_num)
+                    if key not in seen_keys:
+                        info = get_info_for_frame(v_uuid, f_num)
+                        if info:
+                            image_infos.append(info)
+                            seen_keys.add(key)
+
+    selected_image_info = None
+    if selected_video_uuid and selected_frame_number is not None:
+        selected_image_info = get_info_for_frame(selected_video_uuid, selected_frame_number)
+        if selected_image_info and (selected_video_uuid, selected_frame_number) not in seen_keys:
+            image_infos.append(selected_image_info)
+            seen_keys.add((selected_video_uuid, selected_frame_number))
+
+    if not image_infos:
+        if selected_video_uuid:
+            ann_frames = database.get_annotated_video_frames(selected_video_uuid)
+            for f in ann_frames:
+                key = (f['video_uuid'], f['frame_number'])
+                if key not in seen_keys:
+                    info = get_info_for_frame(f['video_uuid'], f['frame_number'])
+                    if info:
+                        image_infos.append(info)
+                        seen_keys.add(key)
+                        if len(image_infos) >= 10:
+                            break
+
+        if not image_infos:
+            for v in database.get_video_list():
+                ann_frames = database.get_annotated_video_frames(v['video_uuid'])
+                for f in ann_frames:
+                    key = (f['video_uuid'], f['frame_number'])
+                    if key not in seen_keys:
+                        info = get_info_for_frame(f['video_uuid'], f['frame_number'])
+                        if info:
+                            image_infos.append(info)
+                            seen_keys.add(key)
+                            if len(image_infos) >= 10:
+                                break
+                if len(image_infos) >= 10:
+                    break
+
+    if not image_infos:
+        return None, 'No labeled images found in dataset to generate mosaic preview.'
 
     previews = []
-    selected_image_info = next((info for info in image_infos if info['video_uuid'] == selected_video_uuid and info[
-        'frame_number'] == selected_frame_number), None)
-
     for _ in range(6):
-        other_images = [info for info in image_infos if info != selected_image_info]
-        random.shuffle(other_images)
+        if selected_image_info:
+            mosaic_set = [selected_image_info]
+            other_candidates = [info for info in image_infos if (info['video_uuid'], info['frame_number']) != (selected_image_info['video_uuid'], selected_image_info['frame_number'])]
+            if not other_candidates:
+                other_candidates = image_infos
+            mosaic_set.extend(random.choices(other_candidates, k=3))
+        else:
+            mosaic_set = random.choices(image_infos, k=4)
 
-        mosaic_set = [selected_image_info] + other_images[:3] if selected_image_info else other_images[:4]
         random.shuffle(mosaic_set)
-
         mosaic_img, final_bboxes = file_storage.create_mosaic_image(mosaic_set, class_map)
 
         h, w, _ = mosaic_img.shape
         vis_image = mosaic_img.copy()
         for bbox_data in final_bboxes:
             class_index, x_center, y_center, width_norm, height_norm = bbox_data
-            class_name = all_labels[class_index]
-            color = string_to_color_bgr(class_name)
+            if 0 <= class_index < len(all_labels):
+                class_name = all_labels[class_index]
+                color = string_to_color_bgr(class_name)
 
-            x1 = int((x_center - width_norm / 2) * w)
-            y1 = int((y_center - height_norm / 2) * h)
-            x2 = int((x_center + width_norm / 2) * w)
-            y2 = int((y_center + height_norm / 2) * h)
-            cv2.rectangle(vis_image, (x1, y1), (x2, y2), color, 2)
+                x1 = int((x_center - width_norm / 2) * w)
+                y1 = int((y_center - height_norm / 2) * h)
+                x2 = int((x_center + width_norm / 2) * w)
+                y2 = int((y_center + height_norm / 2) * h)
+                cv2.rectangle(vis_image, (x1, y1), (x2, y2), color, 2)
 
         _, buffer = cv2.imencode('.jpg', vis_image)
         img_base64 = base64.b64encode(buffer).decode('utf-8')
@@ -2757,13 +2823,10 @@ def preview_augmentations():
 
     try:
         if augmentation_options.get('mosaic', {}).get('enabled'):
-            if not sample_pool:
-                return jsonify({'success': False, 'message': 'Sample pool is required for Mosaic preview.'}), 400
-            if random.random() < augmentation_options['mosaic'].get('p', 1.0):
-                previews, err_msg = generate_mosaic_previews(sample_pool, video_uuid, frame_number)
-                if err_msg:
-                    return jsonify({'success': False, 'message': err_msg}), 400
-                return jsonify({'success': True, 'previews': previews})
+            previews, err_msg = generate_mosaic_previews(sample_pool, video_uuid, frame_number)
+            if err_msg:
+                return jsonify({'success': False, 'message': err_msg}), 400
+            return jsonify({'success': True, 'previews': previews})
 
         frame_path = file_storage.get_frame_path(video_uuid, frame_number)
         if not os.path.exists(frame_path):
