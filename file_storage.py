@@ -94,6 +94,9 @@ def get_yolo_bboxes(bboxes_text, width, height, class_map):
     class_indices = []
 
     for i, r in enumerate(rects):
+        if labels[i] not in class_map:
+            continue
+
         x_min, y_min, x_max, y_max = r[0], r[1], r[2], r[3]
         if x_min > x_max:
             x_min, x_max = x_max, x_min
@@ -318,12 +321,12 @@ def create_yolo_dataset_zip(dataset_uuid, frames_data, all_labels, eval_percent,
             cv2.imwrite(os.path.join(target_img_dir, base_filename + '.jpg'), final_image_bgr)
             yolo_content_lines = [f"{class_id} {x:.6f} {y:.6f} {w:.6f} {h:.6f}" for class_id, x, y, w, h in
                                   bboxes_aug_yolo]
-            with open(os.path.join(target_lbl_dir, base_filename + '.txt'), 'w') as f:
+            with open(os.path.join(target_lbl_dir, base_filename + '.txt'), 'w', encoding='utf-8') as f:
                 f.write("\n".join(yolo_content_lines))
 
     yaml_content = {'path': f"../datasets/{dataset_uuid}", 'train': 'images/train', 'val': 'images/val',
                     'test': 'images/test', 'nc': len(all_labels), 'names': all_labels}
-    with open(os.path.join(dataset_dir, 'data.yaml'), 'w') as f:
+    with open(os.path.join(dataset_dir, 'data.yaml'), 'w', encoding='utf-8') as f:
         yaml.dump(yaml_content, f, sort_keys=False)
     zip_path = get_dataset_zip_path(dataset_uuid)
     try:

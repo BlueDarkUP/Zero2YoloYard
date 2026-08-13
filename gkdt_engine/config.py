@@ -5,7 +5,10 @@ import datetime
 import argparse
 from yacs.config import CfgNode
 import logging
-from tensorboardX import SummaryWriter
+try:
+    from tensorboardX import SummaryWriter
+except ImportError:
+    SummaryWriter = None
 import yaml
 
 def parse_list_str_via_yaml(args, cfg):
