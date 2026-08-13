@@ -586,9 +586,11 @@ def retrieve_video_entity():
 @app.route('/deleteVideo', methods=['POST'])
 def delete_video():
     video_uuid = (request.json or {}).get('video_uuid')
-    database.delete_video(video_uuid)
-    file_storage.delete_video_file(video_uuid)
-    file_storage.delete_frames_for_video(video_uuid)
+    if video_uuid:
+        background_tasks.active_tasks.pop(video_uuid, None)
+        database.delete_video(video_uuid)
+        file_storage.delete_video_file(video_uuid)
+        file_storage.delete_frames_for_video(video_uuid)
     return jsonify({'success': True})
 
 
