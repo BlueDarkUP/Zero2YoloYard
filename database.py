@@ -188,6 +188,7 @@ def force_resync_all_dataset_labels():
                     # 1.1 尝试从视频文件获取分辨率及视频基本元数据
                     vid_path = file_storage.get_video_path(v_uuid)
                     if os.path.exists(vid_path):
+                        cap = None
                         try:
                             cap = cv2.VideoCapture(vid_path)
                             if cap.isOpened():
@@ -195,7 +196,6 @@ def force_resync_all_dataset_labels():
                                 cap_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
                                 cap_fps = cap.get(cv2.CAP_PROP_FPS)
                                 cap_fc = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-                                cap.release()
                                 if cap_w > 0 and cap_h > 0:
                                     new_w, new_h = cap_w, cap_h
                                 if cap_fps > 0 and (new_fps is None or new_fps <= 0):
@@ -204,6 +204,9 @@ def force_resync_all_dataset_labels():
                                     new_fc = cap_fc
                         except Exception as e:
                             logging.warning(f"无法从视频文件 [{v_uuid[:8]}] 读取分辨率: {e}")
+                        finally:
+                            if cap is not None:
+                                cap.release()
 
                     # 1.2 若从视频文件未获取到，尝试从抽取的帧图片读取分辨率
                     if new_w is None or new_h is None or new_w <= 0 or new_h <= 0:
