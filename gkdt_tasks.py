@@ -33,30 +33,18 @@ _gkdt_model_cache = {
 }
 
 
-# os.chdir() 是进程全局操作，在多线程 Flask 中必须串行化，否则会产生竞争条件
-_WORKING_DIR_LOCK = threading.Lock()
-
-
 class WorkingDirContext:
-    """上下文管理器：临时切换工作目录到 gkdt_engine，确保 GKDT 内部相对路径正确。
-    使用模块级锁保证多线程环境下 os.chdir() 的串行执行，避免竞争条件。"""
+    """上下文管理器：废弃进程级 os.chdir() 调用以保证多线程安全，避免破坏并发 HTTP 请求的相对路径解析。
+    GKDT 模型加载与推理已全量使用绝对路径和 sys.path 路径导入。"""
 
-    def __init__(self, target_dir):
+    def __init__(self, target_dir=None):
         self.target_dir = target_dir
-        self.prev_dir = None
 
     def __enter__(self):
-        _WORKING_DIR_LOCK.acquire()
-        self.prev_dir = os.getcwd()
-        os.chdir(self.target_dir)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        try:
-            if self.prev_dir:
-                os.chdir(self.prev_dir)
-        finally:
-            _WORKING_DIR_LOCK.release()
+        pass
 
 
 def _apply_dinov3_bpe_path_patch():
