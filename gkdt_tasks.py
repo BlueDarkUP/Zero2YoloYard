@@ -198,14 +198,15 @@ def predict_pose_from_text(video_uuid, frame_number, class_label, custom_kps_tex
             from test_real_world.gkd_inference_lib.gkd_inference import demo
 
         bbox_input = list(bbox) if (bbox is not None and len(bbox) > 0) else []
-        predictions_o, predict_score, w_h_origin = demo(
-            gkd_engine,
-            image_path,
-            bbox_input,
-            "",
-            [],
-            kps_texts
-        )
+        with torch.inference_mode():
+            predictions_o, predict_score, w_h_origin = demo(
+                gkd_engine,
+                image_path,
+                bbox_input,
+                "",
+                [],
+                kps_texts
+            )
 
     # 5. 解析预测出的关键点坐标并施加【空间越界熔断】+【三阶置信度判定】
     keypoints_out = []

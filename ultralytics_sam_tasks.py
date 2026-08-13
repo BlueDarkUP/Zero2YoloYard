@@ -194,8 +194,9 @@ def _get_sam3_frame_state(processor, video_uuid, frame_number, image_path=None):
     image = Image.open(image_path).convert("RGB")
     device_type = "cuda" if torch.cuda.is_available() else "cpu"
     dtype = torch.bfloat16 if (device_type == "cuda" and torch.cuda.is_bf16_supported()) else (torch.float16 if device_type == "cuda" else torch.float32)
-    with torch.autocast(device_type=device_type, dtype=dtype):
-        state = processor.set_image(image)
+    with torch.inference_mode():
+        with torch.autocast(device_type=device_type, dtype=dtype):
+            state = processor.set_image(image)
 
     _sam3_frame_cache_put(cache_key, state)
     return state
@@ -242,17 +243,18 @@ def sam3_query_frame(video_uuid, frame_number, text_prompt=None, positive_boxes=
         old_threshold = processor.confidence_threshold
         processor.confidence_threshold = confidence
         try:
-            with torch.autocast(device_type=device_type, dtype=dtype):
-                if text_prompt:
-                    state = processor.set_text_prompt(prompt=text_prompt, state=state)
-                if positive_boxes:
-                    for box in positive_boxes:
-                        norm_box = _pixel_box_to_norm_cxcywh(box, img_w, img_h)
-                        state = processor.add_geometric_prompt(box=norm_box, label=True, state=state)
-                if negative_boxes:
-                    for box in negative_boxes:
-                        norm_box = _pixel_box_to_norm_cxcywh(box, img_w, img_h)
-                        state = processor.add_geometric_prompt(box=norm_box, label=False, state=state)
+            with torch.inference_mode():
+                with torch.autocast(device_type=device_type, dtype=dtype):
+                    if text_prompt:
+                        state = processor.set_text_prompt(prompt=text_prompt, state=state)
+                    if positive_boxes:
+                        for box in positive_boxes:
+                            norm_box = _pixel_box_to_norm_cxcywh(box, img_w, img_h)
+                            state = processor.add_geometric_prompt(box=norm_box, label=True, state=state)
+                    if negative_boxes:
+                        for box in negative_boxes:
+                            norm_box = _pixel_box_to_norm_cxcywh(box, img_w, img_h)
+                            state = processor.add_geometric_prompt(box=norm_box, label=False, state=state)
         finally:
             processor.confidence_threshold = old_threshold
 
