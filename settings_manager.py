@@ -140,8 +140,10 @@ def load_settings():
 
 def save_settings(settings_data):
     try:
-        with open(SETTINGS_FILE, 'w') as f:
+        tmp_file = SETTINGS_FILE + ".tmp"
+        with open(tmp_file, 'w', encoding='utf-8') as f:
             json.dump(settings_data, f, indent=4)
+        os.replace(tmp_file, SETTINGS_FILE)
         return True
     except IOError as e:
         logging.error(f"Failed to save settings file: {e}")
