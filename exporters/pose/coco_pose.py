@@ -19,15 +19,19 @@ class COCOPoseExporter(BaseExporter):
         images_dir = os.path.join(export_dir, "images")
         os.makedirs(images_dir, exist_ok=True)
 
+        effective_classes = class_list if class_list else ["person"]
+        category_map = {name: idx + 1 for idx, name in enumerate(effective_classes)}
+        categories = [{
+            "id": idx + 1,
+            "name": name,
+            "supercategory": name,
+            "keypoints": COCO_POSE_17_SCHEMA["keypoints"],
+            "skeleton": COCO_POSE_17_SCHEMA["skeleton"]
+        } for idx, name in enumerate(effective_classes)]
+
         coco_pose_data = {
-            "info": {"description": "COCO 17 Keypoints Export from Zero2YoloYard"},
-            "categories": [{
-                "id": 1,
-                "name": "person",
-                "supercategory": "person",
-                "keypoints": COCO_POSE_17_SCHEMA["keypoints"],
-                "skeleton": COCO_POSE_17_SCHEMA["skeleton"]
-            }],
+            "info": {"description": "COCO Keypoints Export from Zero2YoloYard"},
+            "categories": categories,
             "images": [],
             "annotations": []
         }
@@ -53,6 +57,7 @@ class COCOPoseExporter(BaseExporter):
 
             annotations: AnnotationData = frame_info["annotations"]
             for obj in annotations.get_keypoints():
+                cls_id = category_map.get(obj.label, 1)
                 x1, y1, x2, y2 = obj.bbox if obj.bbox else (0, 0, width, height)
                 w, h = max(0, x2 - x1), max(0, y2 - y1)
 
@@ -67,7 +72,7 @@ class COCOPoseExporter(BaseExporter):
                 coco_pose_data["annotations"].append({
                     "id": ann_id,
                     "image_id": img_id,
-                    "category_id": 1,
+                    "category_id": cls_id,
                     "bbox": [round(x1, 2), round(y1, 2), round(w, 2), round(h, 2)],
                     "area": round(w * h, 2),
                     "keypoints": keypoints_flat,
