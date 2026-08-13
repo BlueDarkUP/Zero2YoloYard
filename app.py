@@ -615,9 +615,12 @@ def store_video_frame_bboxes_text():
 
 @app.route('/saveFrameAnnotations', methods=['POST'])
 def save_frame_annotations():
-    data = request.json
+    data = request.get_json(silent=True) or {}
     video_uuid = data.get('video_uuid')
-    frame_number = int(data.get('frame_number'))
+    frame_num_raw = data.get('frame_number')
+    if not video_uuid or frame_num_raw is None:
+        return jsonify({'success': False, 'message': 'Missing required parameters.'}), 400
+    frame_number = int(frame_num_raw)
     annotations_json = data.get('annotations_json')
 
     if annotations_json:
