@@ -208,7 +208,6 @@ def apply_class_to_videos_task(task_uuid, video_uuids, class_name, confidence_th
             session['status'] = 'COMPLETED'
             session['message'] = f"Finished applying '{class_name}' across {len(video_uuids)} video(s)."
             logging.info(f"[{task_uuid}] Completed successfully.")
-
     except Exception as e:
         error_message = f"Failed to apply class '{class_name}' to videos"
         logging.error(f"[{task_uuid}] {error_message}: {e}")
