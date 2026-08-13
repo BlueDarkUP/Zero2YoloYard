@@ -42,6 +42,9 @@ class PascalVOCExporter(BaseExporter):
 
             annotations: AnnotationData = frame_info["annotations"]
             for obj in annotations.get_bboxes():
+                if class_list and obj.label not in class_list:
+                    continue
+
                 object_elem = ET.SubElement(annotation_elem, "object")
                 ET.SubElement(object_elem, "name").text = obj.label
                 ET.SubElement(object_elem, "pose").text = "Unspecified"
@@ -49,11 +52,16 @@ class PascalVOCExporter(BaseExporter):
                 ET.SubElement(object_elem, "difficult").text = "0"
 
                 bndbox = ET.SubElement(object_elem, "bndbox")
-                x1, y1, x2, y2 = obj.bbox
-                ET.SubElement(bndbox, "xmin").text = str(int(x1))
-                ET.SubElement(bndbox, "ymin").text = str(int(y1))
-                ET.SubElement(bndbox, "xmax").text = str(int(x2))
-                ET.SubElement(bndbox, "ymax").text = str(int(y2))
+                x1, y1, x2, y2 = obj.bbox if obj.bbox else (0, 0, frame_info['width'], frame_info['height'])
+                x1_c = max(0, min(frame_info['width'], int(x1)))
+                y1_c = max(0, min(frame_info['height'], int(y1)))
+                x2_c = max(0, min(frame_info['width'], int(x2)))
+                y2_c = max(0, min(frame_info['height'], int(y2)))
+
+                ET.SubElement(bndbox, "xmin").text = str(x1_c)
+                ET.SubElement(bndbox, "ymin").text = str(y1_c)
+                ET.SubElement(bndbox, "xmax").text = str(x2_c)
+                ET.SubElement(bndbox, "ymax").text = str(y2_c)
 
             xml_str = minidom.parseString(ET.tostring(annotation_elem)).toprettyxml(indent="  ")
             with open(os.path.join(annotations_dir, xml_filename), "w", encoding="utf-8") as f:
