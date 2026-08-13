@@ -489,6 +489,7 @@ def update_pre_annotation_info(video_uuid, model_uuid, model_desc):
 
 def update_video_after_extraction_start(video_uuid, width, height, fps, frame_count):
     with engine.begin() as conn:
+        conn.execute(text('DELETE FROM video_frames WHERE video_uuid = :u'), {"u": video_uuid})
         conn.execute(
             text(
                 "UPDATE videos SET width=:w, height=:h, fps=:f, frame_count=:fc, included_frame_count=:fc, status=:st WHERE video_uuid=:u"),
