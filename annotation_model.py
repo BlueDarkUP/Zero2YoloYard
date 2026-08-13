@@ -127,9 +127,11 @@ class AnnotationData:
     def get_unique_labels(self) -> set[str]:
         labels = set()
         for obj in self.objects:
-            labels.add(obj.label)
+            if obj.label:
+                labels.add(obj.label)
         for cls in self.classifications:
-            labels.add(cls)
+            if cls:
+                labels.add(cls)
         return labels
 
 def bbox_to_polygon(bbox: List[float]) -> List[List[float]]:
