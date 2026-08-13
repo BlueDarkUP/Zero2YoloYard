@@ -227,7 +227,7 @@ def process_frame_worker(args):
 
         yolo_content_lines = [f"{class_id} {x:.6f} {y:.6f} {w:.6f} {h:.6f}" for class_id, x, y, w, h in bboxes_aug_yolo]
         output_label_path = os.path.join(target_lbl_dir, base_filename + '.txt')
-        with open(output_label_path, 'w') as f:
+        with open(output_label_path, 'w', encoding='utf-8') as f:
             f.write("\n".join(yolo_content_lines))
 
         return output_image_path
@@ -312,6 +312,6 @@ class YoloDetectionExporter(BaseExporter):
         if yaml:
             yaml_content = {'path': f"../datasets/{os.path.basename(export_dir)}", 'train': 'images/train', 'val': 'images/val',
                             'test': 'images/test', 'nc': len(class_list), 'names': class_list}
-            with open(os.path.join(export_dir, 'data.yaml'), 'w') as f:
+            with open(os.path.join(export_dir, 'data.yaml'), 'w', encoding='utf-8') as f:
                 yaml.dump(yaml_content, f, sort_keys=False)
         
