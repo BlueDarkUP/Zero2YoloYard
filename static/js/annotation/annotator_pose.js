@@ -109,6 +109,9 @@ class PoseAnnotator {
                 if (!res.success) {
                     console.warn("Failed to persist keypoint schema to database:", res.message);
                 }
+            },
+            error: function(xhr, status, err) {
+                console.warn("Failed to persist keypoint schema to database:", err);
             }
         });
     }
