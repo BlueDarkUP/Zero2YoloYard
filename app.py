@@ -221,7 +221,7 @@ def generate_mosaic_previews(sample_pool, selected_video_uuid, selected_frame_nu
                             break
 
         if not image_infos:
-            for v in database.get_video_list():
+            for v in database.get_all_video_list():
                 ann_frames = database.get_annotated_video_frames(v['video_uuid'])
                 for f in ann_frames:
                     key = (f['video_uuid'], f['frame_number'])

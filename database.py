@@ -166,11 +166,96 @@ def force_resync_all_dataset_labels():
     """强行重新扫描所有帧的真实标注数据，修复视频标注计数与索引表"""
     logging.info("=== 开始对所有视频执行标注数据全量校准与修复... ===")
     try:
+        import os
+        import cv2
         from annotation_model import AnnotationData
         with engine.begin() as conn:
-            # 1. 重置可能卡在中间态的视频状态为 READY
-            conn.execute(text(
-                "UPDATE videos SET status = 'READY' WHERE status IN ('EXTRACTING', 'PRE_ANNOTATING', 'APPLYING_CLASS', 'UPLOADING', 'CANCELLING')"))
+            # 1. 检查并修复视频状态与分辨率 (width/height)
+            inter_statuses = ('EXTRACTING', 'PRE_ANNOTATING', 'APPLYING_CLASS', 'UPLOADING', 'CANCELLING')
+            v_rows = conn.execute(text(
+                "SELECT video_uuid, status, width, height, fps, frame_count, extracted_frame_count FROM videos"
+            )).fetchall()
+
+            for v_uuid, st, w, h, fps, fc, efc in v_rows:
+                is_intermediate = (st in inter_statuses)
+                needs_res = (w is None or h is None or w <= 0 or h <= 0)
+
+                new_w, new_h = w, h
+                new_fps, new_fc = fps, fc
+
+                if is_intermediate or needs_res:
+                    # 1.1 尝试从视频文件获取分辨率及视频基本元数据
+                    vid_path = file_storage.get_video_path(v_uuid)
+                    if os.path.exists(vid_path):
+                        try:
+                            cap = cv2.VideoCapture(vid_path)
+                            if cap.isOpened():
+                                cap_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                                cap_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                                cap_fps = cap.get(cv2.CAP_PROP_FPS)
+                                cap_fc = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                                cap.release()
+                                if cap_w > 0 and cap_h > 0:
+                                    new_w, new_h = cap_w, cap_h
+                                if cap_fps > 0 and (new_fps is None or new_fps <= 0):
+                                    new_fps = cap_fps
+                                if cap_fc > 0 and (new_fc is None or new_fc <= 0):
+                                    new_fc = cap_fc
+                        except Exception as e:
+                            logging.warning(f"无法从视频文件 [{v_uuid[:8]}] 读取分辨率: {e}")
+
+                    # 1.2 若从视频文件未获取到，尝试从抽取的帧图片读取分辨率
+                    if new_w is None or new_h is None or new_w <= 0 or new_h <= 0:
+                        frame_dir = file_storage.get_frame_dir(v_uuid)
+                        if os.path.isdir(frame_dir):
+                            for fname in os.listdir(frame_dir):
+                                if fname.lower().endswith(('.jpg', '.jpeg', '.png')):
+                                    fpath = os.path.join(frame_dir, fname)
+                                    try:
+                                        img = cv2.imread(fpath)
+                                        if img is not None:
+                                            img_h, img_w = img.shape[:2]
+                                            if img_w > 0 and img_h > 0:
+                                                new_w, new_h = img_w, img_h
+                                                break
+                                    except Exception:
+                                        pass
+
+                    # 1.3 如果成功获取 width/height
+                    if new_w is not None and new_h is not None and new_w > 0 and new_h > 0:
+                        target_st = 'READY' if is_intermediate else st
+                        update_params = {
+                            "w": new_w,
+                            "h": new_h,
+                            "st": target_st,
+                            "u": v_uuid
+                        }
+                        sql_parts = ["width = :w", "height = :h", "status = :st", "status_message = ''"]
+                        if new_fps is not None and new_fps > 0:
+                            sql_parts.append("fps = :fps")
+                            update_params["fps"] = new_fps
+                        if new_fc is not None and new_fc > 0:
+                            sql_parts.append("frame_count = :fc")
+                            update_params["fc"] = new_fc
+
+                        conn.execute(text(f"UPDATE videos SET {', '.join(sql_parts)} WHERE video_uuid = :u"), update_params)
+                        logging.info(f"视频 [{v_uuid[:8]}] 分辨率/状态校准成功: width={new_w}, height={new_h}, status={target_st}")
+                    else:
+                        # 1.4 无法获取 width/height，强制标记为 FAILED
+                        conn.execute(text("""
+                            UPDATE videos 
+                            SET status = 'FAILED', status_message = 'Video upload or extraction incomplete (resolution width/height missing)' 
+                            WHERE video_uuid = :u
+                        """), {"u": v_uuid})
+                        logging.warning(f"视频 [{v_uuid[:8]}] 缺少分辨率且无法恢复，状态更新为 FAILED")
+
+                # 1.5 校准 extracted_frame_count 字段
+                frame_dir = file_storage.get_frame_dir(v_uuid)
+                if os.path.isdir(frame_dir):
+                    actual_frames = len([f for f in os.listdir(frame_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))])
+                    if actual_frames != efc:
+                        conn.execute(text("UPDATE videos SET extracted_frame_count = :c WHERE video_uuid = :u"),
+                                     {"c": actual_frames, "u": v_uuid})
 
             # 2. 遍历所有帧，从 JSON / 框文本 / 标签中解析真实标注
             rows = conn.execute(
