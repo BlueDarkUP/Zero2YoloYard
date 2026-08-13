@@ -190,7 +190,7 @@ def _download_file(url, dest_path, model_id):
                         DOWNLOAD_TASKS[model_id]["progress"] = prog_str
                         last_update_time = now
 
-        os.rename(dest_path + ".tmp", dest_path)
+        os.replace(dest_path + ".tmp", dest_path)
         DOWNLOAD_TASKS[model_id]["status"] = "ready"
         DOWNLOAD_TASKS[model_id]["progress"] = "DOWNLOAD COMPLETE"
         logging.info(f"Download complete: {dest_path}")
