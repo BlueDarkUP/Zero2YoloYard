@@ -30,6 +30,7 @@ def set_sqlite_pragma(dbapi_connection, connection_record):
     cursor = dbapi_connection.cursor()
     # 开启预写式日志，允许多个读操作和一个写操作并发执行
     cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA foreign_keys=ON")
     # NORMAL 在 WAL 模式下能提供极高写入性能，且安全性有保证
     cursor.execute("PRAGMA synchronous=NORMAL")
     # 增加内存缓存大小 (约为 64MB)
