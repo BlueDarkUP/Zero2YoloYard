@@ -718,7 +718,7 @@ def create_task():
     if not video:
         return jsonify({'success': False, 'message': 'Video not found.'}), 404
 
-    if not (0 <= start_frame < end_frame < video['frame_count']):
+    if not (0 <= start_frame <= end_frame < video['frame_count']):
         return jsonify({'success': False,
                         'message': f'Invalid frame range. Must be within 0 and {video["frame_count"] - 1}.'}), 400
 
