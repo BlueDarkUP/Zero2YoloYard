@@ -1630,6 +1630,7 @@ def cluster_classification_images_route():
         return jsonify({'success': False, 'message': 'Failed to load frame images for feature extraction.'}), 404
 
     feature_matrix = np.array(feature_matrix, dtype=np.float32)
+    num_clusters = max(1, min(len(feature_matrix), num_clusters))
 
     # 3. K-Means 聚类
     from sklearn.cluster import KMeans
