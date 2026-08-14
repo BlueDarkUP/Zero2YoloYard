@@ -30,8 +30,16 @@ class YOLOPoseExporter(BaseExporter):
         if not class_map:
             class_map = {"person": 0}
 
-        # Track max keypoints per instance across dataset to define kpt_shape
-        max_kpts_count = 17
+        # Determine actual max keypoints count from frames_data
+        max_kpts_count = 0
+        for frame_info in frames_data:
+            ann: AnnotationData = frame_info.get("annotations")
+            if ann:
+                for obj in ann.get_keypoints():
+                    if obj.keypoints:
+                        max_kpts_count = max(max_kpts_count, len(obj.keypoints))
+        if max_kpts_count == 0:
+            max_kpts_count = 17
 
         eval_percent = options.get('eval_percent', 20.0)
         test_percent = options.get('test_percent', 10.0)
@@ -92,12 +100,17 @@ class YOLOPoseExporter(BaseExporter):
                     nw = bw / width
                     nh = bh / height
 
-                    # Format keypoints
+                    # Format keypoints up to max_kpts_count
                     kpt_str_list = []
-                    for kp in obj.keypoints:
-                        kx = max(0.0, min(1.0, kp.get('x', 0) / width))
-                        ky = max(0.0, min(1.0, kp.get('y', 0) / height))
-                        kv = int(kp.get('v', 2))
+                    kps = obj.keypoints or []
+                    for kp_idx in range(max_kpts_count):
+                        if kp_idx < len(kps):
+                            kp = kps[kp_idx]
+                            kx = max(0.0, min(1.0, kp.get('x', 0) / width))
+                            ky = max(0.0, min(1.0, kp.get('y', 0) / height))
+                            kv = int(kp.get('v', 2))
+                        else:
+                            kx, ky, kv = 0.0, 0.0, 0
                         kpt_str_list.extend([f"{kx:.6f}", f"{ky:.6f}", str(kv)])
 
                     lines.append(f"{cls_id} {cx:.6f} {cy:.6f} {nw:.6f} {nh:.6f} " + " ".join(kpt_str_list))
