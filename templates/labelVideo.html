@@ -593,7 +593,7 @@
     </div>
     <div class="ide-resizer" id="sidebar-resizer"></div>
     <div class="ide-sidebar custom-scrollbar" id="ide-sidebar">
-        <!-- Task-Specific Sub-Template Inclusion -->
+        <!-- Sub Template -->
         {% if video_entity.annotation_type == 'segmentation' %}
             {% include '_label_segmentation.html' %}
         {% elif video_entity.annotation_type == 'classification' %}
@@ -735,99 +735,133 @@
                             <button id="clip-add-class-btn" class="btn btn-outline-primary font-monospace" type="button"><i class="bi bi-plus-lg"></i> ADD</button>
                         </div>
                     </div>
-                </div>
+        <div class="modal-content border-info" style="background-color: var(--bg-surface);">
+            <div class="modal-header bg-info-subtle border-info">
+                <h5 class="modal-title font-monospace font-weight-bold text-info"><i class="bi bi-magic mr-2"></i>CLIP ZERO-SHOT AUTOMATIC ANNOTATOR</h5>
+                <button type="button" class="close text-light" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small">
+                    Leverage OpenAI CLIP Vision-Language Models to predict candidate labels for frames without training.
+                </p>
 
                 <div class="form-row">
                     <div class="form-group col-md-6">
-                        <label class="font-monospace small text-muted font-weight-bold">PROMPT TEMPLATE:</label>
-                        <input type="text" id="clip-prompt-template" class="form-control form-control-sm font-monospace" value="a photo of a {}">
+                        <label class="font-monospace text-light">VISION-LANGUAGE MODEL</label>
+                        <select class="form-control bg-dark text-light border-secondary font-monospace" id="clip-model-select">
+                            <!-- Populated via API -->
+                        </select>
                     </div>
                     <div class="form-group col-md-6">
-                        <label class="font-monospace small text-muted font-weight-bold">CONFIDENCE THRESHOLD (<span id="clip-conf-val">0.40</span>):</label>
+                        <label class="font-monospace text-light">CONFIDENCE THRESHOLD: <span id="clip-conf-val" class="text-warning">0.40</span></label>
                         <input type="range" class="custom-range" id="clip-conf-threshold" min="0.10" max="0.95" step="0.05" value="0.40">
                     </div>
                 </div>
 
+                <div class="form-group">
+                    <label class="font-monospace text-light">PROMPT TEMPLATE</label>
+                    <input type="text" class="form-control bg-dark text-light border-secondary font-monospace" id="clip-prompt-template" value="a photo of a {}" placeholder="e.g. a photo of a {}">
+                    <small class="form-text text-muted">Use <code>{}</code> where the candidate class name should be inserted.</small>
+                </div>
+
+                <div class="form-group">
+                    <label class="font-monospace text-light mb-1">CANDIDATE CLASSES TO EVALUATE</label>
+                    <div id="clip-classes-container" class="p-2 border border-secondary rounded bg-dark" style="max-height: 120px; overflow-y: auto;">
+                        <!-- Checkboxes populated dynamically -->
+                    </div>
+                    <div class="input-group input-group-sm mt-2">
+                        <input type="text" class="form-control bg-dark text-light border-secondary" id="clip-custom-class-input" placeholder="Add custom label query (e.g. damaged part)">
+                        <div class="input-group-append">
+                            <button class="btn btn-outline-info" type="button" id="clip-add-class-btn"><i class="bi bi-plus-lg"></i> Add Class</button>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="custom-control custom-checkbox mb-3">
-                    <input type="checkbox" class="custom-control-input" id="clip-unlabeled-only">
-                    <label class="custom-control-label small font-monospace text-warning" for="clip-unlabeled-only">PRE-ANNOTATE UNLABELED FRAMES ONLY</label>
+                    <input type="checkbox" class="custom-control-input" id="clip-unlabeled-only" checked>
+                    <label class="custom-control-label font-monospace text-muted" for="clip-unlabeled-only">Only evaluate UNLABELED / UNTAGGED frames</label>
                 </div>
 
-                <div id="clip-loader" class="text-center my-4" style="display: none;">
-                    <div class="spinner-border text-primary" role="status"></div>
-                    <p class="mt-2 text-primary font-monospace small">Running zero-shot text-image inference across video frames...</p>
+                <div id="clip-loader" style="display: none;" class="text-center my-3">
+                    <div class="spinner-border text-info" role="status">
+                        <span class="sr-only">Evaluating...</span>
+                    </div>
+                    <div class="text-info font-monospace small mt-2">RUNNING CLIP ZERO-SHOT INFERENCE...</div>
                 </div>
 
-                <div id="clip-results-container"></div>
+                <div id="clip-results-container" class="mt-2"></div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-sm btn-secondary font-monospace" data-dismiss="modal">CANCEL</button>
-                <button type="button" id="clip-run-zeroshot-btn" class="btn btn-sm btn-primary font-monospace font-weight-bold px-4">
-                    <i class="bi bi-magic mr-1"></i> RUN ZERO-SHOT PRE-ANNOTATION
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-secondary font-monospace" data-dismiss="modal">CLOSE</button>
+                <button type="button" class="btn btn-info font-monospace font-weight-bold" id="clip-run-zeroshot-btn">
+                    <i class="bi bi-lightning-charge-fill mr-1"></i> RUN ZERO-SHOT
                 </button>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Visual Feature Clustering Modal for Classification Tasks -->
 <div class="modal fade" id="labelVideoClusterModal" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-centered" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title font-monospace text-info font-weight-bold">
-                    <i class="bi bi-diagram-3-fill mr-2"></i> VISUAL FEATURE CLUSTERING (K-MEANS)
-                </h5>
-                <button type="button" class="close text-secondary" data-dismiss="modal"><span>&times;</span></button>
+        <div class="modal-content border-secondary" style="background-color: var(--bg-surface);">
+            <div class="modal-header bg-surface-secondary border-secondary">
+                <h5 class="modal-title font-monospace font-weight-bold text-main"><i class="bi bi-grid-3x3-gap-fill mr-2 text-primary"></i>VISUAL FEATURE CLUSTERING</h5>
+                <button type="button" class="close text-light" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
             </div>
             <div class="modal-body">
+                <p class="text-muted small">
+                    Group visually similar frames together using CLIP or HSV visual embeddings. Tag multiple frames simultaneously.
+                </p>
+
                 <div class="form-row align-items-center mb-3">
                     <div class="col-md-4">
-                        <label class="font-monospace small text-muted font-weight-bold mb-1">EMBEDDING MODEL:</label>
-                        <select id="lv-cluster-model-select" class="form-control form-control-sm font-monospace">
-                            <option value="clip-vit-base-patch32" selected>clip-vit-base-patch32 (Fastest)</option>
-                            <option value="clip-vit-base-patch16">clip-vit-base-patch16 (Balanced)</option>
-                            <option value="clip-vit-large-patch14">clip-vit-large-patch14 (High Precision)</option>
-                            <option value="hsv-color-fallback">HSV Color Features (Histogram)</option>
+                        <label class="font-monospace text-light small">EMBEDDING MODEL</label>
+                        <select class="form-control form-control-sm bg-dark text-light border-secondary font-monospace" id="lv-cluster-model-select">
+                            <!-- Populated via API -->
                         </select>
                     </div>
                     <div class="col-md-3">
-                        <label class="font-monospace small text-muted font-weight-bold mb-1">CLUSTERS (K = <span id="lv-cluster-k-val">6</span>):</label>
-                        <input type="range" class="custom-range" id="lv-cluster-num-input" min="2" max="20" value="6" oninput="$('#lv-cluster-k-val').text(this.value)">
+                        <label class="font-monospace text-light small">NUMBER OF CLUSTERS (K): <span id="lv-cluster-k-val" class="text-primary font-weight-bold">6</span></label>
+                        <input type="range" class="custom-range" id="lv-cluster-num-input" min="2" max="20" step="1" value="6" oninput="$('#lv-cluster-k-val').text(this.value)">
                     </div>
-                    <div class="col-md-3">
-                        <div class="custom-control custom-checkbox pt-3">
+                    <div class="col-md-3 pt-3">
+                        <div class="custom-control custom-checkbox">
                             <input type="checkbox" class="custom-control-input" id="lv-cluster-unlabeled-only" checked>
-                            <label class="custom-control-label small font-monospace text-warning" for="lv-cluster-unlabeled-only">UNLABELED ONLY</label>
+                            <label class="custom-control-label font-monospace text-muted small" for="lv-cluster-unlabeled-only">Unlabeled frames only</label>
                         </div>
                     </div>
-                    <div class="col-md-2 text-right pt-3">
-                        <button type="button" id="lv-run-cluster-btn" class="btn btn-sm btn-info font-monospace font-weight-bold btn-block">
-                            <i class="bi bi-play-fill mr-1"></i> RUN CLUSTER
+                    <div class="col-md-2 pt-3 text-right">
+                        <button type="button" class="btn btn-primary btn-sm font-monospace font-weight-bold w-100" id="lv-run-cluster-btn">
+                            <i class="bi bi-diagram-3-fill mr-1"></i> CLUSTER
                         </button>
                     </div>
                 </div>
 
-                <div id="lv-cluster-loader" class="text-center my-4" style="display: none;">
-                    <div class="spinner-border text-info" role="status"></div>
-                    <p class="mt-2 text-info font-monospace small">Extracting CLIP embeddings & clustering image vectors...</p>
+                <div id="lv-cluster-loader" style="display: none;" class="text-center my-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="sr-only">Clustering...</span>
+                    </div>
+                    <div class="text-primary font-monospace small mt-2">EXTRACTING EMBEDDINGS & RUNNING K-MEANS...</div>
                 </div>
 
-                <div id="lv-cluster-results-container" class="custom-scrollbar p-2" style="max-height: 60vh; overflow-y: auto;">
-                    <div class="text-center text-muted p-5 font-monospace">
-                        <i class="bi bi-grid-3x3-gap-fill mb-2" style="font-size: 2.5rem; opacity: 0.3;"></i>
-                        <p>Select number of clusters (K) and click <strong>RUN CLUSTER</strong> to group similar unannotated images automatically.</p>
+                <div id="lv-cluster-results-container" class="mt-3" style="max-height: 520px; overflow-y: auto;">
+                    <div class="text-center text-muted font-monospace py-5">
+                        <i class="bi bi-collection-play" style="font-size: 2.5rem; opacity: 0.3;"></i>
+                        <p class="mt-2">Click "CLUSTER" above to partition frames into visual groups.</p>
                     </div>
                 </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-sm btn-secondary font-monospace" data-dismiss="modal">CLOSE</button>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-secondary font-monospace" data-dismiss="modal">CLOSE</button>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Glassmorphism Keybinding Customization Modal -->
 <div id="keybind-modal" class="keybind-modal-backdrop" style="display: none;">
     <div class="keybind-modal-card">
         <div class="keybind-modal-header">
@@ -990,7 +1024,6 @@
             $('#frame-slider').val(targetFrame).trigger('input');
         });
 
-        // CLIP Zero-Shot Pre-Annotation Logic
         $('#btn-open-clip-zeroshot').on('click', function() {
             populateClipModal();
             $('#labelVideoClipModal').modal('show');
@@ -1148,10 +1181,8 @@
             });
         }
 
-        // Auto-fetch CLIP models on page load
         loadClipModels();
 
-        // Visual Clustering Modal Trigger & Execution
         $('#btn-open-visual-clustering').on('click', function() {
             loadClipModels();
             $('#labelVideoClusterModal').modal('show');

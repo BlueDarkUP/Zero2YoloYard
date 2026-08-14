@@ -21,37 +21,10 @@ except ImportError:
     logging.warning("ultralytics_sam_tasks.py not found or failed to import. All SAM features will be disabled.")
     sam_tasks = None
 
-# ==============================================================================
-# 重构说明 (MobileNet -> SAM3 迁移)
-# ==============================================================================
-# 本文件原来还负责加载/运行一个独立的 MobileNetV3 (ImageNet 预训练、去分类头) 作为
-# 通用语义特征提取器，支撑"类别原型库 (KMeans 聚类) + 余弦相似度"这一整套范式，用来
-# 实现四个功能: LAM(点击建议标签)、智能选择(单样例/类别库)、批量应用到整段视频、
-# 数据集一致性检查。
-#
-# 这套范式已经整体替换为基于 SAM3 开放词汇/框样例检索的新实现，核心原语是
-# ultralytics_sam_tasks.sam3_query_frame()（同一帧的 backbone 只算一次，可以用文本
-# 或框样例反复查询）。MobileNet 模型本身、原型库 (PROTOTYPE_CACHE)、按帧缓存的
-# MobileNet 特征 (PREPROCESSED_DATA_CACHE)、KMeans 聚类、余弦相似度计算、磁盘持久化
-# (prototype_library.pt / preprocessed_cache.pt) 等代码均已删除，不再需要 torchvision
-# 的 MobileNet 权重和 scikit-learn 依赖。
-#
-# 类别现在通过 database.class_labels.sam3_prompt 字段维护各自的 SAM3 检索文本（见
-# get_retrieval_text_for_class），不再需要"用已标注样本训练/构建原型"这个步骤。
-# ==============================================================================
-
 AI_MODEL_LOCK = threading.RLock()
 
 
-# ==============================================================================
-# 通用工具函数
-# ==============================================================================
-
 def get_retrieval_text_for_class(class_name):
-    """
-    取某个类别用于 SAM3 检索的文本：优先用用户在类别管理里填写的 sam3_prompt，
-    没填就回退用类别名本身（保证没配置描述之前功能不是硬失败）。
-    """
     try:
         prompt = database.get_class_sam3_prompt(class_name)
     except Exception as e:
@@ -61,12 +34,6 @@ def get_retrieval_text_for_class(class_name):
 
 
 def class_has_labeled_examples(class_name):
-    """
-    对应旧代码里 build_prototypes_for_class(...) is not None 的判断。
-    新架构不需要真的"训练/构建原型"，这里只是给前端一个软提示用：
-    这个类别在数据库里是否已经有标注样本（用于提示"还没有样本，建议先手动标几个再用批量功能"），
-    不再是功能是否可用的硬性前置条件。
-    """
     try:
         sample_frames = database.get_all_frames_with_class(class_name)
         return bool(sample_frames)
@@ -205,19 +172,14 @@ def startup_ai_models():
 
 
 def clear_retrieval_engine_cache():
-    """
-    对应旧的 clear_feature_extractor_cache()。设置里和 SAM3 检索相关的配置
-    （设备、checkpoint 等）变更时调用，清空帧级 backbone 缓存，避免复用旧状态。
-    """
     if sam_tasks:
         try:
             sam_tasks.clear_sam3_frame_state_cache()
         except Exception as e:
-            logging.error(f"清理 SAM3 帧缓存失败: {e}")
+            logging.error(f"Failed to clear SAM3 frame cache: {e}")
 
 
 def warm_frame_cache(video_uuid, frame_number):
-    """给 /interactive_segment/preprocess、后台预处理路由用：提前跑掉最贵的 backbone 前向。"""
     if sam_tasks is None:
         raise RuntimeError("SAM feature is not installed.")
     return sam_tasks.warm_frame_cache(video_uuid, frame_number)
@@ -229,25 +191,7 @@ def is_frame_cached(video_uuid, frame_number):
     return sam_tasks.is_frame_cached(video_uuid, frame_number)
 
 
-# ==============================================================================
-# 功能 1: 点击建议标签 (LAM, Label Assignment Matching)
-# ==============================================================================
-
 def lam_predict(video_uuid, frame_number, point_coords):
-    """
-    第一步 (SAM2 点选出精确框) 和 MobileNet 无关，原样保留 —— 响应快、边缘精度高，
-    SAM3 暂时替代不了这种亚秒级单点点选体验。
-    第二步 (给这个框猜标签) 原来是 "MobileNet 特征 + 全部类别原型做余弦相似度"，
-    现在改成: 对当前项目里每个类别都用 sam3_query_frame 在同一帧上查一次(同一帧
-    backbone 只算一次，靠帧级缓存复用)，用 IoU 把 SAM3 各类别的检测结果和 SAM2
-    给出的精确框做匹配，按匹配到的置信度对类别排序，取 Top-5。
-
-    已知取舍: 类别数量较多时，这一步等价于同一帧要跑 N 次 SAM3 文本查询检测头
-    (N=类别数，backbone 部分是共享的)。类别很多、或者在纯 CPU 环境下，单次点击的
-    延迟会比旧的"点一下就出结果"明显变高，这是新架构相对旧架构的一个已知取舍，
-    不是 bug。如果延迟成为问题，后续可以考虑把候选类别限制在"最近使用过的类别"
-    等子集里，而不是每次都跑全量词表。
-    """
     if sam_tasks is None:
         return None, "SAM feature is not installed."
 
@@ -268,10 +212,6 @@ def lam_predict(video_uuid, frame_number, point_coords):
         for class_name in all_labels:
             retrieval_text = get_retrieval_text_for_class(class_name)
             try:
-                # 阈值刻意放得很低: 这里要问的是"这个具体位置有多像类别 X"，而不是
-                # "SAM3 会不会主动把它检出来"——点击的位置已经确定有一个目标了，我们
-                # 只是想知道各个类别的相对匹配程度，所以要拿到低置信度下的原始分数
-                # 用于排序比较，而不是提前被阈值过滤掉。
                 class_results = sam_tasks.sam3_query_frame(
                     video_uuid, frame_number, text_prompt=retrieval_text, confidence=0.05
                 )
@@ -280,32 +220,15 @@ def lam_predict(video_uuid, frame_number, point_coords):
                 continue
 
             score, iou = _best_iou_match(clicked_box, class_results)
-            if iou > 0.3:  # 只有和点击框有实质几何重叠时，这个分数才有意义
+            if iou > 0.3:
                 suggestions.append({"label": class_name, "score": round(score, 4)})
 
         suggestions.sort(key=lambda x: x['score'], reverse=True)
         return {"bbox": bbox_dict, "suggestions": suggestions[:5]}, None
 
 
-# ==============================================================================
-# 功能 2: 智能选择 · 单样例 (One-shot Smart Select)
-# ==============================================================================
-
 def predict_from_one_shot(video_uuid, frame_number, positive_prompt_box, negative_prompt_boxes=None,
                            use_color=False):
-    """
-    旧实现: 全帧"分割一切"生成候选框 -> MobileNet 逐框提特征 -> 与正例框特征算余弦
-           相似度 -> NMS。
-    新实现: 直接把用户画的正例框(可选再加几个负例框)作为 SAM3 的框样例 prompt
-           (add_geometric_prompt)，一次前向直接拿到本帧内的相似目标，不再需要
-           "先枚举全部候选框、再逐个比对"这一步——这个能力(exemplar/框样例检索)
-           是官方 SAM3 自带的，本仓库在这次重构之前完全没有用到过。
-
-    use_color: 可选的颜色后过滤。SAM3 的框样例检索本身已经同时编码了外观和几何
-        信息，一般不需要额外的颜色校验；但如果场景里有"形状几乎一样、只有颜色不同"
-        的物体(比如不同颜色的同款游戏道具)，可以打开这个开关，用正例框的颜色直方图
-        再筛一遍候选结果，颜色差异过大的会被剔除。
-    """
     if sam_tasks is None:
         raise RuntimeError("SAM feature is not installed.")
 
@@ -332,7 +255,6 @@ def predict_from_one_shot(video_uuid, frame_number, positive_prompt_box, negativ
                 pos_hist = _calculate_region_color_hist(image_bgr, prompt_rect)
                 if pos_hist is not None:
                     filtered = []
-                    # 归一化直方图的 L1 距离理论范围是 [0, 2]；阈值可从系统设置中配置 (默认 1.0)
                     color_veto_threshold = float(settings.get('color_veto_threshold', 1.0))
                     for r in results:
                         cand_hist = _calculate_region_color_hist(image_bgr, r['box'])
@@ -343,15 +265,7 @@ def predict_from_one_shot(video_uuid, frame_number, positive_prompt_box, negativ
     return results
 
 
-# ==============================================================================
-# 功能 3: 智能选择 · 类别库 / 批量应用到整段视频 (SAM3 文本检索)
-# ==============================================================================
-
 def predict_by_class_text(video_uuid, frame_number, class_name, confidence_threshold=0.5):
-    """
-    用某个类别的 SAM3 检索文本在指定帧上查询。取代旧的
-    "build_prototypes_for_class + predict_with_prototypes" 两步。
-    """
     if sam_tasks is None:
         raise RuntimeError("SAM feature is not installed.")
 
@@ -362,21 +276,6 @@ def predict_by_class_text(video_uuid, frame_number, class_name, confidence_thres
         )
     return results
 
-
-# ==============================================================================
-# 功能 4: 数据集一致性检查 (Consistency Check / AI Quality Control)
-# ==============================================================================
-# 决策记录 (对应方案 §4.4 最终版):
-# 旧实现: 已标注框 -> MobileNet 语义向量 + HSV 颜色直方图 -> 类内/类间余弦相似度
-#        和颜色距离找离群点。这是一个"提取通用视觉 embedding 再做无监督聚类"的方案。
-# 新实现: 核实过 SAM3 本身不提供任何"数据集标注质量审查"工具(sam3/eval/ 下都是
-#        对齐 COCO/HOTA/TETA 这类学术基准的评测脚本，和审查用户自己的数据集是两回
-#        事)。与其给 SAM3 的骨干网络硬套一个它不是为聚类/度量学习设计的向量空间,
-#        不如换个角度: 不提取 embedding, 直接问 SAM3"这块区域符不符合这个类别的
-#        描述", 把"一致性"重新定义成"SAM3 自己给出的开放词汇置信度分数",
-#        而不是"和同类样本的向量距离"。
-#        颜色直方图部分和 MobileNet 无关，原样保留。
-# ==============================================================================
 
 def _extract_crop_color_hist(image_bgr, rect=None):
     """
@@ -584,7 +483,6 @@ def check_dataset_consistency(dataset_uuid, enable_color_check=True):
                 outlier_image_indices.add(idx)
 
     else:
-        # === OBJECT DETECTION, SEGMENTATION & POSE (DET / SEG / POSET) QUALITY SCAN ===
         all_frames = []
         for vu in video_uuids:
             frames = database.get_video_frames(vu)
@@ -600,13 +498,11 @@ def check_dataset_consistency(dataset_uuid, enable_color_check=True):
         for i, frame in enumerate(all_frames):
             instances_list = []
 
-            # 1. 提取传统 bboxes_text
             if (frame.get('bboxes_text') or '').strip():
                 rects, labels, _ = convert_text_to_rects_and_labels(frame['bboxes_text'])
                 for j, r in enumerate(rects):
                     instances_list.append({'rect': r, 'label': labels[j], 'kpts': None})
 
-            # 2. 提取 JSON 注释中的 Keypoint/BBox/Polygon 实例
             if (frame.get('annotations_json') or '').strip():
                 try:
                     from annotation_model import AnnotationData

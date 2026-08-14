@@ -1,6 +1,4 @@
-/**
- * DetectionAnnotator - Bounding Box Drawing & Rendering Plugin
- */
+// DetectionAnnotator
 class DetectionAnnotator {
     constructor(core) {
         this.core = core;
@@ -66,7 +64,6 @@ class DetectionAnnotator {
             ctx.fillStyle = isSelected ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.05)';
             ctx.fillRect(x1, y1, x2 - x1, y2 - y1);
 
-            // Label tag
             const fontSize = 12 / zoom;
             const tagH = 20 / zoom;
             const padX = 5 / zoom;
@@ -77,7 +74,6 @@ class DetectionAnnotator {
             ctx.fillText(labelText, x1 + padX, y1 - (padX));
         }
 
-        // Draw active box
         if (this.currentBox) {
             const [x1, y1, x2, y2] = this.currentBox.bbox;
             ctx.strokeStyle = '#e4e4e7';

@@ -1,13 +1,8 @@
-/* Modern Low-Saturation Adaptive Design System — Zero2YoloYard */
+/* Design System */
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
-/* ==========================================================================
-   THEME TOKENS: LOW SATURATION PALETTES (LIGHT & DARK)
-   ========================================================================== */
-
 :root {
-    /* Default fallback to dark theme tokens */
     --bg-body: #0d0f12;
     --bg-surface: #14171d;
     --bg-surface-secondary: #1b2028;
@@ -18,19 +13,16 @@
     --bg-glass: rgba(20, 23, 29, 0.85);
     --bg-modal-backdrop: rgba(0, 0, 0, 0.75);
 
-    /* Text */
     --text-main: #f1f3f5;
     --text-body: #9ca3af;
     --text-secondary: #6b7280;
     --text-muted: #4b5563;
     --text-on-primary: #0d0f12;
 
-    /* Borders */
     --border-color: rgba(255, 255, 255, 0.09);
     --border-highlight: rgba(255, 255, 255, 0.16);
     --border-active: rgba(255, 255, 255, 0.3);
 
-    /* Low-Saturation Refined Accents (Dark Mode) */
     --color-primary: #e2e8f0;
     --color-primary-accent: #60a5fa;
     --color-primary-accent-glow: rgba(96, 165, 250, 0.22);
@@ -57,7 +49,6 @@
     --color-info-text: #a4bed6;
     --color-info-glow: rgba(94, 127, 158, 0.25);
 
-    /* Shadows & Radii */
     --radius-xs: 4px;
     --radius-sm: 6px;
     --radius-base: 10px;
@@ -73,7 +64,6 @@
     --scrollbar-thumb: rgba(255, 255, 255, 0.16);
     --scrollbar-thumb-hover: rgba(255, 255, 255, 0.32);
 
-    /* Transitions */
     --transition-fast: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
     --transition-smooth: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
     --transition-spring: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -81,7 +71,7 @@
     color-scheme: dark;
 }
 
-/* Explicit Dark Theme */
+/* Dark Theme */
 [data-theme="dark"] {
     --bg-body: #0d0f12;
     --bg-surface: #14171d;
@@ -141,60 +131,60 @@
     color-scheme: dark;
 }
 
-/* Explicit Light Theme (Refined Low Saturation) */
+/* Light Theme */
 [data-theme="light"] {
-    --bg-body: #f4f6f8;
+    --bg-body: #f8fafc;
     --bg-surface: #ffffff;
-    --bg-surface-secondary: #eaeef2;
-    --bg-surface-hover: #dfe5eb;
+    --bg-surface-secondary: #f1f5f9;
+    --bg-surface-hover: #e2e8f0;
     --bg-input: #ffffff;
-    --bg-input-focus: #fafbfc;
+    --bg-input-focus: #f8fafc;
     --bg-hover: rgba(0, 0, 0, 0.04);
     --bg-glass: rgba(255, 255, 255, 0.88);
     --bg-modal-backdrop: rgba(15, 23, 42, 0.45);
 
-    --text-main: #18202a;
-    --text-body: #475569;
+    --text-main: #0f172a;
+    --text-body: #334155;
     --text-secondary: #64748b;
     --text-muted: #94a3b8;
     --text-on-primary: #ffffff;
 
-    --border-color: rgba(0, 0, 0, 0.09);
-    --border-highlight: rgba(0, 0, 0, 0.16);
-    --border-active: rgba(0, 0, 0, 0.28);
+    --border-color: rgba(0, 0, 0, 0.08);
+    --border-highlight: rgba(0, 0, 0, 0.14);
+    --border-active: rgba(0, 0, 0, 0.25);
 
     --color-primary: #1e293b;
-    --color-primary-accent: #2563eb;
-    --color-primary-accent-glow: rgba(37, 99, 235, 0.15);
-    --color-primary-dim: rgba(0, 0, 0, 0.05);
+    --color-primary-accent: #3b82f6;
+    --color-primary-accent-glow: rgba(59, 130, 246, 0.15);
+    --color-primary-dim: rgba(0, 0, 0, 0.04);
     --color-primary-glow: rgba(0, 0, 0, 0.08);
 
-    --color-success: #2e6b56;
-    --color-success-bg: rgba(46, 107, 86, 0.1);
-    --color-success-text: #204e3e;
-    --color-success-glow: rgba(46, 107, 86, 0.18);
+    --color-success: #2e7d5e;
+    --color-success-bg: rgba(46, 125, 94, 0.10);
+    --color-success-text: #1b5e43;
+    --color-success-glow: rgba(46, 125, 94, 0.2);
 
-    --color-warning: #926c27;
-    --color-warning-bg: rgba(146, 108, 39, 0.1);
-    --color-warning-text: #694d18;
-    --color-warning-glow: rgba(146, 108, 39, 0.18);
+    --color-warning: #9a6b1f;
+    --color-warning-bg: rgba(154, 107, 31, 0.10);
+    --color-warning-text: #784e0f;
+    --color-warning-glow: rgba(154, 107, 31, 0.2);
 
-    --color-danger:  #9e3d3d;
-    --color-danger-bg: rgba(158, 61, 61, 0.1);
-    --color-danger-text: #782929;
-    --color-danger-glow: rgba(158, 61, 61, 0.18);
+    --color-danger:  #b93c3c;
+    --color-danger-bg: rgba(185, 60, 60, 0.10);
+    --color-danger-text: #922424;
+    --color-danger-glow: rgba(185, 60, 60, 0.2);
 
-    --color-info:    #345e85;
-    --color-info-bg: rgba(52, 94, 133, 0.1);
-    --color-info-text: #214361;
-    --color-info-glow: rgba(52, 94, 133, 0.18);
+    --color-info:    #3b6d9c;
+    --color-info-bg: rgba(59, 109, 156, 0.10);
+    --color-info-text: #264e75;
+    --color-info-glow: rgba(59, 109, 156, 0.2);
 
-    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
-    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06), 0 2px 4px rgba(0, 0, 0, 0.04);
-    --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.08), 0 4px 10px rgba(0, 0, 0, 0.03);
-    --shadow-glow: 0 0 12px rgba(0, 0, 0, 0.04);
+    --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.04);
+    --shadow-md: 0 6px 16px rgba(0, 0, 0, 0.06);
+    --shadow-lg: 0 12px 28px rgba(0, 0, 0, 0.08);
+    --shadow-glow: 0 0 15px rgba(0, 0, 0, 0.02);
 
-    --scrollbar-track: #f4f6f8;
+    --scrollbar-track: #f8fafc;
     --scrollbar-thumb: rgba(0, 0, 0, 0.18);
     --scrollbar-thumb-hover: rgba(0, 0, 0, 0.32);
 
@@ -219,7 +209,7 @@ body {
 
 body::after, body::before { display: none !important; }
 
-/* Custom Scrollbars */
+/* Scrollbars */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: var(--scrollbar-track); }
 ::-webkit-scrollbar-thumb { 
@@ -249,16 +239,13 @@ label, .text-muted, .small, th, .badge, .nav-link, .font-monospace {
 
 code, pre { font-family: 'JetBrains Mono', monospace; color: var(--text-main); }
 
-/* Semantic Text & Utilities */
+/* Utilities */
 .text-main { color: var(--text-main) !important; }
 .text-body { color: var(--text-body) !important; }
 .text-secondary { color: var(--text-secondary) !important; }
 .text-muted { color: var(--text-muted) !important; }
 
-/* ==========================================================================
-   SUN & MOON THEME SWITCH BUTTON
-   ========================================================================== */
-
+/* Theme Toggle */
 .theme-toggle-btn {
     width: 36px;
     height: 36px;
@@ -305,7 +292,6 @@ code, pre { font-family: 'JetBrains Mono', monospace; color: var(--text-main); }
     transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.25s ease;
 }
 
-/* Dark Mode State */
 [data-theme="dark"] .theme-icon-sun {
     transform: rotate(-90deg) scale(0);
     opacity: 0;
@@ -316,7 +302,6 @@ code, pre { font-family: 'JetBrains Mono', monospace; color: var(--text-main); }
     color: #ffd166;
 }
 
-/* Light Mode State */
 [data-theme="light"] .theme-icon-sun {
     transform: rotate(0deg) scale(1);
     opacity: 1;
@@ -327,10 +312,7 @@ code, pre { font-family: 'JetBrains Mono', monospace; color: var(--text-main); }
     opacity: 0;
 }
 
-/* ==========================================================================
-   CARDS & CONTAINERS
-   ========================================================================== */
-
+/* Cards */
 .card {
     background-color: var(--bg-surface);
     border: 1px solid var(--border-color);
@@ -367,10 +349,7 @@ code, pre { font-family: 'JetBrains Mono', monospace; color: var(--text-main); }
     padding: 0.75rem 1.25rem; 
 }
 
-/* ==========================================================================
-   BUTTONS (LOW SATURATION REFINED)
-   ========================================================================== */
-
+/* Buttons */
 .btn {
     border-radius: var(--radius-sm) !important;
     font-family: 'Inter', sans-serif;
@@ -397,7 +376,6 @@ code, pre { font-family: 'JetBrains Mono', monospace; color: var(--text-main); }
     transition: transform 0.08s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Primary Button */
 .btn-primary {
     background: var(--color-primary) !important;
     border-color: var(--color-primary) !important;
@@ -411,7 +389,6 @@ code, pre { font-family: 'JetBrains Mono', monospace; color: var(--text-main); }
     color: var(--text-on-primary) !important;
 }
 
-/* Secondary Button */
 .btn-secondary { 
     background-color: var(--bg-surface-secondary) !important; 
     color: var(--text-main) !important; 
@@ -423,7 +400,6 @@ code, pre { font-family: 'JetBrains Mono', monospace; color: var(--text-main); }
     color: var(--text-main) !important;
 }
 
-/* Outline Buttons */
 .btn-outline-primary, .btn-outline-secondary, .btn-outline-info, .btn-outline-success, .btn-outline-warning, .btn-outline-danger {
     background-color: transparent;
     border-color: var(--border-color);
@@ -436,7 +412,6 @@ code, pre { font-family: 'JetBrains Mono', monospace; color: var(--text-main); }
     color: var(--text-main) !important;
 }
 
-/* Status Buttons */
 .btn-success {
     background-color: var(--color-success-bg) !important;
     color: var(--color-success-text) !important;
@@ -485,17 +460,13 @@ code, pre { font-family: 'JetBrains Mono', monospace; color: var(--text-main); }
     box-shadow: 0 0 12px var(--color-info-glow) !important;
 }
 
-/* Extra Small Button */
 .btn-xs {
     padding: 0.2rem 0.5rem;
     font-size: 0.72rem;
     border-radius: var(--radius-xs) !important;
 }
 
-/* ==========================================================================
-   STATUS OVERRIDES & ALERTS
-   ========================================================================== */
-
+/* Alerts */
 .bg-success { background-color: var(--color-success) !important; color: #fff !important; }
 .bg-warning { background-color: var(--color-warning) !important; color: #fff !important; }
 .bg-danger  { background-color: var(--color-danger) !important; color: #fff !important; }
@@ -534,10 +505,7 @@ code, pre { font-family: 'JetBrains Mono', monospace; color: var(--text-main); }
     color: var(--text-secondary) !important;
 }
 
-/* ==========================================================================
-   FORMS & INPUTS
-   ========================================================================== */
-
+/* Forms */
 .form-control, .custom-select, .custom-file-label {
     background-color: var(--bg-input) !important;
     border: 1px solid var(--border-color) !important;
@@ -553,7 +521,7 @@ code, pre { font-family: 'JetBrains Mono', monospace; color: var(--text-main); }
 }
 .form-control::placeholder { color: var(--text-muted); }
 
-/* Range Sliders */
+/* Sliders */
 input[type=range] { -webkit-appearance: none; background: transparent; width: 100%; }
 input[type=range]::-webkit-slider-thumb {
     -webkit-appearance: none;
@@ -576,7 +544,7 @@ input[type=range]::-webkit-slider-runnable-track {
     border-radius: 2px;
 }
 
-/* Custom Switches */
+/* Switches */
 .custom-switch .custom-control-label::before {
     background-color: var(--bg-surface-secondary);
     border-color: var(--border-color);
@@ -587,9 +555,7 @@ input[type=range]::-webkit-slider-runnable-track {
     border-color: var(--color-primary-accent);
 }
 
-/* ==========================================================================
-   NAVBAR & NAVIGATION TABS
-   ========================================================================== */
+/* Navbar */
 
 .navbar {
     background-color: var(--bg-glass) !important;
@@ -647,10 +613,7 @@ input[type=range]::-webkit-slider-runnable-track {
     opacity: 1;
 }
 
-/* ==========================================================================
-   SEGMENTED SLIDING NAV TABS & TAB CONTENT TRANSITIONS
-   ========================================================================== */
-
+/* Segmented Tabs */
 .nav-tabs-segmented {
     position: relative;
     display: inline-flex;
@@ -730,7 +693,7 @@ input[type=range]::-webkit-slider-runnable-track {
     will-change: transform, width;
 }
 
-/* Silky Track-Based Horizontal Sliding Content Panels (100% Zero Ghosting / Zero Overlap) */
+/* Sliding Track */
 .tab-content-sliding {
     position: relative;
     overflow: hidden;
@@ -776,10 +739,7 @@ input[type=range]::-webkit-slider-runnable-track {
     }
 }
 
-/* ==========================================================================
-   TABLES & LIST GROUPS
-   ========================================================================== */
-
+/* Tables */
 .table { color: var(--text-body); font-size: 0.85rem; }
 .table th {
     border-top: none;
@@ -825,10 +785,7 @@ input[type=range]::-webkit-slider-runnable-track {
     border-left: 3px solid var(--color-primary-accent) !important;
 }
 
-/* ==========================================================================
-   BADGES & LABELS
-   ========================================================================== */
-
+/* Badges */
 .badge {
     background: var(--bg-surface-secondary) !important;
     border: 1px solid var(--border-color) !important;
@@ -847,7 +804,7 @@ input[type=range]::-webkit-slider-runnable-track {
 .badge-primary, .text-primary { color: var(--text-main) !important; }
 .badge-secondary, .text-secondary { color: var(--text-secondary) !important; }
 
-/* Tool Section Titles */
+/* Section Titles */
 .tool-section-title {
     font-family: 'Inter', sans-serif;
     font-size: 0.75rem;
@@ -864,10 +821,7 @@ input[type=range]::-webkit-slider-runnable-track {
     justify-content: space-between;
 }
 
-/* ==========================================================================
-   IDE LAYOUT STYLES (ANNOTATION CANVAS & WORKSPACE)
-   ========================================================================== */
-
+/* Workspace Layout */
 .ide-layout { background-color: var(--bg-body); color: var(--text-main); }
 .ide-sidebar { 
     background-color: var(--bg-surface); 
@@ -901,11 +855,7 @@ input[type=range]::-webkit-slider-runnable-track {
     background: #000000;
 }
 
-/* ==========================================================================
-   MODAL DIALOGS & SYNCHRONIZED SPATIAL GATHERING
-   ========================================================================== */
-
-/* Background workspace gathering - perfectly synchronized, zero-lag */
+/* Spatial Gathering */
 html.modal-active-anim .tab-content-sliding,
 html.modal-active-anim .container-fluid > .card,
 html.modal-active-anim #mainTabs,
@@ -928,7 +878,7 @@ html.modal-active-anim .navbar {
     will-change: transform, opacity;
 }
 
-/* Frosted blur backdrop - compositor accelerated, instant response */
+/* Backdrop Blur */
 .modal-backdrop {
     background-color: var(--bg-modal-backdrop);
     opacity: 0;
@@ -945,7 +895,7 @@ html.modal-active-anim .navbar {
     -webkit-backdrop-filter: blur(8px) !important;
 }
 
-/* Modal Dialog Organic Unfold / Morph Animation - snappy 0.24s */
+/* Modal Dialog */
 .modal.fade .modal-dialog {
     transform: scale(0.9) translate3d(0, 16px, 0);
     opacity: 0;
@@ -1005,7 +955,7 @@ html.modal-active-anim .navbar {
     to { opacity: 1; transform: scale(1); }
 }
 
-/* Gallery Items */
+/* Gallery */
 .gallery-item {
     border-radius: var(--radius-sm);
     border: 1px solid var(--border-color);
@@ -1019,14 +969,14 @@ html.modal-active-anim .navbar {
     box-shadow: var(--shadow-md); 
 }
 
-/* Adaptive helper utilities */
+/* Helpers */
 .bg-surface { background-color: var(--bg-surface) !important; }
 .bg-surface-secondary { background-color: var(--bg-surface-secondary) !important; }
 .border-theme { border-color: var(--border-color) !important; }
 .rounded-sm { border-radius: var(--radius-sm) !important; }
 .rounded-base { border-radius: var(--radius-base) !important; }
 
-/* Class Chips & Category Badges */
+/* Class Chips */
 .class-chip {
     background-color: var(--bg-surface-secondary);
     color: var(--text-main);

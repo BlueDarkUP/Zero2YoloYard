@@ -10,10 +10,6 @@ import uuid
 from collections import OrderedDict
 from PIL import Image
 
-# ==============================================================================
-# 1. 双引擎自适应导入 (Dual-Engine Import)
-# ==============================================================================
-# 基础引擎 (SAM 2)
 try:
     from sam2.build_sam import build_sam2_video_predictor, build_sam2
     from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
@@ -24,7 +20,6 @@ except ImportError:
     logging.warning("[SAM2] SAM 2 engine not found. Fast point clicks disabled.")
     HAS_SAM2 = False
 
-# 高级引擎 (SAM 3.1)
 try:
     from sam3.model_builder import build_sam3_multiplex_video_predictor, build_sam3_image_model
     from sam3.model.sam3_image_processor import Sam3Processor
@@ -40,26 +35,17 @@ import file_storage
 from bbox_writer import convert_text_to_rects_and_labels
 import settings_manager
 
-# 模型缓存管理
 _sam_cache = {
-    # SAM 2 缓存
     "sam2_video_predictor": None,
     "sam2_image_predictor": None,
-    # SAM 3.1 缓存
     "multiplex_predictor": None,
     "image_model": None,
     "image_processor": None,
-    # 按模式分别记录 checkpoint/device
     "image_checkpoint": None,
     "image_device": None,
     "video_checkpoint": None,
     "video_device": None,
 }
-
-
-# ==============================================================================
-# 2. 引擎自适应加载层
-# ==============================================================================
 
 def _load_sam2_models(mode="image"):
     """加载高精度的 SAM 2 基础引擎"""
@@ -98,7 +84,6 @@ def _load_sam2_models(mode="image"):
 
 
 def _load_sam3_models(mode="video"):
-    """智能加载 SAM 3.1 模型：图像LAM和视频追踪双通道分离"""
     settings = settings_manager.load_settings()
     if not settings.get('enable_sam_model', True):
         return None
@@ -142,8 +127,6 @@ def _load_sam3_models(mode="video"):
     return _sam_cache["multiplex_predictor"] if mode == "video" else _sam_cache["image_processor"]
 
 
-# --- SAM3 帧级 backbone 缓存与统一查询 ---
-
 _sam3_frame_state_cache = OrderedDict()
 _SAM3_QUERY_LOCK = threading.Lock()
 
@@ -161,14 +144,12 @@ def _sam3_frame_cache_put(key, value):
 
 
 def clear_sam3_frame_state_cache():
-    """在 SAM3 checkpoint / 设备变更时调用，避免复用到用旧模型算出来的 backbone 特征。"""
     _sam3_frame_state_cache.clear()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
 
 def _pixel_box_to_norm_cxcywh(box, img_w, img_h):
-    """[x1,y1,x2,y2] 像素坐标 -> SAM3 geometric prompt 需要的 [cx,cy,w,h] 归一化坐标。"""
     x1, y1, x2, y2 = box
     return [
         (x1 + x2) / 2.0 / img_w,
@@ -179,11 +160,10 @@ def _pixel_box_to_norm_cxcywh(box, img_w, img_h):
 
 
 def _get_sam3_frame_state(processor, video_uuid, frame_number, image_path=None):
-    """获取（或懒加载并缓存）某一帧的 SAM3 backbone state。命中缓存不会重跑 backbone。"""
     cache_key = f"{video_uuid}_{frame_number}"
     if cache_key in _sam3_frame_state_cache:
         state = _sam3_frame_state_cache.pop(cache_key)
-        _sam3_frame_state_cache[cache_key] = state  # 移到 LRU 末尾
+        _sam3_frame_state_cache[cache_key] = state
         return state
 
     if image_path is None:
@@ -204,32 +184,15 @@ def _get_sam3_frame_state(processor, video_uuid, frame_number, image_path=None):
 
 def sam3_query_frame(video_uuid, frame_number, text_prompt=None, positive_boxes=None,
                       negative_boxes=None, confidence=0.25, image_path=None):
-    """
-    SAM3 统一查询入口：取代旧的"MobileNet 特征 + 候选框匹配"范式，是本次重构里
-    智能选择(单样例/类别库)、LAM、批量应用、一致性检查共用的核心原语。
-
-    - text_prompt: 开放词汇文本 query（比如某个类别的 SAM3 检索描述）
-    - positive_boxes / negative_boxes: 像素坐标 [x1,y1,x2,y2] 的列表，框样例 query
-      （对应官方 SAM3 的 exemplar/box-prompted 检索能力，即 add_geometric_prompt，
-      本仓库在这次重构之前完全没有用到）
-    - text_prompt 和 positive_boxes 可以同时提供（文本 + 框样例联合约束），至少要
-      提供其中一个
-    - 同一帧（同一个 video_uuid+frame_number）多次调用本函数只会跑一次图像 backbone
-
-    返回: [{"box": [x1,y1,x2,y2], "score": float}, ...]，按 score 降序排列
-    """
     if not text_prompt and not positive_boxes:
         raise ValueError("sam3_query_frame requires at least text_prompt or positive_boxes.")
 
     processor = _load_sam3_models(mode="image")
     if processor is None:
-        raise RuntimeError("SAM 3.1 Image Processor is not initialized (checkpoint not loaded or disabled in settings).")
+        raise RuntimeError("SAM 3.1 Image Processor is not initialized.")
 
     with _SAM3_QUERY_LOCK:
         state = _get_sam3_frame_state(processor, video_uuid, frame_number, image_path=image_path)
-
-        # 每次独立查询前清空上一次查询残留的文本/框 prompt 和检测结果，避免不同查询
-        # 之间互相串味；图像本身的 backbone_out（vision features）不受影响，继续复用。
         processor.reset_all_prompts(state)
 
         img_w = state["original_width"]
@@ -238,8 +201,6 @@ def sam3_query_frame(video_uuid, frame_number, text_prompt=None, positive_boxes=
         device_type = "cuda" if torch.cuda.is_available() else "cpu"
         dtype = torch.bfloat16 if (device_type == "cuda" and torch.cuda.is_bf16_supported()) else (torch.float16 if device_type == "cuda" else torch.float32)
 
-        # confidence_threshold 是共享 processor 实例上的属性，查询期间临时改写，
-        # 结束后还原，并且整个过程持有 _SAM3_QUERY_LOCK，避免并发请求互相冲突阈值。
         old_threshold = processor.confidence_threshold
         processor.confidence_threshold = confidence
         try:
@@ -292,12 +253,11 @@ def sam3_query_frame(video_uuid, frame_number, text_prompt=None, positive_boxes=
                     cnts, _ = cv2.findContours(mask_np, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
                     if cnts:
                         c = max(cnts, key=cv2.contourArea)
-                        # 将系数从 0.004 缩小到 0.0015，提取更精细、贴合物体真实轮廓的多边形
                         eps = 0.0015 * cv2.arcLength(c, True)
                         approx = cv2.approxPolyDP(c, eps, True)
                         polygon = approx.reshape(-1, 2).tolist()
             except Exception as e:
-                logging.error(f"[SAM2 多边形精细化失败]: {e}")
+                logging.error(f"[SAM2 精细化失败]: {e}")
 
         results.append({"box": [x1, y1, x2, y2], "polygon": polygon, "score": score})
 
@@ -306,11 +266,6 @@ def sam3_query_frame(video_uuid, frame_number, text_prompt=None, positive_boxes=
 
 
 def warm_frame_cache(video_uuid, frame_number, image_path=None):
-    """
-    预热某一帧的 SAM3 backbone 缓存（跑一次 set_image，不做任何查询）。
-    对应旧的 "/interactive_segment/preprocess" 语义：在用户真正画框/点击之前，
-    提前把最贵的 backbone 前向跑掉，之后的查询就只需要跑轻量的检测头。
-    """
     processor = _load_sam3_models(mode="image")
     if processor is None:
         raise RuntimeError("SAM 3.1 Image Processor is not initialized.")
@@ -327,15 +282,7 @@ def frame_cache_size():
     return len(_sam3_frame_state_cache)
 
 
-# ==============================================================================
-# 3. 图像交互逻辑的分流 (Core Feature Dispatch)
-# ==============================================================================
-
 def predict_box_from_point_ultralytics(image_path, point_coords):
-    """
-    点选交互 (SAM Point)：完全走 SAM 2 引擎。
-    提供极致的亚毫秒级响应和像素级微小目标边缘咬合。
-    """
     predictor = _load_sam2_models(mode="image")
     if predictor is None:
         logging.error("[Engine Switch] SAM 2 is offline, point click unavailable.")
@@ -378,17 +325,6 @@ def predict_box_from_point_ultralytics(image_path, point_coords):
     return None
 
 
-# 注：原来这里有一个独立的 predict_boxes_from_text_sam3(image_path, text_prompt, ...)
-# 实现，逻辑和上面 §2b 的 sam3_query_frame 高度重复（都是 set_image + set_text_prompt），
-# 且不参与帧级 backbone 缓存。这次重构统一收敛到 sam3_query_frame，唯一的调用方
-# app.py 的 /api/sam3_text_predict 路由已同步改为直接调用 sam3_query_frame（它本来
-# 就有 video_uuid/frame_number，可以正常吃到缓存收益）。
-
-
-# ==============================================================================
-# 4. 视频追踪的分流 (目前走稳定且占用极低的 SAM 2 Tracking)
-# ==============================================================================
-
 def prepare_chunk_images(video_uuid, chunk_start, chunk_end, temp_dir, inference_size, session):
     if os.path.exists(temp_dir): shutil.rmtree(temp_dir)
     os.makedirs(temp_dir)
@@ -408,14 +344,11 @@ def prepare_chunk_images(video_uuid, chunk_start, chunk_end, temp_dir, inference
 
 
 def track_video_ultralytics(video_uuid, start_frame, end_frame, init_bboxes_text, session):
-    """
-    点选追踪 (SAM Tracking)：采用极度成熟、低延迟且支持分块内存释放的 SAM 2 视频推理器。
-    """
     predictor = _load_sam2_models(mode="video")
     if predictor is None: raise RuntimeError("SAM 2 Video Predictor offline.")
 
     settings = settings_manager.load_settings()
-    inference_size = 1024  # 采用标准高清分辨率进行追踪
+    inference_size = 1024
     chunk_size = int(settings.get('batch_tracking_chunk_size', 200))
 
     init_rects, init_labels, init_ids = convert_text_to_rects_and_labels(init_bboxes_text)

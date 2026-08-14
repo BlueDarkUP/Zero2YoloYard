@@ -125,7 +125,6 @@ def create_mosaic_image(image_infos, class_map):
     if not image_infos:
         return np.full((640 * 2, 640 * 2, 3), 114, dtype=np.uint8), []
 
-    # Pad pool if less than 4 images
     image_infos = list(image_infos)
     while len(image_infos) < 4:
         image_infos.append(random.choice(image_infos))
@@ -222,7 +221,6 @@ def create_mosaic_image(image_infos, class_map):
             by2 = (y_center + box_h / 2.0) * h
             orig_area = max(1e-6, (bx2 - bx1) * (by2 - by1))
 
-            # Intersect with cropped quadrant boundaries [x1b, y1b, x2b, y2b]
             cx1 = max(bx1, float(x1b))
             cy1 = max(by1, float(y1b))
             cx2 = min(bx2, float(x2b))
@@ -235,7 +233,6 @@ def create_mosaic_image(image_infos, class_map):
             if clipped_area < 0.15 * orig_area:
                 continue
 
-            # Translate to mosaic canvas coordinates
             mx1 = max(0.0, min(float(s * 2), cx1 + padw))
             my1 = max(0.0, min(float(s * 2), cy1 + padh))
             mx2 = max(0.0, min(float(s * 2), cx2 + padw))
@@ -355,7 +352,6 @@ def create_yolo_dataset_zip(dataset_uuid, frames_data, all_labels, eval_percent,
     try:
         shutil.make_archive(os.path.join(config.STORAGE_DIR, 'datasets', dataset_uuid), 'zip', dataset_dir)
     finally:
-        # 无论打包是否成功都清理临时目录，防止磁盘泄漏
         if os.path.isdir(dataset_dir):
             shutil.rmtree(dataset_dir, ignore_errors=True)
     return zip_path

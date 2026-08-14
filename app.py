@@ -77,7 +77,6 @@ except ImportError:
     logging.error("PyYAML is not installed! Dataset export will fail. Please run 'pip install pyyaml'.")
     yaml = None
 
-# ----------------- 动态获取线程数 -----------------
 initial_settings = settings_manager.load_settings()
 max_workers_setting = initial_settings.get('max_workers', 8)
 
@@ -92,15 +91,11 @@ else:
 app = flask.Flask(__name__)
 app.secret_key = os.urandom(24)
 APP_BOOT_ID = uuid.uuid4().hex
-# 注: 原来这里有一个 prototype_executor (ThreadPoolExecutor)，专给"重建类别原型"
-# (MobileNet+KMeans，比较慢，需要后台跑) 用。SAM3 迁移后，"类别检索文本"只是一次
-# DB 写入 (见 /api/setClassSam3Prompt)，同步返回即可，已确认全仓库没有其它地方在用
-# 这个线程池，一并删除。
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(threadName)s - %(message)s')
 
 with app.app_context():
     try:
-        database.init_db()   # 内部已包含 migrate_db()，无需再次调用
+        database.init_db()
         file_storage.init_storage()
     except Exception as _startup_err:
         logging.critical(f"数据库初始化或迁移失败，应用无法安全启动：{_startup_err}", exc_info=True)
@@ -292,10 +287,7 @@ def setup_wizard():
 
 @app.route('/api/detect_hardware', methods=['GET'])
 def detect_hardware():
-    """检测本机硬件配置并返回"""
     cpu_cores = os.cpu_count() or 4
-
-    # 检测内存 (如果没有 psutil 则默认返回 0)
     ram_gb = 0
     try:
         import psutil
@@ -303,7 +295,6 @@ def detect_hardware():
     except ImportError:
         pass
 
-    # 检测显卡与显存
     has_cuda = torch.cuda.is_available()
     gpu_name = "None"
     vram_gb = 0
@@ -312,7 +303,6 @@ def detect_hardware():
         gpu_name = torch.cuda.get_device_name(0)
         vram_gb = round(torch.cuda.get_device_properties(0).total_memory / (1024 ** 3), 1)
 
-    # 简单的分级策略 (low, mid, high)
     tier = "low"
     if has_cuda:
         if vram_gb >= 8:
@@ -332,24 +322,18 @@ def detect_hardware():
 
 @app.route('/api/complete_setup', methods=['POST'])
 def complete_setup():
-    """保存向导配置并唤醒 AI 模型加载"""
     data = request.json
     settings = settings_manager.load_settings()
 
-    # 覆盖所有传过来的设置
     for key, value in data.items():
         settings[key] = value
 
     settings['initial_setup_done'] = True
 
     if settings_manager.save_settings(settings):
-        # 更新设备状态
         settings_manager.update_device()
-
-        # 核心：使用独立线程启动 AI 模型加载，防止前端请求超时
         logging.info("配置完成，正在后台唤醒 AI 模型引擎...")
         threading.Thread(target=ai_models.startup_ai_models, name="Delayed-AI-Startup").start()
-
         return jsonify({"success": True})
     else:
         return jsonify({"success": False, "message": "Failed to save settings."}), 500
@@ -415,19 +399,16 @@ def serve_annotated_frame(video_uuid, frame_number):
         if image is None:
             return "Could not read frame image", 500
 
-        # 获取指定帧的数据库记录
         frames = database.get_video_frames(video_uuid)
         frame_item = next((f for f in frames if f['frame_number'] == frame_number), None)
 
         if frame_item:
-            # 1. 优先绘制高级 JSON 标注 (适用于分割多边形、姿态、高级框)
             if frame_item.get('annotations_json') and frame_item['annotations_json'].strip():
                 from annotation_model import AnnotationData
                 ann_data = AnnotationData.from_json(frame_item['annotations_json'])
                 for obj in ann_data.objects:
                     color = string_to_color_bgr(obj.label)
 
-                    # 绘制分割多边形与半透明色彩掩码
                     if obj.type == 'polygon' and obj.polygon:
                         pts = np.array(obj.polygon, np.int32).reshape((-1, 1, 2))
                         cv2.polylines(image, [pts], isClosed=True, color=color, thickness=2)
@@ -436,24 +417,21 @@ def serve_annotated_frame(video_uuid, frame_number):
                         cv2.fillPoly(overlay, [pts], color)
                         cv2.addWeighted(overlay, 0.35, image, 0.65, 0, image)
 
-                        # 绘制类别标签
                         x_min = int(np.min(pts[:, 0, 0]))
                         y_min = int(np.min(pts[:, 0, 1]))
                         (text_w, text_h), _ = cv2.getTextSize(obj.label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
                         cv2.rectangle(image, (x_min, max(0, y_min - text_h - 5)), (x_min + text_w, y_min), color, -1)
                         cv2.putText(image, obj.label, (x_min, max(text_h, y_min - 4)), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
-                                    (255, 255, 255), 1)
+                                     (255, 255, 255), 1)
 
-                    # 绘制矩形框
                     elif obj.type == 'bbox' and obj.bbox:
                         x1, y1, x2, y2 = map(int, obj.bbox)
                         cv2.rectangle(image, (x1, y1), (x2, y2), color, 2)
                         (text_w, text_h), _ = cv2.getTextSize(obj.label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
                         cv2.rectangle(image, (x1, max(0, y1 - text_h - 5)), (x1 + text_w, y1), color, -1)
                         cv2.putText(image, obj.label, (x1, max(text_h, y1 - 4)), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
-                                    (255, 255, 255), 1)
+                                     (255, 255, 255), 1)
 
-            # 2. 兼容传统文本检测框 (bboxes_text)
             elif frame_item.get('bboxes_text') and frame_item['bboxes_text'].strip():
                 rects, labels, _ = convert_text_to_rects_and_labels(frame_item['bboxes_text'])
                 for i, rect in enumerate(rects):
@@ -531,15 +509,12 @@ def import_frames():
     total_imported = 0
 
     try:
-        # 分离图片和视频处理
         image_bytes_list = []
 
         for file in uploaded_files:
             filename = file.filename.lower()
 
-            # 1. 如果是视频文件 -> 抽帧
             if filename.endswith(('.mp4', '.avi', '.mov', '.mkv', '.webm')):
-                # 保存临时文件以便 OpenCV 读取
                 temp_video_path = os.path.join(config.STORAGE_DIR, f"temp_import_{uuid.uuid4().hex}.mp4")
                 file.save(temp_video_path)
 
@@ -549,21 +524,17 @@ def import_frames():
                         ret, frame = cap.read()
                         if not ret: break
 
-                        # 编码为 JPG binary
                         success, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
                         if success:
                             image_bytes_list.append(buffer.tobytes())
                     cap.release()
                 finally:
-                    # 清理临时视频
                     if os.path.exists(temp_video_path):
                         os.remove(temp_video_path)
 
-            # 2. 如果是图片文件 -> 直接读取
             elif filename.endswith(('.jpg', '.jpeg', '.png', '.bmp', '.webp')):
                 image_bytes_list.append(file.read())
 
-        # 3. 统一写入数据库 (使用 database.py 中新写的安全函数)
         if image_bytes_list:
             total_imported = database.add_frames_to_video(video_uuid, image_bytes_list)
 
@@ -649,7 +620,6 @@ def get_frame_annotations():
     frame_data = database.get_frame_annotations(video_uuid, frame_number)
     ann_type = database.get_video_annotation_type(video_uuid)
 
-    # 自动平滑转换逻辑：若当前为姿态模式(POSET)，但数据库中只有此前 FindSim 生成的文本检测框(bboxes_text)而无 keypoint，自动实时转换为高精姿态骨架
     if ann_type == 'pose':
         has_kpts = False
         if frame_data and isinstance(frame_data, dict):
@@ -839,7 +809,6 @@ def interpolate_bboxes():
 
             new_bbox_line = f"{interp_x1},{interp_y1},{interp_x2},{interp_y2},{label},{object_id}"
 
-            # 1. 更新传统 bboxes_text 兼容旧接口
             frame_db = database.get_frame_bboxes(video_uuid, current_frame_num)
 
             existing_bboxes = frame_db['bboxes_text'] if frame_db else ''
@@ -856,7 +825,6 @@ def interpolate_bboxes():
 
             database.save_frame_bboxes(video_uuid, current_frame_num, final_bboxes_text)
 
-            # 2. 同步写入现代 AnnotationData (JSON) 结构，确保画布正常加载
             from annotation_model import AnnotationData, AnnotationObject
             curr_ann_dict = database.get_frame_annotations(video_uuid, current_frame_num)
             curr_data = AnnotationData.from_dict(curr_ann_dict) if curr_ann_dict else AnnotationData()
@@ -945,7 +913,6 @@ def interpolate_pose_keypoints():
             for s_obj, e_obj in pairs:
                 target_id = s_obj.id
 
-                # 1. 姿态包围框 BBox 线性插值
                 interp_bbox = None
                 if s_obj.bbox and e_obj.bbox and len(s_obj.bbox) == 4 and len(e_obj.bbox) == 4:
                     bx1 = float(s_obj.bbox[0]) + (float(e_obj.bbox[0]) - float(s_obj.bbox[0])) * alpha
@@ -954,7 +921,6 @@ def interpolate_pose_keypoints():
                     by2 = float(s_obj.bbox[3]) + (float(e_obj.bbox[3]) - float(s_obj.bbox[3])) * alpha
                     interp_bbox = [round(bx1, 2), round(by1, 2), round(bx2, 2), round(by2, 2)]
 
-                # 2. 关键点坐标 (x, y) 与可见性 (v) 线性插值
                 s_kps = s_obj.keypoints or []
                 e_kps = e_obj.keypoints or []
                 e_kp_map = {k.get('name', f"pt_{idx}"): k for idx, k in enumerate(e_kps)}
@@ -1068,19 +1034,12 @@ def save_settings():
 
     restart_required = sam_model_changed or device_changed or max_workers_changed
 
-    # --- THE FIX: Merge the new settings into the current ones ---
     current_settings.update(new_settings)
 
-    # --- Pass the merged 'current_settings' instead of 'new_settings' ---
     if settings_manager.save_settings(current_settings):
         if sam_model_changed or device_changed:
             logging.info("SAM model or device setting changed. Clearing SAM2/SAM3 cache.")
             try:
-                # 修复: 原代码这里 `from ultralytics_sam_tasks import _sam_model_cache`
-                # 引用的是一个不存在的变量名（实际缓存字典叫 _sam_cache），一直被
-                # except (ImportError, AttributeError) 静默吞掉，"切换模型后清缓存"
-                # 这个动作过去其实从没真正生效过。这里改成正确清空 SAM2/SAM3 各自的
-                # 模型缓存，以及 SAM3 迁移新增的帧级 backbone 缓存。
                 import ultralytics_sam_tasks as sam_tasks_module
                 sam_tasks_module._sam_cache["sam2_image_predictor"] = None
                 sam_tasks_module._sam_cache["sam2_video_predictor"] = None
@@ -1255,10 +1214,7 @@ def sam3_text_predict():
             {'success': False, 'message': 'Missing required data (video_uuid, frame_number, text_prompt).'}), 400
 
     try:
-        # 改为直接调用统一原语 sam3_query_frame（同一帧多次查询会复用 backbone 缓存），
-        # 取代原来独立实现、逻辑重复的 predict_boxes_from_text_sam3。
         results = sam3_query_frame(video_uuid, int(frame_number), text_prompt=text_prompt, confidence=confidence)
-
         return jsonify({'success': True, 'results': results})
 
     except Exception as e:
@@ -1282,8 +1238,6 @@ def interactive_segment_preprocess_route():
         return jsonify({'success': False, 'message': 'Missing video_uuid or frame_number.'}), 400
 
     try:
-        # 预热该帧的 SAM3 backbone 缓存（跑一次最贵的图像前向），后续同一帧的文本/
-        # 框样例查询都会直接复用，不再需要旧版"生成全部候选框+提特征"的预处理。
         ai_models.warm_frame_cache(video_uuid, int(frame_number))
         cache_key = f"{video_uuid}_{frame_number}"
         return jsonify({'success': True, 'message': 'Preprocessing successful', 'cache_key': cache_key})
@@ -1305,8 +1259,6 @@ def interactive_segment_predict_route():
     video_uuid = data.get('video_uuid')
     frame_number = int(data.get('frame_number'))
     prompt_boxes = data.get('prompt_boxes', [])
-    # 新增: 负例框 (框样例检索的 label=False)，同一帧内"这不是我想要的"的反例，
-    # 前端可以让用户额外画几个负例框来提升精度。
     negative_prompt_boxes = data.get('negative_prompt_boxes', [])
     use_color = data.get('use_color', False)
 
@@ -1347,8 +1299,6 @@ def predict_from_dataset_route():
         return jsonify({'success': False, 'message': 'Missing required data.'}), 400
 
     try:
-        # 不再需要"先构建原型再预测"两步：直接用该类别的 SAM3 检索文本
-        # (database.class_labels.sam3_prompt，没配置则回退用类别名) 查询这一帧。
         results = ai_models.predict_by_class_text(video_uuid, frame_number, class_name, confidence_threshold)
         response = {'success': True, 'results': results}
         if not ai_models.class_has_labeled_examples(class_name):
@@ -1387,11 +1337,6 @@ def background_preprocess_frame():
     ).start()
 
     return jsonify({'success': True, 'message': 'Preprocessing started in background.'})
-
-
-# 注: 这里原来有一个 /api/get_random_frames_for_neg_sampling 路由，专给旧版
-# negative-sampling-modal（随机抽帧、手绘负例框、给 MobileNet 建负原型）用。SAM3
-# 迁移后批量应用改成纯文本检索驱动，前端已经不再调用这个接口，一并删除。
 
 
 @app.route('/api/apply_class_to_videos', methods=['POST'])
@@ -1486,17 +1431,12 @@ def batch_apply_status_route(task_uuid):
 
 
 def extract_visual_feature_vector(image_bgr):
-    """
-    提取图像的高维视觉特征向量（HSV颜色直方图+空间2x2网格布局+灰度边缘纹理+长宽比）。
-    毫秒级高效运行。
-    """
     if image_bgr is None:
         return np.zeros(72, dtype=np.float32)
     
     h, w, _ = image_bgr.shape
     aspect_ratio = float(w) / float(h) if h > 0 else 1.0
     
-    # 1. 转换 HSV 空间颜色分布 (32维)
     hsv = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2HSV)
     hist_h = cv2.calcHist([hsv], [0], None, [16], [0, 180]).flatten()
     hist_s = cv2.calcHist([hsv], [1], None, [8], [0, 256]).flatten()
@@ -1506,7 +1446,6 @@ def extract_visual_feature_vector(image_bgr):
     cv2.normalize(hist_s, hist_s)
     cv2.normalize(hist_v, hist_v)
 
-    # 2. 空间 2x2 网格局部颜色布局 (32维)
     half_h, half_w = max(1, h // 2), max(1, w // 2)
     quad_hists = []
     for r in [0, half_h]:
@@ -1521,7 +1460,6 @@ def extract_visual_feature_vector(image_bgr):
 
     quad_feat = np.concatenate(quad_hists)
 
-    # 3. 灰度边缘/纹理特征 + 宽高比 (4维)
     gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
     edges = cv2.Canny(gray, 50, 150)
     edge_density = np.float32([np.mean(edges) / 255.0])
@@ -1534,9 +1472,6 @@ def extract_visual_feature_vector(image_bgr):
 
 @app.route('/api/clusterClassificationImages', methods=['POST'])
 def cluster_classification_images_route():
-    """
-    提取图像视觉特征向量，使用 K-Means 进行无监督视觉聚类。
-    """
     settings = settings_manager.load_settings()
     if not settings.get('enable_cls_model', True):
         return jsonify({'success': False, 'message': 'Classification (CLIP) features are disabled in System Settings.'}), 400
@@ -1570,7 +1505,6 @@ def cluster_classification_images_route():
 
     num_clusters = max(1, min(100, num_clusters))
 
-    # 1. 收集目标图片
     frames_to_cluster = []
     all_valid_frames = []
     for vu in video_uuids:
@@ -1604,8 +1538,6 @@ def cluster_classification_images_route():
             if not (unlabeled_only and has_label):
                 frames_to_cluster.append(f_item)
 
-    # 不再静默回退：若 unlabeled_only=True 但结果为空，明确告知用户，
-    # 而不是意外处理已标注帧（可能覆盖已有标注数据）
     if not frames_to_cluster:
         if unlabeled_only and all_valid_frames:
             return jsonify({'success': False, 'message': 'There are no unlabeled frames in the current video. To perform clustering on all frames, uncheck the "Unlabeled Frames Only" option.'}), 400
@@ -1615,7 +1547,6 @@ def cluster_classification_images_route():
 
     num_clusters = max(1, min(len(frames_to_cluster), num_clusters))
 
-    # 2. 提取特征向量 (优先使用 CLIP 深度特征向量)
     model_name = data.get('model_name')
     use_clip = False
     try:
@@ -1650,12 +1581,10 @@ def cluster_classification_images_route():
     feature_matrix = np.array(feature_matrix, dtype=np.float32)
     num_clusters = max(1, min(len(feature_matrix), num_clusters))
 
-    # 3. K-Means 聚类
     from sklearn.cluster import KMeans
     kmeans = KMeans(n_clusters=num_clusters, random_state=42, n_init=5)
     cluster_labels = kmeans.fit_predict(feature_matrix)
 
-    # 4. 组装聚类簇
     clusters_dict = {c_idx: [] for c_idx in range(num_clusters)}
     for idx, c_idx in enumerate(cluster_labels):
         clusters_dict[int(c_idx)].append(valid_frames[idx])
@@ -1742,7 +1671,6 @@ def apply_clip_zero_shot_route():
     except Exception as e:
         return jsonify({'success': False, 'message': f'CLIP module unavailable: {e}'}), 500
 
-    # 1. 收集目标帧
     target_frames = []
     all_frames_list = []
     from annotation_model import AnnotationData
@@ -1767,7 +1695,6 @@ def apply_clip_zero_shot_route():
             if not (unlabeled_only and has_label):
                 target_frames.append(f_obj)
 
-    # 不再静默回退：若 unlabeled_only=True 但结果为空，明确告知用户
     if not target_frames:
         if unlabeled_only and all_frames_list:
             return jsonify({'success': False, 'message': 'There are no unlabeled frames in the selected videos. To process all frames, uncheck the "Unlabeled Frames Only" option.'}), 400
@@ -1775,7 +1702,6 @@ def apply_clip_zero_shot_route():
     if not target_frames:
         return jsonify({'success': False, 'message': 'No matching frames found for zero-shot pre-annotation.'}), 404
 
-    # 2. 批量推断与标注
     updated_count = 0
     predictions_summary = []
 
@@ -2460,7 +2386,6 @@ def get_dataset_analysis_data(dataset_uuid):
         video_uuid, frame_number = frame['video_uuid'], frame['frame_number']
         rects, labels = [], []
 
-        # 1. 优先解析 annotations_json (适用于分割 Polygon、姿态 Keypoint、矢量 Bbox 和 图像分类 Tag)
         if frame.get('annotations_json') and frame['annotations_json'].strip():
             try:
                 ann_data = AnnotationData.from_json(frame['annotations_json'])
@@ -2508,7 +2433,6 @@ def get_dataset_analysis_data(dataset_uuid):
             except Exception as e:
                 logging.error(f"Error parsing annotations_json for frame {video_uuid}/{frame_number}: {e}")
 
-        # 2. 备用解析传统 bboxes_text (适用于早期检测模式)
         if not rects and not labels and frame.get('bboxes_text') and frame['bboxes_text'].strip():
             rects, labels, _ = convert_text_to_rects_and_labels(frame['bboxes_text'])
 
@@ -2665,10 +2589,6 @@ def run_consistency_check(dataset_uuid):
         else:
             logging.info("Starting AI Quality Control with SEMANTIC (SAM3) check ONLY.")
 
-        # 旧实现: 已标注框 -> MobileNet 语义向量 + HSV 颜色直方图 -> 类内/类间相似度找
-        #        离群点。这一整段逻辑（含 embedding 提取、按类别建 prototype_library、
-        #        余弦相似度比较）已经移进 ai_models.check_dataset_consistency，改用
-        #        SAM3 自己的开放词汇置信度分数判断"标得对不对"，不再需要 embedding。
         outlier_image_indices, all_bboxes_info, message = ai_models.check_dataset_consistency(
             dataset_uuid, enable_color_check=is_color_check_enabled
         )
@@ -2686,11 +2606,9 @@ def run_consistency_check(dataset_uuid):
         logging.error(f"On-demand consistency check failed: {e}", exc_info=True)
         return jsonify({'success': False, 'message': f'Review failed: {e}'}), 500
 
-# --- GKDT 姿态通用关键点 AI 识别接口 ---
 
 @app.route('/api/gkdt_text_pose_predict', methods=['POST'])
 def gkdt_text_pose_predict_route():
-    """文本 Prompt 自动识别关键点生成骨架"""
     settings = settings_manager.load_settings()
     if not settings.get('enable_pose_model', True):
         return jsonify({'success': False, 'message': 'Pose estimation features are disabled in System Settings.'}), 400
@@ -2699,8 +2617,8 @@ def gkdt_text_pose_predict_route():
     video_uuid = data.get('video_uuid')
     frame_number = data.get('frame_number')
     class_label = data.get('class_label')
-    custom_kps_texts = data.get('custom_kps_texts') # 可选
-    bbox = data.get('bbox') # 可选 ROI [x1, y1, x2, y2]
+    custom_kps_texts = data.get('custom_kps_texts')
+    bbox = data.get('bbox')
 
     if not video_uuid or frame_number is None or not class_label:
         return jsonify({'success': False, 'message': 'Missing required parameters (video_uuid, frame_number, class_label)'}), 400
@@ -2723,7 +2641,6 @@ def gkdt_text_pose_predict_route():
 
 @app.route('/api/gkdt_sam_pose_predict', methods=['POST'])
 def gkdt_sam_pose_predict_route():
-    """SAM 2.1 + GKDT 交互点选生成独立目标姿态"""
     settings = settings_manager.load_settings()
     if not settings.get('enable_pose_model', True):
         return jsonify({'success': False, 'message': 'Pose estimation features are disabled in System Settings.'}), 400
@@ -2732,7 +2649,7 @@ def gkdt_sam_pose_predict_route():
     video_uuid = data.get('video_uuid')
     frame_number = data.get('frame_number')
     class_label = data.get('class_label')
-    point_coords = data.get('point')  # {'x': ..., 'y': ...}
+    point_coords = data.get('point')
 
     if not all([video_uuid, frame_number is not None, class_label, point_coords]):
         return jsonify(
@@ -2864,7 +2781,6 @@ def preview_augmentations():
         all_labels = database.get_all_class_labels()
         class_map = {name: i for i, name in enumerate(all_labels)}
 
-        # 1. 优先解析 annotations_json 分割多边形
         polygons_data = []
         if frame_item.get('annotations_json') and frame_item['annotations_json'].strip():
             from annotation_model import AnnotationData, AnnotationObject
@@ -2927,7 +2843,6 @@ def preview_augmentations():
 
             return jsonify({'success': True, 'previews': previews})
 
-        # 2. 备用解析传统 bboxes_text
         yolo_bboxes = []
         class_indices = []
         if frame_item.get('bboxes_text') and frame_item['bboxes_text'].strip():
@@ -2935,7 +2850,6 @@ def preview_augmentations():
                                                                       video_info['height'], class_map)
 
         if not yolo_bboxes:
-            # 3. 图像分类模式 / 无框图像 的通用图像数据增强预览
             classifications_data = []
             if frame_item.get('annotations_json') and frame_item['annotations_json'].strip():
                 from annotation_model import AnnotationData
@@ -2959,7 +2873,6 @@ def preview_augmentations():
 
                 vis_image = cv2.cvtColor(aug_image_rgb, cv2.COLOR_RGB2BGR)
 
-                # 若包含分类 Tag，在图像上方绘制亮色 Badge 标签
                 if classifications_data:
                     x_offset = 15
                     for cls_tag in classifications_data:
@@ -3058,11 +2971,6 @@ def start_server():
         ai_models.startup_ai_models()
     else:
         logging.warning("=== 处于初始配置向导模式：已拦截 AI 模型加载，等待用户完成环境配置 ===")
-
-    # 注: 原来这里有两个 atexit.register，退出时把 "原型库" 和 "预处理特征缓存" 落盘
-    # (prototype_library.pt / preprocessed_cache.pt)，是 MobileNet 时代的产物。SAM3
-    # 迁移后不再有需要跨进程持久化的 embedding/原型概念，帧级 backbone 缓存本来就只是
-    # 一个短期的内存 LRU（退出即丢，下次用到时重新跑一次 backbone 即可），不需要落盘。
 
     time.sleep(0.01)
 

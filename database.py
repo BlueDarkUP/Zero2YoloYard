@@ -8,48 +8,37 @@ from bbox_writer import extract_labels
 from sqlalchemy import create_engine, text, event
 from sqlalchemy.pool import QueuePool
 
-# --- 数据库配置 ---
 db_url = f"sqlite:///{config.DATABASE_FILE}"
 
-# 创建带连接池的 SQLAlchemy 引擎
 engine = create_engine(
     db_url,
     poolclass=QueuePool,
-    pool_size=10,  # 保持10个常驻连接
-    max_overflow=20,  # 峰值最多额外创建20个连接
+    pool_size=10,
+    max_overflow=20,
     connect_args={
-        'check_same_thread': False,  # 允许跨线程使用连接
-        'timeout': 15  # 增加锁等待超时时间
+        'check_same_thread': False,
+        'timeout': 15
     }
 )
 
 
-# 监听连接事件：开启 WAL 模式和性能调优
 @event.listens_for(engine, "connect")
 def set_sqlite_pragma(dbapi_connection, connection_record):
     cursor = dbapi_connection.cursor()
-    # 开启预写式日志，允许多个读操作和一个写操作并发执行
     cursor.execute("PRAGMA journal_mode=WAL")
     cursor.execute("PRAGMA foreign_keys=ON")
-    # NORMAL 在 WAL 模式下能提供极高写入性能，且安全性有保证
     cursor.execute("PRAGMA synchronous=NORMAL")
-    # 增加内存缓存大小 (约为 64MB)
     cursor.execute("PRAGMA cache_size=-64000")
-    # 存储临时表和索引在内存中
     cursor.execute("PRAGMA temp_store=MEMORY")
     cursor.close()
 
 
-# 辅助函数：将 SQLAlchemy 的 Row 对象转为 dict，兼容老代码
 def _to_dict(result_proxy):
     return [dict(row._mapping) for row in result_proxy]
 
 
-# --- 数据库初始化与迁移 ---
-
 def migrate_db():
     with engine.begin() as conn:
-        # 获取现有的表和列
         def column_exists(table, column):
             result = conn.execute(text(f"PRAGMA table_info({table})"))
             return any(row[1] == column for row in result)
@@ -59,10 +48,8 @@ def migrate_db():
                 conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"))
                 logging.info(f"Added column '{column}' to table '{table}'.")
 
-        # --- 数据表自动补全列迁移 ---
         add_column('datasets', 'eval_percent', 'REAL')
         add_column('datasets', 'test_percent', 'REAL')
-        # 补上下面这一行：自动为旧数据库补充 export_format 字段
         add_column('datasets', 'export_format', "TEXT DEFAULT 'yolo_v8_detect'")
         add_column('datasets', 'export_options', "TEXT DEFAULT '{}'")
 
@@ -101,7 +88,6 @@ def migrate_db():
                           )
                           '''))
 
-        # 自动补全已有 annotations_json 帧的 frame_labels 和 class_labels 记录
         try:
             from annotation_model import AnnotationData
             rows = conn.execute(text(
@@ -122,7 +108,6 @@ def migrate_db():
                             {"ln": label, "c": int(time.time() * 1000)}
                         )
             
-            # 全局同步所有视频的 labeled_frame_count
             video_rows = conn.execute(text("SELECT video_uuid FROM videos")).fetchall()
             for (v_uuid,) in video_rows:
                 count = conn.execute(
@@ -171,7 +156,6 @@ def force_resync_all_dataset_labels():
         import cv2
         from annotation_model import AnnotationData
         with engine.begin() as conn:
-            # 1. 检查并修复视频状态与分辨率 (width/height)
             inter_statuses = ('EXTRACTING', 'PRE_ANNOTATING', 'APPLYING_CLASS', 'UPLOADING', 'CANCELLING')
             v_rows = conn.execute(text(
                 "SELECT video_uuid, status, width, height, fps, frame_count, extracted_frame_count FROM videos"
@@ -185,7 +169,6 @@ def force_resync_all_dataset_labels():
                 new_fps, new_fc = fps, fc
 
                 if is_intermediate or needs_res:
-                    # 1.1 尝试从视频文件获取分辨率及视频基本元数据
                     vid_path = file_storage.get_video_path(v_uuid)
                     if os.path.exists(vid_path):
                         cap = None
@@ -203,12 +186,11 @@ def force_resync_all_dataset_labels():
                                 if cap_fc > 0 and (new_fc is None or new_fc <= 0):
                                     new_fc = cap_fc
                         except Exception as e:
-                            logging.warning(f"无法从视频文件 [{v_uuid[:8]}] 读取分辨率: {e}")
+                            logging.warning(f"Failed to read resolution from video [{v_uuid[:8]}]: {e}")
                         finally:
                             if cap is not None:
                                 cap.release()
 
-                    # 1.2 若从视频文件未获取到，尝试从抽取的帧图片读取分辨率
                     if new_w is None or new_h is None or new_w <= 0 or new_h <= 0:
                         frame_dir = file_storage.get_frame_dir(v_uuid)
                         if os.path.isdir(frame_dir):
@@ -225,7 +207,6 @@ def force_resync_all_dataset_labels():
                                     except Exception:
                                         pass
 
-                    # 1.3 如果成功获取 width/height
                     if new_w is not None and new_h is not None and new_w > 0 and new_h > 0:
                         target_st = 'READY' if is_intermediate else st
                         update_params = {
@@ -243,17 +224,15 @@ def force_resync_all_dataset_labels():
                             update_params["fc"] = new_fc
 
                         conn.execute(text(f"UPDATE videos SET {', '.join(sql_parts)} WHERE video_uuid = :u"), update_params)
-                        logging.info(f"视频 [{v_uuid[:8]}] 分辨率/状态校准成功: width={new_w}, height={new_h}, status={target_st}")
+                        logging.info(f"Video [{v_uuid[:8]}] calibrated: width={new_w}, height={new_h}, status={target_st}")
                     else:
-                        # 1.4 无法获取 width/height，强制标记为 FAILED
                         conn.execute(text("""
                             UPDATE videos 
                             SET status = 'FAILED', status_message = 'Video upload or extraction incomplete (resolution width/height missing)' 
                             WHERE video_uuid = :u
                         """), {"u": v_uuid})
-                        logging.warning(f"视频 [{v_uuid[:8]}] 缺少分辨率且无法恢复，状态更新为 FAILED")
+                        logging.warning(f"Video [{v_uuid[:8]}] missing resolution, set to FAILED")
 
-                # 1.5 校准 extracted_frame_count 字段
                 frame_dir = file_storage.get_frame_dir(v_uuid)
                 if os.path.isdir(frame_dir):
                     actual_frames = len([f for f in os.listdir(frame_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))])
@@ -261,23 +240,19 @@ def force_resync_all_dataset_labels():
                         conn.execute(text("UPDATE videos SET extracted_frame_count = :c WHERE video_uuid = :u"),
                                      {"c": actual_frames, "u": v_uuid})
 
-            # 2. 遍历所有帧，从 JSON / 框文本 / 标签中解析真实标注
             rows = conn.execute(
                 text("SELECT frame_id, video_uuid, bboxes_text, tags, annotations_json FROM video_frames")).fetchall()
             for r in rows:
                 fid, vu, bt, t_str, aj_str = r[0], r[1], r[2], r[3], r[4]
                 unique_labels = set()
 
-                # 2.1 从传统框文本提取
                 if bt and bt.strip():
                     unique_labels.update(extract_labels(bt))
 
-                # 2.2 从 JSON 高级标注提取（包含分类 Tag、分割多边形、姿态等）
                 if aj_str and aj_str.strip():
                     ann_data = AnnotationData.from_json(aj_str)
                     unique_labels.update(ann_data.get_unique_labels())
 
-                # 2.3 从旧版 tags 字段提取
                 if t_str and t_str.strip() and t_str != '[]':
                     try:
                         tags_list = json.loads(t_str)
@@ -285,7 +260,6 @@ def force_resync_all_dataset_labels():
                     except Exception:
                         pass
 
-                # 2.4 同步补全 frame_labels 关联表
                 if unique_labels:
                     conn.execute(text("DELETE FROM frame_labels WHERE frame_id = :fid"), {"fid": fid})
                     conn.execute(
@@ -299,7 +273,6 @@ def force_resync_all_dataset_labels():
                             {"ln": lbl, "c": int(time.time() * 1000)}
                         )
 
-            # 3. 重新精确校准每一个视频的真实已标注帧数 labeled_frame_count
             video_rows = conn.execute(text("SELECT video_uuid FROM videos")).fetchall()
             for (v_uuid,) in video_rows:
                 count = conn.execute(
@@ -443,9 +416,6 @@ def init_db():
     migrate_db()
 
 
-
-# --- 数据操作 (CRUD) ---
-
 def create_video_entry(description, video_filename, file_size, create_time_ms, annotation_type='detection'):
     video_uuid = str(uuid.uuid4().hex)
     with engine.begin() as conn:
@@ -501,7 +471,6 @@ def update_video_after_extraction_start(video_uuid, width, height, fps, frame_co
         frames_to_insert = [{"u": video_uuid, "fn": i, "bt": "", "sb": "", "t": "", "aj": "", "inc": 1} for i in
                             range(frame_count)]
 
-        # 批量插入提速
         conn.execute(
             text(
                 'INSERT INTO video_frames (video_uuid, frame_number, bboxes_text, suggested_bboxes_text, tags, annotations_json, include_frame_in_dataset) VALUES (:u, :fn, :bt, :sb, :t, :aj, :inc)'),
@@ -576,7 +545,7 @@ def save_frame_annotations(video_uuid, frame_number, annotations_json_str):
         ).fetchone()
 
         if not frame:
-            logging.error(f"无法为 video {video_uuid}, frame {frame_number} 找到 frame_id。")
+            logging.error(f"Failed to find frame_id for video {video_uuid}, frame {frame_number}")
             return
 
         frame_id = frame._mapping['frame_id']
@@ -585,7 +554,6 @@ def save_frame_annotations(video_uuid, frame_number, annotations_json_str):
             {"aj": annotations_json_str, "fid": frame_id}
         )
 
-        # 同步更新 frame_labels 和 class_labels 表
         conn.execute(text('DELETE FROM frame_labels WHERE frame_id = :fid'), {"fid": frame_id})
         from annotation_model import AnnotationData
         ann_data = AnnotationData.from_json(annotations_json_str)
@@ -601,7 +569,6 @@ def save_frame_annotations(video_uuid, frame_number, annotations_json_str):
                     {"ln": label, "c": int(time.time() * 1000)}
                 )
 
-        # 更新已标注帧计数
         new_labeled_count = conn.execute(
             text("""
                 SELECT COUNT(DISTINCT vf.frame_id) FROM video_frames vf
@@ -877,7 +844,6 @@ def update_task_status(task_uuid, status):
 
 def add_class_label(label_name):
     with engine.begin() as conn:
-        # SQLite 不支持 INSERT IGNORE，用 ON CONFLICT 避免报错
         conn.execute(
             text(
                 'INSERT INTO class_labels (label_name, create_time_ms) VALUES (:ln, :c) ON CONFLICT(label_name) DO NOTHING'),
@@ -892,11 +858,6 @@ def get_all_class_labels():
 
 
 def get_all_class_labels_with_prompts():
-    """
-    给 SAM3 检索类功能（智能选择/LAM/批量应用/一致性检查）专用。
-    返回 [{'label_name': ..., 'sam3_prompt': ...}]，sam3_prompt 可能为 None/空字符串
-    （调用方需要自行 fallback 到 label_name，详见 ai_models.get_retrieval_text_for_class）。
-    """
     with engine.connect() as conn:
         result = conn.execute(
             text('SELECT label_name, sam3_prompt FROM class_labels ORDER BY label_name ASC'))
@@ -912,9 +873,6 @@ def get_class_sam3_prompt(label_name):
 
 
 def set_class_sam3_prompt(label_name, sam3_prompt):
-    """
-    设置/更新某个类别用于 SAM3 检索的描述文本。传入空字符串或 None 会清空（即回退到用 label_name 本身）。
-    """
     cleaned = (sam3_prompt or '').strip() or None
     now_ms = int(time.time() * 1000)
     with engine.begin() as conn:
@@ -926,9 +884,6 @@ def set_class_sam3_prompt(label_name, sam3_prompt):
 
 
 def set_class_keypoint_schema(label_name, schema_json):
-    """
-    设置/更新某个类别的骨架点位与连线 Schema (JSON 字符串或 dict)。
-    """
     if isinstance(schema_json, (dict, list)):
         schema_json = json.dumps(schema_json)
     cleaned = (schema_json or '').strip() or None
@@ -1116,7 +1071,6 @@ def get_frame_numbers_for_video(video_uuid):
         return [row[0] for row in result]
 
 def get_frame_bboxes(video_uuid, frame_number):
-    """获取指定帧的边界框数据"""
     with engine.connect() as conn:
         result = conn.execute(
             text('SELECT bboxes_text FROM video_frames WHERE video_uuid = :u AND frame_number = :fn'),
@@ -1125,10 +1079,8 @@ def get_frame_bboxes(video_uuid, frame_number):
         return dict(result._mapping) if result else None
 
 def get_class_usage_count(label_name):
-    """统计某个类别在全局多少个帧中被使用了"""
     try:
         with engine.connect() as conn:
-            # 查询 frame_labels 表中该类别的出现次数
             count = conn.execute(
                 text('SELECT COUNT(DISTINCT frame_id) FROM frame_labels WHERE label_name = :ln'),
                 {"ln": label_name}

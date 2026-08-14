@@ -603,9 +603,7 @@
                             </div>
                         </div>
 
-                        <!-- ═══════════════════════════════════════════════════
-                             LOCAL MODEL MANAGEMENT
-                             ═══════════════════════════════════════════════════ -->
+                        <!-- Local Model Management -->
                         <div class="card settings-section mb-4" id="local-model-mgmt-card" style="border-color: #7c3aed; border-width: 2px;">
                             <div class="card-header d-flex align-items-center justify-content-between" style="background: linear-gradient(90deg, rgba(124,58,237,0.18) 0%, rgba(124,58,237,0.06) 100%); border-bottom: 1px solid rgba(124,58,237,0.35);">
                                 <span style="color: #a78bfa; font-weight: 700; letter-spacing: 0.08em;">
@@ -836,7 +834,6 @@
         $('.modal').appendTo("body");
         let currentSettings = {};
 
-        // ==================== SYS_MANUAL_DATABASE (System Parameter Encyclopedia) ====================
         const sysManualDb = {
             'gpu_device': { title: 'COMPUTATION_NODE', desc: 'Specifies the hardware accelerator for neural network operations.', tune: 'Prioritize NVIDIA_CUDA. Select CPU only if no dedicated GPU is available.', when: 'Switch if console reports CUDA Out-Of-Memory (OOM) errors or to reassign GPU workloads.' },
             'sam_model': { title: 'SEGMENT_CORE (SAM)', desc: 'Core AI vision engine. Determines precision of point-clicks and tracking.', tune: 'Tiny (Fast, 1.5GB VRAM) -> Large (High Precision, 10GB+ VRAM).', when: 'Upgrade to Base/Large if object edges are poorly segmented. Downgrade to Tiny if system crashes or lags heavily.' },
@@ -872,7 +869,6 @@
             'opencv_tracker': { title: 'LEGACY_TRACKER', desc: 'Fallback mathematical tracking algorithms (OpenCV) requiring zero GPU inference.', tune: 'CSRT (Accurate) / MOSSE (Ultra-fast).', when: 'Use to conserve power or when tracking perfectly rigid, translating objects without AI overhead.' }
         };
 
-        // UI Hover Panel Logic
         $(document).on('mouseenter', '.info-trigger', function(e) {
             const key = $(this).data('key');
             const data = sysManualDb[key];
@@ -885,26 +881,21 @@
 
             const panel = $('#sys-manual-panel');
 
-            // Show panel invisibly first to calculate true height
             panel.css({ display: 'block', visibility: 'hidden' });
             const panelWidth = panel.outerWidth();
             const panelHeight = panel.outerHeight();
 
-            // Anchor directly to the mouse cursor coordinates + 15px gap
             let leftPos = e.pageX + 15;
             let topPos = e.pageY + 15;
 
-            // X-axis collision detection
             if (leftPos + panelWidth > $(window).width() - 20) {
                 leftPos = e.pageX - panelWidth - 15;
             }
 
-            // Y-axis collision detection
             if (topPos + panelHeight > $(window).scrollTop() + $(window).height() - 20) {
                 topPos = e.pageY - panelHeight - 15;
             }
 
-            // Apply calculated position, set back to hidden for fade animation
             panel.css({ top: topPos + 'px', left: leftPos + 'px', visibility: 'visible', display: 'none' });
             panel.stop(true, true).fadeIn(150);
 
@@ -912,9 +903,6 @@
             $('#sys-manual-panel').stop(true, true).fadeOut(150);
         });
 
-        // --------------------------------------------------------------------------
-        // Modern Segmented Tab Sliding Indicator & Track-Based Bezier Transitions
-        // --------------------------------------------------------------------------
         let activeTabIndex = 0;
 
         function updateTabIndicator(activeLink, animated = true) {
@@ -935,7 +923,7 @@
                     'transform': `translate3d(${left}px, 0, 0)`,
                     'width': `${width}px`
                 });
-                $indicator[0].offsetHeight; // force reflow
+                $indicator[0].offsetHeight;
                 $indicator.css({ 'transition': '' });
             } else {
                 $indicator.css({
@@ -953,7 +941,7 @@
 
             if (!animated) {
                 $track.css({ 'transition': 'none', 'transform': `translate3d(${offsetPercent}%, 0, 0)` });
-                $track[0].offsetHeight; // force reflow
+                $track[0].offsetHeight;
                 $track.css({ 'transition': '' });
             } else {
                 $track.css({ 'transform': `translate3d(${offsetPercent}%, 0, 0)` });
@@ -965,7 +953,6 @@
             });
         }
 
-        // Initialize indicator position & track on page ready
         setTimeout(() => {
             const $activeTab = $('#mainTabs .nav-link.active');
             updateTabIndicator($activeTab, false);
@@ -977,7 +964,6 @@
             updateTabIndicator($('#mainTabs .nav-link.active'), false);
         });
 
-        // Tab click handling - smoothly slide both indicator and track
         $('#mainTabs .nav-link').on('click', function(e) {
             e.preventDefault();
             const $tab = $(this);
@@ -1187,7 +1173,6 @@
                     currentSettings = data.settings;
                     const s = data.settings;
 
-                    // 1. Hardware
                     $('#setting-gpu-device').val(s.gpu_device);
                     $('#setting-sam-model').val(s.sam_model_checkpoint);
 
@@ -1212,26 +1197,22 @@
                     $('#eval-percent').val(s.default_eval_percent || 20.0);
                     $('#test-percent').val(s.default_test_percent || 10.0);
 
-                    // 2. Algorithm
                     $('#setting-sam-mask-confidence').val(s.sam_mask_confidence).trigger('input');
                     $('#setting-nms-iou-threshold').val(s.nms_iou_threshold).trigger('input');
                     $('#setting-consistency-semantic-threshold').val(s.consistency_semantic_threshold ?? 0.3).trigger('input');
 
-                    // 3. Batch & Tracking
                     $('#setting-batch-tracking-conf').val(s.batch_tracking_conf).trigger('input');
                     $('#setting-preannotation-conf').val(s.default_preannotation_conf).trigger('input');
                     $('#setting-batch-tracking-imgsz').val(s.batch_tracking_imgsz);
                     $('#setting-batch-tracking-chunk-size').val(s.batch_tracking_chunk_size);
                     $('#setting-consistency-confusion-margin').val(s.consistency_confusion_margin ?? 0.15);
 
-                    // 4. Workflow
                     $('#setting-default-annotation-mode').val(s.default_annotation_mode);
                     $('#setting-autosave-enabled').prop('checked', s.autosave_enabled);
                     $('#setting-speedrun-auto-next').prop('checked', s.speedrun_auto_next !== false);
                     $('#setting-jpeg-quality').val(s.frame_extraction_jpeg_quality);
                     $('#setting-opencv-tracker').val(s.default_opencv_tracker);
 
-                    // Maintenance
                     $('#setting-cache-save-interval').val(s.cache_save_interval_seconds);
 
                     loadClassColorManager();
@@ -1767,7 +1748,6 @@
                     }
                 },
                 error: function(err) {
-                    // It could be that the task is already running
                     if (err.responseJSON && err.responseJSON.message === "Task already running") {
                         startDownloadPoll(modelId);
                     } else {

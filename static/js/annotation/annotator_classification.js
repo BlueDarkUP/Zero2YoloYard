@@ -1,7 +1,4 @@
-/**
- * ClassificationAnnotator - Image & Frame Classification Annotator Plugin
- * Supports 1-Key Quick Tagging (Keys 1-9), Auto-Advance, & Canvas Banner Overlays.
- */
+// ClassificationAnnotator
 class ClassificationAnnotator {
     constructor(core) {
         this.core = core;
@@ -14,7 +11,6 @@ class ClassificationAnnotator {
     initDOM() {
         const self = this;
 
-        // Render Search Bar and Tag Chips
         $(document).off('input', '#classification-search').on('input', '#classification-search', function() {
             const query = $(this).val().toLowerCase();
             $('#classification-tag-container .class-chip').each(function() {
@@ -23,7 +19,6 @@ class ClassificationAnnotator {
             });
         });
 
-        // Click Keybind Badge on Chip -> Open Keybind Prompt
         $(document).off('click', '#classification-tag-container .keybind-chip-btn').on('click', '#classification-tag-container .keybind-chip-btn', function(e) {
             e.stopPropagation();
             e.preventDefault();
@@ -33,14 +28,12 @@ class ClassificationAnnotator {
             }
         });
 
-        // Click Tag Chip -> Assign Classification
         $(document).off('click', '#classification-tag-container .class-chip').on('click', '#classification-tag-container .class-chip', function(e) {
             if ($(e.target).hasClass('keybind-chip-btn')) return;
             const className = $(this).data('class-name');
             self.setClassification(className);
         });
 
-        // Render Class Chips initially
         this.renderSidebarTags();
     }
 
@@ -164,7 +157,6 @@ class ClassificationAnnotator {
     }
 
     render(ctx, annotations) {
-        // Sync sidebar tag active states
         this.renderSidebarTags();
 
         const classifications = annotations.classifications || [];
@@ -172,7 +164,6 @@ class ClassificationAnnotator {
 
         ctx.save();
 
-        // Render Top-Left Canvas Banner Badge
         const badgeX = 20 / this.core.zoom;
         const badgeY = 20 / this.core.zoom;
         const fontSize = Math.max(14, 18 / this.core.zoom);
@@ -180,8 +171,8 @@ class ClassificationAnnotator {
         ctx.font = `bold ${fontSize}px "Inter", sans-serif`;
 
         const labelText = isLabeled 
-            ? `🏷️ CLASS: [ ${classifications.join(', ')} ]`
-            : `⚠️ UNLABELED (Press 1-9 to tag)`;
+            ? `CLASS: [ ${classifications.join(', ')} ]`
+            : `UNLABELED (Press 1-9 to tag)`;
 
         const textWidth = ctx.measureText(labelText).width;
         const paddingH = 14 / this.core.zoom;
@@ -189,13 +180,11 @@ class ClassificationAnnotator {
         const boxW = textWidth + paddingH * 2;
         const boxH = fontSize + paddingV * 2;
 
-        // Draw Badge Background
         ctx.fillStyle = isLabeled ? 'rgba(94, 148, 117, 0.9)' : 'rgba(181, 150, 86, 0.9)';
         ctx.beginPath();
         ctx.roundRect ? ctx.roundRect(badgeX, badgeY, boxW, boxH, 6 / this.core.zoom) : ctx.rect(badgeX, badgeY, boxW, boxH);
         ctx.fill();
 
-        // Draw Badge Text
         ctx.fillStyle = '#000000';
         ctx.textBaseline = 'middle';
         ctx.fillText(labelText, badgeX + paddingH, badgeY + boxH / 2);

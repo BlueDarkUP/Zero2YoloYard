@@ -1,13 +1,4 @@
-/**
- * PoseAnnotator - Manual & AI Keypoint / Skeleton Annotator Plugin
- *
- * 设计目标：完全不写死点位数量或名称。每个"骨架实例"就是一个
- * AnnotationObject { type:'keypoint', label, bbox, keypoints:[{name,x,y,v}, ...] }，
- * keypoints 数组长度、顺序、命名完全自由 —— 可以是 COCO-17，也可以是 6 点的机械臂，
- * 21 点的手部，或者任何你想标的东西。
- *
- * 集成 SAM 2.1 实例隔离 + GKDT 姿态生成交互引擎，彻底消除跨目标混淆。
- */
+// PoseAnnotator
 class PoseAnnotator {
     constructor(core) {
         this.core = core;
@@ -32,9 +23,6 @@ class PoseAnnotator {
         this.bindShortcuts();
         this.updateSidebarList();
     }
-
-    // ============================================================
-    // ============================================================
 
     schemaStorageKey(label) {
         return `zyy_pose_schema_global::${label}`;
@@ -116,9 +104,6 @@ class PoseAnnotator {
         });
     }
 
-    // ============================================================
-    // ============================================================
-
     getSelectedClass() {
         if (this.core.selectedClass) return this.core.selectedClass;
         if (typeof window.activeClass !== 'undefined' && window.activeClass) return window.activeClass;
@@ -134,9 +119,6 @@ class PoseAnnotator {
         if (typeof window.stringToColor === 'function') return window.stringToColor(label);
         return '#e4e4e7';
     }
-
-    // ============================================================
-    // ============================================================
 
     initDOM() {
         const self = this;
@@ -508,9 +490,6 @@ class PoseAnnotator {
         });
     }
 
-    // ============================================================
-    // ============================================================
-
     showNameInput(screenX, screenY, defaultName) {
         this.cancelNameInput();
         const input = document.createElement('input');
@@ -579,9 +558,6 @@ class PoseAnnotator {
         this.core.render();
         if (typeof window.showToast === 'function') window.showToast('✅ Skeleton annotation complete', 1500);
     }
-
-    // ============================================================
-    // ============================================================
 
     recomputeBbox(obj) {
         if (!obj || !obj.keypoints || obj.keypoints.length === 0) { if (obj) obj.bbox = null; return; }
@@ -683,13 +659,10 @@ class PoseAnnotator {
             this.updateSidebarList();
             this.core.render();
             if (typeof window.showToast === 'function') {
-                window.showToast('✏️ No template set: Click canvas to add keypoints, Enter/Right-click/"Done" button to finish', 3500);
+                window.showToast('No template set: Click canvas to add keypoints, Enter/Right-click/"Done" button to finish', 3500);
             }
         }
     }
-
-    // ============================================================
-    // ============================================================
 
     hitTestKeypoint(pt, radiusPx) {
         const objects = this.core.annotations.objects || [];
@@ -842,13 +815,10 @@ class PoseAnnotator {
         }
     }
 
-    // ============================================================
-    // ============================================================
-
     colorForVisibility(v) {
-        if (v === 0) return 'rgba(160,160,170,0.9)';   // absent - Gray
-        if (v === 1) return '#b59656';                  // occluded - Soft yellow/orange
-        return '#5e9475';                                // visible - Sage green
+        if (v === 0) return 'rgba(160,160,170,0.9)';
+        if (v === 1) return '#b59656';
+        return '#5e9475';
     }
 
     render(ctx, annotations, selectedId) {
@@ -1072,9 +1042,6 @@ class PoseAnnotator {
             listDiv.appendChild(wrapper);
         });
     }
-
-    // ============================================================
-    // ============================================================
 
     openSchemaEditor(label) {
         $('#pose-schema-modal').remove();

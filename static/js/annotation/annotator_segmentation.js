@@ -1,6 +1,4 @@
-/**
- * SegmentationAnnotator - Professional Polygon Creation & Vertex Editing Plugin
- */
+// SegmentationAnnotator
 class SegmentationAnnotator {
     constructor(core) {
         this.core = core;
@@ -10,17 +8,15 @@ class SegmentationAnnotator {
         this.draggedVertexIndex = null;
         this.hoveredPolygonId = null;
 
-        this.activeTool = 'manual'; // 'manual', 'brush', 'eraser'
+        this.activeTool = 'manual';
         this.brushRadius = 15;
         this.isPainting = false;
         this.brushStrokePoints = [];
 
-        // Whole-polygon drag & drop state
         this.isDraggingPolygon = false;
         this.polygonDragStartPoint = null;
         this.polygonInitialVertices = null;
 
-        // DOM listeners for Paint Tools
         $(document).on('click', '#btn-brush-tool', (e) => {
             e.stopPropagation();
             this.activeTool = (this.activeTool === 'brush') ? 'manual' : 'brush';
@@ -39,7 +35,6 @@ class SegmentationAnnotator {
             this.core.render();
         });
 
-        // Key listeners for closing, canceling, or deleting polygon
         window.addEventListener('keydown', (e) => {
             if ($(e.target).is('input, textarea')) return;
 
@@ -97,13 +92,10 @@ class SegmentationAnnotator {
     }
 
     onMouseDown(pt, e) {
-        // If middle mouse or space panning, ignore
         if (e.button === 1 || this.core.isSpacePressed) return;
 
-        // Active Paint Brush / Eraser Tool
         if (this.activeTool === 'brush' || this.activeTool === 'eraser') {
             if (this.activeTool === 'eraser') {
-                // Auto-detect target polygon under eraser if not currently selected
                 let targetObj = null;
                 const objects = this.core.annotations.objects || [];
                 const r = this.brushRadius;
@@ -130,7 +122,7 @@ class SegmentationAnnotator {
                 const currentClass = this.getSelectedClass();
                 if (!currentClass) {
                     if (typeof window.showToast === 'function') {
-                        window.showToast("⚠️ Please select a Class from the right sidebar first!", 3000);
+                        window.showToast("Please select a Class from the right sidebar first!", 3000);
                     }
                     return;
                 }
@@ -141,15 +133,12 @@ class SegmentationAnnotator {
             return;
         }
 
-        // Double Click to finish current polygon
         if (e.detail === 2) {
             this.closePolygon();
             return;
         }
 
-        // If currently drawing a polygon:
         if (this.currentPolygonPoints.length > 0) {
-            // Check if clicking near the starting vertex to close
             const startPt = this.currentPolygonPoints[0];
             const distToStart = Math.hypot(pt.x - startPt[0], pt.y - startPt[1]);
             const snapRadius = 12 / this.core.zoom;
@@ -159,13 +148,11 @@ class SegmentationAnnotator {
                 return;
             }
 
-            // Append point
             this.currentPolygonPoints.push([pt.x, pt.y]);
             this.core.render();
             return;
         }
 
-        // If not drawing, check if clicking a vertex on the selected polygon to drag:
         if (this.core.selectedObjectId) {
             const selectedObj = this.core.annotations.objects.find(o => o.id === this.core.selectedObjectId);
             if (selectedObj && selectedObj.polygon) {
@@ -180,7 +167,6 @@ class SegmentationAnnotator {
             }
         }
 
-        // Check if clicking inside or near an existing polygon to select and drag it:
         const objects = this.core.annotations.objects || [];
         for (let obj of objects) {
             if (obj.type === 'polygon' && obj.polygon) {
@@ -196,18 +182,16 @@ class SegmentationAnnotator {
             }
         }
 
-        // Otherwise, start a new polygon! First verify a class is selected:
         const currentClass = this.getSelectedClass();
         if (!currentClass) {
             if (typeof window.showToast === 'function') {
-                window.showToast("⚠️ Please select a Class from the right sidebar first!", 3000);
+                window.showToast("Please select a Class from the right sidebar first!", 3000);
             } else {
                 alert("Please select a Class from the right sidebar first!");
             }
             return;
         }
 
-        // Deselect any previous object and start new polygon
         this.core.selectedObjectId = null;
         this.core.updateSidebarList();
         this.currentPolygonPoints = [[pt.x, pt.y]];
@@ -223,7 +207,6 @@ class SegmentationAnnotator {
             return;
         }
 
-        // Handle vertex dragging
         if (this.draggedVertexIndex !== null && this.core.selectedObjectId) {
             const selectedObj = this.core.annotations.objects.find(o => o.id === this.core.selectedObjectId);
             if (selectedObj && selectedObj.polygon) {
@@ -233,7 +216,6 @@ class SegmentationAnnotator {
             }
         }
 
-        // Handle entire polygon mask dragging
         if (this.isDraggingPolygon && this.core.selectedObjectId && this.polygonDragStartPoint && this.polygonInitialVertices) {
             const selectedObj = this.core.annotations.objects.find(o => o.id === this.core.selectedObjectId);
             if (selectedObj && selectedObj.polygon) {
@@ -250,7 +232,6 @@ class SegmentationAnnotator {
             }
         }
 
-        // Handle hovering state
         if (this.currentPolygonPoints.length > 0) {
             this.core.render();
         }
@@ -290,13 +271,11 @@ class SegmentationAnnotator {
         const currentClass = this.getSelectedClass() || 'object';
         const r = this.brushRadius;
 
-        // Create offscreen canvas for rasterizing the stroke mask
         const offCanvas = document.createElement('canvas');
         offCanvas.width = imgW;
         offCanvas.height = imgH;
         const ctx = offCanvas.getContext('2d');
 
-        // Calculate bounding box of stroke + padding
         let minX = imgW, minY = imgH, maxX = 0, maxY = 0;
         for (let p of this.brushStrokePoints) {
             minX = Math.min(minX, Math.floor(p[0] - r - 5));
@@ -307,14 +286,12 @@ class SegmentationAnnotator {
         minX = Math.max(0, minX); minY = Math.max(0, minY);
         maxX = Math.min(imgW - 1, maxX); maxY = Math.min(imgH - 1, maxY);
 
-        // Draw existing selected polygon if editing/adding with brush/eraser
         let selectedObj = this.core.annotations.objects.find(o => o.id === this.core.selectedObjectId);
 
         if (this.activeTool === 'eraser') {
             if (!selectedObj || !selectedObj.polygon || selectedObj.polygon.length < 3) return;
         }
 
-        // Draw existing selected polygon if editing/erasing
         if (selectedObj && selectedObj.polygon && selectedObj.polygon.length >= 3) {
             ctx.beginPath();
             ctx.moveTo(selectedObj.polygon[0][0], selectedObj.polygon[0][1]);
@@ -326,7 +303,6 @@ class SegmentationAnnotator {
             ctx.fill();
         }
 
-        // Rasterize brush stroke or eraser subtraction onto offscreen canvas
         ctx.save();
         if (this.activeTool === 'eraser') {
             ctx.globalCompositeOperation = 'destination-out';
@@ -357,7 +333,6 @@ class SegmentationAnnotator {
         }
         ctx.restore();
 
-        // Extract 100% true outer boundary contour using Moore-Neighbor Tracing
         let boundary = this.traceOuterBoundary(ctx, minX, minY, maxX, maxY, imgW, imgH);
         if (boundary.length < 3) {
             if (this.activeTool === 'eraser' && selectedObj) {
@@ -369,15 +344,12 @@ class SegmentationAnnotator {
             return;
         }
 
-        // Simplify boundary contour using Ramer-Douglas-Peucker algorithm
         boundary = this.simplifyPolygonRDP(boundary, 1.8);
         if (boundary.length < 3) return;
 
         if (selectedObj && (this.activeTool === 'brush' || this.activeTool === 'eraser')) {
-            // Update existing polygon with new outer boundary
             selectedObj.polygon = boundary;
         } else if (this.activeTool === 'brush') {
-            // Add new polygon object
             const polyObj = {
                 id: 'poly_' + Date.now(),
                 type: 'polygon',
@@ -397,7 +369,6 @@ class SegmentationAnnotator {
             return data[(y * w + x) * 4 + 3] > 128;
         };
 
-        // Find starting top-left boundary pixel
         let startX = -1, startY = -1;
         outerLoop: for (let y = minY; y <= maxY; y++) {
             for (let x = minX; x <= maxX; x++) {
@@ -409,7 +380,6 @@ class SegmentationAnnotator {
         }
         if (startX === -1) return [];
 
-        // Moore-Neighbor Tracing Algorithm
         const boundary = [];
         let currX = startX, currY = startY;
         const dirs = [
@@ -471,7 +441,6 @@ class SegmentationAnnotator {
     }
 
     onContextMenu(pt, e) {
-        // Right click closes current polygon
         if (this.currentPolygonPoints.length >= 3) {
             this.closePolygon();
         }
@@ -518,7 +487,6 @@ class SegmentationAnnotator {
     render(ctx, annotations, selectedId) {
         const objects = annotations.objects || [];
 
-        // Render Brush / Eraser Active Hover Cursor
         if ((this.activeTool === 'brush' || this.activeTool === 'eraser') && this.hoverPoint) {
             const radiusOnScreen = this.brushRadius;
             ctx.save();
@@ -532,7 +500,6 @@ class SegmentationAnnotator {
             ctx.restore();
         }
 
-        // Render Active Painting Stroke
         if (this.isPainting && this.brushStrokePoints.length > 0) {
             ctx.save();
             ctx.beginPath();
@@ -548,7 +515,6 @@ class SegmentationAnnotator {
             ctx.restore();
         }
 
-        // 1. Render Existing Polygons
         for (let obj of objects) {
             if (obj.type !== 'polygon' || !obj.polygon || obj.polygon.length < 3) continue;
             const isSelected = obj.id === selectedId;
@@ -561,7 +527,6 @@ class SegmentationAnnotator {
             }
             ctx.closePath();
 
-            // Fill & Stroke
             ctx.fillStyle = isSelected ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.05)';
             ctx.fill();
 
@@ -569,7 +534,6 @@ class SegmentationAnnotator {
             ctx.lineWidth = isSelected ? 3 / this.core.zoom : 2 / this.core.zoom;
             ctx.stroke();
 
-            // Draw Vertices if Selected
             if (isSelected) {
                 const nodeRadius = 5 / this.core.zoom;
                 for (let i = 0; i < obj.polygon.length; i++) {
@@ -586,7 +550,6 @@ class SegmentationAnnotator {
             }
         }
 
-        // 2. Render In-Progress Polygon Rubberband
         if (this.currentPolygonPoints.length > 0) {
             ctx.beginPath();
             ctx.moveTo(this.currentPolygonPoints[0][0], this.currentPolygonPoints[0][1]);
@@ -602,11 +565,10 @@ class SegmentationAnnotator {
             ctx.stroke();
             ctx.setLineDash([]);
 
-            // Draw vertices of in-progress polygon
             const nodeRadius = 5 / this.core.zoom;
             for (let i = 0; i < this.currentPolygonPoints.length; i++) {
                 const pt = this.currentPolygonPoints[i];
-                ctx.fillStyle = (i === 0) ? '#5e9475' : '#bd6363'; // First vertex sage green for snap target
+                ctx.fillStyle = (i === 0) ? '#5e9475' : '#bd6363';
                 ctx.beginPath();
                 ctx.arc(pt[0], pt[1], nodeRadius, 0, 2 * Math.PI);
                 ctx.fill();

@@ -1,6 +1,4 @@
-/**
- * AnnotationCore - Core Canvas State Manager, Zoom/Pan Engine, & Sidebar UI Sync
- */
+// AnnotationCore
 class AnnotationCore {
     constructor(options) {
         this.canvas = options.canvas;
@@ -11,7 +9,6 @@ class AnnotationCore {
         this.currentFrame = 0;
         this.image = document.getElementById('frame-image') || new Image();
 
-        // View Transform (Zoom & Pan)
         this.zoom = 1.0;
         this.panX = 0;
         this.panY = 0;
@@ -20,7 +17,6 @@ class AnnotationCore {
         this.startPanY = 0;
         this.isSpacePressed = false;
 
-        // Unified Annotation Data & Undo History
         this.annotations = {
             objects: [],
             classifications: []
@@ -30,8 +26,6 @@ class AnnotationCore {
 
         this.selectedObjectId = null;
         this.selectedClass = null;
-
-        // Active Annotator Plugin
         this.annotator = null;
 
         this.initEvents();
@@ -85,7 +79,6 @@ class AnnotationCore {
 
     bindClassRegistry() {
         const self = this;
-        // Listen for class selection from sidebar
         $(document).on('click', '#class-list .class-item-clickable', function() {
             setTimeout(() => {
                 if (typeof activeClass !== 'undefined' && activeClass) {
@@ -101,7 +94,6 @@ class AnnotationCore {
     initEvents() {
         const container = this.canvas.parentElement;
 
-        // Track Spacebar for Panning
         window.addEventListener('keydown', (e) => {
             if ($(e.target).is('input, textarea')) return;
             if (e.code === 'Space' && !this.isSpacePressed) {
@@ -117,7 +109,6 @@ class AnnotationCore {
             }
         });
 
-        // Zoom (Wheel) - Centered on Mouse Cursor
         container.addEventListener('wheel', (e) => {
             e.preventDefault();
             const canvasContainer = document.getElementById('canvas-container');
@@ -125,8 +116,6 @@ class AnnotationCore {
             const zoomFactor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
             const newZoom = Math.max(0.1, Math.min(15.0, this.zoom * zoomFactor));
 
-            // Adjust pan so point under cursor stays stationary relative to screen
-            // mouse position relative to container
             const rect = canvasContainer.getBoundingClientRect();
             const mouseX = e.clientX - rect.left;
             const mouseY = e.clientY - rect.top;
@@ -139,7 +128,6 @@ class AnnotationCore {
             canvasContainer.style.transform = `translate(${this.panX}px, ${this.panY}px) scale(${this.zoom})`;
         }, { passive: false });
 
-        // Pan with Middle Click or Space + Left Click
         container.addEventListener('mousedown', (e) => {
             if (e.button === 1 || (e.button === 0 && this.isSpacePressed)) {
                 e.preventDefault();
@@ -191,7 +179,6 @@ class AnnotationCore {
             }
         });
 
-        // Context Menu (Right Click)
         container.addEventListener('contextmenu', (e) => {
             e.preventDefault();
             if (this.annotator && this.annotator.onContextMenu) {
@@ -339,15 +326,11 @@ class AnnotationCore {
     render() {
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         this.ctx.save();
-        // NOTE: Viewport panning & zooming is handled by CSS transform on #canvas-container.
-        // Do not apply ctx.translate / ctx.scale here to avoid double-transforming canvas drawings.
 
-        // 2. Delegate Saved Shape Rendering to Active Annotator Plugin
         if (this.annotator && this.annotator.render) {
             this.annotator.render(this.ctx, this.annotations, this.selectedObjectId);
         }
 
-        // 3. Draw Reviewable AI Suggestions (from database suggested_bboxes_text)
         if (typeof window.suggestionBboxes !== 'undefined' && window.suggestionBboxes.length > 0) {
             const thresholdInput = document.getElementById('suggestion-threshold');
             const threshold = thresholdInput ? parseFloat(thresholdInput.value) : 0.5;
@@ -373,7 +356,6 @@ class AnnotationCore {
             });
         }
 
-        // 4. Draw Interactive Preview Polygons (Smart Select / Find Similar Current Frame Results)
         if (typeof window.interactivePreviewBboxes !== 'undefined' && window.interactivePreviewBboxes.length > 0) {
             const thresholdInput = document.getElementById('result-threshold');
             const threshold = thresholdInput ? parseFloat(thresholdInput.value) : 0.5;
@@ -391,7 +373,6 @@ class AnnotationCore {
                     }
                     this.ctx.closePath();
 
-                    // Highlight brightly if mouse is hovering over this preview polygon
                     if (typeof window.hoveredPreviewIndex !== 'undefined' && window.hoveredPreviewIndex === index) {
                         this.ctx.strokeStyle = '#FFD000';
                         this.ctx.lineWidth = 3 / this.zoom;
@@ -408,7 +389,6 @@ class AnnotationCore {
             });
         }
 
-        // 5. Draw Interactive Prompt BBoxes (Smart Select Drag-Prompt Inputs)
         if (window.isInteractiveMode) {
             if (typeof window.positiveExampleBboxes !== 'undefined' && window.positiveExampleBboxes.length > 0) {
                 this.ctx.strokeStyle = 'rgba(94, 148, 117, 0.9)';
@@ -442,7 +422,6 @@ class AnnotationCore {
             }
         }
 
-        // 6. Draw Temporary LAM Suggestion Polygon
         if (typeof window.tempLamPolygon !== 'undefined' && window.tempLamPolygon) {
             const polyPoints = window.tempLamPolygon;
             this.ctx.beginPath();

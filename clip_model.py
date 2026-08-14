@@ -124,7 +124,6 @@ class CLIPModelManager:
         else:
             raise ValueError("Input image must be OpenCV numpy array or PIL Image.")
 
-        # 1. Image feature extraction
         img_inputs = processor(images=pil_img, return_tensors="pt").to(self.device)
         with torch.no_grad():
             img_out = model.get_image_features(**img_inputs)
@@ -138,7 +137,6 @@ class CLIPModelManager:
                 img_feat = torch.tensor(img_out)
             img_feat = img_feat / img_feat.norm(p=2, dim=-1, keepdim=True)
 
-        # 2. Candidate classes preparation + optional background negative class
         import re
         effective_classes = list(candidate_classes)
         has_negative_class = False
@@ -146,7 +144,6 @@ class CLIPModelManager:
             effective_classes.append("other background, floor or irrelevant object")
             has_negative_class = True
 
-        # 3. Prompt Ensembling templates
         if use_ensemble:
             templates = [
                 "a photo of a {}.",
@@ -163,7 +160,6 @@ class CLIPModelManager:
         else:
             templates = [prompt_template or "a photo of a {}"]
 
-        # 4. Text embeddings computation with Prompt Averaging per class
         class_vectors = []
         with torch.no_grad():
             for c in effective_classes:
@@ -190,9 +186,8 @@ class CLIPModelManager:
                 avg_vec = avg_vec / avg_vec.norm(p=2, dim=-1, keepdim=True)
                 class_vectors.append(avg_vec)
 
-        class_matrix = torch.cat(class_vectors, dim=0) # [num_classes, embed_dim]
+        class_matrix = torch.cat(class_vectors, dim=0)
 
-        # 5. Cosine similarity & Softmax with model logit_scale
         with torch.no_grad():
             logit_scale = model.logit_scale.exp() if hasattr(model, 'logit_scale') else 100.0
             logits = (img_feat @ class_matrix.T) * logit_scale
