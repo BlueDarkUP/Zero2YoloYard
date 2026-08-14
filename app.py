@@ -839,7 +839,7 @@ def interpolate_bboxes():
 
             new_bbox_line = f"{interp_x1},{interp_y1},{interp_x2},{interp_y2},{label},{object_id}"
 
-            # 替换为使用新的通用查询方法
+            # 1. 更新传统 bboxes_text 兼容旧接口
             frame_db = database.get_frame_bboxes(video_uuid, current_frame_num)
 
             existing_bboxes = frame_db['bboxes_text'] if frame_db else ''
@@ -855,6 +855,19 @@ def interpolate_bboxes():
             final_bboxes_text = '\n'.join(filter(None, updated_lines))
 
             database.save_frame_bboxes(video_uuid, current_frame_num, final_bboxes_text)
+
+            # 2. 同步写入现代 AnnotationData (JSON) 结构，确保画布正常加载
+            from annotation_model import AnnotationData, AnnotationObject
+            curr_ann_dict = database.get_frame_annotations(video_uuid, current_frame_num)
+            curr_data = AnnotationData.from_dict(curr_ann_dict) if curr_ann_dict else AnnotationData()
+            curr_data.objects = [o for o in curr_data.objects if o.id != object_id]
+            curr_data.objects.append(AnnotationObject(
+                id=object_id,
+                type='bbox',
+                label=label,
+                bbox=[interp_x1, interp_y1, interp_x2, interp_y2]
+            ))
+            database.save_frame_annotations(video_uuid, current_frame_num, curr_data.to_json())
 
         return jsonify({'success': True, 'message': f'Interpolated {total_steps - 1} frames successfully.'})
 
