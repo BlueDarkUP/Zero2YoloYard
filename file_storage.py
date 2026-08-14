@@ -216,15 +216,38 @@ def create_mosaic_image(image_infos, class_map):
         for j, box in enumerate(yolo_boxes):
             x_center, y_center, box_w, box_h = box
 
-            x_center_abs, box_w_abs = x_center * w, box_w * w
-            y_center_abs, box_h_abs = y_center * h, box_h * h
+            bx1 = (x_center - box_w / 2.0) * w
+            by1 = (y_center - box_h / 2.0) * h
+            bx2 = (x_center + box_w / 2.0) * w
+            by2 = (y_center + box_h / 2.0) * h
+            orig_area = max(1e-6, (bx2 - bx1) * (by2 - by1))
 
-            new_x_center = (x_center_abs + padw) / (s * 2)
-            new_y_center = (y_center_abs + padh) / (s * 2)
-            new_w = box_w_abs / (s * 2)
-            new_h = box_h_abs / (s * 2)
+            # Intersect with cropped quadrant boundaries [x1b, y1b, x2b, y2b]
+            cx1 = max(bx1, float(x1b))
+            cy1 = max(by1, float(y1b))
+            cx2 = min(bx2, float(x2b))
+            cy2 = min(by2, float(y2b))
 
-            final_bboxes.append((class_indices[j], new_x_center, new_y_center, new_w, new_h))
+            if cx2 <= cx1 or cy2 <= cy1:
+                continue
+
+            clipped_area = (cx2 - cx1) * (cy2 - cy1)
+            if clipped_area < 0.15 * orig_area:
+                continue
+
+            # Translate to mosaic canvas coordinates
+            mx1 = max(0.0, min(float(s * 2), cx1 + padw))
+            my1 = max(0.0, min(float(s * 2), cy1 + padh))
+            mx2 = max(0.0, min(float(s * 2), cx2 + padw))
+            my2 = max(0.0, min(float(s * 2), cy2 + padh))
+
+            mw = (mx2 - mx1) / (s * 2)
+            mh = (my2 - my1) / (s * 2)
+            mcx = (mx1 + mx2) / 2.0 / (s * 2)
+            mcy = (my1 + my2) / 2.0 / (s * 2)
+
+            if mw > 0.001 and mh > 0.001:
+                final_bboxes.append((class_indices[j], mcx, mcy, mw, mh))
 
     return mosaic_img, final_bboxes
 
