@@ -137,10 +137,13 @@ def extract_labels(bboxes_text):
 
 
 def format_bboxes_text(bboxes, labels, scale, max_x, max_y):
-    return __convert_bboxes_and_labels_to_text(bboxes, 1 / scale, max_x, max_y, labels)
+    scale_inv = 1.0 / max(1e-6, float(scale))
+    return __convert_bboxes_and_labels_to_text(bboxes, scale_inv, max_x, max_y, labels)
 
 
 def convert_to_yolo_format(bboxes_text, class_map, image_width, image_height):
+    if not image_width or not image_height:
+        return ""
     rects, labels, _ = convert_text_to_rects_and_labels(bboxes_text)
     yolo_lines = []
     for i, rect in enumerate(rects):
@@ -152,9 +155,9 @@ def convert_to_yolo_format(bboxes_text, class_map, image_width, image_height):
         box_height = float(y2 - y1)
         x_center = float(x1) + (box_width / 2)
         y_center = float(y1) + (box_height / 2)
-        x_center_norm = x_center / image_width
-        y_center_norm = y_center / image_height
-        width_norm = box_width / image_width
-        height_norm = box_height / image_height
+        x_center_norm = max(0.0, min(1.0, x_center / float(image_width)))
+        y_center_norm = max(0.0, min(1.0, y_center / float(image_height)))
+        width_norm = max(0.0, min(1.0, box_width / float(image_width)))
+        height_norm = max(0.0, min(1.0, box_height / float(image_height)))
         yolo_lines.append(f"{class_id} {x_center_norm:.6f} {y_center_norm:.6f} {width_norm:.6f} {height_norm:.6f}")
     return "\n".join(yolo_lines)
