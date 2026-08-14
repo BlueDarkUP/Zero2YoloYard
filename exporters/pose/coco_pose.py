@@ -21,13 +21,30 @@ class COCOPoseExporter(BaseExporter):
 
         effective_classes = class_list if class_list else ["person"]
         category_map = {name: idx + 1 for idx, name in enumerate(effective_classes)}
-        categories = [{
-            "id": idx + 1,
-            "name": name,
-            "supercategory": name,
-            "keypoints": COCO_POSE_17_SCHEMA["keypoints"],
-            "skeleton": COCO_POSE_17_SCHEMA["skeleton"]
-        } for idx, name in enumerate(effective_classes)]
+        # Collect keypoint names per class from annotations
+        class_kpt_names = {}
+        for frame_info in frames_data:
+            ann: AnnotationData = frame_info.get("annotations")
+            if ann:
+                for obj in ann.get_keypoints():
+                    if obj.label not in class_kpt_names and obj.keypoints:
+                        class_kpt_names[obj.label] = [kp.get("name", f"pt_{i}") for i, kp in enumerate(obj.keypoints)]
+
+        categories = []
+        for idx, name in enumerate(effective_classes):
+            if name in class_kpt_names and class_kpt_names[name]:
+                kpts = class_kpt_names[name]
+                skel = COCO_POSE_17_SCHEMA["skeleton"] if len(kpts) == 17 else []
+            else:
+                kpts = COCO_POSE_17_SCHEMA["keypoints"]
+                skel = COCO_POSE_17_SCHEMA["skeleton"]
+            categories.append({
+                "id": idx + 1,
+                "name": name,
+                "supercategory": name,
+                "keypoints": kpts,
+                "skeleton": skel
+            })
 
         coco_pose_data = {
             "info": {"description": "COCO Keypoints Export from Zero2YoloYard"},
