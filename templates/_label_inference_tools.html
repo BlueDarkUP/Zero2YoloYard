@@ -1,6 +1,6 @@
 <div class="tool-section-title">
     <span>Inference Tools</span>
-    <i class="bi bi-lightning-charge-fill"></i>
+    <i class="bi bi-lightning-charge-fill text-warning"></i>
 </div>
 <div class="row no-gutters mb-3">
     <div class="col-6 pr-1 mb-2">
@@ -31,7 +31,7 @@
     </div>
 </div>
 
-<div id="sam3-true-lam-controls" style="display: none;" class="mb-3 p-3 border border-warning" style="background: var(--bg-surface-secondary); border-radius: var(--radius-sm);">
+<div id="sam3-true-lam-controls" style="display: none; background: var(--bg-surface-secondary); border-radius: var(--radius-sm);" class="mb-3 p-3 border border-warning">
     <h6 class="small font-weight-bold mb-2 text-warning text-uppercase"><i class="bi bi-magic"></i> Concept Segmentation</h6>
     <p class="text-muted small mb-2 font-monospace" style="font-size: 0.7rem;">Enter object description to locate all instances:</p>
     <input type="text" id="sam3-text-prompt-input" class="form-control form-control-sm tool-input mb-2" placeholder="e.g. 'red car', 'person with hat'...">
@@ -41,26 +41,26 @@
 <div id="interactive-segment-controls" style="display: none;">
     <h6 class="small font-weight-bold mb-2 text-info text-uppercase"><i class="bi bi-crosshair"></i> Smart Select Active</h6>
     <p class="text-muted small mb-3 font-monospace" style="font-size: 0.7rem;">Designate target box to locate similar instances:</p>
-    <div class="custom-control custom-switch mb-3 border-bottom border-secondary pb-2">
+    <div class="custom-control custom-switch mb-3 border-bottom pb-2" style="border-color: var(--border-color) !important;">
         <input type="checkbox" class="custom-control-input" id="smart-select-use-color">
         <label class="custom-control-label small text-muted text-uppercase" for="smart-select-use-color">Strict Color Match <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="color_match"></i></label>
     </div>
     <button id="find-similar-btn" class="btn btn-sm btn-primary w-100 mb-2 text-uppercase font-weight-bold" style="display: none;"><i class="bi bi-radar"></i> Scan Frame</button>
     <button id="clear-samples-btn" class="btn btn-sm btn-secondary w-100 mb-2 text-uppercase"><i class="bi bi-eraser"></i> Clear Signal</button>
-    <div id="interactive-results-controls" style="display: none;" class="mt-3 border-top border-secondary pt-3">
+    <div id="interactive-results-controls" style="display: none;" class="mt-3 border-top pt-3" style="border-color: var(--border-color) !important;">
         <div class="form-group mb-3">
-            <label class="small mb-1 d-flex justify-content-between text-muted text-uppercase"><span>Confidence</span> <span id="threshold-value" class="font-weight-bold text-white">0.50</span></label>
+            <label class="small mb-1 d-flex justify-content-between text-muted text-uppercase"><span>Confidence</span> <span id="threshold-value" class="font-weight-bold text-main">0.50</span></label>
             <input type="range" class="custom-range" id="result-threshold" min="0.1" max="0.99" step="0.01" value="0.50">
         </div>
         <button id="accept-visible-btn" class="btn btn-sm btn-success w-100 mb-2 text-uppercase font-weight-bold"><i class="bi bi-check2-square"></i> Confirm All</button>
-        <button id="finish-interactive-btn" class="btn btn-sm btn-outline-light w-100 text-uppercase">Terminate</button>
+        <button id="finish-interactive-btn" class="btn btn-sm btn-outline-secondary w-100 text-uppercase">Terminate</button>
     </div>
 </div>
 
 <div id="suggestion-review-controls" style="display: none;">
     <h6 class="small font-weight-bold mb-3 text-warning text-uppercase"><i class="bi bi-lightbulb"></i> AI Suggestions</h6>
     <div class="form-group mb-3">
-        <label class="small mb-1 d-flex justify-content-between text-muted text-uppercase"><span>Confidence</span> <span id="suggestion-threshold-value" class="font-weight-bold text-white">0.50</span></label>
+        <label class="small mb-1 d-flex justify-content-between text-muted text-uppercase"><span>Confidence</span> <span id="suggestion-threshold-value" class="font-weight-bold text-main">0.50</span></label>
         <input type="range" class="custom-range" id="suggestion-threshold" min="0.1" max="0.99" step="0.01" value="0.50">
     </div>
     <button id="accept-all-suggestions-btn" class="btn btn-sm btn-outline-warning w-100 text-uppercase font-weight-bold"><i class="bi bi-check-all"></i> Accept Visible</button>
@@ -70,11 +70,11 @@
     <div class="d-flex justify-content-between align-items-center mb-2">
         <h6 class="small font-weight-bold mb-0 text-success text-uppercase" id="track-status-header">Tracking sequence...</h6>
     </div>
-    <div class="progress mb-3 rounded-0 bg-dark" style="height: 6px; border: 1px solid var(--border-color);">
+    <div class="progress mb-3" style="height: 6px; background-color: var(--bg-surface-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-xs);">
         <div id="track-progress-bar" class="progress-bar bg-success" role="progressbar" style="width: 0%;"></div>
     </div>
     <button id="stop-sam2-track-btn" class="btn btn-sm btn-danger w-100 mb-3 text-uppercase font-weight-bold"><i class="bi bi-stop-fill"></i> Abort</button>
-    <div class="border-top border-secondary pt-3 mt-2">
+    <div class="border-top pt-3 mt-2" style="border-color: var(--border-color) !important;">
         <small class="text-muted d-block mb-2 text-uppercase font-monospace">Review Mode Active</small>
         <button id="save-all-tracked-btn" class="btn btn-sm btn-success w-100 mb-2 text-uppercase font-weight-bold" disabled><i class="bi bi-hdd-fill"></i> Commit Results</button>
         <button id="exit-track-mode-btn" class="btn btn-sm btn-secondary w-100 text-uppercase">Exit</button>

@@ -3,7 +3,22 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta name="color-scheme" content="light dark">
     <title>Zero2YoloYard</title>
+
+    <!-- Zero-FOUC Theme Pre-initialization -->
+    <script>
+    (function() {
+        try {
+            const savedTheme = localStorage.getItem('z2y_theme');
+            const systemPrefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            const initialTheme = savedTheme || (systemPrefersDark ? 'dark' : 'light');
+            document.documentElement.setAttribute('data-theme', initialTheme);
+            const meta = document.querySelector('meta[name="color-scheme"]');
+            if (meta) meta.content = initialTheme;
+        } catch(e) {}
+    })();
+    </script>
 
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
@@ -23,6 +38,7 @@
             height: 26px;
             background-color: var(--bg-glass);
             backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
             border-top: 1px solid var(--border-color);
             display: flex;
             align-items: center;
@@ -32,6 +48,7 @@
             font-size: 0.7rem;
             color: var(--text-secondary);
             z-index: 9999;
+            transition: background-color 0.25s ease, border-color 0.25s ease;
         }
 
         .status-item {
@@ -46,7 +63,7 @@
             background-color: var(--color-success);
             margin-right: 8px;
             border-radius: 50%;
-            box-shadow: 0 0 8px var(--color-success);
+            box-shadow: 0 0 8px var(--color-success-glow);
         }
 
         main {
@@ -57,12 +74,13 @@
 
         /* Navbar Brand Hover Animation */
         .navbar-brand-icon {
-            font-size: 1.4rem;
+            font-size: 1.35rem;
+            color: var(--text-main);
             transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.3s ease;
         }
         .navbar-brand:hover .navbar-brand-icon {
             transform: rotate(90deg) scale(1.1);
-            color: #ffffff !important;
+            color: var(--color-primary-accent) !important;
         }
 
         /* ==================== SYSTEM INITIALIZATION SPLASH ==================== */
@@ -86,7 +104,7 @@
             top: -40px;
             width: 140px;
             height: 140px;
-            background: radial-gradient(circle, rgba(255,255,255,0.08) 0%, transparent 70%);
+            background: radial-gradient(circle, var(--color-primary-glow) 0%, transparent 70%);
             border-radius: 50%;
             pointer-events: none;
             animation: pulseGlow 3s infinite ease-in-out;
@@ -110,15 +128,15 @@
             color: var(--text-secondary); margin-bottom: 24px;
         }
         .splash-bar-container {
-            width: 100%; height: 3px; background: rgba(255, 255, 255, 0.08);
+            width: 100%; height: 3px; background: var(--border-color);
             position: relative; overflow: hidden; border-radius: 2px;
-            box-shadow: inset 0 1px 2px rgba(0,0,0,0.5);
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
         }
         .splash-bar-fill {
             height: 100%; width: 0%; 
-            background: linear-gradient(90deg, #567594, #e4e4e7, #ffffff);
+            background: linear-gradient(90deg, var(--color-info), var(--color-primary), var(--text-main));
             transition: width 0.15s linear;
-            box-shadow: 0 0 10px rgba(255,255,255,0.5);
+            box-shadow: 0 0 10px var(--color-primary-glow);
         }
         .splash-status {
             font-family: 'JetBrains Mono', monospace;
@@ -136,12 +154,13 @@
         }
 
         .sys-toast {
-            background: rgba(18, 18, 21, 0.92);
-            border: 1px solid var(--border-color);
+            background: var(--bg-surface);
+            border: 1px solid var(--border-highlight);
             border-left: 4px solid var(--color-primary);
             color: var(--text-main);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.7), 0 0 15px rgba(255,255,255,0.03);
+            box-shadow: var(--shadow-lg);
             backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
             border-radius: var(--radius-sm);
             animation: toastSlideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
             overflow: hidden;
@@ -157,6 +176,22 @@
         .sys-toast.toast-success { border-left-color: var(--color-success); }
         .sys-toast.toast-warning { border-left-color: var(--color-warning); }
         .sys-toast.toast-info { border-left-color: var(--color-info); }
+        
+        .sys-toast .toast-header {
+            background-color: transparent !important;
+            border-bottom: 1px solid var(--border-color);
+            color: var(--text-main);
+        }
+        .sys-toast .close {
+            color: var(--text-secondary);
+            text-shadow: none;
+            opacity: 0.8;
+            outline: none;
+        }
+        .sys-toast .close:hover {
+            color: var(--text-main);
+            opacity: 1;
+        }
     </style>
     {% block head %}{% endblock %}
 </head>
@@ -177,26 +212,34 @@
         </div>
     </div>
 
-    <nav class="navbar navbar-expand-lg navbar-dark py-2 px-4 border-bottom">
+    <nav class="navbar navbar-expand-lg py-2 px-4 border-bottom">
         <a class="navbar-brand d-flex align-items-center" href="/">
-            <i class="bi bi-bounding-box text-light mr-3 navbar-brand-icon" style="opacity: 0.9;"></i>
+            <i class="bi bi-bounding-box mr-3 navbar-brand-icon"></i>
             <div class="d-flex flex-column justify-content-center">
-                <span class="font-weight-bold" style="font-family: 'Inter', sans-serif; letter-spacing: -0.01em; line-height: 1.2; font-size: 1.15rem;">Zero2YoloYard</span>
-                <span class="small text-muted" style="font-family: 'JetBrains Mono', monospace; font-size: 0.65rem;">by BlueDarkUP</span>
+                <span class="font-weight-bold" style="letter-spacing: -0.01em; line-height: 1.2; font-size: 1.15rem; color: var(--text-main);">Zero2YoloYard</span>
+                <span class="small text-muted" style="font-size: 0.65rem;">by BlueDarkUP</span>
             </div>
         </a>
 
-        <button class="navbar-toggler border-0" type="button" data-toggle="collapse" data-target="#navbarContent">
-            <span class="navbar-toggler-icon"></span>
+        <button class="navbar-toggler border-0" type="button" data-toggle="collapse" data-target="#navbarContent" aria-label="Toggle navigation">
+            <i class="bi bi-list text-main" style="font-size: 1.4rem;"></i>
         </button>
 
         <div class="collapse navbar-collapse" id="navbarContent">
             <ul class="navbar-nav mr-auto"></ul>
 
             <div class="d-flex align-items-center text-right">
-                <div class="d-none d-md-block mr-4 text-right">
+                <!-- Theme Switcher Button (Sun / Moon) -->
+                <button id="theme-toggle-btn" class="theme-toggle-btn mr-3" type="button" aria-label="Toggle Light and Dark Theme" title="Toggle Light / Dark Theme">
+                    <div class="theme-icon-container">
+                        <i class="bi bi-sun-fill theme-icon-sun"></i>
+                        <i class="bi bi-moon-stars-fill theme-icon-moon"></i>
+                    </div>
+                </button>
+
+                <div class="d-none d-md-block mr-3 text-right">
                     <div class="small text-muted font-monospace" style="font-size: 0.7rem;">BE BASED ON FMLTC</div>
-                    <div class="small text-success font-monospace d-flex align-items-center justify-content-end" style="font-size: 0.65rem; gap: 4px;">
+                    <div class="small font-monospace d-flex align-items-center justify-content-end text-success" style="font-size: 0.65rem; gap: 4px;">
                         <span class="status-indicator"></span> Connected
                     </div>
                 </div>
@@ -209,11 +252,49 @@
         {% block content %}{% endblock %}
     </main>
 
+    <div class="system-status-bar">
+        <div class="d-flex align-items-center">
+            <div class="status-item">
+                <span class="status-indicator"></span>
+                <span>ENGINE: <b class="text-main">ONLINE</b></span>
+            </div>
+            <div class="status-item d-none d-sm-flex">
+                <span>LATENCY: <b id="sys-latency" class="text-main">12ms</b></span>
+            </div>
+            <div class="status-item d-none d-md-flex">
+                <span>SYSTEM_LOAD: <b id="sys-memory" class="text-main">42.8%</b></span>
+            </div>
+        </div>
+        <div class="d-flex align-items-center">
+            <span class="d-none d-md-inline mr-3">v2.5.0-PRO</span>
+            <span>ZERO2YOLOYARD</span>
+        </div>
+    </div>
+
     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 
     <script>
+        // ==================== THEME CONTROLLER ====================
+        window.toggleTheme = function() {
+            const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', newTheme);
+            try {
+                localStorage.setItem('z2y_theme', newTheme);
+                const meta = document.querySelector('meta[name="color-scheme"]');
+                if (meta) meta.content = newTheme;
+            } catch(e) {}
+            window.dispatchEvent(new CustomEvent('themeChanged', { detail: { theme: newTheme } }));
+        };
+
+        document.addEventListener("DOMContentLoaded", () => {
+            const themeBtn = document.getElementById('theme-toggle-btn');
+            if (themeBtn) {
+                themeBtn.addEventListener('click', window.toggleTheme);
+            }
+        });
+
         // ==================== BOOT SEQUENCE LOGIC ====================
         document.addEventListener("DOMContentLoaded", () => {
             const splash = document.getElementById("telemetry-splash");
@@ -295,7 +376,7 @@
                     <h6 id="sysPromptTitle" class="modal-title font-weight-bold text-main text-uppercase">
                         <i class="bi bi-pencil mr-2"></i> Edit Prompt
                     </h6>
-                    <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close" style="text-shadow: none; opacity: 0.7; outline: none;">
+                    <button type="button" class="close text-secondary" data-dismiss="modal" aria-label="Close" style="outline: none;">
                         <span aria-hidden="true">&times;</span>
                     </button>
                 </div>
@@ -326,14 +407,14 @@
 
             const toastHtml = `
                 <div id="${toastId}" class="toast sys-toast ${toastClass} mb-2" role="alert" aria-live="assertive" aria-atomic="true" data-delay="${type === 'error' ? '5000' : '3200'}">
-                    <div class="toast-header border-0 bg-transparent text-white pb-0 pt-2 px-3">
+                    <div class="toast-header border-0 bg-transparent pb-0 pt-2 px-3">
                         <i class="bi ${icon} mr-2"></i>
                         <strong class="mr-auto font-monospace small tracking-wider">${title}</strong>
-                        <button type="button" class="ml-2 mb-1 close text-white" data-dismiss="toast" style="text-shadow: none; opacity: 0.8; outline: none;">
+                        <button type="button" class="ml-2 mb-1 close" data-dismiss="toast" style="outline: none;">
                             <span aria-hidden="true">&times;</span>
                         </button>
                     </div>
-                    <div class="toast-body font-monospace small pt-1 pb-2 px-3 text-muted">
+                    <div class="toast-body font-monospace small pt-1 pb-2 px-3 text-secondary">
                         > ${message}
                     </div>
                 </div>`;
@@ -402,6 +483,7 @@
         };
 
         $(document).on('show.bs.modal', '.modal', function () {
+            document.documentElement.classList.add('modal-active-anim');
             const openCount = $('.modal.show').length;
             const newZ = 1050 + openCount * 20;
             $(this).css('z-index', newZ);
@@ -411,9 +493,19 @@
             }, 10);
         });
 
+        $(document).on('hide.bs.modal', '.modal', function () {
+            // Instantly start restoring the background at 0ms latency when close is triggered
+            if ($('.modal.show').length <= 1) {
+                document.documentElement.classList.remove('modal-active-anim');
+            }
+        });
+
         $(document).on('hidden.bs.modal', '.modal', function () {
             if ($('.modal.show').length > 0) {
                 $('body').addClass('modal-open');
+                document.documentElement.classList.add('modal-active-anim');
+            } else {
+                document.documentElement.classList.remove('modal-active-anim');
             }
         });
     </script>

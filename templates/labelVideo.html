@@ -182,7 +182,7 @@
     }
     #class-list .list-group-item,
     #bbox-list .list-group-item {
-        background: rgba(0,0,0,0.2);
+        background: var(--bg-surface);
         color: var(--text-main);
         border: 1px solid transparent;
         border-bottom: 1px solid var(--border-color);
@@ -201,11 +201,12 @@
         width: 100%;
         display: flex;
         align-items: center;
+        color: var(--text-main);
     }
     #class-list .list-group-item:hover,
     #bbox-list .list-group-item:hover {
-        background: rgba(255,255,255,0.05);
-        border-left-color: rgba(255,255,255,0.5);
+        background: var(--bg-hover);
+        border-left-color: var(--color-primary-accent);
         transform: translateX(2px);
     }
     #class-list .list-group-item.active,
@@ -213,20 +214,23 @@
         background: var(--bg-surface-secondary);
         border-top: 1px solid var(--border-color);
         border-bottom: 1px solid var(--border-color);
-        border-left: 3px solid var(--text-main);
+        border-left: 3px solid var(--color-primary-accent);
         color: var(--text-main);
         transform: translateX(4px);
     }
     .delete-class-btn {
-        opacity: 0.3;
-        transition: opacity 0.2s, transform 0.2s;
+        opacity: 0.4;
+        color: var(--text-secondary);
+        transition: opacity 0.2s, transform 0.2s, color 0.2s;
     }
     #class-list .list-group-item:hover .delete-class-btn { opacity: 1; }
     .delete-class-btn:hover { transform: scale(1.2); color: var(--color-danger) !important; }
     .class-count-badge {
         font-size: 0.65rem;
         padding: 2px 6px;
-        background: rgba(255,255,255,0.08);
+        background: var(--bg-surface-secondary);
+        border: 1px solid var(--border-color);
+        color: var(--text-main);
         border-radius: 10px;
         margin-left: auto;
     }
@@ -235,8 +239,9 @@
         width: 12px;
         height: 12px;
         margin-right: 10px;
-        border: 1px solid rgba(255,255,255,0.6);
+        border: 1px solid var(--border-color);
         border-radius: 2px;
+        box-shadow: var(--shadow-sm);
     }
     .btn {
         border-radius: var(--radius-sm) !important;
@@ -264,9 +269,9 @@
         user-select: none;
     }
     .keybind-btn:hover {
-        background: rgba(255, 255, 255, 0.12);
-        color: #ffffff;
-        border-color: rgba(255, 255, 255, 0.3);
+        background: var(--bg-hover);
+        color: var(--text-main);
+        border-color: var(--border-active);
     }
     .keybind-btn.empty-key {
         color: var(--text-muted);
@@ -282,8 +287,9 @@
         position: fixed;
         top: 0; left: 0; right: 0; bottom: 0;
         z-index: 1050;
-        background: rgba(9, 9, 11, 0.8);
+        background: var(--bg-modal-backdrop);
         backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -293,7 +299,7 @@
         background: var(--bg-surface);
         border: 1px solid var(--border-color);
         border-radius: var(--radius-base);
-        box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+        box-shadow: var(--shadow-lg);
         padding: 20px;
         color: var(--text-main);
         text-align: center;
@@ -514,15 +520,15 @@
                 <a href="/" class="btn btn-sm btn-outline-secondary mr-3 font-weight-medium" style="border-color: transparent;">
                     <i class="bi bi-chevron-left"></i> Return
                 </a>
-                <div class="pl-3 border-left border-secondary" style="overflow: hidden; white-space: nowrap;">
-                    <h6 class="mb-0 font-weight-bold text-white" style="font-family: 'Inter', sans-serif;">{{ video_entity.description }}</h6>
+                <div class="pl-3 border-left" style="overflow: hidden; white-space: nowrap; border-color: var(--border-color) !important;">
+                    <h6 class="mb-0 font-weight-bold text-main" style="font-family: 'Inter', sans-serif;">{{ video_entity.description }}</h6>
                     <small class="text-muted text-monospace">TASK: <span class="text-primary">{{ task_entity.assigned_to }}</span> // FRAMES: {{ task_entity.start_frame }}-{{ task_entity.end_frame }}</small>
                 </div>
             </div>
-            <div class="d-flex align-items-center border border-secondary px-3 py-1 mx-2" style="background: var(--bg-input); border-radius: var(--radius-sm);">
+            <div class="d-flex align-items-center border px-3 py-1 mx-2" style="background: var(--bg-input); border-color: var(--border-color) !important; border-radius: var(--radius-sm);">
                 <button class="btn btn-sm btn-link text-secondary p-0 mr-2" onclick="document.getElementById('frame-slider').stepDown(); document.getElementById('frame-slider').dispatchEvent(new Event('input'));" style="transition: color 0.2s;"><i class="bi bi-caret-left-fill"></i></button>
                 <span class="font-weight-bold mx-2 text-monospace text-main" style="min-width: 100px; text-align: center; font-size: 1em;">
-                    <span id="frame-number-display" class="text-white">{{ task_entity.start_frame }}</span> <span class="text-muted">/</span> {{ task_entity.end_frame }}
+                    <span id="frame-number-display" class="text-main">{{ task_entity.start_frame }}</span> <span class="text-muted">/</span> {{ task_entity.end_frame }}
                 </span>
                 <button class="btn btn-sm btn-link text-secondary p-0 ml-2" onclick="document.getElementById('frame-slider').stepUp(); document.getElementById('frame-slider').dispatchEvent(new Event('input'));" style="transition: color 0.2s;"><i class="bi bi-caret-right-fill"></i></button>
             </div>
@@ -551,8 +557,8 @@
                 <div class="d-flex align-items-center">
                     <i class="bi bi-bezier2 mr-3" style="font-size: 1.8rem; text-shadow: 0 0 10px var(--color-warning);"></i>
                     <div>
-                        <strong class="text-uppercase" style="letter-spacing: 0.1em; font-size: 1.1em;">Interpolation Active</strong><br>
-                        <small class="text-monospace text-white">Adjust Target -> Click 'Confirm' to execute.</small>
+                        <strong class="text-uppercase text-warning" style="letter-spacing: 0.1em; font-size: 1.1em;">Interpolation Active</strong><br>
+                        <small class="text-monospace text-main">Adjust Target -> Click 'Confirm' to execute.</small>
                     </div>
                 </div>
             </div>
@@ -609,7 +615,7 @@
                     <button id="add-class-btn" class="btn btn-outline-secondary" type="button"><i class="bi bi-plus-lg"></i></button>
                 </div>
             </div>
-            <ul id="class-list" class="list-group list-group-flush border border-secondary" style="max-height: 220px; overflow-y: auto; background: rgba(0,0,0,0.3);"></ul>
+            <ul id="class-list" class="list-group list-group-flush border" style="max-height: 220px; overflow-y: auto; background: var(--bg-surface-secondary); border-color: var(--border-color) !important; border-radius: var(--radius-sm);"></ul>
             <div class="mt-3">
                 <div class="custom-control custom-switch mb-2">
                     <input type="checkbox" class="custom-control-input" id="dataset-find-use-color">
@@ -667,10 +673,10 @@
 
 {% from "_macros.html" import render_modal %}
 {% call render_modal('apply-scope-modal', 'APPLY_SAM3_MODEL') %}
-<div class="mb-3 p-3 border border-secondary" style="background: rgba(255,255,255,0.02);">
+<div class="mb-3 p-3 border" style="background: var(--bg-surface-secondary); border-color: var(--border-color) !important; border-radius: var(--radius-sm);">
     <h6 class="font-weight-bold text-primary text-uppercase">Step 1: Confidence Threshold</h6>
     <p class="text-muted small mb-2 font-monospace">Set minimum score for label generation.</p>
-    <label class="d-flex justify-content-between small font-weight-bold text-white">
+    <label class="d-flex justify-content-between small font-weight-bold text-main">
         <span>VALUE</span>
         <span id="apply-confidence-value" class="text-primary font-monospace">0.50</span>
     </label>
@@ -684,10 +690,10 @@
         SAM3 will scan every unlabeled frame in the selected scope using the class's retrieval text (<code id="apply-scope-class-name">-</code>),
         and write the results as formal annotations.
     </p>
-    <div id="apply-scope-options" class="border border-secondary p-2" style="max-height: 240px; overflow-y: auto;">
+    <div id="apply-scope-options" class="border p-2" style="max-height: 240px; overflow-y: auto; border-color: var(--border-color) !important; border-radius: var(--radius-sm);">
         <div class="form-check py-1">
             <input class="form-check-input" type="radio" name="apply-scope" id="apply-scope-this-video" value="this_video" checked>
-            <label class="form-check-label small text-white" for="apply-scope-this-video">
+            <label class="form-check-label small text-main" for="apply-scope-this-video">
                 Only this video
             </label>
         </div>
@@ -705,15 +711,15 @@
 <!-- CLIP Zero-Shot Pre-Annotation Modal for labelVideo.html -->
 <div class="modal fade" id="labelVideoClipModal" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
-        <div class="modal-content bg-dark text-white border-secondary" style="box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6);">
-            <div class="modal-header border-secondary bg-black">
+        <div class="modal-content">
+            <div class="modal-header">
                 <h5 class="modal-title font-monospace text-primary font-weight-bold"><i class="bi bi-robot mr-2"></i> CLIP ZERO-SHOT AUTOMATIC PRE-ANNOTATION</h5>
-                <button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button>
+                <button type="button" class="close text-secondary" data-dismiss="modal"><span>&times;</span></button>
             </div>
-            <div class="modal-body bg-dark">
+            <div class="modal-body">
                 <div class="form-group">
                     <label class="font-monospace small text-muted font-weight-bold">CLIP MODEL VARIANT:</label>
-                    <select id="clip-model-select" class="form-control form-control-sm bg-black text-primary border-secondary font-monospace">
+                    <select id="clip-model-select" class="form-control form-control-sm font-monospace">
                         <option value="clip-vit-base-patch32" selected>clip-vit-base-patch32 (Fastest, ~350MB)</option>
                         <option value="clip-vit-base-patch16">clip-vit-base-patch16 (Balanced, ~600MB)</option>
                         <option value="clip-vit-large-patch14">clip-vit-large-patch14 (Highest Precision, ~1.7GB)</option>
@@ -722,9 +728,9 @@
 
                 <div class="form-group">
                     <label class="font-monospace small text-muted font-weight-bold">CANDIDATE CLASSES FOR PRE-ANNOTATION:</label>
-                    <div id="clip-classes-container" class="p-3 bg-black border border-secondary rounded custom-scrollbar" style="max-height: 150px; overflow-y: auto;"></div>
+                    <div id="clip-classes-container" class="p-3 bg-surface-secondary border rounded custom-scrollbar" style="max-height: 150px; overflow-y: auto; border-color: var(--border-color) !important;"></div>
                     <div class="input-group input-group-sm mt-2">
-                        <input type="text" id="clip-custom-class-input" class="form-control bg-black text-white border-secondary font-monospace" placeholder="Add extra candidate class name...">
+                        <input type="text" id="clip-custom-class-input" class="form-control font-monospace" placeholder="Add extra candidate class name...">
                         <div class="input-group-append">
                             <button id="clip-add-class-btn" class="btn btn-outline-primary font-monospace" type="button"><i class="bi bi-plus-lg"></i> ADD</button>
                         </div>
@@ -734,7 +740,7 @@
                 <div class="form-row">
                     <div class="form-group col-md-6">
                         <label class="font-monospace small text-muted font-weight-bold">PROMPT TEMPLATE:</label>
-                        <input type="text" id="clip-prompt-template" class="form-control form-control-sm bg-black text-white border-secondary font-monospace" value="a photo of a {}">
+                        <input type="text" id="clip-prompt-template" class="form-control form-control-sm font-monospace" value="a photo of a {}">
                     </div>
                     <div class="form-group col-md-6">
                         <label class="font-monospace small text-muted font-weight-bold">CONFIDENCE THRESHOLD (<span id="clip-conf-val">0.40</span>):</label>
@@ -754,7 +760,7 @@
 
                 <div id="clip-results-container"></div>
             </div>
-            <div class="modal-footer border-secondary bg-black">
+            <div class="modal-footer">
                 <button type="button" class="btn btn-sm btn-secondary font-monospace" data-dismiss="modal">CANCEL</button>
                 <button type="button" id="clip-run-zeroshot-btn" class="btn btn-sm btn-primary font-monospace font-weight-bold px-4">
                     <i class="bi bi-magic mr-1"></i> RUN ZERO-SHOT PRE-ANNOTATION
@@ -767,18 +773,18 @@
 <!-- Visual Feature Clustering Modal for Classification Tasks -->
 <div class="modal fade" id="labelVideoClusterModal" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-centered" role="document">
-        <div class="modal-content bg-dark text-white border-secondary" style="box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6);">
-            <div class="modal-header border-secondary bg-black">
+        <div class="modal-content">
+            <div class="modal-header">
                 <h5 class="modal-title font-monospace text-info font-weight-bold">
                     <i class="bi bi-diagram-3-fill mr-2"></i> VISUAL FEATURE CLUSTERING (K-MEANS)
                 </h5>
-                <button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button>
+                <button type="button" class="close text-secondary" data-dismiss="modal"><span>&times;</span></button>
             </div>
-            <div class="modal-body bg-dark">
+            <div class="modal-body">
                 <div class="form-row align-items-center mb-3">
                     <div class="col-md-4">
                         <label class="font-monospace small text-muted font-weight-bold mb-1">EMBEDDING MODEL:</label>
-                        <select id="lv-cluster-model-select" class="form-control form-control-sm bg-black text-info border-secondary font-monospace">
+                        <select id="lv-cluster-model-select" class="form-control form-control-sm font-monospace">
                             <option value="clip-vit-base-patch32" selected>clip-vit-base-patch32 (Fastest)</option>
                             <option value="clip-vit-base-patch16">clip-vit-base-patch16 (Balanced)</option>
                             <option value="clip-vit-large-patch14">clip-vit-large-patch14 (High Precision)</option>
@@ -792,7 +798,7 @@
                     <div class="col-md-3">
                         <div class="custom-control custom-checkbox pt-3">
                             <input type="checkbox" class="custom-control-input" id="lv-cluster-unlabeled-only" checked>
-                            <label class="custom-control-label small font-monospace text-warning" for="lv-cluster-unlabeled-only">UNLABELED FRAMES ONLY</label>
+                            <label class="custom-control-label small font-monospace text-warning" for="lv-cluster-unlabeled-only">UNLABELED ONLY</label>
                         </div>
                     </div>
                     <div class="col-md-2 text-right pt-3">
@@ -814,7 +820,7 @@
                     </div>
                 </div>
             </div>
-            <div class="modal-footer border-secondary bg-black">
+            <div class="modal-footer">
                 <button type="button" class="btn btn-sm btn-secondary font-monospace" data-dismiss="modal">CLOSE</button>
             </div>
         </div>
@@ -827,7 +833,7 @@
         <div class="keybind-modal-header">
             <i class="bi bi-keyboard-fill text-primary mr-2" style="font-size: 1.3rem;"></i>
             <span class="font-weight-bold">ASSIGN HOTKEY SHORTCUT</span>
-            <button type="button" class="close text-light ml-auto" id="close-keybind-modal-btn" style="outline: none;">&times;</button>
+            <button type="button" class="close text-secondary ml-auto" id="close-keybind-modal-btn" style="outline: none;">&times;</button>
         </div>
         <div class="keybind-modal-body">
             <div class="mb-2 text-muted small">Target Class:</div>
@@ -1203,13 +1209,13 @@
                 });
 
                 const clusterCard = $(`
-                    <div class="card bg-black border-secondary mb-3">
-                        <div class="card-header bg-dark border-secondary d-flex justify-content-between align-items-center py-2">
+                    <div class="card mb-3">
+                        <div class="card-header d-flex justify-content-between align-items-center py-2">
                             <span class="font-monospace small font-weight-bold text-info">
                                 <i class="bi bi-collection-fill mr-1"></i> CLUSTER #${idx + 1} (${images.length} images)
                             </span>
                             <div class="d-flex align-items-center">
-                                <select class="form-control form-control-sm bg-black text-white border-secondary font-monospace mr-2 cluster-tag-select" style="width: 180px;" data-cluster="${clusterId}">
+                                <select class="form-control form-control-sm font-monospace mr-2 cluster-tag-select" style="width: 180px;" data-cluster="${clusterId}">
                                     ${classOptionsHtml}
                                 </select>
                                 <button class="btn btn-sm btn-info font-monospace btn-apply-cluster-tag mr-2" data-cluster="${clusterId}">
@@ -2331,9 +2337,9 @@
                         res.datasets.forEach((ds, idx) => {
                             const radioId = `apply-scope-dataset-${idx}`;
                             $datasetOptions.append(`
-                                <div class="form-check py-1 mt-1 border-top border-secondary pt-2">
+                                <div class="form-check py-1 mt-1 border-top pt-2" style="border-color: var(--border-color) !important;">
                                     <input class="form-check-input" type="radio" name="apply-scope" id="${radioId}" value="dataset" data-dataset-uuid="${ds.dataset_uuid}">
-                                    <label class="form-check-label small text-white" for="${radioId}">
+                                    <label class="form-check-label small text-main" for="${radioId}">
                                         Entire dataset: <strong>${ds.description}</strong> <span class="text-muted">(${ds.video_uuids.length} videos)</span>
                                     </label>
                                 </div>
@@ -2392,12 +2398,12 @@
             const suggestionList = popup.find('.list-group');
 
             if (suggestions.length === 0) {
-                suggestionList.append('<div class="list-group-item bg-transparent text-white border-0">No suggestions.</div>');
+                suggestionList.append('<div class="list-group-item bg-transparent text-main border-0">No suggestions.</div>');
             } else {
                 suggestions.forEach(sug => {
                     const color = stringToColor(sug.label);
                     suggestionList.append(`
-                        <button type="button" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center bg-transparent text-white border-bottom border-secondary" style="transition: all 0.2s;" data-label="${sug.label}">
+                        <button type="button" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center bg-transparent text-main border-bottom" style="transition: all 0.2s; border-color: var(--border-color) !important;" data-label="${sug.label}">
                             <div><span class="color-swatch" style="background-color: ${color};"></span> ${sug.label}</div>
                             <span class="badge badge-primary rounded-0">${(sug.score * 100).toFixed(1)}%</span>
                         </button>

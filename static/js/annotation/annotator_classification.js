@@ -151,9 +151,9 @@ class ClassificationAnnotator {
                 : ((idx < 9) ? String(idx + 1) : '');
             const shortcutNum = keyStr ? `[${keyStr}] ` : '';
             const chip = $(`
-                <div class="class-chip px-3 py-2 border rounded text-truncate font-weight-bold ${isAssigned ? 'bg-warning text-dark border-warning' : 'bg-dark text-light border-secondary'}" 
+                <div class="class-chip px-3 py-2 border rounded text-truncate font-weight-bold ${isAssigned ? 'bg-warning text-dark border-warning' : 'bg-surface-secondary text-main'}" 
                      data-class-name="${cls}" 
-                     style="cursor: pointer; transition: all 0.2s ease; font-size: 0.85rem; user-select: none;">
+                     style="cursor: pointer; transition: all 0.2s ease; font-size: 0.85rem; user-select: none; border-color: var(--border-color) !important;">
                     <span class="opacity-75 mr-1 font-monospace keybind-chip-btn" data-class-name="${cls}" style="font-size: 0.75rem; cursor: pointer;" title="Click to bind shortcut">${shortcutNum}</span>
                     <span>${cls}</span>
                     ${isAssigned ? '<i class="bi bi-check-circle-fill ml-2 text-dark"></i>' : ''}

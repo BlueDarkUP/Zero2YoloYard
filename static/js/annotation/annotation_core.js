@@ -305,7 +305,8 @@ class AnnotationCore {
         objects.forEach((obj, idx) => {
             const isSelected = obj.id === this.selectedObjectId;
             const item = document.createElement('div');
-            item.className = `d-flex justify-content-between align-items-center p-2 mb-1 border rounded ${isSelected ? 'bg-primary text-white border-primary' : 'bg-dark text-light border-secondary'}`;
+            item.className = `d-flex justify-content-between align-items-center p-2 mb-1 border rounded ${isSelected ? 'bg-surface-secondary text-main' : 'bg-surface text-main'}`;
+            item.style.borderColor = isSelected ? 'var(--color-primary-accent)' : 'var(--border-color)';
             item.style.cursor = 'pointer';
 
             const name = document.createElement('span');

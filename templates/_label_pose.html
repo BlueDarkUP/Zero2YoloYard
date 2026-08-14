@@ -11,7 +11,7 @@
         color: var(--text-main);
         border: 1px solid var(--border-active);
         border-radius: var(--radius-sm);
-        box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+        box-shadow: var(--shadow-md);
         outline: none;
     }
     .task-pose [data-v]:disabled { opacity: 0.35; cursor: not-allowed; }
@@ -78,12 +78,12 @@
     <div id="truelam-panel-controls" class="pose-panel-box border border-warning" style="display: none;">
         <div class="small font-weight-bold text-warning mb-1 d-flex justify-content-between align-items-center">
             <span><i class="bi bi-lightning-fill mr-1"></i>TrueLAM Pose</span>
-            <span class="badge badge-warning text-dark" style="font-size: 0.6rem; font-weight: 700;">AI Auto</span>
+            <span class="badge badge-warning" style="font-size: 0.6rem; font-weight: 700;">AI Auto</span>
         </div>
         <div class="input-group input-group-sm my-1">
-            <input type="text" id="pose-truelam-prompt-input" class="form-control bg-dark text-light border-secondary" placeholder="Prompt (e.g. person)" style="font-size: 0.75rem;">
+            <input type="text" id="pose-truelam-prompt-input" class="form-control" placeholder="Prompt (e.g. person)" style="font-size: 0.75rem;">
         </div>
-        <button type="button" id="btn-truelam-pose-batch" class="btn btn-sm btn-warning font-weight-bold w-100 text-dark mt-1" style="font-size: 0.75rem;">
+        <button type="button" id="btn-truelam-pose-batch" class="btn btn-sm btn-warning font-weight-bold w-100 mt-1" style="font-size: 0.75rem;">
             <i class="bi bi-magic mr-1"></i>Detect Current Frame
         </button>
         <button type="button" id="btn-truelam-pose-dataset-batch" class="btn btn-sm btn-outline-warning font-weight-bold w-100 mt-1" style="font-size: 0.75rem;">
@@ -95,23 +95,23 @@
     <div id="interp-panel-controls" class="pose-panel-box border border-info" style="display: none;">
         <div class="small font-weight-bold text-info mb-1 d-flex justify-content-between align-items-center">
             <span><i class="bi bi-graph-up mr-1"></i>Keypoint Interpolation</span>
-            <span class="badge badge-info text-dark" style="font-size: 0.6rem; font-weight: 700;">Linear</span>
+            <span class="badge badge-info" style="font-size: 0.6rem; font-weight: 700;">Linear</span>
         </div>
         <div class="d-flex mb-1" style="gap: 4px;">
             <div class="input-group input-group-sm flex-fill">
-                <div class="input-group-prepend"><span class="input-group-text bg-dark text-info border-secondary" style="font-size: 0.7rem;">Start</span></div>
-                <input type="number" id="pose-interp-start-frame" class="form-control bg-dark text-light border-secondary" placeholder="Frame" style="font-size: 0.75rem;">
+                <div class="input-group-prepend"><span class="input-group-text text-info" style="font-size: 0.7rem; background: var(--bg-surface); border-color: var(--border-color);">Start</span></div>
+                <input type="number" id="pose-interp-start-frame" class="form-control" placeholder="Frame" style="font-size: 0.75rem;">
             </div>
             <button type="button" id="btn-set-pose-interp-start" class="btn btn-sm btn-outline-info" style="font-size: 0.7rem; padding: 0.2rem 0.4rem;">Set</button>
         </div>
         <div class="d-flex mb-2" style="gap: 4px;">
             <div class="input-group input-group-sm flex-fill">
-                <div class="input-group-prepend"><span class="input-group-text bg-dark text-info border-secondary" style="font-size: 0.7rem;">End</span></div>
-                <input type="number" id="pose-interp-end-frame" class="form-control bg-dark text-light border-secondary" placeholder="Frame" style="font-size: 0.75rem;">
+                <div class="input-group-prepend"><span class="input-group-text text-info" style="font-size: 0.7rem; background: var(--bg-surface); border-color: var(--border-color);">End</span></div>
+                <input type="number" id="pose-interp-end-frame" class="form-control" placeholder="Frame" style="font-size: 0.75rem;">
             </div>
             <button type="button" id="btn-set-pose-interp-end" class="btn btn-sm btn-outline-info" style="font-size: 0.7rem; padding: 0.2rem 0.4rem;">Set</button>
         </div>
-        <button type="button" id="btn-exec-pose-interpolate" class="btn btn-sm btn-info font-weight-bold text-dark w-100" style="font-size: 0.75rem;">
+        <button type="button" id="btn-exec-pose-interpolate" class="btn btn-sm btn-info font-weight-bold w-100" style="font-size: 0.75rem;">
             <i class="bi bi-arrow-down-up mr-1"></i>Execute Interpolation
         </button>
     </div>
@@ -131,7 +131,7 @@
     </button>
 
     <!-- Keypoint Visibility Status Buttons -->
-    <div class="pose-panel-box border border-secondary p-1 mb-2">
+    <div class="pose-panel-box border p-1 mb-2" style="border-color: var(--border-color) !important;">
         <div class="btn-group btn-group-sm w-100" role="group">
             <button type="button" class="btn btn-outline-success py-1" data-v="2" style="font-size: 0.7rem;">🟢 Vis (2)</button>
             <button type="button" class="btn btn-outline-warning py-1" data-v="1" style="font-size: 0.7rem;">🟠 Occ (1)</button>

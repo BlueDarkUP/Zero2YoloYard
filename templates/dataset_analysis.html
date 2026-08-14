@@ -10,15 +10,6 @@
         height: 350px;
         width: 100%;
         border: 1px solid var(--border-color);
-        background: rgba(0,0,0,0.3);
-    }
-
-    /* Chart Containers */
-    .chart-container {
-        position: relative;
-        height: 350px;
-        width: 100%;
-        border: 1px solid var(--border-color);
         background: var(--bg-surface);
         border-radius: var(--radius-base);
         box-shadow: var(--shadow-sm);
@@ -165,9 +156,9 @@
     }
 
     .warning-item {
-        background: rgba(181, 150, 86, 0.08);
+        background: var(--color-warning-bg);
         border-left: 3px solid var(--color-warning);
-        color: var(--text-body);
+        color: var(--color-warning-text);
         font-family: 'JetBrains Mono', monospace;
         padding: 0.5rem;
         margin-bottom: 0.25rem;
@@ -285,22 +276,22 @@
                     </div>
                     <div class="card-body p-0">
                         <div class="row no-gutters">
-                            <div class="col-lg-4 border-right border-secondary p-3 bg-dark">
-                                <h6 class="font-weight-bold mb-3 border-bottom border-secondary pb-2 text-uppercase text-muted font-monospace small">01 // PARAMETERS</h6>
+                            <div class="col-lg-4 border-right p-3 bg-surface-secondary" style="border-color: var(--border-color) !important;">
+                                <h6 class="font-weight-bold mb-3 border-bottom pb-2 text-uppercase text-muted font-monospace small" style="border-color: var(--border-color) !important;">01 // PARAMETERS</h6>
                                 <div id="preview-aug-controls" class="custom-scrollbar">
                                     {% include '_augmentation_controls.html' %}
                                 </div>
                             </div>
 
                             <div class="col-lg-8 p-3">
-                                <h6 class="font-weight-bold mb-3 border-bottom border-secondary pb-2 text-uppercase text-muted font-monospace small">02 // LIVE FEED</h6>
+                                <h6 class="font-weight-bold mb-3 border-bottom pb-2 text-uppercase text-muted font-monospace small" style="border-color: var(--border-color) !important;">02 // LIVE FEED</h6>
 
                                 <div class="mb-3">
                                     <small class="text-muted d-block mb-2 font-weight-bold text-uppercase font-monospace">SOURCE SELECT:</small>
                                     <div id="aug-preview-source-selector" class="d-flex flex-wrap" style="gap: 10px;"></div>
                                 </div>
 
-                                <div id="aug-preview-gallery-container" class="border border-secondary p-3" style="min-height: 300px; background: rgba(0,0,0,0.2);">
+                                <div id="aug-preview-gallery-container" class="border p-3" style="min-height: 300px; background: var(--bg-surface); border-color: var(--border-color) !important; border-radius: var(--radius-sm);">
                                     <div id="aug-preview-gallery"></div>
                                     <div id="aug-preview-loader" class="text-center mt-5" style="display: none;">
                                         <div class="spinner-border text-primary" role="status"></div>
@@ -336,7 +327,7 @@
 
                         <div class="d-flex align-items-center mt-2 mt-md-0">
                             <label class="mr-2 mb-0 small font-weight-bold text-muted text-uppercase">FILTER:</label>
-                            <select id="outlier-filter" class="form-control form-control-sm mr-2 rounded-0 bg-black text-white border-secondary" style="width: auto; max-width: 280px;">
+                            <select id="outlier-filter" class="form-control form-control-sm mr-2" style="width: auto; max-width: 280px;">
                                 <option value="none">SHOW_ALL</option>
                                 <option value="area_smallest">SMALLEST_OBJECTS (TOP 10)</option>
                                 <option value="area_largest">LARGEST_OBJECTS (TOP 10)</option>
@@ -345,7 +336,7 @@
                                 <option value="iou_high">HIGH_OVERLAP (IoU > 0.95)</option>
                                 <option value="consistency_outliers" hidden style="color: var(--color-danger); font-weight: bold;">AI_REVIEW_OUTLIERS</option>
                             </select>
-                            <button id="reset-filter-btn" class="btn btn-sm btn-outline-secondary rounded-0"><i class="bi bi-x-lg"></i> RESET</button>
+                            <button id="reset-filter-btn" class="btn btn-sm btn-outline-secondary"><i class="bi bi-x-lg"></i> RESET</button>
                         </div>
                     </div>
                     <div class="card-body p-0">
@@ -381,37 +372,47 @@ $(document).ready(function() {
     };
 
     // --- Core Color Palette (Low Saturation) ---
+    function isDarkTheme() {
+        return document.documentElement.getAttribute('data-theme') !== 'light';
+    }
+
     function getColor(type) {
+        const dark = isDarkTheme();
         switch (type) {
-            case 'primary': return 'rgba(228, 228, 231, 0.7)';
-            case 'success': return 'rgba(94, 148, 117, 0.7)';  // Muted Sage
-            case 'warning': return 'rgba(181, 150, 86, 0.7)';  // Muted Amber
-            case 'info':    return 'rgba(86, 117, 148, 0.7)';  // Muted Slate Blue
-            case 'danger':  return 'rgba(189, 99, 99, 0.7)';   // Muted Brick Red
-            case 'scatter': return 'rgba(228, 228, 231, 0.85)';
-            default:        return 'rgba(161, 161, 170, 0.6)';
+            case 'primary': return dark ? 'rgba(228, 228, 231, 0.75)' : 'rgba(30, 41, 59, 0.75)';
+            case 'success': return dark ? 'rgba(91, 142, 125, 0.75)' : 'rgba(46, 107, 86, 0.75)';
+            case 'warning': return dark ? 'rgba(184, 147, 85, 0.75)' : 'rgba(146, 108, 39, 0.75)';
+            case 'info':    return dark ? 'rgba(94, 127, 158, 0.75)' : 'rgba(52, 94, 133, 0.75)';
+            case 'danger':  return dark ? 'rgba(182, 98, 98, 0.75)' : 'rgba(158, 61, 61, 0.75)';
+            case 'scatter': return dark ? 'rgba(228, 228, 231, 0.85)' : 'rgba(30, 41, 59, 0.85)';
+            default:        return dark ? 'rgba(156, 163, 175, 0.6)' : 'rgba(100, 116, 139, 0.6)';
         }
     }
 
     // --- Chart Theme Options ---
     function getChartThemeOptions() {
-        const gridColor = 'rgba(255, 255, 255, 0.05)';
-        const textColor = '#71717a';
+        const dark = isDarkTheme();
+        const gridColor = dark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)';
+        const textColor = dark ? '#9ca3af' : '#64748b';
+        const tooltipBg = dark ? 'rgba(20, 23, 29, 0.95)' : 'rgba(255, 255, 255, 0.95)';
+        const tooltipText = dark ? '#f1f3f5' : '#18202a';
+        const tooltipBody = dark ? '#9ca3af' : '#475569';
+        const tooltipBorder = dark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)';
 
         return {
             maintainAspectRatio: false,
             responsive: true,
             animation: {
-                duration: 600,
+                duration: 500,
                 easing: 'easeOutQuart'
             },
             plugins: {
                 legend: { labels: { color: textColor, font: { family: 'JetBrains Mono', size: 10 } } },
                 tooltip: {
-                    backgroundColor: 'rgba(18, 18, 21, 0.95)',
-                    titleColor: '#f4f4f5',
-                    bodyColor: '#a1a1aa',
-                    borderColor: 'rgba(255, 255, 255, 0.1)',
+                    backgroundColor: tooltipBg,
+                    titleColor: tooltipText,
+                    bodyColor: tooltipBody,
+                    borderColor: tooltipBorder,
                     borderWidth: 1,
                     padding: 10,
                     cornerRadius: 6,
@@ -942,9 +943,32 @@ $(document).ready(function() {
 
                 // Render gallery with thumbnail tags
                 renderGallery(fullGalleryData);
-            } else { $('#loading-indicator').html(`<div class="alert alert-danger shadow-sm rounded-0">ERROR: ${response.message}</div>`); }
+            } else { $('#loading-indicator').html(`<div class="alert alert-danger shadow-sm">ERROR: ${response.message}</div>`); }
         },
-        error: function() { $('#loading-indicator').html('<div class="alert alert-danger shadow-sm rounded-0">SERVER COMMUNICATION FAILED</div>'); }
+        error: function() { $('#loading-indicator').html('<div class="alert alert-danger shadow-sm">SERVER COMMUNICATION FAILED</div>'); }
+    });
+
+    function refreshActiveCharts() {
+        if (!originalAnalysisData) return;
+        const response = originalAnalysisData;
+        renderClassCounts(response.class_counts);
+        if (response.is_pose) {
+            renderKeypointVisibility(response.keypoint_visibility || {});
+            renderKeypointScatterPlot(response.keypoint_coords || []);
+        } else if (response.is_classification) {
+            renderLabelsPerImage(response.labels_per_image || {});
+            renderCoOccurrence(response.co_occurrence || {});
+        } else {
+            renderObjectsPerImage(response.objects_per_image);
+            renderCenterScatterPlot(response.center_points);
+        }
+        renderAspectRatio(response.aspect_ratios, response.is_classification);
+        if (response.brightness_levels) renderBrightness(response.brightness_levels);
+        if (response.annotator_stats) renderAnnotatorStats(response.annotator_stats);
+    }
+
+    window.addEventListener('themeChanged', function() {
+        refreshActiveCharts();
     });
 
     // AI Consistency Check Button

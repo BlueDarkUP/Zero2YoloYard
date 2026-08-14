@@ -992,8 +992,9 @@ class PoseAnnotator {
         objects.forEach((obj, idx) => {
             const isSelected = obj.id === this.core.selectedObjectId;
             const wrapper = document.createElement('div');
-            wrapper.className = `mb-2 p-2 border rounded ${isSelected ? 'border-primary' : 'border-secondary'}`;
-            wrapper.style.background = isSelected ? 'var(--bg-surface-secondary)' : 'transparent';
+            wrapper.className = `mb-2 p-2 border rounded ${isSelected ? 'border-primary' : ''}`;
+            wrapper.style.background = isSelected ? 'var(--bg-surface-secondary)' : 'var(--bg-surface)';
+            wrapper.style.borderColor = isSelected ? 'var(--color-primary-accent)' : 'var(--border-color)';
 
             const header = document.createElement('div');
             header.className = 'd-flex justify-content-between align-items-center';

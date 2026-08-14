@@ -18,6 +18,7 @@
         font-family: 'JetBrains Mono', monospace;
         box-shadow: var(--shadow-md);
         backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
         transition: var(--transition-smooth);
     }
     .hardware-card:hover {
@@ -65,18 +66,16 @@
     .config-body { padding: 22px; }
 
     .over-limit-warning {
-        color: #e57373;
+        color: var(--color-danger-text);
         font-size: 0.78rem;
         font-family: 'JetBrains Mono', monospace;
         margin-top: 6px;
         display: none;
-        background: rgba(189, 99, 99, 0.1);
+        background: var(--color-danger-bg);
         padding: 4px 8px;
-        border-radius: 4px;
-        border: 1px solid rgba(189, 99, 99, 0.2);
+        border-radius: var(--radius-xs);
+        border: 1px solid var(--color-danger);
     }
-
-    input[type=range].custom-range::-webkit-slider-thumb { background: var(--color-primary); }
 </style>
 {% endblock %}
 
@@ -88,7 +87,7 @@
     </div>
 
     <div class="hardware-card">
-        <h6 class="text-uppercase mb-3"><i class="bi bi-cpu mr-2"></i>System Telemetry & Hardware Diagnostics</h6>
+        <h6 class="text-uppercase mb-3 font-weight-bold text-main"><i class="bi bi-cpu mr-2"></i>System Telemetry & Hardware Diagnostics</h6>
         <div id="hardware-loading" class="text-center py-3">
             <span class="spinner-border spinner-border-sm text-primary"></span> GATHERING SYSTEM SPECS...
         </div>
@@ -97,7 +96,7 @@
             <div class="spec-item"><span>VRAM_CAPACITY:</span> <span id="hw-vram" class="spec-value">-</span></div>
             <div class="spec-item"><span>SYSTEM_RAM:</span> <span id="hw-ram" class="spec-value">-</span></div>
             <div class="spec-item"><span>CPU_CORES:</span> <span id="hw-cpu" class="spec-value">-</span></div>
-            <div class="mt-3 pt-3 border-top border-primary d-flex justify-content-between align-items-center">
+            <div class="mt-3 pt-3 border-top border-theme d-flex justify-content-between align-items-center">
                 <span>ASSIGNED_TIER:</span>
                 <span id="hw-tier" class="badge badge-primary font-monospace p-2" style="font-size:1.1em;">EVALUATING...</span>
             </div>
@@ -105,13 +104,13 @@
     </div>
 
     <form id="full-setup-form">
-        <div class="config-section" style="border-color: var(--color-info);">
+        <div class="config-section section-ai">
             <div class="config-header text-info"><i class="bi bi-magic mr-2"></i>1. AI ENGINE CONFIGURATION</div>
             <div class="config-body">
                 <div class="form-row">
                     <div class="form-group col-md-4">
                         <label class="font-weight-bold small text-muted">COMPUTATION_NODE</label>
-                        <select id="setup-gpu-device" class="form-control custom-select bg-dark text-white border-secondary">
+                        <select id="setup-gpu-device" class="form-control custom-select">
                             <option value="auto">AUTO_DETECT</option>
                             <option value="cpu">CPU_ONLY (SAFE)</option>
                             <option value="cuda:0">NVIDIA_CUDA_0</option>
@@ -119,7 +118,7 @@
                     </div>
                     <div class="form-group col-md-4">
                         <label class="font-weight-bold small text-muted">SAM 2.1 (SEGMENTATION)</label>
-                        <select id="setup-sam-model" class="form-control custom-select bg-dark text-white border-secondary">
+                        <select id="setup-sam-model" class="form-control custom-select">
                             <option value="none" data-level="0">DISABLE SAM (NO VRAM)</option>
                             <option value="sam2.1_t.pt" data-level="1">SAM 2.1 TINY (LOW VRAM)</option>
                             <option value="sam2.1_s.pt" data-level="2">SAM 2.1 SMALL (BALANCED)</option>
@@ -130,7 +129,7 @@
                     </div>
                     <div class="form-group col-md-4">
                         <label class="font-weight-bold small text-muted">SAM 3.1 RETRIEVAL FEATURES</label>
-                        <select id="setup-feature-extractor" class="form-control custom-select bg-dark text-white border-secondary">
+                        <select id="setup-feature-extractor" class="form-control custom-select">
                             <option value="off" data-level="0">DISABLE (SAVES VRAM)</option>
                             <option value="on" data-level="1" selected>ENABLE (SMART SELECT / LAM / BULK APPLY / QC)</option>
                         </select>
@@ -140,14 +139,14 @@
                 <div class="form-row mt-2">
                     <div class="form-group col-md-6">
                         <label class="font-weight-bold small text-muted">CLASSIFICATION MODEL (CLIP)</label>
-                        <select id="setup-cls-model" class="form-control custom-select bg-dark text-white border-secondary">
+                        <select id="setup-cls-model" class="form-control custom-select">
                             <option value="on" selected>ENABLE (CLIP ZERO-SHOT & CLUSTERING)</option>
                             <option value="off">DISABLE (SAVES VRAM/MEMORY)</option>
                         </select>
                     </div>
                     <div class="form-group col-md-6">
                         <label class="font-weight-bold small text-muted">POSE ESTIMATION MODEL (KEYPOINTS)</label>
-                        <select id="setup-pose-model" class="form-control custom-select bg-dark text-white border-secondary">
+                        <select id="setup-pose-model" class="form-control custom-select">
                             <option value="on" selected>ENABLE (GROUNDED KEYPOINT POSE)</option>
                             <option value="off">DISABLE (SAVES VRAM/MEMORY)</option>
                         </select>
@@ -156,13 +155,13 @@
             </div>
         </div>
 
-        <div class="config-section" style="border-color: var(--color-warning);">
+        <div class="config-section section-resource">
             <div class="config-header text-warning"><i class="bi bi-cpu mr-2"></i>2. SYSTEM RESOURCE SCHEDULING</div>
             <div class="config-body">
                 <div class="form-row">
                     <div class="form-group col-md-4">
                         <label class="font-weight-bold small text-muted">MAX THREAD WORKERS</label>
-                        <select id="setup-workers" class="form-control custom-select bg-dark text-white border-secondary">
+                        <select id="setup-workers" class="form-control custom-select">
                             <option value="2" data-level="1">2 THREADS (SAFE)</option>
                             <option value="4" data-level="2">4 THREADS (STANDARD)</option>
                             <option value="8" data-level="3">8 THREADS (PERFORMANCE)</option>
@@ -187,7 +186,7 @@
                 <div class="form-row mt-2">
                     <div class="form-group col-md-4">
                         <label class="font-weight-bold small text-muted">INFERENCE RESOLUTION</label>
-                        <select id="setup-inference-size" class="form-control custom-select bg-dark text-white border-secondary">
+                        <select id="setup-inference-size" class="form-control custom-select">
                             <option value="512">512x512 (FAST)</option>
                             <option value="640" selected>640x640 (STANDARD)</option>
                             <option value="1024">1024x1024 (HIGH RES)</option>
@@ -195,7 +194,7 @@
                     </div>
                     <div class="form-group col-md-4">
                          <label class="font-weight-bold small text-muted">ZIP COMPRESSION</label>
-                         <select id="setup-zip-compression" class="form-control custom-select bg-dark text-white border-secondary">
+                         <select id="setup-zip-compression" class="form-control custom-select">
                              <option value="fast">FAST (STORE ONLY)</option>
                              <option value="standard" selected>STANDARD</option>
                              <option value="max">MAXIMUM (HIGH CPU)</option>
@@ -205,7 +204,7 @@
             </div>
         </div>
 
-        <div class="config-section" style="border-color: var(--color-success);">
+        <div class="config-section section-algo">
             <div class="config-header text-success"><i class="bi bi-sliders mr-2"></i>3. ALGORITHM & TRACKING PARAMETERS</div>
             <div class="config-body">
                 <div class="form-row">
@@ -234,8 +233,8 @@
                     <div class="form-group col-md-4">
                         <label class="font-weight-bold small text-muted">TRACKING IMG SIZE / CHUNK</label>
                         <div class="input-group input-group-sm">
-                            <input type="number" id="setup-batch-tracking-imgsz" class="form-control bg-dark text-white border-secondary" value="1024" title="Image Size">
-                            <input type="number" id="setup-batch-tracking-chunk-size" class="form-control bg-dark text-white border-secondary" value="10" title="Chunk Size">
+                            <input type="number" id="setup-batch-tracking-imgsz" class="form-control" value="1024" title="Image Size">
+                            <input type="number" id="setup-batch-tracking-chunk-size" class="form-control" value="10" title="Chunk Size">
                         </div>
                     </div>
                 </div>
@@ -361,12 +360,12 @@ $(document).ready(function() {
                     setTimeout(() => { window.location.href = '/'; }, 500);
                 } else {
                     window.sysAlert('Error applying configuration.', 'error');
-                    $btn.prop('disabled', false).html('SAVE & BOOT YARD CORE <i class="bi bi-rocket ml-2"></i>');
+                    $btn.prop('disabled', false).html('Save & Boot Core <i class="bi bi-rocket ml-2"></i>');
                 }
             },
             error: function() {
                 window.sysAlert('Server connection failed.', 'error');
-                $btn.prop('disabled', false).html('SAVE & BOOT YARD CORE <i class="bi bi-rocket ml-2"></i>');
+                $btn.prop('disabled', false).html('Save & Boot Core <i class="bi bi-rocket ml-2"></i>');
             }
         });
     });

@@ -61,8 +61,8 @@
     .empty-state-tutorial {
         padding: 3.5rem 2rem;
         text-align: center;
-        background: radial-gradient(circle at center, rgba(255,255,255,0.02) 0%, transparent 70%), var(--bg-surface);
-        border: 1px dashed var(--border-color);
+        background: var(--bg-surface);
+        border: 1px dashed var(--border-highlight);
         border-radius: var(--radius-base);
         margin: 15px;
         display: none;
@@ -106,10 +106,11 @@
     #sys-manual-panel {
         position: absolute;
         width: 360px;
-        background: rgba(18, 18, 21, 0.95);
+        background: var(--bg-surface);
         border: 1px solid var(--border-highlight);
-        box-shadow: 0 16px 36px rgba(0, 0, 0, 0.7);
+        box-shadow: var(--shadow-lg);
         backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
         z-index: 99999;
         pointer-events: none;
         display: none;
@@ -150,8 +151,8 @@
         color: var(--text-body);
         line-height: 1.5;
     }
-    .manual-text.highlight-tune { color: #64b5f6; }
-    .manual-text.highlight-when { color: #ffd54f; }
+    .manual-text.highlight-tune { color: var(--color-info-text); }
+    .manual-text.highlight-when { color: var(--color-warning-text); }
 </style>
 {% endblock %}
 
@@ -169,33 +170,35 @@
             </div>
         </div>
 
-        <ul class="nav nav-tabs mt-4 mt-md-0 border-0" id="mainTabs" role="tablist" style="gap: 0.5rem;">
-            <li class="nav-item">
-                <a class="nav-link active d-flex align-items-center" id="videos-tab" data-toggle="tab" href="#videos" role="tab" aria-selected="true">
+        <ul class="nav nav-tabs-segmented mt-4 mt-md-0 border-0" id="mainTabs" role="tablist">
+            <div class="tab-sliding-indicator"></div>
+            <li class="nav-item" data-index="0">
+                <a class="nav-link active d-flex align-items-center" id="videos-tab" href="#videos" role="tab" aria-selected="true">
                     <i class="bi bi-camera-video mr-2"></i> Videos
                 </a>
             </li>
-            <li class="nav-item">
-                <a class="nav-link d-flex align-items-center" id="datasets-tab" data-toggle="tab" href="#datasets" role="tab" aria-selected="false">
+            <li class="nav-item" data-index="1">
+                <a class="nav-link d-flex align-items-center" id="datasets-tab" href="#datasets" role="tab" aria-selected="false">
                     <i class="bi bi-database mr-2"></i> Datasets
                 </a>
             </li>
-            <li class="nav-item">
-                <a class="nav-link d-flex align-items-center" id="models-tab" data-toggle="tab" href="#models" role="tab" aria-selected="false">
+            <li class="nav-item" data-index="2">
+                <a class="nav-link d-flex align-items-center" id="models-tab" href="#models" role="tab" aria-selected="false">
                     <i class="bi bi-box mr-2"></i> Models
                 </a>
             </li>
-            <li class="nav-item">
-                <a class="nav-link d-flex align-items-center" id="settings-tab" data-toggle="tab" href="#settings" role="tab" aria-selected="false">
+            <li class="nav-item" data-index="3">
+                <a class="nav-link d-flex align-items-center" id="settings-tab" href="#settings" role="tab" aria-selected="false">
                     <i class="bi bi-sliders mr-2"></i> Config
                 </a>
             </li>
         </ul>
     </div>
 
-    <div class="tab-content" id="mainTabContent">
+    <div class="tab-content-sliding" id="mainTabContent">
+        <div class="tab-panes-track" id="mainTabTrack">
 
-        <div class="tab-pane fade show active" id="videos" role="tabpanel">
+            <div class="tab-pane active" id="videos" role="tabpanel">
             <div class="d-flex justify-content-end mb-3">
                 <button class="btn btn-primary" data-toggle="modal" data-target="#uploadVideoModal">
                     <i class="bi bi-plus-lg mr-2"></i>INIT_NEW_STREAM
@@ -227,7 +230,7 @@
 
                 <div id="video-empty-state" class="empty-state-tutorial">
                     <div class="empty-step-badge">PHASE 01 // DATA_INGESTION</div>
-                    <h5 class="font-weight-bold text-white mb-3" style="font-family: 'Inter';">No Data Streams Detected</h5>
+                    <h5 class="font-weight-bold text-main mb-3" style="font-family: 'Inter';">No Data Streams Detected</h5>
                     <p class="text-muted font-monospace small mb-4" style="line-height: 1.8;">
                         > SYSTEM AWAITING INPUT...<br>
                         > To begin the machine learning pipeline, you must initialize a new data stream.<br>
@@ -238,7 +241,7 @@
             </div>
         </div>
 
-        <div class="tab-pane fade" id="datasets" role="tabpanel">
+        <div class="tab-pane" id="datasets" role="tabpanel">
             <div class="d-flex justify-content-end mb-3">
                 <button class="btn btn-primary" data-toggle="modal" data-target="#createDatasetModal">
                     <i class="bi bi-cpu mr-2"></i>COMPILE_DATASET
@@ -267,7 +270,7 @@
 
                 <div id="dataset-empty-state" class="empty-state-tutorial">
                     <div class="empty-step-badge">PHASE 02 // COMPILATION</div>
-                    <h5 class="font-weight-bold text-white mb-3" style="font-family: 'Inter';">No Dataset Archives Found</h5>
+                    <h5 class="font-weight-bold text-main mb-3" style="font-family: 'Inter';">No Dataset Archives Found</h5>
                     <p class="text-muted font-monospace small mb-4" style="line-height: 1.8;">
                         > AWAITING ANNOTATED STREAMS...<br>
                         > Once you have labeled your data streams in PHASE 01, compile them here.<br>
@@ -278,7 +281,7 @@
             </div>
         </div>
 
-        <div class="tab-pane fade" id="models" role="tabpanel">
+        <div class="tab-pane" id="models" role="tabpanel">
             <div class="d-flex justify-content-end mb-3">
                 <button class="btn btn-primary" data-toggle="modal" data-target="#importModelModal">
                     <i class="bi bi-hdd-network mr-2"></i>LOAD_MODEL
@@ -307,7 +310,7 @@
 
                 <div id="model-empty-state" class="empty-state-tutorial">
                     <div class="empty-step-badge">PHASE 03 // DEPLOYMENT</div>
-                    <h5 class="font-weight-bold text-white mb-3" style="font-family: 'Inter';">No Inference Engines Loaded</h5>
+                    <h5 class="font-weight-bold text-main mb-3" style="font-family: 'Inter';">No Inference Engines Loaded</h5>
                     <p class="text-muted font-monospace small mb-4" style="line-height: 1.8;">
                         > AI CO-PILOT OFFLINE...<br>
                         > Import a trained .tflite model engine alongside its label map.<br>
@@ -318,7 +321,7 @@
             </div>
         </div>
 
-        <div class="tab-pane fade" id="settings" role="tabpanel">
+        <div class="tab-pane" id="settings" role="tabpanel">
             <form id="settings-form">
                 <div class="row justify-content-center">
                     <div class="col-lg-10 col-xl-9">
@@ -621,7 +624,7 @@
                                     </div>
                                     <div class="custom-control custom-switch mb-2">
                                         <input type="checkbox" class="custom-control-input" id="use-mirror-switch" checked>
-                                        <label class="custom-control-label text-white small font-monospace" for="use-mirror-switch">Enable mirror acceleration (hf-mirror / ghproxy)</label>
+                                        <label class="custom-control-label text-main small font-monospace" for="use-mirror-switch">Enable mirror acceleration (hf-mirror / ghproxy)</label>
                                     </div>
                                 </div>
                                 <div id="local-model-table-wrap" class="px-3 pb-3">
@@ -653,6 +656,7 @@
                     </div>
                 </div>
             </form>
+        </div>
         </div>
     </div>
 </div>
@@ -908,6 +912,85 @@
             $('#sys-manual-panel').stop(true, true).fadeOut(150);
         });
 
+        // --------------------------------------------------------------------------
+        // Modern Segmented Tab Sliding Indicator & Track-Based Bezier Transitions
+        // --------------------------------------------------------------------------
+        let activeTabIndex = 0;
+
+        function updateTabIndicator(activeLink, animated = true) {
+            const $indicator = $('#mainTabs .tab-sliding-indicator');
+            if (!$indicator.length || !activeLink || !activeLink.length) return;
+            const link = activeLink[0];
+            const container = $('#mainTabs')[0];
+            if (!link || !container) return;
+
+            const linkRect = link.getBoundingClientRect();
+            const containerRect = container.getBoundingClientRect();
+            const left = linkRect.left - containerRect.left;
+            const width = linkRect.width;
+
+            if (!animated) {
+                $indicator.css({ 'transition': 'none' });
+                $indicator.css({
+                    'transform': `translate3d(${left}px, 0, 0)`,
+                    'width': `${width}px`
+                });
+                $indicator[0].offsetHeight; // force reflow
+                $indicator.css({ 'transition': '' });
+            } else {
+                $indicator.css({
+                    'transform': `translate3d(${left}px, 0, 0)`,
+                    'width': `${width}px`
+                });
+            }
+        }
+
+        function slideToTab(index, animated = true) {
+            activeTabIndex = index;
+            const $track = $('#mainTabTrack');
+            const $panes = $track.find('> .tab-pane');
+            const offsetPercent = -(index * 25);
+
+            if (!animated) {
+                $track.css({ 'transition': 'none', 'transform': `translate3d(${offsetPercent}%, 0, 0)` });
+                $track[0].offsetHeight; // force reflow
+                $track.css({ 'transition': '' });
+            } else {
+                $track.css({ 'transform': `translate3d(${offsetPercent}%, 0, 0)` });
+            }
+
+            $panes.each(function(idx) {
+                const isActive = idx === index;
+                $(this).toggleClass('active', isActive);
+            });
+        }
+
+        // Initialize indicator position & track on page ready
+        setTimeout(() => {
+            const $activeTab = $('#mainTabs .nav-link.active');
+            updateTabIndicator($activeTab, false);
+            const initialIndex = parseInt($activeTab.closest('.nav-item').data('index') ?? 0, 10);
+            slideToTab(initialIndex, false);
+        }, 60);
+
+        $(window).on('resize', function() {
+            updateTabIndicator($('#mainTabs .nav-link.active'), false);
+        });
+
+        // Tab click handling - smoothly slide both indicator and track
+        $('#mainTabs .nav-link').on('click', function(e) {
+            e.preventDefault();
+            const $tab = $(this);
+            const $item = $tab.closest('.nav-item');
+            const index = parseInt($item.data('index') ?? 0, 10);
+
+            $('#mainTabs .nav-link').removeClass('active').attr('aria-selected', 'false');
+            $tab.addClass('active').attr('aria-selected', 'true');
+
+            updateTabIndicator($tab, true);
+            slideToTab(index, true);
+        });
+
         let lastVideosSnapshot = "";
         let lastDatasetsSnapshot = "";
         let lastModelsSnapshot = "";
@@ -998,7 +1081,7 @@
 
                         newHtml += `
                             <tr>
-                                <td class="align-middle font-weight-bold text-white">${video.description}</td>
+                                <td class="align-middle font-weight-bold text-main">${video.description}</td>
                                 <td class="align-middle text-muted small font-monospace">${video.video_filename || ''}</td>
                                 <td class="align-middle">${statusHtml}${statusMsg}</td>
                                 <td class="align-middle font-weight-bold text-primary font-monospace small">${progress}</td>
@@ -1050,7 +1133,7 @@
 
                         newHtml += `
                             <tr>
-                                <td class="align-middle font-weight-bold text-white">${dataset.description}</td>
+                                <td class="align-middle font-weight-bold text-main">${dataset.description}</td>
                                 <td class="align-middle">${getStatusBadge(dataset.status, dataset.status_message)}</td>
                                 <td class="align-middle font-monospace">${videosCount} SOURCES</td>
                                 <td class="align-middle" style="line-height: 1.8;">${classes || '<span class="text-muted small">NO_LABELS</span>'}</td>
@@ -1084,7 +1167,7 @@
 
                         newHtml += `
                             <tr>
-                                <td class="align-middle font-weight-bold text-white">${model.description}</td>
+                                <td class="align-middle font-weight-bold text-main">${model.description}</td>
                                 <td class="align-middle">${typeBadge}</td>
                                 <td class="align-middle text-muted small font-monospace">${model.label_filename || 'N/A'}</td>
                                 <td class="align-middle text-muted small font-monospace">${createdDate}</td>
@@ -1169,10 +1252,10 @@
                     data.labels.forEach(label => {
                         const color = classColors[label] || '#000000';
                         const item = `
-                        <div class="d-flex align-items-center bg-dark border px-2 py-1 mr-2 mb-2" style="min-width: 120px; border-color: var(--border-color) !important;">
+                        <div class="d-flex align-items-center bg-surface-secondary border px-2 py-1 mr-2 mb-2" style="min-width: 120px; border-color: var(--border-color) !important; border-radius: var(--radius-sm);">
                             <input type="color" class="border-0 p-0 mr-2" value="${color}" data-class-name="${label}"
                                    style="width: 24px; height: 24px; cursor: pointer; background: none;" title="COLOR_CODE: ${label}">
-                            <span class="small font-weight-bold text-truncate text-white font-monospace" style="max-width: 100px;">${label}</span>
+                            <span class="small font-weight-bold text-truncate text-main font-monospace" style="max-width: 100px;">${label}</span>
                         </div>`;
                         container.append(item);
                     });
@@ -1640,8 +1723,8 @@
 
                         html += `
                             <tr>
-                                <td class="align-middle font-weight-bold" style="color: #c4b5fd;">${m.engine}</td>
-                                <td class="align-middle text-white">${m.name}</td>
+                                <td class="align-middle font-weight-bold text-primary">${m.engine}</td>
+                                <td class="align-middle text-main">${m.name}</td>
                                 <td class="align-middle text-muted small font-monospace">${m.ext}${rareBadge}</td>
                                 <td class="align-middle text-info font-monospace">${sizeStr}</td>
                                 <td class="align-middle text-muted small">${m.purpose}</td>
