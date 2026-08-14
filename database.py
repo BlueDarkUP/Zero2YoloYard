@@ -544,6 +544,30 @@ def get_annotated_video_frames(video_uuid):
         )
         return _to_dict(result)
 
+
+def delete_unlabeled_video_frames(video_uuid):
+    with engine.begin() as conn:
+        conn.execute(
+            text("""
+                DELETE FROM video_frames 
+                WHERE video_uuid = :u 
+                  AND (annotations_json IS NULL OR TRIM(annotations_json) = '' OR annotations_json = '{"version": 1, "objects": [], "classifications": [], "is_ambiguous": false}')
+                  AND (bboxes_text IS NULL OR TRIM(bboxes_text) = '')
+                  AND (tags IS NULL OR tags = '[]' OR TRIM(tags) = '')
+                  AND frame_id NOT IN (SELECT DISTINCT frame_id FROM frame_labels)
+            """),
+            {"u": video_uuid}
+        )
+        new_total = conn.execute(
+            text("SELECT COUNT(*) FROM video_frames WHERE video_uuid = :u"),
+            {"u": video_uuid}
+        ).scalar() or 0
+        conn.execute(
+            text("UPDATE videos SET frame_count = :fc WHERE video_uuid = :u"),
+            {"fc": new_total, "u": video_uuid}
+        )
+
+
 def save_frame_annotations(video_uuid, frame_number, annotations_json_str):
     with engine.begin() as conn:
         frame = conn.execute(

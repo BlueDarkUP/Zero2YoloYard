@@ -874,8 +874,12 @@ def create_dataset_task(dataset_uuid, video_uuids, eval_percent, test_percent, e
                     if not f_info.get('annotations_json') and not f_info.get('bboxes_text'):
                         f_path = file_storage.get_frame_path(v_uuid, f_info['frame_number'])
                         if os.path.exists(f_path):
-                            os.remove(f_path)
-                            cleaned_count += 1
+                            try:
+                                os.remove(f_path)
+                                cleaned_count += 1
+                            except OSError:
+                                pass
+                database.delete_unlabeled_video_frames(v_uuid)
             logging.info(f"Auto-cleanup finished. Deleted {cleaned_count} unlabeled frame files to free up space.")
 
         logging.info(f"ZIP archive created at: {zip_path}")
