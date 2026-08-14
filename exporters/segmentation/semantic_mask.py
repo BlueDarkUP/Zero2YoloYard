@@ -166,24 +166,26 @@ class SemanticMaskExporter(BaseExporter):
         is_aug_enabled = A is not None and augmentation_options.get("enabled", False)
         multiplication_factor = int(augmentation_options.get("multiply_factor", 1)) if is_aug_enabled else 1
 
-        final_frames_to_process = []
-        if is_aug_enabled and multiplication_factor > 1:
-            for frame_info in frames_data:
-                final_frames_to_process.append({"type": "original", **frame_info})
-                for i in range(multiplication_factor - 1):
-                    aug_id = f"aug_{i}_{frame_info['video_uuid']}_{frame_info['frame_number']:05d}"
-                    final_frames_to_process.append({"type": "augmented", "augmented_id": aug_id, **frame_info})
-        else:
-            final_frames_to_process = [{"type": "original", **frame_info} for frame_info in frames_data]
-
-        random.shuffle(final_frames_to_process)
-        total_count = len(final_frames_to_process)
+        shuffled_frames = list(frames_data)
+        random.shuffle(shuffled_frames)
+        total_count = len(shuffled_frames)
         val_count = int(total_count * eval_percent / 100.0)
         test_count = int(total_count * test_percent / 100.0)
 
-        val_data = final_frames_to_process[:val_count]
-        test_data = final_frames_to_process[val_count:val_count + test_count]
-        train_data = final_frames_to_process[val_count + test_count:]
+        raw_val = shuffled_frames[:val_count]
+        raw_test = shuffled_frames[val_count:val_count + test_count]
+        raw_train = shuffled_frames[val_count + test_count:]
+
+        val_data = [{"type": "original", **f} for f in raw_val]
+        test_data = [{"type": "original", **f} for f in raw_test]
+
+        train_data = []
+        for frame_info in raw_train:
+            train_data.append({"type": "original", **frame_info})
+            if is_aug_enabled and multiplication_factor > 1:
+                for i in range(multiplication_factor - 1):
+                    aug_id = f"aug_{i}_{frame_info['video_uuid']}_{frame_info['frame_number']:05d}"
+                    train_data.append({"type": "augmented", "augmented_id": aug_id, **frame_info})
 
         if os.path.exists(export_dir):
             shutil.rmtree(export_dir)
