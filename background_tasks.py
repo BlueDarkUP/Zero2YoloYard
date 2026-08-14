@@ -311,7 +311,7 @@ def start_sam2_batch_tracking_task(video_uuid, tracker_uuid, start_frame, end_fr
         logging.info(
             f"Starting BATCH SAM tracking for video {video_uuid} from frame {start_frame} to {end_frame}")
 
-        all_results = ultralytics_sam_tasks.run_batch_tracking_with_predictor(
+        ultralytics_sam_tasks.track_video_ultralytics(
             video_uuid,
             start_frame,
             end_frame,
@@ -319,10 +319,9 @@ def start_sam2_batch_tracking_task(video_uuid, tracker_uuid, start_frame, end_fr
             session
         )
 
-        session['results'] = all_results
-        session['progress'] = session['total']
-        session['status'] = 'COMPLETED'
-        session['message'] = 'Batch processing complete. Ready for review.'
+        if session.get('status') not in ['FAILED', 'STOPPED']:
+            session['status'] = 'COMPLETED'
+            session['message'] = 'Batch processing complete. Ready for review.'
         logging.info(f"Batch SAM tracking for {tracker_uuid} finished successfully.")
 
     except Exception as e:
