@@ -52,6 +52,7 @@ def migrate_db():
         add_column('datasets', 'test_percent', 'REAL')
         add_column('datasets', 'export_format', "TEXT DEFAULT 'yolo_v8_detect'")
         add_column('datasets', 'export_options', "TEXT DEFAULT '{}'")
+        add_column('datasets', 'augmentation_options', "TEXT DEFAULT '{}'")
 
         add_column('models', 'label_filename', 'TEXT')
         add_column('models', 'model_type', 'TEXT')
@@ -352,7 +353,9 @@ def init_db():
                               sorted_label_list TEXT,
                               eval_percent      REAL,
                               test_percent      REAL,
-                              export_format     TEXT DEFAULT 'yolo_v8_detect'
+                              export_format     TEXT DEFAULT 'yolo_v8_detect',
+                              export_options    TEXT DEFAULT '{}',
+                              augmentation_options TEXT DEFAULT '{}'
                           )
                           '''))
 
@@ -506,6 +509,8 @@ def get_annotated_video_frames(video_uuid):
                       frame_id IN (SELECT DISTINCT frame_id FROM frame_labels)
                       OR (bboxes_text IS NOT NULL AND TRIM(bboxes_text) != '')
                       OR (tags IS NOT NULL AND tags != '[]' AND TRIM(tags) != '')
+                      OR (annotations_json IS NOT NULL AND TRIM(annotations_json) != '' AND
+                          annotations_json NOT LIKE '%"objects": [], "classifications": []%')
                   ) 
                 ORDER BY frame_number ASC
             """),
@@ -577,6 +582,8 @@ def save_frame_annotations(video_uuid, frame_number, annotations_json_str):
                       vf.frame_id IN (SELECT DISTINCT frame_id FROM frame_labels)
                       OR (vf.bboxes_text IS NOT NULL AND TRIM(vf.bboxes_text) != '')
                       OR (vf.tags IS NOT NULL AND vf.tags != '[]' AND TRIM(vf.tags) != '')
+                      OR (vf.annotations_json IS NOT NULL AND TRIM(vf.annotations_json) != '' AND
+                          vf.annotations_json NOT LIKE '%"objects": [], "classifications": []%')
                   )
             """),
             {"u": video_uuid}
@@ -659,6 +666,8 @@ def save_frame_bboxes(video_uuid, frame_number, bboxes_text):
                       vf.frame_id IN (SELECT DISTINCT frame_id FROM frame_labels)
                       OR (vf.bboxes_text IS NOT NULL AND TRIM(vf.bboxes_text) != '')
                       OR (vf.tags IS NOT NULL AND vf.tags != '[]' AND TRIM(vf.tags) != '')
+                      OR (vf.annotations_json IS NOT NULL AND TRIM(vf.annotations_json) != '' AND
+                          vf.annotations_json NOT LIKE '%"objects": [], "classifications": []%')
                   )
             """),
             {"u": video_uuid}
@@ -746,6 +755,8 @@ def save_frame_tags(video_uuid, frame_number, tags_json_string):
                       vf.frame_id IN (SELECT DISTINCT frame_id FROM frame_labels)
                       OR (vf.bboxes_text IS NOT NULL AND TRIM(vf.bboxes_text) != '')
                       OR (vf.tags IS NOT NULL AND vf.tags != '[]' AND TRIM(vf.tags) != '')
+                      OR (vf.annotations_json IS NOT NULL AND TRIM(vf.annotations_json) != '' AND
+                          vf.annotations_json NOT LIKE '%"objects": [], "classifications": []%')
                   )
             """),
             {"u": video_uuid}
@@ -955,17 +966,20 @@ def delete_class_tag(tag_name):
         conn.execute(text('DELETE FROM class_tags WHERE tag_name = :tn'), {"tn": tag_name})
 
 
-def create_dataset_entry(description, video_uuids, create_time, eval_percent=20.0, test_percent=10.0, export_format='yolo_v8_detect', export_options=None):
+def create_dataset_entry(description, video_uuids, create_time, eval_percent=20.0, test_percent=10.0, export_format='yolo_v8_detect', export_options=None, augmentation_options=None):
     dataset_uuid = str(uuid.uuid4())
     video_uuids_json = json.dumps(video_uuids)
     if export_options is None:
         export_options = {}
     export_options_json = json.dumps(export_options) if isinstance(export_options, dict) else str(export_options)
+    if augmentation_options is None:
+        augmentation_options = {}
+    aug_options_json = json.dumps(augmentation_options) if isinstance(augmentation_options, dict) else str(augmentation_options)
     with engine.begin() as conn:
         conn.execute(
             text("""
-                INSERT INTO datasets (dataset_uuid, description, video_uuids, create_time_ms, eval_percent, test_percent, export_format, export_options, status)
-                VALUES (:dataset_uuid, :description, :video_uuids, :create_time, :eval_percent, :test_percent, :export_format, :export_options, 'PENDING')
+                INSERT INTO datasets (dataset_uuid, description, video_uuids, create_time_ms, eval_percent, test_percent, export_format, export_options, augmentation_options, status)
+                VALUES (:dataset_uuid, :description, :video_uuids, :create_time, :eval_percent, :test_percent, :export_format, :export_options, :augmentation_options, 'PENDING')
             """),
             {
                 "dataset_uuid": dataset_uuid,
@@ -976,9 +990,21 @@ def create_dataset_entry(description, video_uuids, create_time, eval_percent=20.
                 "test_percent": test_percent,
                 "export_format": export_format,
                 "export_options": export_options_json,
+                "augmentation_options": aug_options_json,
             }
         )
     return dataset_uuid
+
+
+def update_dataset_augmentation_options(dataset_uuid, augmentation_options):
+    if augmentation_options is None:
+        augmentation_options = {}
+    aug_json = json.dumps(augmentation_options) if isinstance(augmentation_options, dict) else str(augmentation_options)
+    with engine.begin() as conn:
+        conn.execute(
+            text('UPDATE datasets SET augmentation_options = :ao WHERE dataset_uuid = :du'),
+            {"ao": aug_json, "du": dataset_uuid}
+        )
 
 
 def update_dataset_status(dataset_uuid, status, message="", zip_path="", sorted_label_list=None):
@@ -1008,6 +1034,14 @@ def get_dataset_list():
                     d['export_options'] = {}
             elif not d.get('export_options'):
                 d['export_options'] = {}
+
+            if d.get('augmentation_options') and isinstance(d['augmentation_options'], str):
+                try:
+                    d['augmentation_options'] = json.loads(d['augmentation_options'])
+                except Exception:
+                    d['augmentation_options'] = {}
+            elif not d.get('augmentation_options'):
+                d['augmentation_options'] = {}
         return datasets
 
 
@@ -1027,6 +1061,14 @@ def get_dataset_entity(dataset_uuid):
                 d['export_options'] = {}
         elif not d.get('export_options'):
             d['export_options'] = {}
+
+        if d.get('augmentation_options') and isinstance(d['augmentation_options'], str):
+            try:
+                d['augmentation_options'] = json.loads(d['augmentation_options'])
+            except Exception:
+                d['augmentation_options'] = {}
+        elif not d.get('augmentation_options'):
+            d['augmentation_options'] = {}
         return d
 
 

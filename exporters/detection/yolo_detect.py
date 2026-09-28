@@ -71,6 +71,19 @@ def tight_fit_bbox(orig_yolos, aug_yolos, orig_ids=None, aug_ids=None):
 
     return corrected
 
+
+if A is not None:
+    class BboxSafeCoarseDropout(A.CoarseDropout):
+        def apply_to_bbox(self, bbox, **params):
+            return bbox
+
+        def apply_to_keypoint(self, keypoint, **params):
+            return keypoint
+else:
+    class BboxSafeCoarseDropout:
+        pass
+
+
 def build_augmentation_pipeline(options):
     if A is None: return None
     transforms = []
@@ -110,6 +123,24 @@ def build_augmentation_pipeline(options):
     if options.get('noise', {}).get('enabled'):
         transforms.append(A.GaussNoise(var_limit=(10.0, options['noise']['limit']), p=options['noise']['p']))
 
+    if options.get('cutout', {}).get('enabled'):
+        cutout_cfg = options['cutout']
+        max_size = int(cutout_cfg.get('size', 64))
+        min_size = max(1, max_size // 2)
+        holes = int(cutout_cfg.get('holes', 1))
+        p = float(cutout_cfg.get('p', 0.5))
+        transforms.append(
+            BboxSafeCoarseDropout(
+                max_holes=holes,
+                min_holes=1,
+                max_height=max_size,
+                max_width=max_size,
+                min_height=min_size,
+                min_width=min_size,
+                p=p
+            )
+        )
+
     if not transforms: return None
     return A.Compose(transforms,
                      bbox_params=A.BboxParams(format='yolo', label_fields=['class_labels', 'track_ids'], min_visibility=0.1))
@@ -135,6 +166,8 @@ def build_augmentation_pipeline_for_keypoints(options):
         limit = options['affine']['shear']
         transforms.append(
             A.Affine(shear={'x': (-limit, limit), 'y': (-limit, limit)}, p=options['affine']['p'], cval=0))
+    if options.get('crop', {}).get('enabled'):
+        transforms.append(A.CropAndPad(percent=(-0.15, 0.0), pad_mode=cv2.BORDER_CONSTANT, p=options['crop']['p']))
 
     if options.get('grayscale', {}).get('enabled'):
         transforms.append(A.ToGray(p=options['grayscale']['p']))
@@ -151,11 +184,26 @@ def build_augmentation_pipeline_for_keypoints(options):
     if options.get('noise', {}).get('enabled'):
         transforms.append(A.GaussNoise(var_limit=(10.0, options['noise']['limit']), p=options['noise']['p']))
 
+    if options.get('cutout', {}).get('enabled'):
+        cutout_cfg = options['cutout']
+        max_size = int(cutout_cfg.get('size', 64))
+        min_size = max(1, max_size // 2)
+        holes = int(cutout_cfg.get('holes', 1))
+        p = float(cutout_cfg.get('p', 0.5))
+        transforms.append(
+            BboxSafeCoarseDropout(
+                max_holes=holes,
+                min_holes=1,
+                max_height=max_size,
+                max_width=max_size,
+                min_height=min_size,
+                min_width=min_size,
+                p=p
+            )
+        )
+
     if not transforms: return None
     return A.Compose(transforms, keypoint_params=A.KeypointParams(format='xy', label_fields=['keypoint_labels'], remove_invisible=False))
-
-class BboxSafeCoarseDropout: # Placeholder to keep compatibility
-    pass
 
 def process_frame_worker(args):
     frame_info, target_img_dir, target_lbl_dir, class_map, augmentation_options = args
@@ -181,28 +229,38 @@ def process_frame_worker(args):
         
         # Process annotations
         annotations: AnnotationData = frame_info["annotations"]
-        bboxes = annotations.get_bboxes()
-        img_w = frame_info['width']
-        img_h = frame_info['height']
+        img_w = float(frame_info['width'])
+        img_h = float(frame_info['height'])
         
         yolo_bboxes = []
         class_indices = []
         track_ids = []
-        for i, obj in enumerate(bboxes):
+        for i, obj in enumerate(annotations.objects):
             if obj.label in class_map:
-                x1, y1, x2, y2 = obj.bbox
-                # Convert to YOLO format (cx, cy, w, h) normalized
-                cx = ((x1 + x2) / 2) / img_w
-                cy = ((y1 + y2) / 2) / img_h
-                w = (x2 - x1) / img_w
-                h = (y2 - y1) / img_h
-                # Clamp between 0 and 1
-                cx, cy = max(0, min(1, cx)), max(0, min(1, cy))
-                w, h = max(0, min(1, w)), max(0, min(1, h))
-                if w > 0 and h > 0:
-                    yolo_bboxes.append([cx, cy, w, h])
-                    class_indices.append(class_map[obj.label])
-                    track_ids.append(i)
+                bbox = obj.get_bbox()
+                if not bbox or len(bbox) != 4:
+                    continue
+                x1, y1, x2, y2 = bbox
+                x_min, x_max = min(float(x1), float(x2)), max(float(x1), float(x2))
+                y_min, y_max = min(float(y1), float(y2)), max(float(y1), float(y2))
+
+                # Normalize and clamp safely to [0.002, 0.998] to prevent Albumentations 1.0.0 integer +1 pixel overflow
+                norm_x1 = max(0.002, min(0.998, x_min / img_w))
+                norm_y1 = max(0.002, min(0.998, y_min / img_h))
+                norm_x2 = max(0.002, min(0.998, x_max / img_w))
+                norm_y2 = max(0.002, min(0.998, y_max / img_h))
+
+                w = norm_x2 - norm_x1
+                h = norm_y2 - norm_y1
+                if w <= 0.001 or h <= 0.001:
+                    continue
+
+                cx = norm_x1 + w / 2.0
+                cy = norm_y1 + h / 2.0
+
+                yolo_bboxes.append([cx, cy, w, h])
+                class_indices.append(class_map[obj.label])
+                track_ids.append(i)
 
         if not yolo_bboxes and not is_augmented:
             # We can still export images without labels for background, but typical YOLO requires at least one bbox or an empty txt

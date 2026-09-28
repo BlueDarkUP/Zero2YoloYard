@@ -22,12 +22,15 @@ class LocateAnythingDetector:
     """Detect several named classes in one LocateAnything inference call."""
 
     def __init__(self, model_path=_DEFAULT_MODEL_PATH):
-        if not os.path.isdir(model_path) or not os.path.isfile(
-            os.path.join(model_path, 'config.json')
-        ):
+        f1 = os.path.join(model_path, 'model-00001-of-00002.safetensors')
+        f2 = os.path.join(model_path, 'model-00002-of-00002.safetensors')
+        f_single = os.path.join(model_path, 'model.safetensors')
+        has_weights = (os.path.isfile(f1) and os.path.isfile(f2)) or os.path.isfile(f_single)
+
+        if not os.path.isdir(model_path) or not os.path.isfile(os.path.join(model_path, 'config.json')) or not has_weights:
             raise FileNotFoundError(
-                'LocateAnything weights are not available locally. Download or copy the '
-                f'complete nvidia/LocateAnything-3B snapshot into: {model_path}'
+                'LocateAnything weights are not available locally. Please download weights from Settings -> Local Model Management '
+                f'or copy the complete nvidia/LocateAnything-3B safetensors weights into: {model_path}'
             )
 
         self.worker = LocateAnythingWorker(model_path)

@@ -34,6 +34,9 @@ try:
         def apply_to_bbox(self, bbox, **params):
             return bbox
 
+        def apply_to_keypoint(self, keypoint, **params):
+            return keypoint
+
 except ImportError:
     logging.warning(
         "albumentations library not found. Data augmentation will be disabled. Run 'pip install albumentations opencv-python-headless'")
@@ -806,17 +809,36 @@ def create_dataset_task(dataset_uuid, video_uuids, eval_percent, test_percent, e
             all_video_frames = database.get_annotated_video_frames(video_uuid)
             for frame in all_video_frames:
                 ann_data = None
-                if frame.get('annotations_json'):
-                    ann_data = AnnotationData.from_json(frame['annotations_json'])
-                elif frame.get('bboxes_text'):
-                    # Fallback for old data during transition
+                if frame.get('annotations_json') and frame['annotations_json'].strip():
+                    try:
+                        parsed = AnnotationData.from_json(frame['annotations_json'])
+                        if parsed.objects or parsed.classifications:
+                            ann_data = parsed
+                    except Exception as e:
+                        logging.warning(f"Failed to parse annotations_json for frame {frame.get('frame_number')}: {e}")
+
+                if ann_data is None and frame.get('bboxes_text') and frame['bboxes_text'].strip():
                     from annotation_model import AnnotationObject
-                    from bbox_writer import parse_bboxes_text
-                    ann_data = AnnotationData()
-                    bboxes, classes = parse_bboxes_text(frame['bboxes_text'], 1.0)
-                    for bbox, cls in zip(bboxes, classes):
-                        ann_data.objects.append(AnnotationObject(id=str(uuid.uuid4()), type="bbox", label=cls, bbox=bbox))
-                
+                    from bbox_writer import convert_text_to_rects_and_labels
+                    rects, labels, _ = convert_text_to_rects_and_labels(frame['bboxes_text'])
+                    if rects:
+                        ann_data = AnnotationData()
+                        for rect, cls in zip(rects, labels):
+                            ann_data.objects.append(AnnotationObject(
+                                id=str(uuid.uuid4()),
+                                type="bbox",
+                                label=cls,
+                                bbox=[float(rect[0]), float(rect[1]), float(rect[2]), float(rect[3])]
+                            ))
+
+                if ann_data is None and frame.get('tags') and frame['tags'].strip() and frame['tags'] != '[]':
+                    try:
+                        tags_list = json.loads(frame['tags'])
+                        if tags_list:
+                            ann_data = AnnotationData(classifications=tags_list)
+                    except Exception as e:
+                        logging.warning(f"Failed to parse tags for frame {frame.get('frame_number')}: {e}")
+
                 if ann_data and (ann_data.objects or ann_data.classifications):
                     frames_to_include.append({
                         "video_uuid": video_uuid, "frame_number": frame['frame_number'],

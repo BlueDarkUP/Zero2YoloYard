@@ -77,6 +77,24 @@ def build_semantic_aug_pipeline(options):
     if options.get('noise', {}).get('enabled'):
         transforms.append(A.GaussNoise(var_limit=(10.0, options['noise']['limit']), p=options['noise']['p']))
 
+    if options.get('cutout', {}).get('enabled'):
+        cutout_cfg = options['cutout']
+        max_size = int(cutout_cfg.get('size', 64))
+        min_size = max(1, max_size // 2)
+        holes = int(cutout_cfg.get('holes', 1))
+        p = float(cutout_cfg.get('p', 0.5))
+        transforms.append(
+            A.CoarseDropout(
+                max_holes=holes,
+                min_holes=1,
+                max_height=max_size,
+                max_width=max_size,
+                min_height=min_size,
+                min_width=min_size,
+                p=p
+            )
+        )
+
     if not transforms:
         return None
     return A.Compose(transforms)

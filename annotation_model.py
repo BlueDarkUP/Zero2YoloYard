@@ -32,6 +32,22 @@ class AnnotationObject:
     def polygon(self, value: Optional[List[List[float]]]):
         self.points = value
 
+    def get_bbox(self) -> Optional[List[float]]:
+        """Returns [x1, y1, x2, y2] representing the bounding box."""
+        if self.bbox and len(self.bbox) == 4:
+            return self.bbox
+        if self.points:
+            xs = [pt[0] for pt in self.points]
+            ys = [pt[1] for pt in self.points]
+            if xs and ys:
+                return [min(xs), min(ys), max(xs), max(ys)]
+        if self.keypoints:
+            v_pts = [p for p in self.keypoints if p.get('v', 2) > 0]
+            pts = v_pts if v_pts else self.keypoints
+            if pts:
+                return [min(p['x'] for p in pts), min(p['y'] for p in pts), max(p['x'] for p in pts), max(p['y'] for p in pts)]
+        return None
+
     def to_dict(self) -> Dict[str, Any]:
         d = {
             "id": self.id,

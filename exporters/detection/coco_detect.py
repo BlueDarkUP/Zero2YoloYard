@@ -52,17 +52,24 @@ class COCODetectionExporter(BaseExporter):
             })
 
             annotations: AnnotationData = frame_info["annotations"]
-            for obj in annotations.get_bboxes():
+            for obj in annotations.objects:
                 if obj.label in class_map:
-                    x1, y1, x2, y2 = obj.bbox
-                    w = x2 - x1
-                    h = y2 - y1
+                    bbox = obj.get_bbox()
+                    if not bbox or len(bbox) != 4:
+                        continue
+                    x1, y1, x2, y2 = bbox
+                    x_min, x_max = min(float(x1), float(x2)), max(float(x1), float(x2))
+                    y_min, y_max = min(float(y1), float(y2)), max(float(y1), float(y2))
+                    w = x_max - x_min
+                    h = y_max - y_min
+                    if w <= 0 or h <= 0:
+                        continue
                     area = w * h
                     coco_data["annotations"].append({
                         "id": ann_id,
                         "image_id": img_id,
                         "category_id": class_map[obj.label],
-                        "bbox": [round(x1, 2), round(y1, 2), round(w, 2), round(h, 2)],
+                        "bbox": [round(x_min, 2), round(y_min, 2), round(w, 2), round(h, 2)],
                         "area": round(area, 2),
                         "iscrowd": 0,
                         "segmentation": []

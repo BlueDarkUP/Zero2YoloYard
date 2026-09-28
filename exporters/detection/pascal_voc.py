@@ -41,8 +41,11 @@ class PascalVOCExporter(BaseExporter):
             ET.SubElement(size_elem, "depth").text = "3"
 
             annotations: AnnotationData = frame_info["annotations"]
-            for obj in annotations.get_bboxes():
+            for obj in annotations.objects:
                 if class_list and obj.label not in class_list:
+                    continue
+                bbox = obj.get_bbox()
+                if not bbox or len(bbox) != 4:
                     continue
 
                 object_elem = ET.SubElement(annotation_elem, "object")
@@ -52,11 +55,13 @@ class PascalVOCExporter(BaseExporter):
                 ET.SubElement(object_elem, "difficult").text = "0"
 
                 bndbox = ET.SubElement(object_elem, "bndbox")
-                x1, y1, x2, y2 = obj.bbox if obj.bbox else (0, 0, frame_info['width'], frame_info['height'])
-                x1_c = max(0, min(frame_info['width'], int(x1)))
-                y1_c = max(0, min(frame_info['height'], int(y1)))
-                x2_c = max(0, min(frame_info['width'], int(x2)))
-                y2_c = max(0, min(frame_info['height'], int(y2)))
+                x1, y1, x2, y2 = bbox
+                x_min, x_max = min(float(x1), float(x2)), max(float(x1), float(x2))
+                y_min, y_max = min(float(y1), float(y2)), max(float(y1), float(y2))
+                x1_c = max(0, min(frame_info['width'], int(x_min)))
+                y1_c = max(0, min(frame_info['height'], int(y_min)))
+                x2_c = max(0, min(frame_info['width'], int(x_max)))
+                y2_c = max(0, min(frame_info['height'], int(y_max)))
 
                 ET.SubElement(bndbox, "xmin").text = str(x1_c)
                 ET.SubElement(bndbox, "ymin").text = str(y1_c)

@@ -622,7 +622,7 @@
                                     </div>
                                     <div class="custom-control custom-switch mb-2">
                                         <input type="checkbox" class="custom-control-input" id="use-mirror-switch" checked>
-                                        <label class="custom-control-label text-main small font-monospace" for="use-mirror-switch">Enable mirror acceleration (hf-mirror / ghproxy)</label>
+                                        <label class="custom-control-label text-main small font-monospace" for="use-mirror-switch">Enable domestic mirror acceleration (hf-mirror / ghfast / ghproxy, with auto-fallback)</label>
                                     </div>
                                 </div>
                                 <div id="local-model-table-wrap" class="px-3 pb-3">
@@ -830,6 +830,26 @@
 
 {% block scripts %}
 <script>
+    /**
+     * 下载数据集：自动适配 pywebview 和普通浏览器两种环境。
+     * - 在 pywebview 内嵌窗口中：调用 Python JS Bridge 用系统浏览器打开下载链接。
+     * - 在普通浏览器中：创建隐藏 <a> 标签触发原生文件下载。
+     */
+    function downloadDatasetFile(url, filename) {
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.open_in_browser) {
+            // pywebview 环境：交给 Python 用系统浏览器下载
+            window.pywebview.api.open_in_browser(url);
+        } else {
+            // 普通浏览器环境：直接触发下载
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename || 'dataset.zip';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+    }
+
     $(document).ready(function() {
         $('.modal').appendTo("body");
         let currentSettings = {};
@@ -1105,7 +1125,7 @@
                     data.datasets.forEach(dataset => {
                         let actions = '';
                         if (dataset.status === 'READY') {
-                            actions += `<a href="/downloadDataset/${dataset.dataset_uuid}" download="${dataset.description || 'dataset'}.zip" target="_blank" class="btn btn-sm btn-outline-success mr-1" title="DOWNLOAD"><i class="bi bi-download"></i></a>`;
+                            actions += `<button onclick="downloadDatasetFile('/downloadDataset/${dataset.dataset_uuid}', '${(dataset.description || 'dataset').replace(/'/g, "\\'")}' + '.zip')" class="btn btn-sm btn-outline-success mr-1" title="DOWNLOAD"><i class="bi bi-download"></i></button>`;
                             actions += `<a href="/datasetAnalysis/${dataset.dataset_uuid}" class="btn btn-sm btn-outline-info mr-1" title="ANALYZE"><i class="bi bi-bar-chart-line"></i></a>`;
                             actions += `<button class="btn btn-sm btn-outline-secondary btn-regenerate-dataset mr-1" data-uuid="${dataset.dataset_uuid}" title="RECOMPILE"><i class="bi bi-arrow-repeat"></i></button>`;
                         } else if (dataset.status === 'FAILED') {
@@ -1691,6 +1711,17 @@
                         let statusHtml = '';
                         if (m.present) {
                             statusHtml = `<span class="badge badge-success font-monospace" style="background: rgba(16,185,129,0.2); color: #10b981; border: 1px solid rgba(16,185,129,0.5);">READY</span>`;
+                        } else if (m.download_status && m.download_status.status === 'downloading') {
+                            const pct = Math.max(5, m.download_status.percent || 5);
+                            statusHtml = `
+                                <div id="dl-container-${m.id}" class="d-flex flex-column align-items-end w-100">
+                                    <div class="small text-info font-monospace mb-1 dl-text-${m.id}" style="font-size: 0.65rem;">${m.download_status.progress || 'DOWNLOADING...'}</div>
+                                    <div class="progress w-100" style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px;">
+                                        <div class="progress-bar progress-bar-striped progress-bar-animated bg-info dl-bar-${m.id}" role="progressbar" style="width: ${pct}%"></div>
+                                    </div>
+                                </div>
+                            `;
+                            setTimeout(() => startDownloadPoll(m.id), 50);
                         } else {
                             statusHtml = `
                                 <div id="dl-container-${m.id}" class="d-flex align-items-center justify-content-end w-100">
@@ -1699,7 +1730,12 @@
                             `;
                         }
 
-                        const sizeStr = m.present ? `${m.size_mb} MB` : '--';
+                        let sizeStr = '--';
+                        if (m.present) {
+                            sizeStr = `${m.size_mb} MB`;
+                        } else if (m.size_mb > 0) {
+                            sizeStr = `<span class="text-warning" title="Incomplete download file present">${m.size_mb} MB (Partial)</span>`;
+                        }
                         const rareBadge = m.rare_format ? `<span class="badge ml-1 font-monospace" style="background: rgba(245,158,11,0.2); color: #f59e0b; font-size: 0.65rem;">Niche format</span>` : '';
 
                         html += `
@@ -1761,21 +1797,25 @@
         function startDownloadPoll(modelId) {
             if (activePolls[modelId]) return;
             const container = $(`#dl-container-${modelId}`);
-            
-            container.html(`
-                <div class="d-flex flex-column align-items-end w-100">
-                    <div class="small text-info font-monospace mb-1 dl-text-${modelId}" style="font-size: 0.65rem;">DOWNLOADING...</div>
-                    <div class="progress w-100" style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px;">
-                        <div class="progress-bar progress-bar-striped progress-bar-animated bg-info dl-bar-${modelId}" role="progressbar" style="width: 100%"></div>
+            if (container.find('.progress').length === 0) {
+                container.html(`
+                    <div class="d-flex flex-column align-items-end w-100">
+                        <div class="small text-info font-monospace mb-1 dl-text-${modelId}" style="font-size: 0.65rem;">CONNECTING...</div>
+                        <div class="progress w-100" style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated bg-info dl-bar-${modelId}" role="progressbar" style="width: 5%"></div>
+                        </div>
                     </div>
-                </div>
-            `);
+                `);
+            }
             
             activePolls[modelId] = setInterval(() => {
                 $.get('/api/local_models/download_status/' + modelId, function(res) {
                     if (res.success && res.status) {
                         if (res.status.status === 'downloading') {
                             $(`.dl-text-${modelId}`).text(res.status.progress);
+                            if (res.status.percent !== undefined) {
+                                $(`.dl-bar-${modelId}`).css('width', Math.max(5, res.status.percent) + '%');
+                            }
                         } else if (res.status.status === 'ready') {
                             clearInterval(activePolls[modelId]);
                             delete activePolls[modelId];
@@ -1791,7 +1831,7 @@
                         }
                     }
                 });
-            }, 1000);
+            }, 800);
         }
 
         loadSettings();

@@ -25,8 +25,8 @@ try:
     from sam3.model.sam3_image_processor import Sam3Processor
 
     HAS_SAM3 = True
-except ImportError:
-    logging.warning("[SAM3] SAM 3.1 engine not found. Text prompt features disabled.")
+except Exception as e:
+    logging.warning(f"[SAM3] SAM 3 engine not found ({e}). Text prompt features disabled.")
     HAS_SAM3 = False
 
 import config

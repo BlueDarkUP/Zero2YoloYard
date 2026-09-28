@@ -1081,38 +1081,12 @@ def get_local_models_status():
     扫描项目中所有已知的本地推理模型权重，返回各模型的存在状态和文件大小。
     供前端 LOCAL MODEL MANAGEMENT 面板实时展示。
     """
-    base = config.BASE_DIR
-
-    def _file_info(rel_path):
-        full = os.path.join(base, rel_path)
-        if os.path.isfile(full):
-            size_mb = round(os.path.getsize(full) / (1024 * 1024), 1)
-            return True, size_mb
-        return False, 0.0
-
-    def _clip_dir_info(rel_dir):
-        full_dir = os.path.join(base, rel_dir)
-        if not os.path.isdir(full_dir):
-            return False, 0.0
-        if not os.path.isfile(os.path.join(full_dir, 'config.json')):
-            return False, 0.0
-        total = 0
-        for root_d, _, files in os.walk(full_dir):
-            for f in files:
-                try:
-                    total += os.path.getsize(os.path.join(root_d, f))
-                except OSError:
-                    pass
-        return True, round(total / (1024 * 1024), 1)
-
     MODEL_DEFS = local_model_manager.get_model_registry()
 
     results = []
     for m in MODEL_DEFS:
-        if m["type"] == "dir":
-            present, size_mb = _clip_dir_info(m["path"])
-        else:
-            present, size_mb = _file_info(m["path"])
+        present, size_mb = local_model_manager.check_model_presence(m, base_dir=config.BASE_DIR)
+        dl_status = local_model_manager.get_download_status(m["id"])
 
         results.append({
             "id": m["id"],
@@ -1124,6 +1098,7 @@ def get_local_models_status():
             "present": present,
             "size_mb": size_mb,
             "rare_format": m.get("rare_format", False),
+            "download_status": dl_status,
         })
 
     return jsonify({"success": True, "models": results})
@@ -2150,7 +2125,7 @@ def create_dataset():
         return jsonify({'success': False, 'message': 'Please select at least one video.'}), 400
 
     create_time = int(time.time() * 1000)
-    dataset_uuid = database.create_dataset_entry(desc, video_uuids, create_time, eval_percent, test_percent, export_format, export_options)
+    dataset_uuid = database.create_dataset_entry(desc, video_uuids, create_time, eval_percent, test_percent, export_format, export_options, augmentation_options)
 
     threading.Thread(target=background_tasks.create_dataset_task, args=(
         dataset_uuid, video_uuids, eval_percent, test_percent, export_format, augmentation_options, export_options
@@ -2161,7 +2136,8 @@ def create_dataset():
 
 @app.route('/regenerateDataset', methods=['POST'])
 def regenerate_dataset():
-    dataset_uuid = (request.json or {}).get('dataset_uuid')
+    data = request.json or {}
+    dataset_uuid = data.get('dataset_uuid')
     if not dataset_uuid:
         return jsonify({'success': False, 'message': 'Dataset UUID is required.'}), 400
 
@@ -2176,13 +2152,31 @@ def regenerate_dataset():
     test_percent = dataset.get('test_percent')
     export_format = dataset.get('export_format', 'yolo_v8_detect')
     export_options = dataset.get('export_options', {})
-    augmentation_options = {'enabled': False}
+
+    new_aug = data.get('augmentation_options')
+    if new_aug is not None:
+        augmentation_options = new_aug
+        database.update_dataset_augmentation_options(dataset_uuid, augmentation_options)
+    else:
+        augmentation_options = dataset.get('augmentation_options') or {'enabled': False}
 
     threading.Thread(target=background_tasks.create_dataset_task, args=(
         dataset_uuid, video_uuids, eval_percent, test_percent, export_format, augmentation_options, export_options
     ), name=f"Dataset-Regen-{dataset_uuid[:6]}").start()
 
     return jsonify({'success': True, 'message': 'Dataset regeneration started.'})
+
+
+@app.route('/api/dataset/<dataset_uuid>/augmentation_options', methods=['POST'])
+def update_dataset_augmentation(dataset_uuid):
+    dataset = database.get_dataset_entity(dataset_uuid)
+    if not dataset:
+        return jsonify({'success': False, 'message': 'Dataset not found.'}), 404
+
+    data = request.json or {}
+    aug_options = data.get('augmentation_options', {})
+    database.update_dataset_augmentation_options(dataset_uuid, aug_options)
+    return jsonify({'success': True, 'message': 'Augmentation options updated.'})
 
 
 @app.route('/api/export_formats', methods=['GET'])
@@ -2568,7 +2562,8 @@ def get_dataset_analysis_data(dataset_uuid):
         'all_bboxes': all_bboxes_for_outliers,
         'suspicious_pairs': suspicious_pairs,
         'image_class_map': image_class_map,
-        'gallery_images': gallery_images
+        'gallery_images': gallery_images,
+        'augmentation_options': dataset.get('augmentation_options') or {}
     })
 
 @app.route('/api/datasetAnalysis/<dataset_uuid>/consistency_check', methods=['POST'])
@@ -2995,6 +2990,18 @@ def start_server():
     serve(app, host='127.0.0.1', port=5000, threads=max_workers_setting)
 
 
+class WebviewAPI:
+    """pywebview JS Bridge: 处理内嵌浏览器无法完成的操作（如文件下载）"""
+
+    def open_in_browser(self, url):
+        """在系统默认浏览器中打开指定 URL（用于解决 pywebview 无法下载文件的问题）"""
+        import webbrowser
+        # 补全相对路径为完整 URL
+        if url.startswith('/'):
+            url = f'http://127.0.0.1:5000{url}'
+        webbrowser.open(url)
+
+
 if __name__ == '__main__':
     multiprocessing.freeze_support()
 
@@ -3003,13 +3010,16 @@ if __name__ == '__main__':
 
     time.sleep(2)
 
+    api = WebviewAPI()
+
     window = webview.create_window(
         title='Zero2YoloYard | Developed by BlueDarkUP from FIRST Tech Challenge team 27570 | Be based on -- FIRST Machine Learning Toolchain --',
         url='http://127.0.0.1:5000',
         width=1920,
         height=1080,
         min_size=(1280, 720),
-        background_color='#ffffff'
+        background_color='#ffffff',
+        js_api=api
     )
 
     webview.start()

@@ -90,11 +90,29 @@ def load_gkdt_model(model_type=None):
     cfg_file = os.path.join(GKDT_ENGINE_DIR, "test_real_world", "configs", "gkd.yaml")
 
     if "H" in model_type:
-        ckpt_path = os.path.join(GKDT_ENGINE_DIR, "output", "GKDT-H_for_app", "model", "gkd_fullset.best")
+        candidate_paths = [
+            os.path.join(GKDT_ENGINE_DIR, "output", "GKDT-H_for_app", "model", "gkd_fullset.best"),
+            os.path.join(GKDT_ENGINE_DIR, "output", "GKDT-H_for_research", "model", "gkd.best"),
+            os.path.join(GKDT_ENGINE_DIR, "output", "GKDT-H_for_research", "model", "gkd_fullset.best"),
+            os.path.join(GKDT_ENGINE_DIR, "output", "GKDT-H_for_app", "model", "gkd.best"),
+        ]
         opts = ["MODEL.ENCODER.DINOv3.VISUAL_ENCODER", "dinov3_vith16plus"]
     else:
-        ckpt_path = os.path.join(GKDT_ENGINE_DIR, "output", "GKDT-L_for_app", "model", "gkd_fullset.best")
+        candidate_paths = [
+            os.path.join(GKDT_ENGINE_DIR, "output", "GKDT-L_for_app", "model", "gkd_fullset.best"),
+            os.path.join(GKDT_ENGINE_DIR, "output", "GKDT-L_for_research", "model", "gkd.best"),
+            os.path.join(GKDT_ENGINE_DIR, "output", "GKDT-L_for_research", "model", "gkd_fullset.best"),
+            os.path.join(GKDT_ENGINE_DIR, "output", "GKDT-L_for_app", "model", "gkd.best"),
+        ]
         opts = ["MODEL.ENCODER.DINOv3.VISUAL_ENCODER", "dinov3_vitl16"]
+
+    ckpt_path = next((p for p in candidate_paths if os.path.isfile(p)), candidate_paths[0])
+
+    if not os.path.isfile(ckpt_path):
+        raise FileNotFoundError(
+            f"GKDT {model_type} model weights not found at '{ckpt_path}'. "
+            "Please download the model from Settings -> Local Model Management."
+        )
 
     try:
         with WorkingDirContext(GKDT_ENGINE_DIR):

@@ -271,14 +271,37 @@
         <div class="row" id="aug-simulation-row">
             <div class="col-12 mb-4">
                 <div class="card">
-                    <div class="card-header">
-                        <i class="bi bi-sliders mr-2"></i> AUGMENTATION SIMULATION
+                    <div class="card-header d-flex justify-content-between align-items-center flex-wrap" style="gap: 8px;">
+                        <div>
+                            <i class="bi bi-sliders mr-2"></i> DATA AUGMENTATION & SIMULATION
+                        </div>
+                        <div class="btn-group btn-group-sm">
+                            <button type="button" class="btn btn-sm btn-outline-secondary font-monospace" id="btn-save-aug-config">
+                                <i class="bi bi-check-lg mr-1"></i> SAVE SETTINGS
+                            </button>
+                            <button type="button" class="btn btn-sm btn-primary font-monospace" id="btn-apply-and-regenerate">
+                                <i class="bi bi-arrow-repeat mr-1"></i> SAVE & RECOMPILE
+                            </button>
+                        </div>
                     </div>
                     <div class="card-body p-0">
                         <div class="row no-gutters">
                             <div class="col-lg-4 border-right p-3 bg-surface-secondary" style="border-color: var(--border-color) !important;">
-                                <h6 class="font-weight-bold mb-3 border-bottom pb-2 text-uppercase text-muted font-monospace small" style="border-color: var(--border-color) !important;">01 // PARAMETERS</h6>
-                                <div id="preview-aug-controls" class="custom-scrollbar">
+                                <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2" style="border-color: var(--border-color) !important;">
+                                    <h6 class="font-weight-bold m-0 text-uppercase text-muted font-monospace small">01 // PARAMETERS</h6>
+                                    <div class="custom-control custom-switch m-0">
+                                        <input type="checkbox" class="custom-control-input" id="dataset-aug-enabled">
+                                        <label class="custom-control-label font-monospace font-weight-bold small text-primary" for="dataset-aug-enabled">ENABLED</label>
+                                    </div>
+                                </div>
+                                <div class="form-group mb-3 pb-2 border-bottom" style="border-color: var(--border-color) !important;">
+                                    <label for="dataset-aug-multiply-factor" class="d-flex justify-content-between text-muted font-monospace small mb-1">
+                                        <span>MULTIPLY FACTOR (COPIES/IMG)</span>
+                                        <span class="font-weight-bold text-primary font-monospace" id="dataset-aug-multiply-factor-val">3</span>
+                                    </label>
+                                    <input type="range" class="custom-range" id="dataset-aug-multiply-factor" min="1" max="10" step="1" value="3">
+                                </div>
+                                <div id="preview-aug-controls" class="custom-scrollbar" style="max-height: 520px; overflow-y: auto;">
                                     {% include '_augmentation_controls.html' %}
                                 </div>
                             </div>
@@ -440,27 +463,40 @@ $(document).ready(function() {
     // --- Augmentation Controls Logic ---
     function setupAugmentationListeners(contextSelector) {
         const context = $(contextSelector);
-        context.on('input', 'input[type="range"]', function() {
-            $(this).closest('div').find('.val-display').text($(this).val());
+        context.off('input', 'input[type="range"]').on('input', 'input[type="range"]', function() {
+            $(this).closest('div').find('.aug-val-display, .val-display').text($(this).val());
             if (contextSelector === '#preview-aug-controls') { triggerAugmentationPreview(); }
         });
-        context.on('change', '.aug-option input[type="checkbox"]', function() {
+        context.off('change', '.aug-option input[type="checkbox"]').on('change', '.aug-option input[type="checkbox"]', function() {
             const controlsId = $(this).closest('.aug-option').data('controls');
-            context.find('#' + controlsId).toggle($(this).is(':checked'));
+            if (controlsId) {
+                context.find('#' + controlsId).toggle($(this).is(':checked'));
+            }
             if (contextSelector === '#preview-aug-controls') { triggerAugmentationPreview(); }
         });
         context.find('.aug-option input[type="checkbox"]').each(function() {
             const controlsId = $(this).closest('.aug-option').data('controls');
-            context.find('#' + controlsId).toggle($(this).is(':checked'));
+            if (controlsId) {
+                context.find('#' + controlsId).toggle($(this).is(':checked'));
+            }
         });
     }
+
+    $('#dataset-aug-multiply-factor').on('input', function() {
+        $('#dataset-aug-multiply-factor-val').text($(this).val());
+    });
+
+    $('#dataset-aug-enabled').on('change', function() {
+        triggerAugmentationPreview();
+    });
 
     function getAugmentationOptions(isForPreview) {
         const context = $('#preview-aug-controls');
         const getVal = (selector, type = 'float') => type === 'int' ? parseInt(context.find(selector).val()) : parseFloat(context.find(selector).val());
         const isEnabled = (selector) => context.find(selector).is(':checked');
         let augOptions = {
-            enabled: true,
+            enabled: isForPreview ? true : $('#dataset-aug-enabled').is(':checked'),
+            multiply_factor: parseInt($('#dataset-aug-multiply-factor').val()) || 3,
             hflip: { enabled: isEnabled('#aug-hflip-enabled'), p: getVal('#aug-hflip-p') },
             vflip: { enabled: isEnabled('#aug-vflip-enabled'), p: getVal('#aug-vflip-p') },
             rotate90: { enabled: isEnabled('#aug-rotate90-enabled'), p: getVal('#aug-rotate90-p') },
@@ -476,9 +512,163 @@ $(document).ready(function() {
             cutout: { enabled: isEnabled('#aug-cutout-enabled'), p: getVal('#aug-cutout-p'), holes: getVal('#aug-cutout-holes', 'int'), size: getVal('#aug-cutout-size', 'int') },
             mosaic: { enabled: isEnabled('#aug-mosaic-enabled'), p: getVal('#aug-mosaic-p') }
         };
-        if(!isForPreview){ augOptions.multiply_factor = 3; }
         return augOptions;
     }
+
+    function setAugmentationOptions(contextSelector, options) {
+        if (!options || typeof options !== 'object') return;
+        const context = $(contextSelector);
+
+        if (options.enabled !== undefined) {
+            $('#dataset-aug-enabled').prop('checked', !!options.enabled);
+        }
+        if (options.multiply_factor !== undefined) {
+            $('#dataset-aug-multiply-factor').val(options.multiply_factor);
+            $('#dataset-aug-multiply-factor-val').text(options.multiply_factor);
+        }
+
+        const setVal = (selector, val) => {
+            if (val === undefined || val === null) return;
+            const $el = context.find(selector);
+            $el.val(val);
+            $el.closest('div').find('.aug-val-display, .val-display').text(val);
+        };
+        const setChecked = (selector, checked) => {
+            if (checked === undefined || checked === null) return;
+            const $chk = context.find(selector);
+            $chk.prop('checked', !!checked);
+            const controlsId = $chk.closest('.aug-option').data('controls');
+            if (controlsId) {
+                context.find('#' + controlsId).toggle(!!checked);
+            }
+        };
+
+        if (options.hflip) {
+            setChecked('#aug-hflip-enabled', options.hflip.enabled);
+            setVal('#aug-hflip-p', options.hflip.p);
+        }
+        if (options.vflip) {
+            setChecked('#aug-vflip-enabled', options.vflip.enabled);
+            setVal('#aug-vflip-p', options.vflip.p);
+        }
+        if (options.rotate90) {
+            setChecked('#aug-rotate90-enabled', options.rotate90.enabled);
+            setVal('#aug-rotate90-p', options.rotate90.p);
+        }
+        if (options.rotate) {
+            setChecked('#aug-rotate-enabled', options.rotate.enabled);
+            setVal('#aug-rotate-p', options.rotate.p);
+            setVal('#aug-rotate-limit', options.rotate.limit);
+        }
+        if (options.ssr) {
+            setChecked('#aug-ssr-enabled', options.ssr.enabled);
+            setVal('#aug-ssr-p', options.ssr.p);
+            setVal('#aug-ssr-rotate', options.ssr.rotate);
+            setVal('#aug-ssr-shift', options.ssr.shift);
+            setVal('#aug-ssr-scale', options.ssr.scale);
+        }
+        if (options.affine) {
+            setChecked('#aug-affine-enabled', options.affine.enabled);
+            setVal('#aug-affine-p', options.affine.p);
+            setVal('#aug-affine-shear', options.affine.shear);
+        }
+        if (options.crop) {
+            setChecked('#aug-crop-enabled', options.crop.enabled);
+            setVal('#aug-crop-p', options.crop.p);
+        }
+        if (options.grayscale) {
+            setChecked('#aug-grayscale-enabled', options.grayscale.enabled);
+            setVal('#aug-grayscale-p', options.grayscale.p);
+        }
+        if (options.hsv) {
+            setChecked('#aug-hsv-enabled', options.hsv.enabled);
+            setVal('#aug-hsv-p', options.hsv.p);
+            setVal('#aug-hsv-h', options.hsv.h);
+            setVal('#aug-hsv-s', options.hsv.s);
+            setVal('#aug-hsv-v', options.hsv.v);
+        }
+        if (options.bc) {
+            setChecked('#aug-bc-enabled', options.bc.enabled);
+            setVal('#aug-bc-p', options.bc.p);
+            setVal('#aug-bc-b', options.bc.b);
+            setVal('#aug-bc-c', options.bc.c);
+        }
+        if (options.blur) {
+            setChecked('#aug-blur-enabled', options.blur.enabled);
+            setVal('#aug-blur-p', options.blur.p);
+            setVal('#aug-blur-limit', options.blur.limit);
+        }
+        if (options.noise) {
+            setChecked('#aug-noise-enabled', options.noise.enabled);
+            setVal('#aug-noise-p', options.noise.p);
+            setVal('#aug-noise-limit', options.noise.limit);
+        }
+        if (options.cutout) {
+            setChecked('#aug-cutout-enabled', options.cutout.enabled);
+            setVal('#aug-cutout-p', options.cutout.p);
+            setVal('#aug-cutout-holes', options.cutout.holes);
+            setVal('#aug-cutout-size', options.cutout.size);
+        }
+        if (options.mosaic) {
+            setChecked('#aug-mosaic-enabled', options.mosaic.enabled);
+            setVal('#aug-mosaic-p', options.mosaic.p);
+        }
+    }
+
+    // Save Augmentation Settings
+    $('#btn-save-aug-config').on('click', function() {
+        const $btn = $(this);
+        const augOptions = getAugmentationOptions(false);
+        $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status"></span> SAVING...');
+        $.ajax({
+            url: `/api/dataset/${datasetUuid}/augmentation_options`,
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ augmentation_options: augOptions }),
+            success: function(resp) {
+                if (resp.success) {
+                    window.sysAlert('Augmentation options saved successfully.', 'success');
+                } else {
+                    window.sysAlert('Failed to save augmentation options: ' + resp.message, 'error');
+                }
+            },
+            error: function() {
+                window.sysAlert('Server error saving augmentation options.', 'error');
+            },
+            complete: function() {
+                $btn.prop('disabled', false).html('<i class="bi bi-check-lg mr-1"></i> SAVE SETTINGS');
+            }
+        });
+    });
+
+    // Save & Recompile Dataset
+    $('#btn-apply-and-regenerate').on('click', function() {
+        const $btn = $(this);
+        const augOptions = getAugmentationOptions(false);
+        if (!confirm('Are you sure you want to save these augmentation settings and recompile/sync the dataset? This will regenerate the dataset zip archive.')) {
+            return;
+        }
+        $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status"></span> RECOMPILING...');
+        $.ajax({
+            url: '/regenerateDataset',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ dataset_uuid: datasetUuid, augmentation_options: augOptions }),
+            success: function(resp) {
+                if (resp.success) {
+                    window.sysAlert('Dataset recompilation started with new augmentation settings! You can track its progress on the Projects or Datasets view.', 'success');
+                } else {
+                    window.sysAlert('Failed to start recompilation: ' + resp.message, 'error');
+                }
+            },
+            error: function() {
+                window.sysAlert('Server error initiating recompilation.', 'error');
+            },
+            complete: function() {
+                $btn.prop('disabled', false).html('<i class="bi bi-arrow-repeat mr-1"></i> SAVE & RECOMPILE');
+            }
+        });
+    });
 
     let previewTimeout;
     function triggerAugmentationPreview() {
@@ -847,6 +1037,9 @@ $(document).ready(function() {
                     select.append('<option value="consistency_outliers" hidden style="color: var(--color-danger); font-weight: bold;">AI_REVIEW_OUTLIERS (Skeleton Outliers)</option>');
 
                     setupAugmentationListeners('#preview-aug-controls');
+                    if (response.augmentation_options && Object.keys(response.augmentation_options).length > 0) {
+                        setAugmentationOptions('#preview-aug-controls', response.augmentation_options);
+                    }
                     const sourceSelector = $('#aug-preview-source-selector');
                     sourceSelector.empty();
                     const sampleImages = fullGalleryData.slice(0, 5);
@@ -916,6 +1109,9 @@ $(document).ready(function() {
                     select.append('<option value="consistency_outliers" hidden style="color: var(--color-danger); font-weight: bold;">AI_REVIEW_OUTLIERS (Instance Label Outliers)</option>');
 
                     setupAugmentationListeners('#preview-aug-controls');
+                    if (response.augmentation_options && Object.keys(response.augmentation_options).length > 0) {
+                        setAugmentationOptions('#preview-aug-controls', response.augmentation_options);
+                    }
                     const sourceSelector = $('#aug-preview-source-selector');
                     sourceSelector.empty();
                     const sampleImages = fullGalleryData.slice(0, 5);
