@@ -17,6 +17,12 @@ def init_storage():
     os.makedirs(os.path.join(config.STORAGE_DIR, 'frames'), exist_ok=True)
     os.makedirs(os.path.join(config.STORAGE_DIR, 'datasets'), exist_ok=True)
     os.makedirs(os.path.join(config.STORAGE_DIR, 'models'), exist_ok=True)
+    
+    # 确保外部 checkpoints 目录存在，便于用户下载或手动放置模型权重
+    checkpoints_dir = os.path.join(config.BASE_DIR, 'checkpoints')
+    os.makedirs(checkpoints_dir, exist_ok=True)
+    os.makedirs(os.path.join(checkpoints_dir, 'clip'), exist_ok=True)
+    os.makedirs(os.path.join(checkpoints_dir, 'sam3'), exist_ok=True)
 
 
 def get_video_path(video_uuid):

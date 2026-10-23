@@ -1,0 +1,22 @@
+================================================================================
+  Zero2YoloYard | FIRST Tech Challenge 机器视觉全能标注与训练工具链
+  开发者: BlueDarkUP (FTC Team 27570)
+  基于 -- FIRST Machine Learning Toolchain -- 全面重构演进
+================================================================================
+
+【快速使用指南】
+1. 双击桌面快捷方式“Zero2YoloYard”即可直接启动本软件。
+2. 软件启动后，将自动加载高性能 AI 运行时并打开应用交互窗口（默认运行于 http://127.0.0.1:5000）。
+3. 首次使用如需启用智能分割 (SAM 2.1 / SAM 3)、零样本分类 (CLIP) 或 姿态关键点估计 (GKDT)：
+   - 您可以直接在左侧导航栏【设置 (Settings) -> 本地模型管理】页面中一键断点续传下载各模型；
+   - 也可以将已下载好的离线权重（.pt / .best / .safetensors）直接放置于软件安装目录的 checkpoints/ 或 gkdt_engine/ 文件夹内。
+
+【目录结构说明】
+- Zero2YoloYard.exe  : 软件核心执行程序
+- checkpoints/       : AI 模型权重存放目录（包含 SAM3、SAM2.1、CLIP 等）
+- gkdt_engine/       : Grounded Pose 姿态估计与关键点检测模型目录
+- local_storage/     : 本地工程视频、抽帧图像及导出的训练集 ZIP 存放目录
+- ftc_ml.db          : 本地 SQLite 标注数据库
+- settings.json      : 系统硬件加速与标注首选项配置
+
+祝您在比赛与视觉工程开发中取得优异战绩！

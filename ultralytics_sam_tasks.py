@@ -38,6 +38,10 @@ import settings_manager
 _sam_cache = {
     "sam2_video_predictor": None,
     "sam2_image_predictor": None,
+    "sam2_image_checkpoint": None,
+    "sam2_image_device": None,
+    "sam2_video_checkpoint": None,
+    "sam2_video_device": None,
     "multiplex_predictor": None,
     "image_model": None,
     "image_processor": None,
@@ -48,39 +52,94 @@ _sam_cache = {
 }
 
 def _load_sam2_models(mode="image"):
-    """加载高精度的 SAM 2 基础引擎"""
-    if not HAS_SAM2: return None
+    """加载高精度的 SAM 2 基础引擎，支持动态模型架构与权重解析"""
+    if not HAS_SAM2:
+        return None
     settings = settings_manager.load_settings()
+    if not settings.get('enable_sam_model', True):
+        return None
 
-    # 默认使用 sam2.1_b.pt 或 sam2.1_t.pt 满足毫秒级点选
-    checkpoint_name = "sam2.1_b.pt"
-    checkpoint_path = os.path.join(config.BASE_DIR, "checkpoints", checkpoint_name)
     device = settings_manager.get_device()
+    selected_ckpt = settings.get("sam_model_checkpoint", "sam2.1_l.pt")
+    if not selected_ckpt or selected_ckpt == "none":
+        selected_ckpt = "sam2.1_l.pt"
 
+    # 规范化 checkpoint 路径
+    checkpoint_path = os.path.abspath(os.path.join(config.BASE_DIR, "checkpoints", os.path.basename(selected_ckpt)))
+
+    # 若指定路径不存在，尝试查找其他路径或自动探测已有模型
     if not os.path.exists(checkpoint_path):
-        logging.warning(f"[SAM2] Checkpoint not found: {checkpoint_path}, falling back to Tiny")
-        checkpoint_name = "sam2.1_t.pt"
-        checkpoint_path = os.path.join(config.BASE_DIR, "checkpoints", checkpoint_name)
+        alt_path = os.path.abspath(os.path.join(config.BASE_DIR, selected_ckpt))
+        if os.path.exists(alt_path):
+            checkpoint_path = alt_path
+        else:
+            checkpoints_dir = os.path.join(config.BASE_DIR, "checkpoints")
+            candidates = [
+                "sam2.1_l.pt", "sam2.1_b.pt", "sam2.1_s.pt", "sam2.1_t.pt",
+                "sam2_hiera_large.pt", "sam2_hiera_base_plus.pt", "sam2_hiera_small.pt", "sam2_hiera_tiny.pt"
+            ]
+            found_candidate = None
+            for cand in candidates:
+                cand_p = os.path.join(checkpoints_dir, cand)
+                if os.path.exists(cand_p):
+                    found_candidate = cand_p
+                    break
 
-    # 动态确定配置文件
-    model_cfg = "configs/sam2.1/sam2.1_hiera_b+.yaml" if "_b.pt" in checkpoint_name else "configs/sam2.1/sam2.1_hiera_t.yaml"
+            if not found_candidate and os.path.exists(checkpoints_dir):
+                for fname in os.listdir(checkpoints_dir):
+                    if "sam2" in fname.lower() and fname.endswith(".pt"):
+                        found_candidate = os.path.join(checkpoints_dir, fname)
+                        break
+
+            if found_candidate:
+                logging.info(f"[SAM2] Configured checkpoint '{selected_ckpt}' not found, auto-using available checkpoint: {found_candidate}")
+                checkpoint_path = found_candidate
+            else:
+                logging.error(f"[SAM2] Checkpoint not found: {checkpoint_path} and no alternative SAM 2 model found in {checkpoints_dir}")
+                return None
+
+    # 根据选定 checkpoint 文件名动态匹配官方 YAML 配置文件
+    ckpt_filename = os.path.basename(checkpoint_path).lower()
+    if "_l." in ckpt_filename or "large" in ckpt_filename:
+        model_cfg = "configs/sam2.1/sam2.1_hiera_l.yaml"
+    elif "_s." in ckpt_filename or "small" in ckpt_filename:
+        model_cfg = "configs/sam2.1/sam2.1_hiera_s.yaml"
+    elif "_t." in ckpt_filename or "tiny" in ckpt_filename:
+        model_cfg = "configs/sam2.1/sam2.1_hiera_t.yaml"
+    elif "_b" in ckpt_filename or "base" in ckpt_filename:
+        model_cfg = "configs/sam2.1/sam2.1_hiera_b+.yaml"
+    else:
+        model_cfg = settings.get("sam_model_config", "configs/sam2.1/sam2.1_hiera_b+.yaml")
+
+    ckpt_key = f"sam2_{mode}_checkpoint"
+    dev_key = f"sam2_{mode}_device"
+    pred_key = f"sam2_{mode}_predictor"
+
+    if (_sam_cache.get(ckpt_key) != checkpoint_path or str(_sam_cache.get(dev_key)) != str(device)):
+        logging.info(f"[SAM2] Switch or init {mode} engine with {checkpoint_path} on {device}...")
+        _sam_cache[pred_key] = None
+        _sam_cache[ckpt_key] = checkpoint_path
+        _sam_cache[dev_key] = str(device)
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
     try:
         if mode == "image" and _sam_cache["sam2_image_predictor"] is None:
-            logging.info(f"[SAM2] Loading Image Predictor on {device}...")
+            logging.info(f"[SAM2] Loading Image Predictor ({model_cfg}) on {device}...")
             _sam_cache["sam2_image_predictor"] = SAM2ImagePredictor(
                 build_sam2(model_cfg, checkpoint_path, device=device)
             )
         elif mode == "video" and _sam_cache["sam2_video_predictor"] is None:
-            logging.info(f"[SAM2] Loading Video Predictor on {device}...")
+            logging.info(f"[SAM2] Loading Video Predictor ({model_cfg}) on {device}...")
             _sam_cache["sam2_video_predictor"] = build_sam2_video_predictor(
                 model_cfg, checkpoint_path, device=device
             )
     except Exception as e:
-        logging.error(f"[SAM2] Load failed: {e}")
+        logging.error(f"[SAM2] Load failed: {e}", exc_info=True)
         return None
 
-    return _sam_cache["sam2_image_predictor"] if mode == "image" else _sam_cache["sam2_video_predictor"]
+    return _sam_cache[pred_key]
 
 
 def _load_sam3_models(mode="video"):
@@ -96,6 +155,10 @@ def _load_sam3_models(mode="video"):
         checkpoint_name = os.path.join("sam3.1_multiplex", "sam3.1_multiplex.pt")
 
     checkpoint_path = os.path.abspath(os.path.join(config.BASE_DIR, "checkpoints", checkpoint_name))
+    if not os.path.exists(checkpoint_path):
+        logging.info(f"[SAM3] Model checkpoint not found at: {checkpoint_path}. You can download it via Settings -> Model Management.")
+        return None
+
     device = settings_manager.get_device()
 
     ckpt_key = f"{mode}_checkpoint"
@@ -225,17 +288,17 @@ def sam3_query_frame(video_uuid, frame_number, text_prompt=None, positive_boxes=
         scores = state.get("scores", [])
 
     results = []
-    sam2_pred = _load_sam2_models(mode="image")
-    img_cv = None
-    if sam2_pred is not None:
+    masks_tensor = state.get("masks", None)
+    masks_np = None
+    if masks_tensor is not None and torch.is_tensor(masks_tensor):
         try:
-            img_path = file_storage.get_frame_path(video_uuid, frame_number)
-            if os.path.exists(img_path):
-                img_cv = cv2.imread(img_path)
-                if img_cv is not None:
-                    sam2_pred.set_image(cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB))
-        except Exception:
-            img_cv = None
+            if masks_tensor.ndim == 4 and masks_tensor.shape[1] == 1:
+                masks_np = masks_tensor.squeeze(1).detach().cpu().numpy()
+            else:
+                masks_np = masks_tensor.detach().cpu().numpy()
+        except Exception as e:
+            logging.debug(f"[SAM3] 原生掩码提取失败: {e}")
+            masks_np = None
 
     for i in range(len(boxes)):
         box_data = boxes[i]
@@ -245,19 +308,19 @@ def sam3_query_frame(video_uuid, frame_number, text_prompt=None, positive_boxes=
         x1, y1, x2, y2 = map(int, box_data)
         polygon = [[x1, y1], [x2, y1], [x2, y2], [x1, y2]]
 
-        if sam2_pred is not None and img_cv is not None:
+        # 直接利用 SAM3 自身前向传播产出的高分辨率精确 Mask 提取多边形，毫秒级响应，彻底消除卡顿
+        if masks_np is not None and i < len(masks_np):
             try:
-                m, _, _ = sam2_pred.predict(box=np.array([x1, y1, x2, y2]), multimask_output=False)
-                if m is not None and m.size > 0:
-                    mask_np = m[0].astype(np.uint8)
-                    cnts, _ = cv2.findContours(mask_np, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-                    if cnts:
-                        c = max(cnts, key=cv2.contourArea)
-                        eps = 0.0015 * cv2.arcLength(c, True)
-                        approx = cv2.approxPolyDP(c, eps, True)
+                mask_i = (masks_np[i] > 0).astype(np.uint8)
+                cnts, _ = cv2.findContours(mask_i, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                if cnts:
+                    c = max(cnts, key=cv2.contourArea)
+                    eps = 0.0015 * cv2.arcLength(c, True)
+                    approx = cv2.approxPolyDP(c, eps, True)
+                    if len(approx) >= 3:
                         polygon = approx.reshape(-1, 2).tolist()
             except Exception as e:
-                logging.error(f"[SAM2 精细化失败]: {e}")
+                logging.debug(f"[SAM3 多边形解析异常]: {e}")
 
         results.append({"box": [x1, y1, x2, y2], "polygon": polygon, "score": score})
 

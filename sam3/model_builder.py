@@ -3,9 +3,30 @@
 # pyre-unsafe
 
 import os
+import sys
 from typing import Optional
 
 import pkg_resources
+
+def _get_default_bpe_path():
+    try:
+        p = pkg_resources.resource_filename("sam3", "assets/bpe_simple_vocab_16e6.txt.gz")
+        if os.path.exists(p):
+            return p
+    except Exception:
+        pass
+
+    candidates = [
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "bpe_simple_vocab_16e6.txt.gz"),
+        os.path.join(getattr(sys, "_MEIPASS", ""), "sam3", "assets", "bpe_simple_vocab_16e6.txt.gz"),
+        os.path.join(getattr(sys, "_MEIPASS", ""), "assets", "bpe_simple_vocab_16e6.txt.gz"),
+        os.path.join(os.path.abspath("."), "sam3", "assets", "bpe_simple_vocab_16e6.txt.gz"),
+    ]
+    for c in candidates:
+        if c and os.path.exists(c):
+            return c
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "bpe_simple_vocab_16e6.txt.gz")
+
 import torch
 import torch.nn as nn
 from huggingface_hub import hf_hub_download
@@ -596,9 +617,7 @@ def build_sam3_image_model(
         A SAM3 image model
     """
     if bpe_path is None:
-        bpe_path = pkg_resources.resource_filename(
-            "sam3", "assets/bpe_simple_vocab_16e6.txt.gz"
-        )
+        bpe_path = _get_default_bpe_path()
 
     # Create visual components
     compile_mode = "default" if compile else None
@@ -695,9 +714,7 @@ def build_sam3_video_model(
         Sam3VideoInferenceWithInstanceInteractivity: The instantiated dense tracking model
     """
     if bpe_path is None:
-        bpe_path = pkg_resources.resource_filename(
-            "sam3", "assets/bpe_simple_vocab_16e6.txt.gz"
-        )
+        bpe_path = _get_default_bpe_path()
 
     # Build Tracker module
     tracker = build_tracker(apply_temporal_disambiguation=apply_temporal_disambiguation)
@@ -1106,9 +1123,7 @@ def build_sam3_multiplex_video_predictor(
         Sam3MultiplexVideoPredictor: The fully-initialized predictor
     """
     if bpe_path is None:
-        bpe_path = pkg_resources.resource_filename(
-            "sam3", "assets/bpe_simple_vocab_16e6.txt.gz"
-        )
+        bpe_path = _get_default_bpe_path()
 
     from sam3.model.sam3_multiplex_base import Sam3MultiplexPredictorWrapper
     from sam3.model.sam3_multiplex_detector import Sam3MultiplexDetector

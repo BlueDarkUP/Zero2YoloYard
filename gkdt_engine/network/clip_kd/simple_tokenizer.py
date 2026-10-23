@@ -1,3 +1,4 @@
+import sys
 import gzip
 import html
 import os
@@ -9,6 +10,22 @@ import regex as re
 
 @lru_cache()
 def default_bpe():
+    candidates = [
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "bpe_simple_vocab_16e6.txt.gz"),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "clip_kd", "bpe_simple_vocab_16e6.txt.gz"),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "dinov3_kd", "bpe_simple_vocab_16e6.txt.gz"),
+    ]
+    meipass = getattr(sys, '_MEIPASS', None)
+    if meipass:
+        candidates.extend([
+            os.path.join(meipass, "network", "clip_kd", "bpe_simple_vocab_16e6.txt.gz"),
+            os.path.join(meipass, "gkdt_engine", "network", "clip_kd", "bpe_simple_vocab_16e6.txt.gz"),
+            os.path.join(meipass, "gkdt_engine", "network", "dinov3_kd", "bpe_simple_vocab_16e6.txt.gz"),
+            os.path.join(meipass, "sam3", "assets", "bpe_simple_vocab_16e6.txt.gz"),
+        ])
+    for c in candidates:
+        if os.path.isfile(c):
+            return os.path.abspath(c)
     return os.path.join(os.path.dirname(os.path.abspath(__file__)), "bpe_simple_vocab_16e6.txt.gz")
 
 

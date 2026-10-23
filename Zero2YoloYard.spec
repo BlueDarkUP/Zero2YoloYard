@@ -1,242 +1,302 @@
 # -*- mode: python ; coding: utf-8 -*-
-import sys
-import os
-from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+# Zero2YoloYard PyInstaller Spec File
+# 特性：
+# 1. 严格排除所有模型大文件（SAM 2.1、SAM 3、CLIP、GKDT、GroundingDINO、LocateAnything 等权重），
+#    保证打包出的单文件 EXE 仅包含程序主体代码与必需结构配置，体积轻巧；
+# 2. 模型支持用户在运行 EXE 后通过设置页面（Settings -> Local Model Management）一键断点续传/镜像下载，
+#    或手动将下载好的模型放置于 EXE 同级 checkpoints / gkdt_engine 目录下；
+# 3. 完整收集 Flask 模板静态资源、SAM2/Hydra 配置文件、SAM3 分词器词表、DINOv3/CLIP 词表、
+#    pywebview/pythonnet/EdgeChromium 运行时、decord 视音频解码库、torchvision/albumentations 等动态链接库与元数据；
+# 4. 彻底规避旧打包中因盲目 exclude unittest/pydoc 导致 scipy/numpy.testing 崩溃的 Bug；
+# 5. 适配 TensorFlow Lite hook，彻底避免与 PyTorch 的 OpenMP 0xC0000005 内存越界崩溃。
 
-# 修复 PyTorch 与 TensorFlow 同时加载引发的 OpenMP / C++ 0xC0000005 (-1073741819) 内存越界崩溃
+import os
+import sys
+
+# 彻底避免 PyTorch + TensorFlow / scikit-learn OpenMP 运行时冲突导致的 0xC0000005 崩溃
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 
-# 1. 突破 PyInstaller 深度递归解算限制
-sys.setrecursionlimit(10000)
+from PyInstaller.utils.hooks import (
+    collect_data_files,
+    collect_dynamic_libs,
+    collect_all,
+)
 
-# ==============================================================
-# Pywebview 原生桌面窗口底层平台依赖
-# ==============================================================
-hidden_webview = [
+# 动态获取当前项目根目录
+PROJECT_DIR = os.path.abspath(os.path.dirname(__file__) if '__file__' in locals() else '.')
+
+# ------------------------------------------------------------------------------
+# 1. 收集项目内部非权重资产（模板、静态文件、配置文件、词表、代码架构）
+# ------------------------------------------------------------------------------
+def get_project_datas():
+    datas = []
+
+    # 1.1 前端资源与根目录配置
+    for sub in ['templates', 'static', 'configs']:
+        base = os.path.join(PROJECT_DIR, sub)
+        if os.path.isdir(base):
+            for root, _, files in os.walk(base):
+                for f in files:
+                    src = os.path.join(root, f)
+                    rel = os.path.relpath(src, PROJECT_DIR)
+                    dst = os.path.dirname(rel)
+                    datas.append((src, dst))
+
+    # 1.2 sam2 架构配置文件（Hydra 推理必需）
+    sam2_cfg = os.path.join(PROJECT_DIR, 'sam2', 'configs')
+    if os.path.isdir(sam2_cfg):
+        for root, _, files in os.walk(sam2_cfg):
+            for f in files:
+                src = os.path.join(root, f)
+                rel = os.path.relpath(src, PROJECT_DIR)
+                dst = os.path.dirname(rel)
+                datas.append((src, dst))
+
+    # 1.3 sam3 词表、资产与源码（保证 TorchScript / inspect.getsource 在单文件运行环境下可访问 .py 源码）
+    sam3_dir = os.path.join(PROJECT_DIR, 'sam3')
+    if os.path.isdir(sam3_dir):
+        for root, dirs, files in os.walk(sam3_dir):
+            dirs[:] = [d for d in dirs if d not in ('__pycache__',)]
+            for f in files:
+                if f.endswith(('.py', '.txt', '.gz', '.yaml', '.yml', '.json')):
+                    src = os.path.join(root, f)
+                    rel = os.path.relpath(src, PROJECT_DIR)
+                    dst = os.path.dirname(rel)
+                    datas.append((src, dst))
+
+    # 1.4 gkdt_engine 源码与非权重配置（严格过滤大模型权重，保留结构配置文件与词表）
+    # 绝对排除：.pt, .pth, .safetensors, .best, .bin, .tmp, output 目录, .cache 目录, __pycache__
+    model_exts = {'.pt', '.pth', '.safetensors', '.best', '.bin', '.tmp', '.pyc'}
+    gkdt_dir = os.path.join(PROJECT_DIR, 'gkdt_engine')
+    if os.path.isdir(gkdt_dir):
+        for root, dirs, files in os.walk(gkdt_dir):
+            dirs[:] = [d for d in dirs if d not in ('output', '.cache', '__pycache__')]
+            for f in files:
+                ext = os.path.splitext(f)[1].lower()
+                if ext in model_exts:
+                    continue
+                src = os.path.join(root, f)
+                rel = os.path.relpath(src, PROJECT_DIR)
+                dst = os.path.dirname(rel)
+                datas.append((src, dst))
+
+    return datas
+
+project_datas = get_project_datas()
+
+# ------------------------------------------------------------------------------
+# 2. 收集第三方包的关键资源、动态库与隐藏模块
+# ------------------------------------------------------------------------------
+extra_datas = []
+extra_binaries = []
+extra_hiddenimports = []
+
+# 桌面 WebView 与 .NET CLR 桥接、视频解码库
+for pkg in ['pythonnet', 'clr_loader', 'webview', 'decord']:
+    try:
+        d, b, h = collect_all(pkg)
+        extra_datas.extend(d)
+        extra_binaries.extend(b)
+        extra_hiddenimports.extend(h)
+    except Exception as e:
+        print(f"Warning collecting {pkg}: {e}")
+
+# 图像处理与视觉模型包配置
+for pkg in ['albumentations', 'timm', 'ultralytics']:
+    try:
+        extra_datas.extend(collect_data_files(pkg))
+    except Exception as e:
+        print(f"Warning collecting data files for {pkg}: {e}")
+
+# ------------------------------------------------------------------------------
+# 3. 完整隐藏导入清单（严禁排除任何 Python 标准库）
+# ------------------------------------------------------------------------------
+hidden_imports = [
+    # 标准库核心
+    'unittest',
+    'pydoc',
+    'multiprocessing',
+    'multiprocessing.freeze_support',
+    'sqlite3',
+    'ctypes',
+    
+    # Web 服务与网络
+    'waitress',
+    'flask',
+    'jinja2',
+    'werkzeug',
+    'colorama',
+    'requests',
+    'urllib3',
+    'tqdm',
+    
+    # 数据库
+    'sqlalchemy',
+    'sqlalchemy.dialects.sqlite',
+    'sqlalchemy.dialects.sqlite.pysqlite',
+    
+    # 桌面 GUI 引擎
     'webview',
     'webview.platforms.winforms',
     'webview.platforms.edgechromium',
-    'webview.platforms.cef',
     'clr',
-]
-
-# 动态将 gkdt_engine 及其子目录追加到 sys.path 末尾，避免子模块递归收集时找不到内部相对导入，且不影响根目录 config.py 优先导入
-gkdt_path = os.path.abspath('gkdt_engine')
-test_rw_path = os.path.join(gkdt_path, 'test_real_world')
-for p in [gkdt_path, test_rw_path]:
-    if p not in sys.path:
-        sys.path.append(p)
-
-# ==============================================================
-# 自动递归收集本地核心包与关键扩展模块子模块
-# ==============================================================
-submodules_to_collect = (
-    collect_submodules('sam2') +
-    collect_submodules('sam3') +
-    collect_submodules('gkdt_engine') +
-    collect_submodules('exporters') +
-    collect_submodules('ultralytics') +
-    collect_submodules('pycocotools') +
-    collect_submodules('skimage')
-)
-
-# ==============================================================
-# 精准隐式依赖导入 (包含 PyTorch/TensorFlow/SAM2/SAM3/GKDT/CLIP/DINOv3 等)
-# ==============================================================
-my_hidden_imports = [
-    # Core PyTorch & TensorFlow Frameworks (包含 FTC Machine Learning TFLite 解释器)
-    'torch',
-    'torchvision',
-    'tensorflow',
-    'tensorflow.lite.python.interpreter',
+    'clr_loader',
+    'pythonnet',
+    
+    # 图像与视觉计算
     'cv2',
-    'numpy',
     'PIL',
     'PIL.Image',
-
-    # HuggingFace & Vision Foundation Backbones
-    'transformers',
-    'huggingface_hub',
+    'PIL.ImageDraw',
+    'PIL.ImageFont',
+    'skimage',
+    'skimage.io',
+    'skimage.io._plugins',
+    'skimage.io._plugins.pil_plugin',
+    'skimage.color',
+    'skimage.color.colorconv',
+    'scipy',
+    'scipy.special',
+    'scipy.special._special_ufuncs',
+    'scipy.linalg',
+    'scipy.ndimage',
+    'albumentations',
+    'supervision',
+    'lapx',
+    'decord',
+    'matplotlib',
+    'matplotlib.pyplot',
+    
+    # 深度学习框架与大模型生态
+    'torch',
+    'torch.nn',
+    'torch.nn.functional',
+    'torchvision',
+    'torchvision.ops',
+    'torchvision.transforms',
+    'yaml',
     'timm',
     'einops',
-    'safetensors',
-    'accelerate',
-    'sentencepiece',
-    'tokenizers',
-    'peft',
-
-    # SAM 2 & SAM 3 Foundation Models
-    'ultralytics',
-    'sam2',
-    'sam3',
-
-    # GKDT (Grounded Keypoint Transformer) & DINOv3 Engine Dependencies
-    'gkdt_engine',
-    'albumentations',
-    'hydra',
-    'omegaconf',
+    'transformers',
+    'huggingface_hub',
+    'iopath',
     'fairscale',
-    'shapely',
     'tensorboardX',
-    'termcolor',
     'torchmetrics',
     'lmdb',
     'h5py',
-
-    # Image Processing, Visualization & COCO Tools (解决 SAM3/GroundingDINO 可视化依赖)
-    'pycocotools',
-    'pycocotools.mask',
-    'pycocotools.coco',
-    'pycocotools.cocoeval',
-    'pandas',
-    'skimage',
-    'skimage.io',
-    'skimage.color',
-    'matplotlib',
-    'matplotlib.pyplot',
-    'matplotlib.patches',
-    'matplotlib.colors',
-
-    # Text Tokenizers & Path Managers for SAM3/DINOv3
-    'ftfy',
-    'regex',
-    'iopath',
-    'pkg_resources',
-    'setuptools',
-
-    # Video Decoding & Object Detection Utilities
-    'decord',
-    'supervision',
     'addict',
     'yacs',
-    'tqdm',
+    'ultralytics',
+    'pycocotools',
+    'shapely',
+    'hydra',
+    'hydra.core.global_hydra',
+    'omegaconf',
+    'tensorflow.lite.python.interpreter',
 
-    # Scipy & Scikit-Learn Clustering Utilities
-    'scipy',
-    'scipy.special.cython_special',
-    'scipy.spatial.transform._rotation_groups',
-    'scipy.ndimage',
-    'scipy.stats',
-    'sklearn',
-    'sklearn.cluster',
-    'sklearn.metrics',
-    'sklearn.utils._typedefs',
-    'sklearn.neighbors._partition_nodes',
-
-    # Flask Backend & SQLite Database Engine
-    'flask',
-    'waitress',
-    'engineio.async_drivers.threading',
-    'colorama',
-    'yaml',
-    'sqlite3',
-    'sqlalchemy',
-    'sqlalchemy.dialects.sqlite',
-
-    # Exporters Engine Extensions
+    # 项目自身模块
+    'config',
+    'database',
+    'file_storage',
+    'settings_manager',
+    'ai_models',
+    'local_model_manager',
+    'background_tasks',
+    'bbox_writer',
+    'annotation_model',
+    'clip_model',
+    'gkdt_tasks',
+    'ultralytics_sam_tasks',
+    'clean_downloaded_models',
+    
+    # 数据集导出器模块
     'exporters',
-] + submodules_to_collect
+    'exporters.base',
+    'exporters.classification',
+    'exporters.detection',
+    'exporters.pose',
+    'exporters.segmentation',
+    
+    # sam2 与 sam3 核心构建入口
+    'sam2',
+    'sam2.build_sam',
+    'sam2.automatic_mask_generator',
+    'sam2.sam2_image_predictor',
+    'sam2.sam2_video_predictor',
+    'sam3',
+    'sam3.model_builder',
+    'sam3.model.sam3_image_processor',
 
-final_hidden_imports = my_hidden_imports + hidden_webview
+    # DINOv3 与 GKDT
+    'dinov3',
+    'dinov3.hub',
+    'dinov3.hub.backbones',
+    'dinov3.hub.classifiers',
+    'dinov3.hub.detectors',
+    'dinov3.hub.dinotxt',
+    'dinov3.hub.segmentors',
+    'dinov3.hub.depthers',
+    'dinov3.hub.utils',
+    'dinov3.eval.text.tokenizer',
+] + extra_hiddenimports
 
-# 收集 PyWebView 及 AI 模型库数据文件
-extra_datas = (
-    collect_data_files('webview') +
-    collect_data_files('ultralytics') +
-    collect_data_files('transformers') +
-    collect_data_files('timm') +
-    collect_data_files('albumentations') +
-    collect_data_files('torchvision')
-)
+# 去重
+hidden_imports = sorted(list(set(hidden_imports)))
 
-# 智能收集轻量配置，剔除超大权重 (.pt / .pth / .safetensors / .bin / .best)
-def collect_light_datas(src_dir, dst_dir):
-    result = []
-    if not os.path.exists(src_dir):
-        return result
-    for root, dirs, files in os.walk(src_dir):
-        for f in files:
-            if not f.endswith(('.pt', '.pth', '.safetensors', '.bin', '.best', '.ckpt', '.onnx')):
-                rel_path = os.path.relpath(root, src_dir)
-                target_dir = os.path.join(dst_dir, rel_path) if rel_path != '.' else dst_dir
-                result.append((os.path.join(root, f), target_dir))
-    return result
+all_datas = project_datas + extra_datas
+all_binaries = extra_binaries
 
-# 基础数据打包路径表
-project_datas = [
-    ('templates', 'templates'),
-    ('static', 'static'),
-    ('configs', 'configs'),
-    ('sam2', 'sam2'),
-    ('sam3', 'sam3'),
-    ('gkdt_engine', 'gkdt_engine'),
-    ('exporters', 'exporters'),
-] + collect_light_datas('checkpoints', 'checkpoints') + extra_datas
-
-# 动态图标检测 (防止绝对路径垮塌)
-icon_file = 'icon.ico' if os.path.exists('icon.ico') else (
-    'static/favicon.ico' if os.path.exists('static/favicon.ico') else None
-)
-
-block_cipher = None
-
+# ------------------------------------------------------------------------------
+# 4. 分析与打包任务构建
+# ------------------------------------------------------------------------------
 a = Analysis(
-    ['app.py'],
-    pathex=['.'],
-    binaries=[],
-    datas=project_datas,
-    hiddenimports=final_hidden_imports,
-    hookspath=[],
+    [os.path.join(PROJECT_DIR, 'app.py')],
+    pathex=[
+        PROJECT_DIR,
+        os.path.join(PROJECT_DIR, 'gkdt_engine'),
+        os.path.join(PROJECT_DIR, 'gkdt_engine', 'test_real_world'),
+        os.path.join(PROJECT_DIR, 'gkdt_engine', 'network'),
+        os.path.join(PROJECT_DIR, 'gkdt_engine', 'network', 'dinov3_kd'),
+        os.path.join(PROJECT_DIR, 'gkdt_engine', 'network', 'clip_kd'),
+        os.path.join(PROJECT_DIR, 'gkdt_engine', 'test_real_world', 'object_detector_lib'),
+    ],
+    binaries=all_binaries,
+    datas=all_datas,
+    hiddenimports=hidden_imports,
+    hookspath=[os.path.join(PROJECT_DIR, 'hooks')],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[
-        'PyQt5',
-        'PyQt6',
-        'PySide2',
-        'PySide6',
-        'tkinter',
-        'IPython',
-        'jupyter',
-        'dask',
-        'bokeh',
-        'numba',
-        'pytest',
-    ],
-    win_no_prefer_redirects=False,
-    win_private_assemblies=False,
-    cipher=block_cipher,
+    excludes=['tkinter', 'IPython', 'pytest'],
     noarchive=False,
+    optimize=0,
 )
 
-pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+pyz = PYZ(a.pure)
+
+exe_icon = os.path.join(PROJECT_DIR, 'static', 'favicon.ico')
+if not os.path.exists(exe_icon):
+    exe_icon = None
 
 exe = EXE(
     pyz,
     a.scripts,
+    a.binaries,
+    a.datas,
     [],
-    exclude_binaries=True,
     name='Zero2YoloYard',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=False,
+    upx_exclude=[],
+    runtime_tmpdir=None,
     console=True,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=icon_file,
-)
-
-coll = COLLECT(
-    exe,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
-    strip=False,
-    upx=False,
-    upx_exclude=[],
-    name='Zero2YoloYard',
+    icon=exe_icon,
 )

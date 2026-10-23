@@ -11,13 +11,19 @@ except ImportError:
     TRANSFORMERS_AVAILABLE = False
 
 
+import config
+
+
 class CLIPModelManager:
     """
     Manager for CLIP (Contrastive Language-Image Pretraining) models.
     Supports local checkpoints stored in checkpoints/clip/ directory.
     """
-    def __init__(self, base_checkpoints_dir="checkpoints/clip"):
-        self.base_checkpoints_dir = os.path.abspath(base_checkpoints_dir)
+    def __init__(self, base_checkpoints_dir=None):
+        if base_checkpoints_dir is None:
+            self.base_checkpoints_dir = os.path.abspath(os.path.join(config.BASE_DIR, "checkpoints", "clip"))
+        else:
+            self.base_checkpoints_dir = os.path.abspath(base_checkpoints_dir)
         self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
         self.loaded_models = {}
         self.loaded_processors = {}

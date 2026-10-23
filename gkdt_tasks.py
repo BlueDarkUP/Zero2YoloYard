@@ -18,13 +18,26 @@ import database
 import settings_manager
 
 # 2. 动态将 gkdt_engine 及其子目录追加到 Python 模块搜索路径末尾
-PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+meipass = getattr(sys, '_MEIPASS', None)
+if meipass and os.path.exists(os.path.join(meipass, "gkdt_engine")):
+    PROJECT_ROOT = meipass
+elif hasattr(config, 'BASE_DIR') and os.path.exists(os.path.join(config.BASE_DIR, "gkdt_engine")):
+    PROJECT_ROOT = config.BASE_DIR
+else:
+    PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+
 GKDT_ENGINE_DIR = os.path.join(PROJECT_ROOT, "gkdt_engine")
 TEST_REAL_WORLD_DIR = os.path.join(GKDT_ENGINE_DIR, "test_real_world")
+NETWORK_DIR = os.path.join(GKDT_ENGINE_DIR, "network")
+DINOV3_KD_DIR = os.path.join(NETWORK_DIR, "dinov3_kd")
+CLIP_KD_DIR = os.path.join(NETWORK_DIR, "clip_kd")
 
-for p in [GKDT_ENGINE_DIR, TEST_REAL_WORLD_DIR]:
-    if p not in sys.path:
-        sys.path.append(p)
+for root_cand in ([meipass] if meipass else []) + [PROJECT_ROOT, getattr(config, 'BASE_DIR', None)]:
+    if not root_cand: continue
+    g_dir = os.path.join(root_cand, "gkdt_engine")
+    for p in [g_dir, os.path.join(g_dir, "test_real_world"), os.path.join(g_dir, "network"), os.path.join(g_dir, "network", "dinov3_kd"), os.path.join(g_dir, "network", "clip_kd")]:
+        if os.path.exists(p) and p not in sys.path:
+            sys.path.append(p)
 
 _gkdt_model_cache = {
     "model": None,
@@ -49,7 +62,18 @@ class WorkingDirContext:
 
 def _apply_dinov3_bpe_path_patch():
     """动态热补丁：修复 DINOv3 源码在 Windows 环境下将 C:\ 本地盘符误识别为 URL Scheme ('c') 的 Bug"""
-    local_bpe_path = os.path.join(GKDT_ENGINE_DIR, "network", "dinov3_kd", "bpe_simple_vocab_16e6.txt.gz")
+    candidates = [
+        os.path.join(GKDT_ENGINE_DIR, "network", "dinov3_kd", "bpe_simple_vocab_16e6.txt.gz"),
+        os.path.join(GKDT_ENGINE_DIR, "network", "clip_kd", "bpe_simple_vocab_16e6.txt.gz"),
+    ]
+    meipass = getattr(sys, '_MEIPASS', None)
+    if meipass:
+        candidates.extend([
+            os.path.join(meipass, "gkdt_engine", "network", "dinov3_kd", "bpe_simple_vocab_16e6.txt.gz"),
+            os.path.join(meipass, "gkdt_engine", "network", "clip_kd", "bpe_simple_vocab_16e6.txt.gz"),
+            os.path.join(meipass, "sam3", "assets", "bpe_simple_vocab_16e6.txt.gz"),
+        ])
+    local_bpe_path = next((p for p in candidates if os.path.exists(p)), candidates[0])
     try:
         from io import BytesIO
         # noinspection PyUnresolvedReferences
@@ -87,10 +111,20 @@ def load_gkdt_model(model_type=None):
 
     logging.info(f"[GKDT] 正在加载姿态 AI 模型引擎 ({model_type}) 到设备 {device}...")
 
-    cfg_file = os.path.join(GKDT_ENGINE_DIR, "test_real_world", "configs", "gkd.yaml")
+    cfg_candidates = [
+        os.path.join(GKDT_ENGINE_DIR, "test_real_world", "configs", "gkd.yaml"),
+        os.path.join(getattr(config, "BASE_DIR", ""), "gkdt_engine", "test_real_world", "configs", "gkd.yaml"),
+    ]
+    meipass = getattr(sys, '_MEIPASS', None)
+    if meipass:
+        cfg_candidates.insert(0, os.path.join(meipass, "gkdt_engine", "test_real_world", "configs", "gkd.yaml"))
+    cfg_file = next((p for p in cfg_candidates if os.path.isfile(p)), cfg_candidates[0])
 
     if "H" in model_type:
         candidate_paths = [
+            os.path.join(config.BASE_DIR, "gkdt_engine", "output", "GKDT-H_for_app", "model", "gkd_fullset.best"),
+            os.path.join(config.BASE_DIR, "gkdt_engine", "output", "GKDT-H_for_research", "model", "gkd.best"),
+            os.path.join(config.BASE_DIR, "checkpoints", "gkdt_h.best"),
             os.path.join(GKDT_ENGINE_DIR, "output", "GKDT-H_for_app", "model", "gkd_fullset.best"),
             os.path.join(GKDT_ENGINE_DIR, "output", "GKDT-H_for_research", "model", "gkd.best"),
             os.path.join(GKDT_ENGINE_DIR, "output", "GKDT-H_for_research", "model", "gkd_fullset.best"),
@@ -99,12 +133,27 @@ def load_gkdt_model(model_type=None):
         opts = ["MODEL.ENCODER.DINOv3.VISUAL_ENCODER", "dinov3_vith16plus"]
     else:
         candidate_paths = [
+            os.path.join(config.BASE_DIR, "gkdt_engine", "output", "GKDT-L_for_app", "model", "gkd_fullset.best"),
+            os.path.join(config.BASE_DIR, "gkdt_engine", "output", "GKDT-L_for_research", "model", "gkd.best"),
+            os.path.join(config.BASE_DIR, "checkpoints", "gkdt_l.best"),
             os.path.join(GKDT_ENGINE_DIR, "output", "GKDT-L_for_app", "model", "gkd_fullset.best"),
             os.path.join(GKDT_ENGINE_DIR, "output", "GKDT-L_for_research", "model", "gkd.best"),
             os.path.join(GKDT_ENGINE_DIR, "output", "GKDT-L_for_research", "model", "gkd_fullset.best"),
             os.path.join(GKDT_ENGINE_DIR, "output", "GKDT-L_for_app", "model", "gkd.best"),
         ]
         opts = ["MODEL.ENCODER.DINOv3.VISUAL_ENCODER", "dinov3_vitl16"]
+
+    # 动态将 DINOv3 仓库路径重写为绝对路径，彻底避免相对路径导致的 FileNotFoundError
+    dinov3_repo_candidates = [
+        DINOV3_KD_DIR,
+        os.path.join(GKDT_ENGINE_DIR, "network", "dinov3_kd"),
+        os.path.join(config.BASE_DIR, "gkdt_engine", "network", "dinov3_kd"),
+    ]
+    meipass = getattr(sys, '_MEIPASS', None)
+    if meipass:
+        dinov3_repo_candidates.insert(0, os.path.join(meipass, "gkdt_engine", "network", "dinov3_kd"))
+    dinov3_repo_dir = next((p for p in dinov3_repo_candidates if os.path.exists(os.path.join(p, "hubconf.py"))), DINOV3_KD_DIR)
+    opts.extend(["MODEL.ENCODER.DINOv3.DINOv3_REPO_DIR", dinov3_repo_dir])
 
     ckpt_path = next((p for p in candidate_paths if os.path.isfile(p)), candidate_paths[0])
 
@@ -368,4 +417,4 @@ def predict_sam3_gkdt_batch_pose(video_uuid, frame_number, class_label, text_pro
             except Exception as e:
                 logging.warning(f"[TrueLAM Pose] 目标 #{idx+1} BBox {box} GKDT 姿态识别跳过: {e}")
 
-    return pose_objects
+    return pose_objects

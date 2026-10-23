@@ -1,3 +1,9 @@
+import os
+import sys
+_curr_dir = os.path.dirname(os.path.abspath(__file__))
+if _curr_dir not in sys.path:
+    sys.path.insert(0, _curr_dir)
+
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 #
 # This software may be used and distributed in accordance with

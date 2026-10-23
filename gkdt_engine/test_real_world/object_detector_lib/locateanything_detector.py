@@ -22,10 +22,41 @@ class LocateAnythingDetector:
     """Detect several named classes in one LocateAnything inference call."""
 
     def __init__(self, model_path=_DEFAULT_MODEL_PATH):
+        import shutil
+        import logging
+
+        # 候选路径：优先检查外部用户数据目录（exe 同级目录）
+        try:
+            import config as app_cfg
+            ext_path = os.path.join(app_cfg.BASE_DIR, 'gkdt_engine', 'test_real_world', 'object_detector_lib', 'weights', 'LocateAnything-3B')
+            f1_ext = os.path.join(ext_path, 'model-00001-of-00002.safetensors')
+            f2_ext = os.path.join(ext_path, 'model-00002-of-00002.safetensors')
+            f_single_ext = os.path.join(ext_path, 'model.safetensors')
+            if (os.path.isfile(f1_ext) and os.path.isfile(f2_ext)) or os.path.isfile(f_single_ext):
+                model_path = ext_path
+        except Exception:
+            pass
+
         f1 = os.path.join(model_path, 'model-00001-of-00002.safetensors')
         f2 = os.path.join(model_path, 'model-00002-of-00002.safetensors')
         f_single = os.path.join(model_path, 'model.safetensors')
         has_weights = (os.path.isfile(f1) and os.path.isfile(f2)) or os.path.isfile(f_single)
+
+        # 若外部目录拥有权重，自动从内置目录同步代码和配置资产（确保 transformers AutoModel.from_pretrained 可执行）
+        if has_weights and model_path != _DEFAULT_MODEL_PATH and os.path.exists(_DEFAULT_MODEL_PATH):
+            for item in os.listdir(_DEFAULT_MODEL_PATH):
+                if item.endswith('.safetensors') or item.endswith('.tmp'):
+                    continue
+                src = os.path.join(_DEFAULT_MODEL_PATH, item)
+                dst = os.path.join(model_path, item)
+                if not os.path.exists(dst):
+                    try:
+                        if os.path.isdir(src):
+                            shutil.copytree(src, dst)
+                        else:
+                            shutil.copy2(src, dst)
+                    except Exception as e:
+                        logging.warning(f"Failed to sync LocateAnything asset {item} to {model_path}: {e}")
 
         if not os.path.isdir(model_path) or not os.path.isfile(os.path.join(model_path, 'config.json')) or not has_weights:
             raise FileNotFoundError(

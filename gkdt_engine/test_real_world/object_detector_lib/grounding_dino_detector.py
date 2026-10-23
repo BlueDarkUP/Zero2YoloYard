@@ -32,7 +32,26 @@ class GroundingDINODetector:
         from groundingdino.util.utils import clean_state_dict
 
         if not os.path.isfile(config_path):
+            try:
+                import config as app_cfg
+                alt_cfg = os.path.join(app_cfg.BASE_DIR, 'gkdt_engine', 'test_real_world', 'object_detector_lib', 'groundingdino', 'config', 'GroundingDINO_SwinT_OGC.py')
+                if os.path.isfile(alt_cfg):
+                    config_path = alt_cfg
+            except Exception:
+                pass
+
+        if not os.path.isfile(config_path):
             raise FileNotFoundError(f'GroundingDINO config not found: {config_path}')
+
+        if not os.path.isfile(checkpoint_path):
+            try:
+                import config as app_cfg
+                alt_ckpt = os.path.join(app_cfg.BASE_DIR, 'gkdt_engine', 'test_real_world', 'object_detector_lib', 'weights', 'groundingdino_swint_ogc.pth')
+                if os.path.isfile(alt_ckpt):
+                    checkpoint_path = alt_ckpt
+            except Exception:
+                pass
+
         if not os.path.isfile(checkpoint_path):
             raise FileNotFoundError(f'GroundingDINO checkpoint not found: {checkpoint_path}')
 

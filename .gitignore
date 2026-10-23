@@ -160,3 +160,9 @@ output/
 Thumbs.db
 Zero2YoloYard.exe
 Zero2YoloYard.zip
+
+# Build outputs & test environments
+installer_output/
+exe_test_env/
+local_storage/
+settings.json

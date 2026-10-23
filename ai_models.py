@@ -232,11 +232,13 @@ def predict_from_one_shot(video_uuid, frame_number, positive_prompt_box, negativ
     if sam_tasks is None:
         raise RuntimeError("SAM feature is not installed.")
 
-    prompt_rect = [positive_prompt_box['x1'], positive_prompt_box['y1'],
-                    positive_prompt_box['x2'], positive_prompt_box['y2']]
-    negative_rects = [
-        [b['x1'], b['y1'], b['x2'], b['y2']] for b in (negative_prompt_boxes or [])
-    ]
+    def _to_rect(b):
+        if isinstance(b, (list, tuple)):
+            return list(b)[:4]
+        return [b.get('x1', 0), b.get('y1', 0), b.get('x2', 0), b.get('y2', 0)]
+
+    prompt_rect = _to_rect(positive_prompt_box)
+    negative_rects = [_to_rect(b) for b in (negative_prompt_boxes or [])]
 
     settings = settings_manager.load_settings()
     confidence = float(settings.get('default_preannotation_conf', 0.5))

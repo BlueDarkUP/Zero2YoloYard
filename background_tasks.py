@@ -9,7 +9,10 @@ import zipfile
 
 import cv2
 import numpy as np
-import tensorflow as tf
+try:
+    from tensorflow.lite.python.interpreter import Interpreter as TFLiteInterpreter
+except Exception:
+    TFLiteInterpreter = None
 import torch
 import yaml
 
@@ -480,7 +483,9 @@ def pre_annotate_video_task(video_uuid, model_uuid, options):
                     f"Failed to load YOLO .pt model. Ensure it is a valid YOLOv8/v11 weights file. Details: {e}")
 
         else:
-            interpreter = tf.lite.Interpreter(model_path=model_path)
+            if TFLiteInterpreter is None:
+                raise ImportError("TensorFlow Lite Interpreter is not available.")
+            interpreter = TFLiteInterpreter(model_path=model_path)
             interpreter.allocate_tensors()
 
             input_details = interpreter.get_input_details()
@@ -717,12 +722,18 @@ def start_tracking_task(video_uuid, tracker_uuid, tracker_name, scale, init_fram
     video_path = file_storage.get_video_path(video_uuid)
     video_info = database.get_video_entity(video_uuid)
 
-    tracker_fns = {
-        'CSRT': cv2.legacy.TrackerCSRT_create, 'MedianFlow': cv2.legacy.TrackerMedianFlow_create,
-        'MIL': cv2.legacy.TrackerMIL_create, 'MOSSE': cv2.legacy.TrackerMOSSE_create,
-        'TLD': cv2.legacy.TrackerTLD_create, 'KCF': cv2.legacy.TrackerKCF_create,
-        'Boosting': cv2.legacy.TrackerBoosting_create,
-    }
+    legacy = getattr(cv2, 'legacy', None)
+    tracker_fns = {}
+    for name in ['CSRT', 'MedianFlow', 'MIL', 'MOSSE', 'TLD', 'KCF', 'Boosting']:
+        fn = None
+        if legacy and hasattr(legacy, f'Tracker{name}_create'):
+            fn = getattr(legacy, f'Tracker{name}_create')
+        elif hasattr(cv2, f'Tracker{name}_create'):
+            fn = getattr(cv2, f'Tracker{name}_create')
+        elif hasattr(cv2, 'TrackerMIL_create'):
+            fn = cv2.TrackerMIL_create
+        if fn:
+            tracker_fns[name] = fn
 
     try:
         logging.info(f"Starting tracking for video {video_uuid} with tracker {tracker_name}")

@@ -1,4 +1,10 @@
+import sys
 import os
+
+# 彻底避免 Windows 下 PyTorch + TensorFlow / scikit-learn OpenMP 运行时冲突导致的 0xC0000005 崩溃
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
+
 import flask
 from flask import Response, request, jsonify, render_template, send_from_directory, send_file
 import os
@@ -88,7 +94,15 @@ if str(max_workers_setting).lower() == 'auto':
 else:
     max_workers_setting = int(max_workers_setting)
 
-app = flask.Flask(__name__)
+if getattr(sys, 'frozen', False):
+    _res_dir = getattr(sys, '_MEIPASS', os.path.dirname(sys.executable))
+    app = flask.Flask(
+        __name__,
+        template_folder=os.path.join(_res_dir, 'templates'),
+        static_folder=os.path.join(_res_dir, 'static')
+    )
+else:
+    app = flask.Flask(__name__)
 app.secret_key = os.urandom(24)
 APP_BOOT_ID = uuid.uuid4().hex
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(threadName)s - %(message)s')
@@ -103,7 +117,7 @@ with app.app_context():
 
 
 def validate_description(desc, existing_descriptions):
-    if not (1 <= len(desc) <= config.MAX_DESCRIPTION_LENGTH):
+    if not desc or not (1 <= len(desc) <= config.MAX_DESCRIPTION_LENGTH):
         return False, "Description must be between 1 and 30 characters."
     if desc in existing_descriptions:
         return False, "Description is a duplicate."
@@ -1306,8 +1320,14 @@ def background_preprocess_frame():
     if ai_models.is_frame_cached(video_uuid, int(frame_number)):
         return jsonify({'success': True, 'message': 'Already cached.'})
 
+    def _bg_warm():
+        try:
+            ai_models.warm_frame_cache(video_uuid, int(frame_number))
+        except Exception as e:
+            logging.debug(f"Background warm frame cache skipped: {e}")
+
     threading.Thread(
-        target=lambda: ai_models.warm_frame_cache(video_uuid, int(frame_number)),
+        target=_bg_warm,
         name=f"Preprocess-{video_uuid[:6]}-{frame_number}"
     ).start()
 
@@ -1938,14 +1958,20 @@ def start_sam2_tracking():
     except ImportError:
         return jsonify({'success': False, 'message': 'SAM features are not installed on server.'}), 501
 
-    data = request.json
+    data = request.json or {}
     video_uuid = data.get('video_uuid')
-    start_frame = int(data.get('start_frame'))
-    end_frame = int(data.get('end_frame'))
+    raw_start = data.get('start_frame')
+    raw_end = data.get('end_frame')
     init_bboxes_text = data.get('init_bboxes_text')
 
-    if not all([video_uuid, start_frame is not None, end_frame is not None, init_bboxes_text]):
+    if not all([video_uuid, raw_start is not None, raw_end is not None, init_bboxes_text]):
         return jsonify({'success': False, 'message': 'Missing required data for tracking.'}), 400
+
+    try:
+        start_frame = int(raw_start)
+        end_frame = int(raw_end)
+    except (ValueError, TypeError):
+        return jsonify({'success': False, 'message': 'start_frame and end_frame must be integers.'}), 400
 
     if background_tasks.active_tasks.get(video_uuid):
         return jsonify(
@@ -1972,14 +1998,20 @@ def start_sam2_batch_tracking():
     except ImportError:
         return jsonify({'success': False, 'message': 'SAM features are not installed on server.'}), 501
 
-    data = request.json
+    data = request.json or {}
     video_uuid = data.get('video_uuid')
-    start_frame = int(data.get('start_frame'))
-    end_frame = int(data.get('end_frame'))
+    raw_start = data.get('start_frame')
+    raw_end = data.get('end_frame')
     init_bboxes_text = data.get('init_bboxes_text')
 
-    if not all([video_uuid, start_frame is not None, end_frame is not None, init_bboxes_text]):
+    if not all([video_uuid, raw_start is not None, raw_end is not None, init_bboxes_text]):
         return jsonify({'success': False, 'message': 'Missing required data for batch tracking.'}), 400
+
+    try:
+        start_frame = int(raw_start)
+        end_frame = int(raw_end)
+    except (ValueError, TypeError):
+        return jsonify({'success': False, 'message': 'start_frame and end_frame must be integers.'}), 400
 
     if background_tasks.active_tasks.get(video_uuid):
         return jsonify(
@@ -2056,10 +2088,14 @@ def prepare_to_start_tracking():
         return jsonify(
             {'success': False, 'message': 'Another task (extraction or tracking) is already running for this video.'})
     tracker_uuid = str(uuid.uuid4().hex)
+    tracker_name = data.get('tracker_name') or 'kcf'
+    scale = float(data.get('scale') or 1.0)
+    init_frame_number = int(data.get('init_frame_number') or 0)
+    init_bboxes_text = data.get('init_bboxes_text') or ''
     threading.Thread(target=background_tasks.start_tracking_task, args=(
-        video_uuid, tracker_uuid, data.get('tracker_name'),
-        float(data.get('scale')), int(data.get('init_frame_number')),
-        data.get('init_bboxes_text'),
+        video_uuid, tracker_uuid, tracker_name,
+        scale, init_frame_number,
+        init_bboxes_text,
     ), name=f"Tracker-{video_uuid[:6]}").start()
     return jsonify({'success': True, 'tracker_uuid': tracker_uuid})
 
@@ -2277,6 +2313,10 @@ def start_pre_annotation():
         return jsonify({'success': False, 'message': 'Video not found.'}), 404
     if video['status'] != 'READY':
         return jsonify({'success': False, 'message': f"Video must be in READY state, but is {video['status']}."}), 400
+
+    model = database.get_model_entity(model_uuid)
+    if not model:
+        return jsonify({'success': False, 'message': 'Model not found.'}), 404
 
     if background_tasks.active_tasks.get(video_uuid):
         return jsonify({'success': False, 'message': 'Another task is already running for this video.'}), 409
@@ -3005,21 +3045,24 @@ class WebviewAPI:
 if __name__ == '__main__':
     multiprocessing.freeze_support()
 
-    server_thread = Thread(target=start_server, daemon=True)
-    server_thread.start()
+    if '--no-gui' in sys.argv or os.environ.get('Z2Y_NO_GUI') == '1':
+        start_server()
+    else:
+        server_thread = Thread(target=start_server, daemon=True)
+        server_thread.start()
 
-    time.sleep(2)
+        time.sleep(2)
 
-    api = WebviewAPI()
+        api = WebviewAPI()
 
-    window = webview.create_window(
-        title='Zero2YoloYard | Developed by BlueDarkUP from FIRST Tech Challenge team 27570 | Be based on -- FIRST Machine Learning Toolchain --',
-        url='http://127.0.0.1:5000',
-        width=1920,
-        height=1080,
-        min_size=(1280, 720),
-        background_color='#ffffff',
-        js_api=api
-    )
+        window = webview.create_window(
+            title='Zero2YoloYard | Developed by BlueDarkUP from FIRST Tech Challenge team 27570 | Be based on -- FIRST Machine Learning Toolchain --',
+            url='http://127.0.0.1:5000',
+            width=1920,
+            height=1080,
+            min_size=(1280, 720),
+            background_color='#ffffff',
+            js_api=api
+        )
 
-    webview.start()
+        webview.start()

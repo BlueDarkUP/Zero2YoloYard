@@ -88,40 +88,40 @@ def build_augmentation_pipeline(options):
     if A is None: return None
     transforms = []
     if options.get('hflip', {}).get('enabled'):
-        transforms.append(A.HorizontalFlip(p=options['hflip']['p']))
+        transforms.append(A.HorizontalFlip(p=float(options['hflip'].get('p', 0.5))))
     if options.get('vflip', {}).get('enabled'):
-        transforms.append(A.VerticalFlip(p=options['vflip']['p']))
+        transforms.append(A.VerticalFlip(p=float(options['vflip'].get('p', 0.5))))
     if options.get('rotate90', {}).get('enabled'):
-        transforms.append(A.RandomRotate90(p=options['rotate90']['p']))
+        transforms.append(A.RandomRotate90(p=float(options['rotate90'].get('p', 0.5))))
     if options.get('rotate', {}).get('enabled'):
         transforms.append(
-            A.Rotate(limit=options['rotate']['limit'], p=options['rotate']['p'], border_mode=cv2.BORDER_CONSTANT,
+            A.Rotate(limit=int(options['rotate'].get('limit', 15)), p=float(options['rotate'].get('p', 0.5)), border_mode=cv2.BORDER_CONSTANT,
                      value=0))
     if options.get('ssr', {}).get('enabled'):
-        transforms.append(A.ShiftScaleRotate(shift_limit=options['ssr']['shift'], scale_limit=options['ssr']['scale'],
-                                             rotate_limit=options['ssr']['rotate'], p=options['ssr']['p'],
+        transforms.append(A.ShiftScaleRotate(shift_limit=float(options['ssr'].get('shift', 0.0625)), scale_limit=float(options['ssr'].get('scale', 0.1)),
+                                             rotate_limit=int(options['ssr'].get('rotate', 15)), p=float(options['ssr'].get('p', 0.5)),
                                              border_mode=cv2.BORDER_CONSTANT, value=0))
     if options.get('affine', {}).get('enabled'):
-        limit = options['affine']['shear']
+        limit = int(options['affine'].get('shear', 10))
         transforms.append(
-            A.Affine(shear={'x': (-limit, limit), 'y': (-limit, limit)}, p=options['affine']['p'], cval=0))
+            A.Affine(shear={'x': (-limit, limit), 'y': (-limit, limit)}, p=float(options['affine'].get('p', 0.5)), cval=0))
     if options.get('crop', {}).get('enabled'):
-        transforms.append(A.CropAndPad(percent=(-0.15, 0.0), pad_mode=cv2.BORDER_CONSTANT, p=options['crop']['p']))
+        transforms.append(A.CropAndPad(percent=(-0.15, 0.0), pad_mode=cv2.BORDER_CONSTANT, p=float(options['crop'].get('p', 0.5))))
 
     if options.get('grayscale', {}).get('enabled'):
-        transforms.append(A.ToGray(p=options['grayscale']['p']))
+        transforms.append(A.ToGray(p=float(options['grayscale'].get('p', 0.5))))
     if options.get('hsv', {}).get('enabled'):
-        transforms.append(A.HueSaturationValue(hue_shift_limit=options['hsv']['h'], sat_shift_limit=options['hsv']['s'],
-                                               val_shift_limit=options['hsv']['v'], p=options['hsv']['p']))
+        transforms.append(A.HueSaturationValue(hue_shift_limit=int(options['hsv'].get('h', 20)), sat_shift_limit=int(options['hsv'].get('s', 30)),
+                                               val_shift_limit=int(options['hsv'].get('v', 20)), p=float(options['hsv'].get('p', 0.5))))
     if options.get('bc', {}).get('enabled'):
         transforms.append(
-            A.RandomBrightnessContrast(brightness_limit=options['bc']['b'], contrast_limit=options['bc']['c'],
-                                       p=options['bc']['p']))
+            A.RandomBrightnessContrast(brightness_limit=float(options['bc'].get('b', 0.2)), contrast_limit=float(options['bc'].get('c', 0.2)),
+                                       p=float(options['bc'].get('p', 0.5))))
 
     if options.get('blur', {}).get('enabled'):
-        transforms.append(A.GaussianBlur(blur_limit=(3, options['blur']['limit']), p=options['blur']['p']))
+        transforms.append(A.GaussianBlur(blur_limit=(3, int(options['blur'].get('limit', 7))), p=float(options['blur'].get('p', 0.5))))
     if options.get('noise', {}).get('enabled'):
-        transforms.append(A.GaussNoise(var_limit=(10.0, options['noise']['limit']), p=options['noise']['p']))
+        transforms.append(A.GaussNoise(var_limit=(10.0, float(options['noise'].get('limit', 50.0))), p=float(options['noise'].get('p', 0.5))))
 
     if options.get('cutout', {}).get('enabled'):
         cutout_cfg = options['cutout']
@@ -149,40 +149,40 @@ def build_augmentation_pipeline_for_keypoints(options):
     if A is None: return None
     transforms = []
     if options.get('hflip', {}).get('enabled'):
-        transforms.append(A.HorizontalFlip(p=options['hflip']['p']))
+        transforms.append(A.HorizontalFlip(p=float(options['hflip'].get('p', 0.5))))
     if options.get('vflip', {}).get('enabled'):
-        transforms.append(A.VerticalFlip(p=options['vflip']['p']))
+        transforms.append(A.VerticalFlip(p=float(options['vflip'].get('p', 0.5))))
     if options.get('rotate90', {}).get('enabled'):
-        transforms.append(A.RandomRotate90(p=options['rotate90']['p']))
+        transforms.append(A.RandomRotate90(p=float(options['rotate90'].get('p', 0.5))))
     if options.get('rotate', {}).get('enabled'):
         transforms.append(
-            A.Rotate(limit=options['rotate']['limit'], p=options['rotate']['p'], border_mode=cv2.BORDER_CONSTANT,
+            A.Rotate(limit=int(options['rotate'].get('limit', 15)), p=float(options['rotate'].get('p', 0.5)), border_mode=cv2.BORDER_CONSTANT,
                      value=0))
     if options.get('ssr', {}).get('enabled'):
-        transforms.append(A.ShiftScaleRotate(shift_limit=options['ssr']['shift'], scale_limit=options['ssr']['scale'],
-                                             rotate_limit=options['ssr']['rotate'], p=options['ssr']['p'],
+        transforms.append(A.ShiftScaleRotate(shift_limit=float(options['ssr'].get('shift', 0.0625)), scale_limit=float(options['ssr'].get('scale', 0.1)),
+                                             rotate_limit=int(options['ssr'].get('rotate', 15)), p=float(options['ssr'].get('p', 0.5)),
                                              border_mode=cv2.BORDER_CONSTANT, value=0))
     if options.get('affine', {}).get('enabled'):
-        limit = options['affine']['shear']
+        limit = int(options['affine'].get('shear', 10))
         transforms.append(
-            A.Affine(shear={'x': (-limit, limit), 'y': (-limit, limit)}, p=options['affine']['p'], cval=0))
+            A.Affine(shear={'x': (-limit, limit), 'y': (-limit, limit)}, p=float(options['affine'].get('p', 0.5)), cval=0))
     if options.get('crop', {}).get('enabled'):
-        transforms.append(A.CropAndPad(percent=(-0.15, 0.0), pad_mode=cv2.BORDER_CONSTANT, p=options['crop']['p']))
+        transforms.append(A.CropAndPad(percent=(-0.15, 0.0), pad_mode=cv2.BORDER_CONSTANT, p=float(options['crop'].get('p', 0.5))))
 
     if options.get('grayscale', {}).get('enabled'):
-        transforms.append(A.ToGray(p=options['grayscale']['p']))
+        transforms.append(A.ToGray(p=float(options['grayscale'].get('p', 0.5))))
     if options.get('hsv', {}).get('enabled'):
-        transforms.append(A.HueSaturationValue(hue_shift_limit=options['hsv']['h'], sat_shift_limit=options['hsv']['s'],
-                                               val_shift_limit=options['hsv']['v'], p=options['hsv']['p']))
+        transforms.append(A.HueSaturationValue(hue_shift_limit=int(options['hsv'].get('h', 20)), sat_shift_limit=int(options['hsv'].get('s', 30)),
+                                               val_shift_limit=int(options['hsv'].get('v', 20)), p=float(options['hsv'].get('p', 0.5))))
     if options.get('bc', {}).get('enabled'):
         transforms.append(
-            A.RandomBrightnessContrast(brightness_limit=options['bc']['b'], contrast_limit=options['bc']['c'],
-                                       p=options['bc']['p']))
+            A.RandomBrightnessContrast(brightness_limit=float(options['bc'].get('b', 0.2)), contrast_limit=float(options['bc'].get('c', 0.2)),
+                                       p=float(options['bc'].get('p', 0.5))))
 
     if options.get('blur', {}).get('enabled'):
-        transforms.append(A.GaussianBlur(blur_limit=(3, options['blur']['limit']), p=options['blur']['p']))
+        transforms.append(A.GaussianBlur(blur_limit=(3, int(options['blur'].get('limit', 7))), p=float(options['blur'].get('p', 0.5))))
     if options.get('noise', {}).get('enabled'):
-        transforms.append(A.GaussNoise(var_limit=(10.0, options['noise']['limit']), p=options['noise']['p']))
+        transforms.append(A.GaussNoise(var_limit=(10.0, float(options['noise'].get('limit', 50.0))), p=float(options['noise'].get('p', 0.5))))
 
     if options.get('cutout', {}).get('enabled'):
         cutout_cfg = options['cutout']
