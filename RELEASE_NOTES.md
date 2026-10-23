@@ -1,82 +1,43 @@
-# Zero2YoloYard Release Notes
+# Zero2YoloYard v2.2.0 Release Notes
 
-## [v2.2.0 / v3.0 Milestone] - 2026-10-23
-
-> **Zero2YoloYard** 迎来里程碑级全方位重构演进！从原先的单一目标检测标注工具，全面跨越至覆盖 **目标检测、实例分割、图像分类、姿态估计 (Pose)** 4 大任务范式，集成了 **SAM 3.0 / SAM 2.1 / GKDT Grounded Pose / CLIP** 基础大模型矩阵，支持 **9 大主流工业级数据集格式导出** 与 **单一可执行安装包** 发布。
+> 对比上一版本 **v2.1.0** 的主要更新与变更说明。
 
 ---
 
-### 🌟 核心新特性与重大突破 (Highlights)
-
-#### 1. ⚡ SAM 3.0 革命性接入与“一点即出”极速单框推理
-- **接入 SAM 3 视觉大模型**：内置文本提示词感知引擎与全图盲扫能力（TRUE LAM - Locate Anything）；
-- **单框/点选推理性能极致优化**：彻底剥离跨模型冗余编码开销，直接提取 Mask 轮廓多边形，单目标框响应延迟从 **2.33 秒骤降至 59.9ms ~ 72.5ms（0.06 秒）**，在打包后独立可执行程序中实测响应仅 **0.16 秒**，实现真正的“一点即出”；
-- **高精多边形提取**：直接生成 100+ 顶点的精确几何多边形，完美贴合复杂边缘。
-
-#### 2. 🎯 GKDT Grounded Pose：8.87 亿参数全图多目标姿态大模型
-- **前沿姿态基础模型**：深度集成基于 DINOv3-ViT-Large 骨干网络与 CLIP 文本适配器的 Grounded Pose 推理引擎；
-- **首创文本驱动零样本关键点生成**：只需输入物体名称与自定义关键点 Schema（如人体、机械臂、移动底盘、竞赛道具），即可在全图自动预测并对齐骨骼关键点；
-- **多模型协同流水线**：打通 `SAM 3 目标定位 -> SAM 2.1 精细区域对齐 -> GKDT 关键点高精检测` 闭环。
-
-#### 3. 🏃 SAM 2.1 连续视频多目标追踪系统
-- **全系列骨干网络支持**：支持 SAM 2.1 Hiera Tiny / Small / Base+ / Large 等多档尺寸按需切换；
-- **抗漂移光流与运动外推**：引入 Forward-Backward 亚像素 PyLK 光流与 Top-Down 双跟踪器骨骼动力学约束，彻底解决视频跳帧或遮挡下的关键点塌陷与轮廓跳变；
-- **多模式追踪**：支持当前视频流交互式步进追踪、全视频多实例批量追踪以及 Server-Sent Events (SSE) 实时毫秒级进度流推送。
-
-#### 4. 🔍 CLIP 零样本特征向量与智能图像分类工作台
-- **全新图像分类标注架构**：单标签、多标签快速切换，支持 `1~9` 键盘极速盲打标；
-- **视觉向量无监督聚类**：利用 CLIP ViT 特征向量自动分析无标注视频帧，一键实现同类视角/物体批量打标与离群点挖掘。
-
-#### 5. 🖌️ 像素级分割标注套件：Moore-Neighbor 智能画笔与橡皮擦
-- **全新画笔 (Brush) 与橡皮擦 (Eraser) 涂抹工具**；
-- **升级 Moore-Neighbor 轮廓追踪算法**：彻底根除旧版画笔涂抹产生的内部杂乱蜘蛛网交叉线与空洞 Bug，支持对已有分割多边形进行布尔运算裁切与自然修边。
-
-#### 6. 📦 9 大工业级机器学习数据集格式全闭环导出
-一键将标注工程生成为行业标准训练数据集（支持划分比例、数据增强配置与原子级事务打包）：
-1. **YOLOv8 Detection** (`data.yaml`, 归一化 xywh)
-2. **COCO Detection** (`annotations.json`, 工业标准多边形与矩形格式)
-3. **Pascal VOC Detection** (`Annotations/*.xml`, `JPEGImages/*.jpg`)
-4. **YOLO Segmentation** (`data.yaml`, 多边形多顶点归一化流)
-5. **Semantic Mask** (像素级单通道 8-bit PNG 灰度掩码图)
-6. **YOLO Classification** (`train/class_name/*.jpg`)
-7. **Folder Classification** (经典目录分类集格式)
-8. **YOLO Pose** (`data.yaml`, 关键点三元组归一化坐标)
-9. **COCO Pose** (`person_keypoints.json`, 骨架图谱与关节点可见度定义)
-
-#### 7. 📊 数据集分析中心与 AI 质量一致性检测 (Dataset Quality Checker)
-- **多维可视化统计**：类别分布直方图、包围框宽高比散点图、图像曝光度/对比度分布图；
-- **AI 一致性离群点探测**：自动识别标注混淆、漏标与异常尺寸目标；
-- **数据增强在线仿真**：支持翻转、仿射变换、裁剪、色彩抖动、模糊与高斯噪声的所见即所得实时预览。
+### 一、 核心 AI 模型与推理加速
+- **SAM 3.0 接入与单框极速响应**：引入开放词汇感知与全图盲扫定位 (TRUE LAM)；重构算法去除冗余跨模型编码，单框响应时间由 **2.33s 优化至 0.06s**（EXE 实测 0.16s），原生输出高精度多边形轮廓。
+- **GKDT Grounded Pose 姿态估计**：集成 8.87 亿参数大模型，首创通过文本提示驱动自定义关键点 Schema（人体、机械臂、竞赛道具等）的零样本骨骼预测。
+- **SAM 2.1 连续视频多目标追踪**：升级 Hiera 骨架，引入双向亚像素 PyLK 光流与 Top-Down 动力学外推，支持步进追踪、全视频批量追踪与 SSE 实时流式进度推送。
+- **CLIP 视觉特征检索**：支持基于图像特征向量的无监督聚类与一键批量分类打标。
 
 ---
 
-### 🛠️ 系统架构与生产级发布 (Architecture & Delivery)
-
-#### 1. 独立轻量单文件编译 (`Zero2YoloYard.exe`)
-- **完全脱机本地编译**：PyInstaller 离线安全构建，严禁外网下载流量；
-- **权重文件完全解耦**：模型权重与主程序物理分离，体积轻巧，支持本地目录挂载与设置页断点续传；
-- **多运行时共存防崩溃**：彻底消除 PyTorch、TensorFlow Lite、OpenMP 与 Scipy 间的 DLL 冲突与 0xC0000005 越界崩溃；
-- **双运行模式**：支持 EdgeChromium 桌面 GUI 窗口与 `--no-gui` 高性能无头服务模式。
-
-#### 2. 专业 Inno Setup 标准安装包 (`Zero2YoloYard_Installer_v2.0.exe`)
-- 单文件快速安装向导，一键部署全部可执行运行时与配置；
-- 自动化创建桌面快捷方式与开始菜单程序组；
-- 安装目录读写权限自动开放（`users-full`），杜绝 UAC 导致的数据保存失败；
-- 规范注册 Windows 控制面板“已安装程序”，支持无残留干净卸载。
+### 二、 标注范式全矩阵扩展
+- **4 大任务范式完整闭环**：目标检测 (BBox/OBB 插值)、实例/语义分割 (多边形/涂抹)、图像分类 (1-9 键盲打)、姿态估计 (骨骼关节点插值)。
+- **分割涂抹工具升级**：新增画笔与橡皮擦，重构 Moore-Neighbor 轮廓追踪算法，根除旧版内部交叉线与空洞 Bug。
 
 ---
 
-### 🛡️ 质量保障与全覆盖测试矩阵 (QA & Verification)
-
-在真实发布的编译可执行程序运行环境下，完成了全链路端到端终验测试：
-- **全部 81 个 Flask 路由 100% 自动化测试通过**（修复各类参数边界缺失导致的 500 隐患，实现 100% 规范 400 提示）；
-- **全部 107 个核心模块底层函数 100% 测试通过**（`database.py` 61个、`file_storage.py` 21个、`bbox_writer.py` 12个、`local_model_manager.py` 9个、`settings_manager.py` 4个）；
-- **全部 4 大 AI 基础模型全链路推理测试 100% PASS**；
-- **全部 9 大数据集导出器生成与内部结构校验 100% PASS**。
+### 三、 9 大工业级数据集导出器
+- **9 种格式一键导出**：YOLOv8 Detect、COCO Detection、Pascal VOC、YOLO Segmentation、Semantic Mask (8-bit PNG)、YOLO Classification、Folder Classification、YOLO Pose、COCO Pose。
+- **数据集质检中心**：支持分布直方图统计、CLIP 离群点筛查、标注一致性检查及数据增强实时预览。
 
 ---
 
-### 🔄 变更统计 (Git Diff from v2.1.0)
-- **提交统计**：94 个提交记录
-- **代码变动**：共变更 762 个文件，`+556,274` 行插入，`-4,125` 行删除
-- **新增模块**：`exporters/`、`sam3/`、`gkdt_engine/`、`installer/`、`clip_model.py` 等
+### 四、 工程发布与安装部署
+- **轻量独立 EXE (`Zero2YoloYard.exe`)**：PyInstaller 本地脱机编译，权重严格物理外部化；修复 PyTorch、TensorFlow Lite 与 OpenMP 运行时冲突；支持 EdgeChromium GUI 与 `--no-gui` 无头模式。
+- **标准安装包 (`Zero2YoloYard_Installer_v2.0.exe`)**：Inno Setup 单文件安装器，自动配置工作区目录读写权限（`users-full`）、桌面/开始菜单快捷方式及控制面板规范卸载入口。
+
+---
+
+### 五、 质量验证与测试覆盖
+- **路由覆盖率**：全部 81 个 Flask 路由 100% 自动化测试通过，零 500 崩溃，异常输入规范返回 400 提示。
+- **函数覆盖率**：底层核心模块（`database.py`、`file_storage.py`、`bbox_writer.py`、`settings_manager.py`、`local_model_manager.py`）共 107 个函数 100% 测试通过。
+- **端到端验证**：4 大 AI 基础模型与 9 大数据集导出器均在发布 EXE 上通过实测。
+
+---
+
+### 六、 代码变动统计 (Diff from v2.1.0)
+- **提交跨度**：`4e88438 (v2.1.0) ... 6113d27 (HEAD)`（94 Commits）
+- **变动文件**：762 个文件（`+556,274 / -4,125` 行）
+- **主要新增**：`exporters/`（9 款导出器）、`sam3/`、`gkdt_engine/`、`installer/`、`clip_model.py`。
