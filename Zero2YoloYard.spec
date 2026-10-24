@@ -65,13 +65,13 @@ def get_project_datas():
                     dst = os.path.dirname(rel)
                     datas.append((src, dst))
 
-    # 1.4 gkdt_engine 源码与非权重配置（严格过滤大模型权重，保留结构配置文件与词表）
-    # 绝对排除：.pt, .pth, .safetensors, .best, .bin, .tmp, output 目录, .cache 目录, __pycache__
-    model_exts = {'.pt', '.pth', '.safetensors', '.best', '.bin', '.tmp', '.pyc'}
+    # 1.4 gkdt_engine 源码与非权重配置（严格过滤大模型权重与冗余测试图片，保留结构配置文件与词表）
+    # 绝对排除：.pt, .pth, .safetensors, .best, .bin, .tmp, output 目录, .cache 目录, assets 目录, ims1 目录, __pycache__
+    model_exts = {'.pt', '.pth', '.safetensors', '.best', '.bin', '.tmp', '.pyc', '.jpg', '.jpeg', '.png'}
     gkdt_dir = os.path.join(PROJECT_DIR, 'gkdt_engine')
     if os.path.isdir(gkdt_dir):
         for root, dirs, files in os.walk(gkdt_dir):
-            dirs[:] = [d for d in dirs if d not in ('output', '.cache', '__pycache__')]
+            dirs[:] = [d for d in dirs if d not in ('output', '.cache', '__pycache__', 'assets', 'ims1')]
             for f in files:
                 ext = os.path.splitext(f)[1].lower()
                 if ext in model_exts:
@@ -268,10 +268,44 @@ a = Analysis(
     hookspath=[os.path.join(PROJECT_DIR, 'hooks')],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['tkinter', 'IPython', 'pytest'],
+    excludes=[
+        'tkinter',
+        'IPython',
+        'pytest',
+        'polars',
+        '_polars_runtime_32',
+        'tensorboard',
+        'tensorboard.compat',
+        'tensorflow.python.profiler',
+    ],
     noarchive=False,
     optimize=0,
 )
+
+# ------------------------------------------------------------------------------
+# 4.5 手术级体积精简过滤：移除无用运行时与冗余素材，保障底层计算库 100% 完整
+# ------------------------------------------------------------------------------
+excluded_bin_patterns = [
+    '_polars_runtime',
+    'profiler_plugin',
+]
+
+filtered_binaries = []
+for item in a.binaries:
+    dest_lower = item[0].lower()
+    if any(pat in dest_lower for pat in excluded_bin_patterns):
+        print(f"[SPEC FILTER] Dropping unnecessary binary: {item[0]}")
+        continue
+    filtered_binaries.append(item)
+a.binaries = filtered_binaries
+
+filtered_datas = []
+for item in a.datas:
+    dest_lower = item[0].lower()
+    if 'gkdt_engine' in dest_lower and ('assets' in dest_lower or 'ims1' in dest_lower):
+        continue
+    filtered_datas.append(item)
+a.datas = filtered_datas
 
 pyz = PYZ(a.pure)
 
@@ -282,9 +316,8 @@ if not os.path.exists(exe_icon):
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
     [],
+    exclude_binaries=True,
     name='Zero2YoloYard',
     debug=False,
     bootloader_ignore_signals=False,
@@ -299,4 +332,14 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     icon=exe_icon,
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.datas,
+    strip=False,
+    upx=False,
+    upx_exclude=[],
+    name='Zero2YoloYard',
 )

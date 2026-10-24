@@ -10,8 +10,8 @@ if not exist %ISCC% (
     exit /b 1
 )
 
-if not exist "%~dp0dist\Zero2YoloYard.exe" (
-    echo [ERROR] dist\Zero2YoloYard.exe does not exist! Please run build_exe.bat first.
+if not exist "%~dp0dist\Zero2YoloYard\Zero2YoloYard.exe" (
+    echo [ERROR] dist\Zero2YoloYard\Zero2YoloYard.exe does not exist! Please run build_exe.bat first.
     exit /b 1
 )
 

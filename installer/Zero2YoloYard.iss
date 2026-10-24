@@ -23,8 +23,8 @@ OutputDir=..\installer_output
 OutputBaseFilename=Zero2YoloYard_Installer_v2.0
 SetupIconFile=app_icon.ico
 UninstallDisplayIcon={app}\app_icon.ico
-Compression=lzma2/fast
-SolidCompression=no
+Compression=lzma2/max
+SolidCompression=yes
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=commandline dialog
@@ -53,7 +53,7 @@ Name: "{app}\gkdt_engine\test_real_world\object_detector_lib"; Permissions: user
 Name: "{app}\gkdt_engine\test_real_world\object_detector_lib\weights"; Permissions: users-full
 
 [Files]
-Source: "..\dist\Zero2YoloYard.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\Zero2YoloYard\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\dist\settings.json"; DestDir: "{app}"; Flags: ignoreversion onlyifdoesntexist; Permissions: users-full
 Source: "app_icon.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "使用说明.txt"; DestDir: "{app}"; Flags: ignoreversion isreadme

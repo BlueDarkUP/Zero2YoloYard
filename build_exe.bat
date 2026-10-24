@@ -16,6 +16,7 @@ echo ============================================================
 REM Clean build directories
 echo [1/3] Cleaning build directories...
 if exist "%PROJECT%\build\Zero2YoloYard" rd /s /q "%PROJECT%\build\Zero2YoloYard"
+if exist "%PROJECT%\dist\Zero2YoloYard" rd /s /q "%PROJECT%\dist\Zero2YoloYard"
 if exist "%PROJECT%\dist\Zero2YoloYard.exe" del /f /q "%PROJECT%\dist\Zero2YoloYard.exe"
 
 REM Run PyInstaller
@@ -28,4 +29,4 @@ if %errorlevel% neq 0 (
 )
 
 echo [3/3] Build finished successfully!
-echo Output: %PROJECT%\dist\Zero2YoloYard.exe
+echo Output: %PROJECT%\dist\Zero2YoloYard\Zero2YoloYard.exe
