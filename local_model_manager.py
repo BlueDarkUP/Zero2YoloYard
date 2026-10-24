@@ -18,8 +18,7 @@ DOWNLOAD_TASKS = {}
 # 常用高质量 GitHub 镜像前缀（按测速及稳定性排序）
 GITHUB_MIRRORS = [
     "https://ghfast.top/",
-    "https://ghproxy.cn/",
-    "https://ghproxy.net/",
+    "https://gh-proxy.com/",
 ]
 
 # HuggingFace 官方与国内镜像域名
@@ -241,6 +240,15 @@ def check_model_presence(model_def, base_dir=None):
         if actual_bytes < min_size_mb * 1024 * 1024:
             # 文件存在但小于预期阈值（例如下载中断残留的残损文件）
             return False, actual_mb
+        # 校验文件头魔数，防止把被失效镜像劫持的 HTML 网页误判为正常模型
+        try:
+            with open(full_path, "rb") as f_chk:
+                header = f_chk.read(16)
+                if header.startswith((b"<", b"<!DOCTYPE", b"<!--", b"<!doctype")):
+                    logging.warning(f"File {full_path} starts with HTML tags; corrupt download.")
+                    return False, actual_mb
+        except Exception:
+            return False, actual_mb
         return True, actual_mb
 
     elif model_def["type"] == "dir":
@@ -354,6 +362,16 @@ def _download_stream_with_resume(candidate_urls, dest_path, model_id, min_size_m
             logging.info(f"[{model_id}] Trying download (round {round_idx+1}/{max_rounds}) from: {url}")
             response = None
             try:
+                # 如果已有临时文件开头是 HTML 污染内容，直接丢弃重建
+                if os.path.exists(tmp_path):
+                    try:
+                        with open(tmp_path, "rb") as f_tmp_chk:
+                            head_chk = f_tmp_chk.read(16)
+                            if head_chk.startswith((b"<", b"<!DOCTYPE", b"<!--", b"<!doctype")):
+                                logging.warning(f"[{model_id}] Discarding corrupt tmp file with HTML header: {tmp_path}")
+                                os.remove(tmp_path)
+                    except Exception:
+                        pass
                 existing_bytes = os.path.getsize(tmp_path) if os.path.exists(tmp_path) else 0
                 headers = {}
                 if existing_bytes > 0:
@@ -396,10 +414,23 @@ def _download_stream_with_resume(candidate_urls, dest_path, model_id, min_size_m
                 start_time = time.time()
                 last_report_time = start_time
 
+                content_type = response.headers.get("Content-Type", "").lower()
+                if "text/html" in content_type:
+                    response.close()
+                    raise RuntimeError(f"Server returned HTML ({content_type}) instead of binary weights. URL: {url}")
+
+                first_chunk = True
                 with open(tmp_path, file_mode) as f:
                     for chunk in response.iter_content(chunk_size=256 * 1024):
                         if not chunk:
                             continue
+                        if first_chunk and file_mode == "wb":
+                            first_chunk = False
+                            if chunk.startswith((b"<", b"<!DOCTYPE", b"<!--", b"<!doctype")):
+                                response.close()
+                                if os.path.exists(tmp_path):
+                                    os.remove(tmp_path)
+                                raise RuntimeError(f"Server response starts with HTML doctype/tag. URL: {url}")
                         f.write(chunk)
                         downloaded_this_session += len(chunk)
                         now = time.time()
@@ -434,6 +465,12 @@ def _download_stream_with_resume(candidate_urls, dest_path, model_id, min_size_m
                 # 下载完成检验
                 final_size = os.path.getsize(tmp_path)
                 if final_size >= min_bytes:
+                    with open(tmp_path, "rb") as f_fin_chk:
+                        fin_head = f_fin_chk.read(16)
+                        if fin_head.startswith((b"<", b"<!DOCTYPE", b"<!--", b"<!doctype")):
+                            if os.path.exists(tmp_path):
+                                os.remove(tmp_path)
+                            raise RuntimeError(f"Corrupt downloaded file (starts with HTML): {dest_path}")
                     os.replace(tmp_path, dest_path)
                     logging.info(f"[{model_id}] Successfully downloaded and saved to: {dest_path}")
                     return True

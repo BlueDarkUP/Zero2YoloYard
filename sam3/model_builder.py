@@ -557,10 +557,22 @@ def _create_sam3_transformer(
     return TransformerWrapper(encoder=encoder, decoder=decoder, d_model=256)
 
 
+def _safe_load_ckpt(f_or_path, map_location="cpu"):
+    try:
+        return torch.load(f_or_path, map_location=map_location, weights_only=True)
+    except Exception:
+        if hasattr(f_or_path, "seek"):
+            try:
+                f_or_path.seek(0)
+            except Exception:
+                pass
+        return torch.load(f_or_path, map_location=map_location, weights_only=False)
+
+
 def _load_checkpoint(model, checkpoint_path):
     """Load model checkpoint from file."""
     with g_pathmgr.open(checkpoint_path, "rb") as f:
-        ckpt = torch.load(f, map_location="cpu", weights_only=True)
+        ckpt = _safe_load_ckpt(f, map_location="cpu")
     if "model" in ckpt and isinstance(ckpt["model"], dict):
         ckpt = ckpt["model"]
     sam3_image_ckpt = {
@@ -815,7 +827,7 @@ def build_sam3_video_model(
         checkpoint_path = download_ckpt_from_hf(version="sam3")
     if checkpoint_path is not None:
         with g_pathmgr.open(checkpoint_path, "rb") as f:
-            ckpt = torch.load(f, map_location="cpu", weights_only=True)
+            ckpt = _safe_load_ckpt(f, map_location="cpu")
         if "model" in ckpt and isinstance(ckpt["model"], dict):
             ckpt = ckpt["model"]
 
@@ -1068,7 +1080,7 @@ def build_sam3_multiplex_video_model(
         checkpoint_path = download_ckpt_from_hf(version="sam3.1")
     if checkpoint_path is not None:
         with g_pathmgr.open(checkpoint_path, "rb") as f:
-            ckpt = torch.load(f, map_location="cpu", weights_only=True)
+            ckpt = _safe_load_ckpt(f, map_location="cpu")
         if "model" in ckpt and isinstance(ckpt["model"], dict):
             ckpt = ckpt["model"]
 
@@ -1218,7 +1230,7 @@ def build_sam3_multiplex_video_predictor(
     if checkpoint_path is None:
         checkpoint_path = download_ckpt_from_hf(version="sam3.1")
     if checkpoint_path is not None:
-        ckpt = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
+        ckpt = _safe_load_ckpt(checkpoint_path, map_location="cpu")
         if "model" in ckpt and isinstance(ckpt["model"], dict):
             ckpt = ckpt["model"]
         # Remap checkpoint keys if needed (internal naming -> OSS naming)

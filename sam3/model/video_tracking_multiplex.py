@@ -41,7 +41,7 @@ from sam3.model.sam3_tracker_utils import (
 from sam3.sam.mask_decoder import MaskDecoder
 from sam3.sam.prompt_encoder import PositionEmbeddingRandom, PromptEncoder
 from sam3.sam.transformer import TwoWayTransformer
-from timm.models.layers import trunc_normal_
+from timm.layers import trunc_normal_
 
 
 # a large negative value as a placeholder score for missing objects
