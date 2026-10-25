@@ -340,6 +340,14 @@ def _extract_crop_color_hist(image_bgr, rect=None):
 
 
 def check_dataset_consistency(dataset_uuid, enable_color_check=True):
+    settings = settings_manager.load_settings()
+    qc_sem_w = float(settings.get('qc_semantic_weight', 0.70))
+    qc_col_w = float(settings.get('qc_color_weight', 0.30))
+    sigma_factor = float(settings.get('color_confusion_factor', 2.0))
+    sem_thresh_min = float(settings.get('consistency_semantic_threshold', 0.30))
+    conf_margin = float(settings.get('consistency_confusion_margin', 0.15))
+    cross_conf_min = float(settings.get('qc_cross_class_conf_min', 0.65))
+    kpt_oob_px = int(settings.get('qc_kpt_out_of_bounds_px', 50))
     """
     Quality control and outlier detection for DET, SEG, and CLS datasets.
     
@@ -419,7 +427,7 @@ def check_dataset_consistency(dataset_uuid, enable_color_check=True):
 
             if enable_color_check:
                 color_vec = _extract_crop_color_hist(img_bgr)
-                combined_vec = np.concatenate([sem_vec * 0.7, color_vec * 0.3])
+                combined_vec = np.concatenate([sem_vec * qc_sem_w, color_vec * qc_col_w])
             else:
                 combined_vec = sem_vec
 
@@ -567,7 +575,7 @@ def check_dataset_consistency(dataset_uuid, enable_color_check=True):
 
                 if enable_color_check:
                     color_vec = _extract_crop_color_hist(crop)
-                    combined_vec = np.concatenate([sem_vec * 0.7, color_vec * 0.3])
+                    combined_vec = np.concatenate([sem_vec * qc_sem_w, color_vec * qc_col_w])
                 else:
                     combined_vec = sem_vec
 
@@ -582,7 +590,7 @@ def check_dataset_consistency(dataset_uuid, enable_color_check=True):
                         kx, ky = float(kp.get('x', 0)), float(kp.get('y', 0))
                         kv = int(kp.get('v', 2))
                         # 检查关节点是否严重越界（超出图像边界或超出包围框）
-                        if kv > 0 and (kx < -50 or kx > w_img + 50 or ky < -50 or ky > h_img + 50):
+                        if kv > 0 and (kx < -kpt_oob_px or kx > w_img + kpt_oob_px or ky < -kpt_oob_px or ky > h_img + kpt_oob_px):
                             topology_anomaly = True
                             break
 
@@ -628,7 +636,7 @@ def check_dataset_consistency(dataset_uuid, enable_color_check=True):
             stats = class_stats.get(label, {'mean': 0.8, 'std': 0.1})
 
             is_outlier = False
-            thresh = max(0.48, stats['mean'] - 2.0 * stats['std'])
+            thresh = max(sem_thresh_min, stats['mean'] - sigma_factor * stats['std'])
             if own_sim < thresh:
                 is_outlier = True
 
@@ -638,7 +646,7 @@ def check_dataset_consistency(dataset_uuid, enable_color_check=True):
             for other_label, centroid in class_centroids.items():
                 if other_label != label:
                     other_sim = float(np.dot(vec, centroid))
-                    if other_sim > own_sim + 0.05 and other_sim > 0.65:
+                    if other_sim > own_sim + conf_margin and other_sim > cross_conf_min:
                         is_outlier = True
                         break
 

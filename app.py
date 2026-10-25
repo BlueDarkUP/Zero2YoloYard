@@ -1,3 +1,4 @@
+import shutil
 import sys
 import os
 
@@ -312,16 +313,42 @@ def detect_hardware():
     has_cuda = torch.cuda.is_available()
     gpu_name = "None"
     vram_gb = 0
+    gpu_devices = []
 
     if has_cuda:
-        gpu_name = torch.cuda.get_device_name(0)
-        vram_gb = round(torch.cuda.get_device_properties(0).total_memory / (1024 ** 3), 1)
+        try:
+            device_count = torch.cuda.device_count()
+            for i in range(device_count):
+                dev_name = torch.cuda.get_device_name(i)
+                dev_vram = round(torch.cuda.get_device_properties(i).total_memory / (1024 ** 3), 1)
+                gpu_devices.append({
+                    "id": f"cuda:{i}",
+                    "name": f"cuda:{i} - {dev_name} ({dev_vram} GB)",
+                    "vram_gb": dev_vram
+                })
+            gpu_name = gpu_devices[0]["name"] if gpu_devices else torch.cuda.get_device_name(0)
+            vram_gb = gpu_devices[0]["vram_gb"] if gpu_devices else round(torch.cuda.get_device_properties(0).total_memory / (1024 ** 3), 1)
+        except Exception as e:
+            logging.warning(f"Error enumerating CUDA devices: {e}")
+
+    # 探测磁盘可用空间
+    disk_total_gb = 0
+    disk_free_gb = 0
+    try:
+        storage_path = config.STORAGE_DIR if os.path.exists(config.STORAGE_DIR) else config.BASE_DIR
+        disk_usage = shutil.disk_usage(storage_path)
+        disk_total_gb = round(disk_usage.total / (1024 ** 3), 1)
+        disk_free_gb = round(disk_usage.free / (1024 ** 3), 1)
+    except Exception as e:
+        logging.warning(f"Error checking disk usage: {e}")
 
     tier = "low"
     if has_cuda:
-        if vram_gb >= 8:
+        if vram_gb >= 11:
+            tier = "pro"
+        elif vram_gb >= 6:
             tier = "high"
-        elif vram_gb >= 4:
+        elif vram_gb >= 3.5:
             tier = "mid"
 
     return jsonify({
@@ -330,6 +357,9 @@ def detect_hardware():
         "has_cuda": has_cuda,
         "gpu_name": gpu_name,
         "vram_gb": vram_gb,
+        "gpu_devices": gpu_devices,
+        "disk_total_gb": disk_total_gb,
+        "disk_free_gb": disk_free_gb,
         "tier": tier
     })
 
@@ -1076,6 +1106,45 @@ def save_settings():
     else:
         return jsonify({'success': False, 'message': 'Failed to save settings to file.'}), 500
 
+
+
+
+@app.route('/api/settings/reset', methods=['POST'])
+def reset_settings_route():
+    success, current = settings_manager.reset_to_defaults()
+    if success:
+        return jsonify({'success': True, 'message': 'Settings reset to factory defaults.', 'settings': current})
+    return jsonify({'success': False, 'message': 'Failed to reset settings.'}), 500
+
+
+@app.route('/api/settings/export', methods=['GET'])
+def export_settings_route():
+    settings = settings_manager.load_settings()
+    response = flask.make_response(json.dumps(settings, indent=4, ensure_ascii=False))
+    response.headers['Content-Type'] = 'application/json'
+    response.headers['Content-Disposition'] = 'attachment; filename=zero2yolo_settings.json'
+    return response
+
+
+@app.route('/api/settings/import', methods=['POST'])
+def import_settings_route():
+    try:
+        if 'file' in request.files:
+            file = request.files['file']
+            data = json.load(file)
+        else:
+            data = request.json
+        if not isinstance(data, dict):
+            return jsonify({'success': False, 'message': 'Invalid settings JSON format.'}), 400
+
+        current = settings_manager.load_settings()
+        current.update(data)
+        if settings_manager.save_settings(current):
+            settings_manager.update_device()
+            return jsonify({'success': True, 'message': 'Settings imported successfully!', 'settings': current})
+        return jsonify({'success': False, 'message': 'Failed to save imported settings.'}), 500
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Import failed: {str(e)}'}), 400
 
 @app.route('/api/clear_cache', methods=['POST'])
 def clear_cache():

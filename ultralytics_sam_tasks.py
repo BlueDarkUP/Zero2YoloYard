@@ -411,8 +411,8 @@ def track_video_ultralytics(video_uuid, start_frame, end_frame, init_bboxes_text
     if predictor is None: raise RuntimeError("SAM 2 Video Predictor offline.")
 
     settings = settings_manager.load_settings()
-    inference_size = 1024
-    chunk_size = int(settings.get('batch_tracking_chunk_size', 200))
+    inference_size = int(settings.get('batch_tracking_imgsz', 1024))
+    chunk_size = int(settings.get('batch_tracking_chunk_size', 10))
 
     init_rects, init_labels, init_ids = convert_text_to_rects_and_labels(init_bboxes_text)
 
