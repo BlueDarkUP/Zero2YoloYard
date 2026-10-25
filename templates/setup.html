@@ -3,248 +3,648 @@
 {% block head %}
 <style>
     body { background: var(--bg-body); overflow-y: auto; }
-    .setup-container {
-        max-width: 960px;
-        margin: 40px auto;
+    .setup-wrapper {
+        max-width: 1080px;
+        margin: 30px auto 60px;
         color: var(--text-main);
     }
+    
+    /* Stepper Header */
+    .stepper-nav {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 28px;
+        position: relative;
+    }
+    .stepper-nav::before {
+        content: '';
+        position: absolute;
+        top: 20px;
+        left: 40px;
+        right: 40px;
+        height: 2px;
+        background: var(--border-color);
+        z-index: 1;
+    }
+    .step-indicator {
+        position: relative;
+        z-index: 2;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        cursor: pointer;
+        background: transparent;
+        border: none;
+        outline: none !important;
+        padding: 0 10px;
+    }
+    .step-circle {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: var(--bg-surface);
+        border: 2px solid var(--border-color);
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: 'JetBrains Mono', monospace;
+        font-weight: 700;
+        font-size: 0.95rem;
+        transition: all 0.25s ease;
+        box-shadow: var(--shadow-sm);
+    }
+    .step-indicator.active .step-circle {
+        background: var(--color-primary-accent);
+        border-color: var(--color-primary-accent);
+        color: #fff;
+        box-shadow: 0 0 16px var(--color-primary-accent-glow);
+    }
+    .step-indicator.completed .step-circle {
+        background: var(--color-success);
+        border-color: var(--color-success);
+        color: #fff;
+    }
+    .step-title {
+        font-size: 0.78rem;
+        font-family: 'Inter', sans-serif;
+        font-weight: 600;
+        margin-top: 8px;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        transition: color 0.2s ease;
+    }
+    .step-indicator.active .step-title {
+        color: var(--color-primary-accent);
+        font-weight: 700;
+    }
+
+    /* Hardware Card */
     .hardware-card {
         background: var(--bg-surface);
         border: 1px solid var(--border-highlight);
         border-left: 4px solid var(--color-primary-accent);
         border-radius: var(--radius-base);
-        padding: 24px;
+        padding: 22px;
         margin-bottom: 25px;
         font-family: 'JetBrains Mono', monospace;
         box-shadow: var(--shadow-md);
         backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
-        transition: var(--transition-smooth);
     }
-    .hardware-card:hover {
-        box-shadow: var(--shadow-lg), 0 0 20px var(--color-primary-accent-glow);
+    .telemetry-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 12px;
     }
-    .spec-item {
-        border-bottom: 1px dashed var(--border-color);
-        padding: 10px 0;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-    .spec-item:last-of-type { border-bottom: none; }
-    .spec-value { color: var(--text-main); font-weight: 600; }
-
-    .config-section {
-        background: var(--bg-surface);
+    .telemetry-item {
+        background: var(--bg-surface-secondary);
+        padding: 10px 14px;
+        border-radius: var(--radius-sm);
         border: 1px solid var(--border-color);
-        border-left: 4px solid var(--border-color);
-        margin-bottom: 24px;
-        border-radius: var(--radius-base);
-        box-shadow: var(--shadow-sm);
-        transition: var(--transition-smooth);
-        overflow: hidden;
     }
-    .config-section:hover {
+    .telemetry-item .label {
+        font-size: 0.72rem;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    .telemetry-item .val {
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: var(--text-main);
+        margin-top: 2px;
+    }
+
+    /* Preset Selection Cards */
+    .preset-card {
+        background: var(--bg-surface);
+        border: 2px solid var(--border-color);
+        border-radius: var(--radius-base);
+        padding: 18px 16px;
+        cursor: pointer;
+        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        height: 100%;
+        position: relative;
+    }
+    .preset-card:hover {
         border-color: var(--border-highlight);
+        transform: translateY(-2px);
         box-shadow: var(--shadow-md);
     }
-    .config-section.section-ai { border-left-color: var(--color-info); }
-    .config-section.section-resource { border-left-color: var(--color-warning); }
-    .config-section.section-algo { border-left-color: var(--color-success); }
+    .preset-card.selected {
+        border-color: var(--color-primary-accent);
+        background: rgba(59, 130, 246, 0.08);
+        box-shadow: 0 0 16px var(--color-primary-accent-glow);
+    }
+    .preset-badge {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.7rem;
+        font-weight: 700;
+        padding: 3px 8px;
+        border-radius: 4px;
+    }
 
-    .config-header {
-        padding: 14px 20px;
+    /* Section Panels */
+    .wizard-step-panel {
+        display: none;
+    }
+    .wizard-step-panel.active {
+        display: block;
+        animation: fadeIn 0.3s ease-in-out;
+    }
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(6px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .config-card {
+        background: var(--bg-surface);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-base);
+        margin-bottom: 20px;
+        box-shadow: var(--shadow-sm);
+        overflow: hidden;
+    }
+    .config-card-header {
+        padding: 12px 20px;
         font-family: 'Inter', sans-serif;
         font-weight: 600;
-        letter-spacing: -0.01em;
+        font-size: 0.88rem;
         background: var(--bg-surface-secondary);
         border-bottom: 1px solid var(--border-color);
-        font-size: 0.9rem;
         display: flex;
         align-items: center;
+        letter-spacing: -0.01em;
     }
-    .config-body { padding: 22px; }
+    .config-card-body {
+        padding: 20px;
+    }
 
-    .over-limit-warning {
-        color: var(--color-danger-text);
-        font-size: 0.78rem;
+    .range-val-badge {
         font-family: 'JetBrains Mono', monospace;
-        margin-top: 6px;
-        display: none;
-        background: var(--color-danger-bg);
-        padding: 4px 8px;
-        border-radius: var(--radius-xs);
-        border: 1px solid var(--color-danger);
+        font-weight: 700;
+        font-size: 0.85rem;
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container setup-container fade-in">
+<div class="container setup-wrapper fade-in">
+    <!-- Header Title -->
     <div class="text-center mb-4">
-        <h2 class="font-weight-bold" style="font-family: 'Inter', sans-serif; letter-spacing: -0.02em; color: var(--text-main);">Zero2YoloYard Initialization</h2>
-        <p class="text-muted font-monospace small">Environment detection & system configuration</p>
+        <h3 class="font-weight-bold" style="font-family: 'Inter', sans-serif; letter-spacing: -0.02em;">
+            <i class="bi bi-rocket-takeoff-fill text-primary mr-2"></i>Zero2YoloYard Initialization Wizard
+        </h3>
+        <p class="text-muted font-monospace small">Deep learning engine telemetry, multi-model selection & workflow configuration</p>
     </div>
 
-    <div class="hardware-card">
-        <h6 class="text-uppercase mb-3 font-weight-bold text-main"><i class="bi bi-cpu mr-2"></i>System Telemetry & Hardware Diagnostics</h6>
-        <div id="hardware-loading" class="text-center py-3">
-            <span class="spinner-border spinner-border-sm text-primary"></span> GATHERING SYSTEM SPECS...
-        </div>
-        <div id="hardware-info" style="display: none;">
-            <div class="spec-item"><span>COMPUTE_DEVICE:</span> <span id="hw-gpu" class="spec-value">-</span></div>
-            <div class="spec-item"><span>VRAM_CAPACITY:</span> <span id="hw-vram" class="spec-value">-</span></div>
-            <div class="spec-item"><span>SYSTEM_RAM:</span> <span id="hw-ram" class="spec-value">-</span></div>
-            <div class="spec-item"><span>CPU_CORES:</span> <span id="hw-cpu" class="spec-value">-</span></div>
-            <div class="mt-3 pt-3 border-top border-theme d-flex justify-content-between align-items-center">
-                <span>ASSIGNED_TIER:</span>
-                <span id="hw-tier" class="badge badge-primary font-monospace p-2" style="font-size:1.1em;">EVALUATING...</span>
-            </div>
-        </div>
+    <!-- Stepper Navigation -->
+    <div class="stepper-nav">
+        <button type="button" class="step-indicator active" data-step="1">
+            <div class="step-circle">1</div>
+            <div class="step-title">Hardware Telemetry</div>
+        </button>
+        <button type="button" class="step-indicator" data-step="2">
+            <div class="step-circle">2</div>
+            <div class="step-title">Compute Preset</div>
+        </button>
+        <button type="button" class="step-indicator" data-step="3">
+            <div class="step-circle">3</div>
+            <div class="step-title">AI Foundation Models</div>
+        </button>
+        <button type="button" class="step-indicator" data-step="4">
+            <div class="step-circle">4</div>
+            <div class="step-title">Workflow & Storage</div>
+        </button>
+        <button type="button" class="step-indicator" data-step="5">
+            <div class="step-circle">5</div>
+            <div class="step-title">Boot Engine</div>
+        </button>
     </div>
 
-    <form id="full-setup-form">
-        <div class="config-section section-ai">
-            <div class="config-header text-info"><i class="bi bi-magic mr-2"></i>1. AI ENGINE CONFIGURATION</div>
-            <div class="config-body">
-                <div class="form-row">
-                    <div class="form-group col-md-4">
-                        <label class="font-weight-bold small text-muted">COMPUTATION_NODE</label>
-                        <select id="setup-gpu-device" class="form-control custom-select">
-                            <option value="auto">AUTO_DETECT</option>
-                            <option value="cpu">CPU_ONLY (SAFE)</option>
-                            <option value="cuda:0">NVIDIA_CUDA_0</option>
-                        </select>
-                    </div>
-                    <div class="form-group col-md-4">
-                        <label class="font-weight-bold small text-muted">SAM 2.1 (SEGMENTATION)</label>
-                        <select id="setup-sam-model" class="form-control custom-select">
-                            <option value="none" data-level="0">DISABLE SAM (NO VRAM)</option>
-                            <option value="sam2.1_t.pt" data-level="1">SAM 2.1 TINY (LOW VRAM)</option>
-                            <option value="sam2.1_s.pt" data-level="2">SAM 2.1 SMALL (BALANCED)</option>
-                            <option value="sam2.1_b.pt" data-level="3">SAM 2.1 BASE (6GB+ VRAM)</option>
-                            <option value="sam2.1_l.pt" data-level="4">SAM 2.1 LARGE (10GB+ VRAM)</option>
-                        </select>
-                        <div class="over-limit-warning" id="warn-sam"><i class="bi bi-exclamation-triangle-fill"></i> EXCEEDS RECOMMENDED VRAM</div>
-                    </div>
-                    <div class="form-group col-md-4">
-                        <label class="font-weight-bold small text-muted">SAM 3.1 RETRIEVAL FEATURES</label>
-                        <select id="setup-feature-extractor" class="form-control custom-select">
-                            <option value="off" data-level="0">DISABLE (SAVES VRAM)</option>
-                            <option value="on" data-level="1" selected>ENABLE (SMART SELECT / LAM / BULK APPLY / QC)</option>
-                        </select>
-                        <div class="over-limit-warning" id="warn-feature"><i class="bi bi-exclamation-triangle-fill"></i> MAY CAUSE LAG</div>
-                    </div>
+    <form id="wizard-form">
+        <!-- ==================== STEP 1: HARDWARE & ENVIRONMENT ==================== -->
+        <div class="wizard-step-panel active" id="step-panel-1">
+            <div class="hardware-card">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="font-weight-bold mb-0 text-main text-uppercase">
+                        <i class="bi bi-cpu mr-2 text-primary"></i>System Telemetry & Hardware Diagnostics
+                    </h6>
+                    <span id="hw-tier" class="badge badge-primary font-monospace p-2">SCANNING HARDWARE...</span>
                 </div>
-                <div class="form-row mt-2">
-                    <div class="form-group col-md-6">
-                        <label class="font-weight-bold small text-muted">CLASSIFICATION MODEL (CLIP)</label>
-                        <select id="setup-cls-model" class="form-control custom-select">
-                            <option value="on" selected>ENABLE (CLIP ZERO-SHOT & CLUSTERING)</option>
-                            <option value="off">DISABLE (SAVES VRAM/MEMORY)</option>
-                        </select>
-                    </div>
-                    <div class="form-group col-md-6">
-                        <label class="font-weight-bold small text-muted">POSE ESTIMATION MODEL (KEYPOINTS)</label>
-                        <select id="setup-pose-model" class="form-control custom-select">
-                            <option value="on" selected>ENABLE (GROUNDED KEYPOINT POSE)</option>
-                            <option value="off">DISABLE (SAVES VRAM/MEMORY)</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-        </div>
 
-        <div class="config-section section-resource">
-            <div class="config-header text-warning"><i class="bi bi-cpu mr-2"></i>2. SYSTEM RESOURCE SCHEDULING</div>
-            <div class="config-body">
-                <div class="form-row">
-                    <div class="form-group col-md-4">
-                        <label class="font-weight-bold small text-muted">MAX THREAD WORKERS</label>
-                        <select id="setup-workers" class="form-control custom-select">
-                            <option value="2" data-level="1">2 THREADS (SAFE)</option>
-                            <option value="4" data-level="2">4 THREADS (STANDARD)</option>
-                            <option value="8" data-level="3">8 THREADS (PERFORMANCE)</option>
-                            <option value="16" data-level="4">16 THREADS (EXTREME)</option>
-                        </select>
-                        <div class="over-limit-warning" id="warn-workers"><i class="bi bi-exclamation-triangle-fill"></i> EXCEEDS CPU CAPABILITY</div>
-                    </div>
-                    <div class="form-group col-md-4">
-                        <label class="d-flex justify-content-between small text-muted font-weight-bold">
-                            <span>MAX_CACHE_SIZE (FRAMES)</span> <span id="val-cache-size" class="text-warning">30</span>
-                        </label>
-                        <input type="range" class="custom-range" id="setup-max-cache-size" min="10" max="100" step="10" value="30">
-                    </div>
-                    <div class="form-group col-md-4">
-                        <label class="font-weight-bold small text-muted">MIXED PRECISION</label>
-                        <div class="custom-control custom-switch mt-2">
-                            <input type="checkbox" class="custom-control-input" id="setup-autocast" checked>
-                            <label class="custom-control-label font-monospace" for="setup-autocast">ENABLE FP16/BF16</label>
+                <div id="hardware-loading" class="text-center py-4">
+                    <span class="spinner-border spinner-border-sm text-primary"></span>
+                    <span class="ml-2 font-monospace small text-muted">PROBING CUDA ACCELERATORS & DISK VOLUMES...</span>
+                </div>
+
+                <div id="hardware-info" style="display: none;">
+                    <div class="telemetry-grid">
+                        <div class="telemetry-item">
+                            <div class="label"><i class="bi bi-gpu-card mr-1"></i>COMPUTE ACCELERATOR</div>
+                            <div class="val" id="hw-gpu">-</div>
+                        </div>
+                        <div class="telemetry-item">
+                            <div class="label"><i class="bi bi-memory mr-1"></i>GRAPHICS VRAM</div>
+                            <div class="val" id="hw-vram">-</div>
+                        </div>
+                        <div class="telemetry-item">
+                            <div class="label"><i class="bi bi-hdd-network mr-1"></i>SYSTEM RAM</div>
+                            <div class="val" id="hw-ram">-</div>
+                        </div>
+                        <div class="telemetry-item">
+                            <div class="label"><i class="bi bi-cpu-fill mr-1"></i>CPU THREAD CORES</div>
+                            <div class="val" id="hw-cpu">-</div>
+                        </div>
+                        <div class="telemetry-item">
+                            <div class="label"><i class="bi bi-hdd mr-1"></i>STORAGE DISK FREE</div>
+                            <div class="val" id="hw-disk">-</div>
                         </div>
                     </div>
-                </div>
-                <div class="form-row mt-2">
-                    <div class="form-group col-md-4">
-                        <label class="font-weight-bold small text-muted">INFERENCE RESOLUTION</label>
-                        <select id="setup-inference-size" class="form-control custom-select">
-                            <option value="512">512x512 (FAST)</option>
-                            <option value="640" selected>640x640 (STANDARD)</option>
-                            <option value="1024">1024x1024 (HIGH RES)</option>
-                        </select>
-                    </div>
-                    <div class="form-group col-md-4">
-                         <label class="font-weight-bold small text-muted">ZIP COMPRESSION</label>
-                         <select id="setup-zip-compression" class="form-control custom-select">
-                             <option value="fast">FAST (STORE ONLY)</option>
-                             <option value="standard" selected>STANDARD</option>
-                             <option value="max">MAXIMUM (HIGH CPU)</option>
-                         </select>
-                    </div>
-                </div>
-            </div>
-        </div>
 
-        <div class="config-section section-algo">
-            <div class="config-header text-success"><i class="bi bi-sliders mr-2"></i>3. ALGORITHM & TRACKING PARAMETERS</div>
-            <div class="config-body">
-                <div class="form-row">
-                    <div class="form-group col-md-4">
-                        <label class="d-flex justify-content-between small text-muted font-weight-bold"><span>SAM MASK CONFIDENCE</span> <span id="val-sam-conf" class="text-success">0.70</span></label>
-                        <input type="range" class="custom-range" id="setup-sam-mask-confidence" min="0.1" max="0.9" step="0.05" value="0.70">
-                    </div>
-                    <div class="form-group col-md-4">
-                        <label class="d-flex justify-content-between small text-muted font-weight-bold"><span>NMS IOU THRESHOLD</span> <span id="val-nms-iou" class="text-success">0.70</span></label>
-                        <input type="range" class="custom-range" id="setup-nms-iou-threshold" min="0.1" max="1.0" step="0.05" value="0.70">
-                    </div>
-                    <div class="form-group col-md-4">
-                        <label class="d-flex justify-content-between small text-muted font-weight-bold"><span>SAM3 RETRIEVAL CONFIDENCE</span> <span id="val-preannotation-conf" class="text-success">0.50</span></label>
-                        <input type="range" class="custom-range" id="setup-preannotation-conf" min="0.05" max="0.95" step="0.05" value="0.50">
-                    </div>
-                </div>
-                <div class="form-row mt-2">
-                    <div class="form-group col-md-4">
-                        <label class="d-flex justify-content-between small text-muted font-weight-bold"><span>GLOBAL DEFAULT CONFIDENCE</span> <span id="val-global-conf" class="text-success">0.50</span></label>
-                        <input type="range" class="custom-range" id="setup-default-confidence" min="0.1" max="0.95" step="0.05" value="0.50">
-                    </div>
-                    <div class="form-group col-md-4">
-                        <label class="d-flex justify-content-between small text-muted font-weight-bold"><span>TRACKING CONFIDENCE</span> <span id="val-track-conf" class="text-success">0.30</span></label>
-                        <input type="range" class="custom-range" id="setup-batch-tracking-conf" min="0.1" max="0.95" step="0.05" value="0.30">
-                    </div>
-                    <div class="form-group col-md-4">
-                        <label class="font-weight-bold small text-muted">TRACKING IMG SIZE / CHUNK</label>
-                        <div class="input-group input-group-sm">
-                            <input type="number" id="setup-batch-tracking-imgsz" class="form-control" value="1024" title="Image Size">
-                            <input type="number" id="setup-batch-tracking-chunk-size" class="form-control" value="10" title="Chunk Size">
+                    <!-- Disk Space Progress Bar -->
+                    <div class="mt-3">
+                        <div class="d-flex justify-content-between small text-muted font-monospace mb-1">
+                            <span>DISK VOLUME USAGE</span>
+                            <span id="disk-percent-text">0%</span>
+                        </div>
+                        <div class="progress" style="height: 6px;">
+                            <div id="disk-progress-bar" class="progress-bar bg-info" role="progressbar" style="width: 0%"></div>
                         </div>
                     </div>
                 </div>
             </div>
+
+            <!-- Network & Mirror Accelerator Banner -->
+            <div class="config-card">
+                <div class="config-card-header text-info">
+                    <i class="bi bi-lightning-charge-fill mr-2"></i>Network Acceleration & Asset Mirrors
+                </div>
+                <div class="config-card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="font-weight-bold">Enable Domestic Mirror Acceleration (HF-Mirror / GH-Fast)</div>
+                            <div class="text-muted small">Automatically routes checkpoint weights via high-speed mirrors with automatic official fallback. Highly recommended for users in mainland China.</div>
+                        </div>
+                        <div class="custom-control custom-switch ml-3">
+                            <input type="checkbox" class="custom-control-input" id="wizard-use-mirror" checked>
+                            <label class="custom-control-label font-monospace" for="wizard-use-mirror">ENABLED</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-end mt-4">
+                <button type="button" class="btn btn-primary px-4 btn-next" data-next="2">
+                    Next: Choose Compute Preset <i class="bi bi-arrow-right ml-1"></i>
+                </button>
+            </div>
         </div>
 
-        <div class="text-right mt-4 mb-5 pb-5">
-            <button type="submit" id="btn-complete-setup" class="btn btn-primary btn-lg font-weight-bold px-5">
-                Save & Boot Core <i class="bi bi-rocket ml-2"></i>
-            </button>
+        <!-- ==================== STEP 2: COMPUTE PRESET ==================== -->
+        <div class="wizard-step-panel" id="step-panel-2">
+            <h5 class="font-weight-bold mb-3"><i class="bi bi-sliders2-vertical mr-2 text-warning"></i>Select System Compute Preset</h5>
+            <p class="text-muted small">Select an optimized baseline according to your hardware capacity. You can still fine-tune all parameters in the next step.</p>
+
+            <div class="row">
+                <!-- Eco / CPU -->
+                <div class="col-md-6 col-lg-3 mb-3">
+                    <div class="preset-card" data-preset="eco">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="preset-badge badge-secondary">CPU ONLY / ECO</span>
+                            <i class="bi bi-battery-charging text-muted font-size-lg"></i>
+                        </div>
+                        <h6 class="font-weight-bold mb-1">Eco Lightweight</h6>
+                        <p class="text-muted small mb-2">Low RAM/VRAM footprint. SAM 2.1 Tiny, CLIP ViT-B/32, GKDT-L, 512px resolution.</p>
+                        <div class="font-monospace small text-muted border-top border-theme pt-2">
+                            • SAM: Tiny<br>
+                            • SAM 3: Off<br>
+                            • Res: 512px<br>
+                            • Workers: 2-4
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Balanced -->
+                <div class="col-md-6 col-lg-3 mb-3">
+                    <div class="preset-card selected" data-preset="balanced">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="preset-badge badge-warning">4G~6G VRAM</span>
+                            <i class="bi bi-check-circle-fill text-warning font-size-lg"></i>
+                        </div>
+                        <h6 class="font-weight-bold mb-1">Balanced (Recommended)</h6>
+                        <p class="text-muted small mb-2">Ideal for consumer GPUs (RTX 3050/4050/2060). Fast point-clicks and open vocabulary.</p>
+                        <div class="font-monospace small text-muted border-top border-theme pt-2">
+                            • SAM: Small<br>
+                            • SAM 3: On (Retrieval)<br>
+                            • Res: 640px<br>
+                            • Workers: 8
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pro -->
+                <div class="col-md-6 col-lg-3 mb-3">
+                    <div class="preset-card" data-preset="pro">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="preset-badge badge-primary">8G~11G VRAM</span>
+                            <i class="bi bi-cpu text-primary font-size-lg"></i>
+                        </div>
+                        <h6 class="font-weight-bold mb-1">Pro Production</h6>
+                        <p class="text-muted small mb-2">High accuracy & fast tracking. SAM 2.1 Base+, CLIP ViT-B/16, TrueLAM batch pose.</p>
+                        <div class="font-monospace small text-muted border-top border-theme pt-2">
+                            • SAM: Base+<br>
+                            • SAM 3: Full Precision<br>
+                            • Res: 640px / 1024px<br>
+                            • Workers: 8-16
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Research -->
+                <div class="col-md-6 col-lg-3 mb-3">
+                    <div class="preset-card" data-preset="research">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="preset-badge badge-success">12G+ WORKSTATION</span>
+                            <i class="bi bi-stars text-success font-size-lg"></i>
+                        </div>
+                        <h6 class="font-weight-bold mb-1">Extreme Research</h6>
+                        <p class="text-muted small mb-2">Maximum model precision. SAM 2.1 Large, GKDT-H (High Precision), CLIP ViT-L/14.</p>
+                        <div class="font-monospace small text-muted border-top border-theme pt-2">
+                            • SAM: Large<br>
+                            • Pose: GKDT-H<br>
+                            • CLIP: ViT-L/14<br>
+                            • Res: 1024px
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-between mt-4">
+                <button type="button" class="btn btn-outline-secondary px-4 btn-prev" data-prev="1">
+                    <i class="bi bi-arrow-left mr-1"></i> Back
+                </button>
+                <button type="button" class="btn btn-primary px-4 btn-next" data-next="3">
+                    Next: AI Model Matrix <i class="bi bi-arrow-right ml-1"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- ==================== STEP 3: AI FOUNDATION MODELS ==================== -->
+        <div class="wizard-step-panel" id="step-panel-3">
+            <div class="config-card">
+                <div class="config-card-header text-info">
+                    <i class="bi bi-magic mr-2"></i>1. Compute Accelerator & SAM Segmentation Engine
+                </div>
+                <div class="config-card-body">
+                    <div class="form-row">
+                        <div class="form-group col-md-4">
+                            <label class="font-weight-bold small text-muted">COMPUTE ACCELERATOR</label>
+                            <select id="wizard-gpu-device" class="form-control custom-select">
+                                <option value="auto">AUTO_DETECT (CUDA / CPU)</option>
+                                <option value="cpu">CPU_ONLY (SAFE)</option>
+                            </select>
+                        </div>
+                        <div class="form-group col-md-4">
+                            <label class="font-weight-bold small text-muted">SAM 2.1 MODEL WEIGHT</label>
+                            <select id="wizard-sam-model" class="form-control custom-select">
+                                <option value="none" data-level="0">DISABLE SAM (LOWEST FOOTPRINT)</option>
+                                <option value="sam2.1_t.pt" data-level="1">SAM 2.1 TINY (~75 MB)</option>
+                                <option value="sam2.1_s.pt" data-level="2" selected>SAM 2.1 SMALL (~88 MB)</option>
+                                <option value="sam2.1_b.pt" data-level="3">SAM 2.1 BASE+ (~154 MB)</option>
+                                <option value="sam2.1_l.pt" data-level="4">SAM 2.1 LARGE (~428 MB)</option>
+                            </select>
+                        </div>
+                        <div class="form-group col-md-4">
+                            <label class="font-weight-bold small text-muted">SAM 3 OPEN-VOCABULARY RETRIEVAL</label>
+                            <select id="wizard-feature-extractor" class="form-control custom-select">
+                                <option value="on" selected>ENABLE (SMART SELECT / LAM / QC)</option>
+                                <option value="off">DISABLE (SAVES ~3.3GB VRAM)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- GKDT Pose Estimation & Detection Backend (KEY ADDITION) -->
+            <div class="config-card">
+                <div class="config-card-header text-warning">
+                    <i class="bi bi-person-lines-fill mr-2"></i>2. GKDT Pose Estimation & Open-Vocabulary Detector
+                </div>
+                <div class="config-card-body">
+                    <div class="form-row">
+                        <div class="form-group col-md-4">
+                            <label class="font-weight-bold small text-muted">POSE ESTIMATION SWITCH</label>
+                            <select id="wizard-pose-model" class="form-control custom-select">
+                                <option value="on" selected>ENABLE GROUNDED KEYPOINT TRANSFORMER</option>
+                                <option value="off">DISABLE POSE ESTIMATION</option>
+                            </select>
+                        </div>
+                        <div class="form-group col-md-4">
+                            <label class="font-weight-bold small text-muted">GKDT ARCHITECTURE & WEIGHT</label>
+                            <select id="wizard-gkdt-model-type" class="form-control custom-select font-monospace">
+                                <option value="GKDT-L" selected>GKDT-L (App / DINOv3-L, ~6.3 GB)</option>
+                                <option value="GKDT-H">GKDT-H (App High-Precision / DINOv3-H, ~12.9 GB)</option>
+                                <option value="GKDT-L-Research">GKDT-L (Research Benchmark)</option>
+                                <option value="GKDT-H-Research">GKDT-H (Research Benchmark)</option>
+                            </select>
+                        </div>
+                        <div class="form-group col-md-4">
+                            <label class="font-weight-bold small text-muted">DETECTOR BACKEND (BOUNDING BOX)</label>
+                            <select id="wizard-gkdt-detector" class="form-control custom-select font-monospace">
+                                <option value="LocateAnything-3B" selected>LocateAnything-3B (NVIDIA 3B, Highest Acc)</option>
+                                <option value="GroundingDINO">GroundingDINO Swin-T</option>
+                                <option value="SAM3-Text-Head">SAM3 Text Head (Reuse VRAM)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CLIP Classification -->
+            <div class="config-card">
+                <div class="config-card-header text-success">
+                    <i class="bi bi-tags-fill mr-2"></i>3. CLIP Zero-Shot Classification & Feature Clustering
+                </div>
+                <div class="config-card-body">
+                    <div class="form-row">
+                        <div class="form-group col-md-4">
+                            <label class="font-weight-bold small text-muted">CLASSIFICATION SWITCH</label>
+                            <select id="wizard-cls-model" class="form-control custom-select">
+                                <option value="on" selected>ENABLE CLIP ZERO-SHOT & K-MEANS</option>
+                                <option value="off">DISABLE CLASSIFICATION MODULE</option>
+                            </select>
+                        </div>
+                        <div class="form-group col-md-4">
+                            <label class="font-weight-bold small text-muted">CLIP MODEL CHECKPOINT</label>
+                            <select id="wizard-clip-model" class="form-control custom-select font-monospace">
+                                <option value="clip-vit-base-patch32" selected>clip-vit-base-patch32 (Fast, ~605 MB)</option>
+                                <option value="clip-vit-base-patch16">clip-vit-base-patch16 (Fine-grain, ~599 MB)</option>
+                                <option value="clip-vit-large-patch14">clip-vit-large-patch14 (High-acc, ~1.7 GB)</option>
+                            </select>
+                        </div>
+                        <div class="form-group col-md-4">
+                            <label class="font-weight-bold small text-muted">PROMPT ENSEMBLING</label>
+                            <div class="custom-control custom-switch mt-2">
+                                <input type="checkbox" class="custom-control-input" id="wizard-clip-ensemble" checked>
+                                <label class="custom-control-label font-monospace" for="wizard-clip-ensemble">8-TEMPLATE MEAN BLEND</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-between mt-4">
+                <button type="button" class="btn btn-outline-secondary px-4 btn-prev" data-prev="2">
+                    <i class="bi bi-arrow-left mr-1"></i> Back
+                </button>
+                <button type="button" class="btn btn-primary px-4 btn-next" data-next="4">
+                    Next: Workflow & Storage <i class="bi bi-arrow-right ml-1"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- ==================== STEP 4: WORKFLOW & STORAGE ==================== -->
+        <div class="wizard-step-panel" id="step-panel-4">
+            <div class="config-card">
+                <div class="config-card-header text-primary">
+                    <i class="bi bi-camera-reels mr-2"></i>Video Frame Ingestion & Storage Settings
+                </div>
+                <div class="config-card-body">
+                    <div class="form-row">
+                        <div class="form-group col-md-4">
+                            <label class="font-weight-bold small text-muted">FRAME EXTRACTION STRATEGY</label>
+                            <select id="wizard-extraction-mode" class="form-control custom-select">
+                                <option value="all" selected>EXTRACT ALL FRAMES (1:1 NATIVE)</option>
+                                <option value="fps_1">1 FRAME PER SECOND (1 FPS)</option>
+                                <option value="fps_2">2 FRAMES PER SECOND (2 FPS)</option>
+                                <option value="fps_5">5 FRAMES PER SECOND (5 FPS)</option>
+                                <option value="fps_10">10 FRAMES PER SECOND (10 FPS)</option>
+                                <option value="step_2">STEP INTERVAL (EVERY 2ND FRAME)</option>
+                                <option value="step_5">STEP INTERVAL (EVERY 5TH FRAME)</option>
+                            </select>
+                        </div>
+                        <div class="form-group col-md-4">
+                            <label class="font-weight-bold small text-muted">FRAME JPEG ENCODING QUALITY</label>
+                            <div class="d-flex justify-content-between small text-muted font-monospace">
+                                <span>COMPRESSION RATIO</span>
+                                <span id="val-jpeg-quality" class="text-primary range-val-badge">85%</span>
+                            </div>
+                            <input type="range" class="custom-range" id="wizard-jpeg-quality" min="40" max="100" step="5" value="85">
+                        </div>
+                        <div class="form-group col-md-4">
+                            <label class="font-weight-bold small text-muted">MAX FRAME RESOLUTION LIMIT</label>
+                            <select id="wizard-max-resolution" class="form-control custom-select font-monospace">
+                                <option value="1080" selected>DOWNSAMPLE TO 1080P (SAFE)</option>
+                                <option value="720">DOWNSAMPLE TO 720P (FAST)</option>
+                                <option value="0">KEEP NATIVE (NO DOWNSAMPLING)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="config-card">
+                <div class="config-card-header text-warning">
+                    <i class="bi bi-ui-checks mr-2"></i>Canvas & Ergonomic Annotation Preferences
+                </div>
+                <div class="config-card-body">
+                    <div class="form-row">
+                        <div class="form-group col-md-4">
+                            <label class="font-weight-bold small text-muted">DEFAULT TOOL MODE</label>
+                            <select id="wizard-annotation-mode" class="form-control custom-select">
+                                <option value="manual" selected>MANUAL DRAW RECTANGLE</option>
+                                <option value="sam">SAM 2.1 (CLICK-TO-SEGMENT)</option>
+                                <option value="lam">LAM (TEXT RETRIEVAL)</option>
+                                <option value="smart_select">SMART SELECT</option>
+                            </select>
+                        </div>
+                        <div class="form-group col-md-4">
+                            <label class="font-weight-bold small text-muted">SPEEDRUN MODE (AUTO-NEXT)</label>
+                            <div class="custom-control custom-switch mt-2">
+                                <input type="checkbox" class="custom-control-input" id="wizard-speedrun" checked>
+                                <label class="custom-control-label font-monospace text-warning" for="wizard-speedrun">AUTO ADVANCE ON TAGGING</label>
+                            </div>
+                        </div>
+                        <div class="form-group col-md-4">
+                            <label class="font-weight-bold small text-muted">NAVIGATION AUTO-SAVE</label>
+                            <div class="custom-control custom-switch mt-2">
+                                <input type="checkbox" class="custom-control-input" id="wizard-autosave">
+                                <label class="custom-control-label font-monospace" for="wizard-autosave">SAVE ON FRAME NAVIGATE</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-row mt-2">
+                        <div class="form-group col-md-4">
+                            <label class="font-weight-bold small text-muted">DATASET TRAIN/VAL/TEST SPLIT</label>
+                            <input type="text" class="form-control font-monospace" value="70% Train / 20% Val / 10% Test" readonly>
+                        </div>
+                        <div class="form-group col-md-4">
+                            <label class="font-weight-bold small text-muted">SPLIT ISOLATION STRATEGY</label>
+                            <select id="wizard-split-strategy" class="form-control custom-select">
+                                <option value="group_by_video" selected>GROUP BY VIDEO UUID (PREVENTS LEAKAGE)</option>
+                                <option value="random">RANDOM UNIFORM SHUFFLE</option>
+                            </select>
+                        </div>
+                        <div class="form-group col-md-4">
+                            <label class="font-weight-bold small text-muted">ZIP EXPORT COMPRESSION</label>
+                            <select id="wizard-zip-compression" class="form-control custom-select">
+                                <option value="standard" selected>STANDARD (DEFLATED)</option>
+                                <option value="fast">FAST (STORE ONLY)</option>
+                                <option value="max">MAXIMUM (COMPACT ARCHIVE)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-between mt-4">
+                <button type="button" class="btn btn-outline-secondary px-4 btn-prev" data-prev="3">
+                    <i class="bi bi-arrow-left mr-1"></i> Back
+                </button>
+                <button type="button" class="btn btn-primary px-4 btn-next" data-next="5">
+                    Next: Review & Launch <i class="bi bi-arrow-right ml-1"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- ==================== STEP 5: REVIEW & BOOT ==================== -->
+        <div class="wizard-step-panel" id="step-panel-5">
+            <div class="config-card">
+                <div class="config-card-header text-primary">
+                    <i class="bi bi-check2-circle mr-2"></i>Configuration Review & Engine Boot Checklist
+                </div>
+                <div class="config-card-body p-0">
+                    <table class="table table-sm mb-0 font-monospace" style="font-size: 0.85rem;">
+                        <tbody>
+                            <tr><td class="text-muted pl-4">COMPUTE_NODE:</td><td class="font-weight-bold" id="rev-compute">AUTO_DETECT</td></tr>
+                            <tr><td class="text-muted pl-4">SYSTEM_PRESET:</td><td class="font-weight-bold text-warning" id="rev-preset">BALANCED</td></tr>
+                            <tr><td class="text-muted pl-4">SAM_SEGMENTATION:</td><td class="font-weight-bold" id="rev-sam">SAM 2.1 Small</td></tr>
+                            <tr><td class="text-muted pl-4">SAM_3_OPEN_VOCABULARY:</td><td class="font-weight-bold text-success" id="rev-sam3">ENABLED</td></tr>
+                            <tr><td class="text-muted pl-4">GKDT_POSE_ENGINE:</td><td class="font-weight-bold" id="rev-gkdt">GKDT-L (App)</td></tr>
+                            <tr><td class="text-muted pl-4">DETECTOR_BACKEND:</td><td class="font-weight-bold" id="rev-detector">LocateAnything-3B</td></tr>
+                            <tr><td class="text-muted pl-4">CLIP_CLASSIFICATION:</td><td class="font-weight-bold" id="rev-clip">ViT-B/32 (Ensembling)</td></tr>
+                            <tr><td class="text-muted pl-4">FRAME_EXTRACTION:</td><td class="font-weight-bold" id="rev-extract">All Frames @ 85% JPEG</td></tr>
+                            <tr><td class="text-muted pl-4">DATASET_SPLIT:</td><td class="font-weight-bold" id="rev-split">70 / 20 / 10 (Group by Video)</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="alert alert-info rounded-0 small font-monospace">
+                <i class="bi bi-info-circle-fill mr-1"></i>
+                Settings will be atomically saved to <code>settings.json</code>. You can change any setting at any time from the Config tab on the main dashboard.
+            </div>
+
+            <div class="d-flex justify-content-between align-items-center mt-4">
+                <button type="button" class="btn btn-outline-secondary px-4 btn-prev" data-prev="4">
+                    <i class="bi bi-arrow-left mr-1"></i> Back
+                </button>
+                <button type="submit" id="btn-complete-setup" class="btn btn-primary btn-lg font-weight-bold px-5">
+                    Save Configuration & Launch <i class="bi bi-rocket-takeoff ml-2"></i>
+                </button>
+            </div>
         </div>
     </form>
 </div>
@@ -253,15 +653,84 @@
 {% block scripts %}
 <script>
 $(document).ready(function() {
-    $('input[type="range"]').on('input', function() {
-        const targetId = $(this).attr('id').replace('setup-', 'val-');
-        let val = $(this).val();
-        if ($(this).attr('step').includes('.')) val = parseFloat(val).toFixed(2);
-        $('#' + targetId).text(val);
+    let currentStep = 1;
+    let selectedPreset = 'balanced';
+
+    // Range input live badges
+    $('#wizard-jpeg-quality').on('input', function() {
+        $('#val-jpeg-quality').text($(this).val() + '%');
     });
 
-    let rec = { sam_level: 1, feature_level: 1, worker_level: 2 };
+    // Step switching logic
+    function goToStep(step) {
+        step = parseInt(step);
+        if (step < 1 || step > 5) return;
+        currentStep = step;
 
+        $('.wizard-step-panel').removeClass('active');
+        $(`#step-panel-${step}`).addClass('active');
+
+        $('.step-indicator').each(function() {
+            const s = parseInt($(this).data('step'));
+            $(this).removeClass('active completed');
+            if (s === step) $(this).addClass('active');
+            else if (s < step) $(this).addClass('completed');
+        });
+
+        if (step === 5) updateReviewTable();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    $('.btn-next').on('click', function() { goToStep($(this).data('next')); });
+    $('.btn-prev').on('click', function() { goToStep($(this).data('prev')); });
+    $('.step-indicator').on('click', function() { goToStep($(this).data('step')); });
+
+    // Preset selection logic
+    const PRESETS = {
+        eco: {
+            sam_model: 'sam2.1_t.pt', feature_extractor: 'off', pose: 'off',
+            gkdt_type: 'GKDT-L', detector: 'GroundingDINO', cls: 'on',
+            clip_model: 'clip-vit-base-patch32', jpeg_quality: 75, max_res: '720'
+        },
+        balanced: {
+            sam_model: 'sam2.1_s.pt', feature_extractor: 'on', pose: 'on',
+            gkdt_type: 'GKDT-L', detector: 'LocateAnything-3B', cls: 'on',
+            clip_model: 'clip-vit-base-patch32', jpeg_quality: 85, max_res: '1080'
+        },
+        pro: {
+            sam_model: 'sam2.1_b.pt', feature_extractor: 'on', pose: 'on',
+            gkdt_type: 'GKDT-L', detector: 'LocateAnything-3B', cls: 'on',
+            clip_model: 'clip-vit-base-patch16', jpeg_quality: 90, max_res: '1080'
+        },
+        research: {
+            sam_model: 'sam2.1_l.pt', feature_extractor: 'on', pose: 'on',
+            gkdt_type: 'GKDT-H', detector: 'LocateAnything-3B', cls: 'on',
+            clip_model: 'clip-vit-large-patch14', jpeg_quality: 95, max_res: '0'
+        }
+    };
+
+    $('.preset-card').on('click', function() {
+        $('.preset-card').removeClass('selected');
+        $(this).addClass('selected');
+        selectedPreset = $(this).data('preset');
+        applyPreset(selectedPreset);
+    });
+
+    function applyPreset(presetKey) {
+        const p = PRESETS[presetKey];
+        if (!p) return;
+        $('#wizard-sam-model').val(p.sam_model);
+        $('#wizard-feature-extractor').val(p.feature_extractor);
+        $('#wizard-pose-model').val(p.pose);
+        $('#wizard-gkdt-model-type').val(p.gkdt_type);
+        $('#wizard-gkdt-detector').val(p.detector);
+        $('#wizard-cls-model').val(p.cls);
+        $('#wizard-clip-model').val(p.clip_model);
+        $('#wizard-jpeg-quality').val(p.jpeg_quality).trigger('input');
+        $('#wizard-max-resolution').val(p.max_res);
+    }
+
+    // Hardware Telemetry Detection
     $.get('/api/detect_hardware', function(hw) {
         $('#hardware-loading').hide();
         $('#hardware-info').fadeIn();
@@ -271,101 +740,114 @@ $(document).ready(function() {
         $('#hw-ram').text(hw.ram_gb > 0 ? hw.ram_gb + ' GB' : 'UNKNOWN');
         $('#hw-cpu').text(hw.cpu_cores + ' CORES');
 
-        let tierBadgeClass = 'badge-secondary';
-        let tierLabel = 'LOW-END (RESTRICTED)';
-
-        if (!hw.has_cuda || (hw.vram_gb > 0 && hw.vram_gb < 4)) {
-            rec.sam_level = 0; rec.feature_level = 0; rec.worker_level = 1;
-            tierBadgeClass = 'badge-danger';
-        } else if (hw.tier === 'mid') {
-            rec.sam_level = 2; rec.feature_level = 2; rec.worker_level = 2;
-            tierBadgeClass = 'badge-warning'; tierLabel = 'MID-TIER (BALANCED)';
-        } else if (hw.tier === 'high') {
-            rec.sam_level = 4; rec.feature_level = 2; rec.worker_level = hw.cpu_cores >= 8 ? 3 : 2;
-            tierBadgeClass = 'badge-success'; tierLabel = 'HIGH-END (UNRESTRICTED)';
+        if (hw.disk_total_gb > 0) {
+            $('#hw-disk').text(hw.disk_free_gb + ' GB / ' + hw.disk_total_gb + ' GB');
+            const usedPercent = Math.round(((hw.disk_total_gb - hw.disk_free_gb) / hw.disk_total_gb) * 100);
+            $('#disk-percent-text').text(usedPercent + '% USED');
+            $('#disk-progress-bar').css('width', usedPercent + '%');
+            if (hw.disk_free_gb < 10) {
+                $('#disk-progress-bar').removeClass('bg-info bg-warning').addClass('bg-danger');
+            } else if (hw.disk_free_gb < 30) {
+                $('#disk-progress-bar').removeClass('bg-info bg-danger').addClass('bg-warning');
+            }
+        } else {
+            $('#hw-disk').text('AVAILABLE');
         }
 
-        $('#hw-tier').removeClass('badge-primary').addClass(tierBadgeClass).text(tierLabel);
+        // Populate CUDA devices
+        if (hw.gpu_devices && hw.gpu_devices.length > 0) {
+            hw.gpu_devices.forEach(dev => {
+                $('#wizard-gpu-device').append(`<option value="${dev.id}">CUDA: ${dev.name}</option>`);
+            });
+        }
 
-        setSelectByLevel('#setup-sam-model', rec.sam_level);
-        $('#setup-feature-extractor').val(rec.feature_level > 0 ? 'on' : 'off');
-        setSelectByLevel('#setup-workers', rec.worker_level);
-        $('#setup-autocast').prop('checked', hw.has_cuda);
+        let recommendedPreset = 'balanced';
+        let tierClass = 'badge-warning';
+        let tierLabel = 'MID-TIER (BALANCED)';
+
+        if (!hw.has_cuda || (hw.vram_gb > 0 && hw.vram_gb < 3.5)) {
+            recommendedPreset = 'eco';
+            tierClass = 'badge-secondary';
+            tierLabel = 'ECO / LOW-VRAM';
+        } else if (hw.tier === 'pro' || (hw.vram_gb >= 11)) {
+            recommendedPreset = 'research';
+            tierClass = 'badge-success';
+            tierLabel = 'WORKSTATION (HIGH VRAM)';
+        } else if (hw.tier === 'high' || (hw.vram_gb >= 6)) {
+            recommendedPreset = 'pro';
+            tierClass = 'badge-primary';
+            tierLabel = 'PRO PRODUCTION';
+        }
+
+        $('#hw-tier').removeClass('badge-primary').addClass(tierClass).text(tierLabel);
+        $(`.preset-card[data-preset="${recommendedPreset}"]`).trigger('click');
     });
 
-    function setSelectByLevel(selector, targetLevel) {
-        $(selector + ` option`).each(function() {
-            if (parseInt($(this).data('level')) === targetLevel) $(this).prop('selected', true);
-        });
+    function updateReviewTable() {
+        $('#rev-compute').text($('#wizard-gpu-device option:selected').text());
+        $('#rev-preset').text(selectedPreset.toUpperCase());
+        $('#rev-sam').text($('#wizard-sam-model option:selected').text());
+        $('#rev-sam3').text($('#wizard-feature-extractor').val() === 'on' ? 'ENABLED' : 'DISABLED');
+        $('#rev-gkdt').text($('#wizard-gkdt-model-type option:selected').text());
+        $('#rev-detector').text($('#wizard-gkdt-detector option:selected').text());
+        $('#rev-clip').text($('#wizard-clip-model option:selected').text() + ($('#wizard-clip-ensemble').is(':checked') ? ' (Ensemble)' : ''));
+        $('#rev-extract').text($('#wizard-extraction-mode option:selected').text() + ' @ ' + $('#wizard-jpeg-quality').val() + '%');
+        $('#rev-split').text($('#wizard-split-strategy option:selected').text());
     }
 
-    $('#setup-sam-model, #setup-workers').on('change', function() {
-        const id = $(this).attr('id');
-        const level = parseInt($(this).find(':selected').data('level'));
-        let target = ''; let rec_level = 0;
-
-        if (id.includes('sam')) { target = '#warn-sam'; rec_level = rec.sam_level; }
-        else if (id.includes('workers')) { target = '#warn-workers'; rec_level = rec.worker_level; }
-
-        if (level > rec_level) $(target).slideDown();
-        else $(target).slideUp();
-    });
-    $('#setup-feature-extractor').on('change', function() {
-        const isOn = $(this).val() === 'on';
-        if (isOn && rec.feature_level === 0) $('#warn-feature').slideDown();
-        else $('#warn-feature').slideUp();
-    });
-
-    $('#full-setup-form').on('submit', function(e) {
+    // Submit handler
+    $('#wizard-form').on('submit', function(e) {
         e.preventDefault();
         const $btn = $('#btn-complete-setup');
-        $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> BOOTING CORE...');
+        $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> BOOTING ENGINE...');
 
-        const samSelection = $('#setup-sam-model').val();
+        const samVal = $('#wizard-sam-model').val();
 
-        const configPayload = {
-            gpu_device: $('#setup-gpu-device').val(),
+        const payload = {
+            system_preset: selectedPreset,
+            gpu_device: $('#wizard-gpu-device').val(),
 
-            enable_sam_model: samSelection !== "none",
-            sam_model_checkpoint: samSelection === "none" ? "sam2.1_t.pt" : samSelection,
+            enable_sam_model: samVal !== 'none',
+            sam_model_checkpoint: samVal === 'none' ? 'sam2.1_t.pt' : samVal,
+            enable_feature_extractor: $('#wizard-feature-extractor').val() === 'on',
 
-            enable_feature_extractor: $('#setup-feature-extractor').val() === 'on',
-            enable_cls_model: $('#setup-cls-model').val() === 'on',
-            enable_pose_model: $('#setup-pose-model').val() === 'on',
+            enable_pose_model: $('#wizard-pose-model').val() === 'on',
+            gkdt_model_type: $('#wizard-gkdt-model-type').val(),
+            gkdt_detector_backend: $('#wizard-gkdt-detector').val(),
 
-            max_workers: parseInt($('#setup-workers').val()),
-            max_cache_size: parseInt($('#setup-max-cache-size').val()),
-            use_autocast: $('#setup-autocast').is(':checked'),
+            enable_cls_model: $('#wizard-cls-model').val() === 'on',
+            clip_model_checkpoint: $('#wizard-clip-model').val(),
+            clip_use_prompt_ensemble: $('#wizard-clip-ensemble').is(':checked'),
 
-            inference_size: parseInt($('#setup-inference-size').val()),
-            zip_compression: $('#setup-zip-compression').val(),
+            video_extraction_mode: $('#wizard-extraction-mode').val(),
+            frame_extraction_jpeg_quality: parseInt($('#wizard-jpeg-quality').val()),
+            video_max_resolution: parseInt($('#wizard-max-resolution').val()),
 
-            sam_mask_confidence: parseFloat($('#setup-sam-mask-confidence').val()),
-            nms_iou_threshold: parseFloat($('#setup-nms-iou-threshold').val()),
-            default_preannotation_conf: parseFloat($('#setup-preannotation-conf').val()),
-            default_confidence: parseFloat($('#setup-default-confidence').val()),
+            default_annotation_mode: $('#wizard-annotation-mode').val(),
+            speedrun_auto_next: $('#wizard-speedrun').is(':checked'),
+            autosave_enabled: $('#wizard-autosave').is(':checked'),
 
-            batch_tracking_conf: parseFloat($('#setup-batch-tracking-conf').val()),
-            batch_tracking_imgsz: parseInt($('#setup-batch-tracking-imgsz').val()),
-            batch_tracking_chunk_size: parseInt($('#setup-batch-tracking-chunk-size').val())
+            dataset_split_strategy: $('#wizard-split-strategy').val(),
+            zip_compression: $('#wizard-zip-compression').val(),
+            use_mirror_acceleration: $('#wizard-use-mirror').is(':checked')
         };
 
         $.ajax({
             url: '/api/complete_setup',
             type: 'POST',
             contentType: 'application/json',
-            data: JSON.stringify(configPayload),
+            data: JSON.stringify(payload),
             success: function(res) {
                 if (res.success) {
-                    setTimeout(() => { window.location.href = '/'; }, 500);
+                    setTimeout(() => { window.location.href = '/'; }, 600);
                 } else {
-                    window.sysAlert('Error applying configuration.', 'error');
-                    $btn.prop('disabled', false).html('Save & Boot Core <i class="bi bi-rocket ml-2"></i>');
+                    window.sysAlert('Error saving setup: ' + (res.message || 'Unknown error'), 'error');
+                    $btn.prop('disabled', false).html('Save Configuration & Launch <i class="bi bi-rocket-takeoff ml-2"></i>');
                 }
             },
             error: function() {
                 window.sysAlert('Server connection failed.', 'error');
-                $btn.prop('disabled', false).html('Save & Boot Core <i class="bi bi-rocket ml-2"></i>');
+                $btn.prop('disabled', false).html('Save Configuration & Launch <i class="bi bi-rocket-takeoff ml-2"></i>');
             }
         });
     });
