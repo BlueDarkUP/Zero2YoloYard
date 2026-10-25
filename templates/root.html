@@ -1896,6 +1896,157 @@
         $('#setting-color-confusion-factor').on('input', function() { $('#color-confusion-factor-val').text(parseFloat($(this).val()).toFixed(1) + ' σ'); });
         $('#setting-consistency-semantic-threshold').on('input', function() { $('#consistency-semantic-threshold-val').text(parseFloat($(this).val()).toFixed(2)); });
 
+        // Augmentation setup logic
+        function setupAugmentationListeners(contextSelector) {
+            const context = $(contextSelector);
+            context.on('input', 'input[type="range"]', function() {
+                $(this).closest('div').find('.val-display').text($(this).val());
+            });
+            context.on('change', '.aug-option input[type="checkbox"]', function() {
+                const controlsId = $(this).closest('.aug-option').data('controls');
+                context.find('#' + controlsId).toggle($(this).is(':checked'));
+            });
+            context.find('.aug-option input[type="checkbox"]').each(function() {
+                const controlsId = $(this).closest('.aug-option').data('controls');
+                context.find('#' + controlsId).toggle($(this).is(':checked'));
+            });
+        }
+        function updateMultilabelVisibility() {
+            const selectedOpt = $('#dataset-export-format option:selected');
+            const fmtKey = $('#dataset-export-format').val() || '';
+            const typesStr = selectedOpt.attr('data-types') || '';
+            const isClassification = typesStr.includes('classification') || fmtKey.includes('cls') || fmtKey.includes('class');
+            $('#multilabel-strategy-group').slideToggle(isClassification);
+        }
+
+        $('#dataset-export-format').on('change', updateMultilabelVisibility);
+
+        const multilabelDescriptions = {
+            'first': 'Pick single label alphabetically first',
+            'random': 'Pick random single label',
+            'ignore': 'Ignore image with multiple labels',
+            'replicate': 'Create duplicate sample for each label'
+        };
+
+        $('#dataset-multilabel-strategy').on('change', function() {
+            const val = $(this).val();
+            $('#multilabel-strategy-desc').text(multilabelDescriptions[val] || multilabelDescriptions['first']);
+        });
+
+        $('#createDatasetModal').on('show.bs.modal', function() {
+            $.get('/api/export_formats', function(res) {
+                if (res.success && res.formats) {
+                    const formatSelect = $('#dataset-export-format');
+                    formatSelect.empty();
+                    res.formats.forEach(function(fmt) {
+                        const opt = $('<option>', {
+                            value: fmt.key,
+                            text: fmt.name
+                        });
+                        if (fmt.types && Array.isArray(fmt.types)) {
+                            opt.attr('data-types', fmt.types.join(','));
+                        }
+                        formatSelect.append(opt);
+                    });
+                    updateMultilabelVisibility();
+                }
+            });
+        });
+
+        $('#aug-enabled').on('change', function() {
+            $('#augmentation-options-panel').slideToggle($(this).is(':checked'));
+        });
+        setupAugmentationListeners('#createDatasetModal');
+
+        function getAugmentationOptions(contextSelector) {
+            const context = $(contextSelector);
+            const getVal = (selector, type = 'float') => type === 'int' ? parseInt(context.find(selector).val()) : parseFloat(context.find(selector).val());
+            const isEnabled = (selector) => context.find(selector).is(':checked');
+             return {
+                enabled: isEnabled('#aug-enabled'),
+                multiply_factor: getVal('#aug-multiply-factor', 'int'),
+                hflip: { enabled: isEnabled('#aug-hflip-enabled'), p: getVal('#aug-hflip-p') },
+                vflip: { enabled: isEnabled('#aug-vflip-enabled'), p: getVal('#aug-vflip-p') },
+                rotate90: { enabled: isEnabled('#aug-rotate90-enabled'), p: getVal('#aug-rotate90-p') },
+                rotate: { enabled: isEnabled('#aug-rotate-enabled'), p: getVal('#aug-rotate-p'), limit: getVal('#aug-rotate-limit', 'int') },
+                ssr: { enabled: isEnabled('#aug-ssr-enabled'), p: getVal('#aug-ssr-p'), rotate: getVal('#aug-ssr-rotate', 'int'), shift: getVal('#aug-ssr-shift'), scale: getVal('#aug-ssr-scale') },
+                affine: { enabled: isEnabled('#aug-affine-enabled'), p: getVal('#aug-affine-p'), shear: getVal('#aug-affine-shear', 'int') },
+                crop: { enabled: isEnabled('#aug-crop-enabled'), p: getVal('#aug-crop-p') },
+                grayscale: { enabled: isEnabled('#aug-grayscale-enabled'), p: getVal('#aug-grayscale-p') },
+                hsv: { enabled: isEnabled('#aug-hsv-enabled'), p: getVal('#aug-hsv-p'), h: getVal('#aug-hsv-h', 'int'), s: getVal('#aug-hsv-s', 'int'), v: getVal('#aug-hsv-v', 'int') },
+                bc: { enabled: isEnabled('#aug-bc-enabled'), p: getVal('#aug-bc-p'), b: getVal('#aug-bc-b'), c: getVal('#aug-bc-c') },
+                blur: { enabled: isEnabled('#aug-blur-enabled'), p: getVal('#aug-blur-p'), limit: getVal('#aug-blur-limit', 'int') },
+                noise: { enabled: isEnabled('#aug-noise-enabled'), p: getVal('#aug-noise-p'), limit: getVal('#aug-noise-limit') },
+                cutout: { enabled: isEnabled('#aug-cutout-enabled'), p: getVal('#aug-cutout-p'), holes: getVal('#aug-cutout-holes', 'int'), size: getVal('#aug-cutout-size', 'int') },
+                mosaic: { enabled: isEnabled('#aug-mosaic-enabled'), p: getVal('#aug-mosaic-p') }
+            };
+        }
+
+        // Form Submissions
+        $('#create-dataset-form').on('submit', function(e) {
+            e.preventDefault();
+            const augmentation_options = getAugmentationOptions('#createDatasetModal');
+            const datasetData = {
+                description: $('#dataset-description').val(),
+                video_uuids: $('#dataset-videos').val(),
+                eval_percent: $('#eval-percent').val(),
+                test_percent: $('#test-percent').val(),
+                export_format: $('#dataset-export-format').val(),
+                export_options: {
+                    multilabel_strategy: $('#dataset-multilabel-strategy').val() || 'first'
+                },
+                augmentation_options: augmentation_options
+            };
+            $.ajax({
+                url: '/createDataset', type: 'POST', contentType: 'application/json',
+                data: JSON.stringify(datasetData),
+                success: function(response) {
+                    if (response.success) {
+                        showSuccess('COMPILATION_STARTED');
+                        $('#createDatasetModal').modal('hide');
+                        refreshDatasets(true);
+                    } else { showError(response.message); }
+                },
+                error: function(xhr) { showError(xhr.responseJSON ? xhr.responseJSON.message : 'UNKNOWN_ERROR'); }
+            });
+        });
+
+        $('#upload-video-form').on('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(this);
+            $.ajax({
+                url: '/uploadVideo', type: 'POST', data: formData, processData: false, contentType: false,
+                success: function(response) {
+                    if (response.success) {
+                        showSuccess('UPLOAD_ACKNOWLEDGED. PROCESSING_STREAM...');
+                        $('#uploadVideoModal').modal('hide');
+                        $(this).trigger('reset');
+                        $('.custom-file-label').html('SELECT_DATA_STREAM...');
+                        refreshVideos(true);
+                    } else { showError(response.message); }
+                }.bind(this),
+                error: function(xhr) { showError(xhr.responseJSON ? xhr.responseJSON.message : 'UNKNOWN_ERROR'); }
+            });
+        });
+
+        $('#import-model-form').on('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(this);
+            $.ajax({
+                url: '/importModel', type: 'POST', data: formData, processData: false, contentType: false,
+                success: function(response) {
+                    if (response.success) {
+                        showSuccess('ENGINE_IMPORTED_SUCCESSFULLY');
+                        $('#importModelModal').modal('hide');
+                        $(this).trigger('reset');
+                        $('.custom-file-label').html('SELECT_FILE...');
+                        refreshModels(true);
+                    } else { showError(response.message); }
+                }.bind(this),
+                error: function(xhr) { showError(xhr.responseJSON ? xhr.responseJSON.message : 'UNKNOWN_ERROR'); }
+            });
+        });
+
         // Submit Settings Form
         $('#settings-form').on('submit', function(e) {
             e.preventDefault();
