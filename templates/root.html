@@ -1922,10 +1922,10 @@
         $('#dataset-export-format').on('change', updateMultilabelVisibility);
 
         const multilabelDescriptions = {
-            'first': 'Pick single label alphabetically first',
-            'random': 'Pick random single label',
-            'ignore': 'Ignore image with multiple labels',
-            'replicate': 'Create duplicate sample for each label'
+            'first': 'For images with multiple labels, only the first label is put into the corresponding folder, ensuring strict Softmax single-label classification paradigm.',
+            'composite': 'Combine multiple labels alphabetically into a new independent composite class (e.g. cat+dog), suitable for multi-target coexistence training.',
+            'skip': 'Skip images with multiple labels directly without exporting, ensuring the purity of the exported dataset.',
+            'duplicate': 'Copy the same image into every hit category folder (old logic), only for special multiple sample expansion needs.'
         };
 
         $('#dataset-multilabel-strategy').on('change', function() {
@@ -1934,6 +1934,10 @@
         });
 
         $('#createDatasetModal').on('show.bs.modal', function() {
+            if (currentSettings) {
+                $('#eval-percent').val(currentSettings.default_eval_percent || 20);
+                $('#test-percent').val(currentSettings.default_test_percent || 10);
+            }
             $.get('/api/export_formats', function(res) {
                 if (res.success && res.formats) {
                     const formatSelect = $('#dataset-export-format');
