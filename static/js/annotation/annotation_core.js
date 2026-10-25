@@ -28,6 +28,15 @@ class AnnotationCore {
         this.selectedClass = null;
         this.annotator = null;
 
+        const s = window.currentSettings || {};
+        this.lineWidth = s.canvas_line_width || 2;
+        this.pointRadius = s.canvas_point_radius || 4;
+        this.maskOpacity = (s.canvas_mask_opacity !== undefined) ? s.canvas_mask_opacity : 0.35;
+        this.zoomStep = (s.canvas_zoom_step !== undefined) ? parseFloat(s.canvas_zoom_step) : 1.15;
+        this.showCrosshair = s.canvas_show_crosshair === true;
+        this.historyLimit = s.canvas_history_limit || 50;
+        this.currentMousePos = null;
+
         this.initEvents();
         this.bindClassRegistry();
     }
@@ -35,7 +44,7 @@ class AnnotationCore {
     saveStateToHistory() {
         this.history = this.history.slice(0, this.historyIndex + 1);
         this.history.push(JSON.parse(JSON.stringify(this.annotations)));
-        if (this.history.length > 50) {
+        if (this.history.length > (this.historyLimit || 50)) {
             this.history.shift();
         }
         this.historyIndex = this.history.length - 1;
@@ -113,7 +122,8 @@ class AnnotationCore {
             e.preventDefault();
             const canvasContainer = document.getElementById('canvas-container');
             
-            const zoomFactor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+            const step = this.zoomStep || 1.15;
+            const zoomFactor = e.deltaY < 0 ? step : 1 / step;
             const newZoom = Math.max(0.1, Math.min(15.0, this.zoom * zoomFactor));
 
             const rect = canvasContainer.getBoundingClientRect();

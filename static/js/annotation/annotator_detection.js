@@ -58,7 +58,8 @@ class DetectionAnnotator {
             const labelText = obj.label != null ? String(obj.label) : '(No category)';
 
             ctx.strokeStyle = isSelected ? '#ffffff' : '#e4e4e7';
-            ctx.lineWidth = (isSelected ? 3 : 2) / zoom;
+            const baseLw = (this.core && this.core.lineWidth) ? this.core.lineWidth : 2;
+            ctx.lineWidth = (isSelected ? (baseLw + 1) : baseLw) / zoom;
             ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
 
             ctx.fillStyle = isSelected ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.05)';

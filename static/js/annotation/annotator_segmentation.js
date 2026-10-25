@@ -531,11 +531,12 @@ class SegmentationAnnotator {
             ctx.fill();
 
             ctx.strokeStyle = isSelected ? '#ffffff' : classColor;
-            ctx.lineWidth = isSelected ? 3 / this.core.zoom : 2 / this.core.zoom;
+            const baseLw = (this.core && this.core.lineWidth) ? this.core.lineWidth : 2;
+            ctx.lineWidth = (isSelected ? baseLw + 1 : baseLw) / this.core.zoom;
             ctx.stroke();
 
             if (isSelected) {
-                const nodeRadius = 5 / this.core.zoom;
+                const nodeRadius = ((this.core && this.core.pointRadius) ? this.core.pointRadius : 5) / this.core.zoom;
                 for (let i = 0; i < obj.polygon.length; i++) {
                     const pt = obj.polygon[i];
                     ctx.fillStyle = '#ffffff';
