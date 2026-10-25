@@ -218,15 +218,27 @@ body {
 
 body::after, body::before { display: none !important; }
 
-/* Scrollbars */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: var(--scrollbar-track); }
-::-webkit-scrollbar-thumb { 
-    background: var(--scrollbar-thumb); 
-    border-radius: var(--radius-xs); 
-    transition: var(--transition-fast); 
+/* Global Scrollbars: Purge native layout-squeezing scrollbars */
+html, body {
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
 }
-::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
+html::-webkit-scrollbar, body::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    background: transparent !important;
+}
+
+/* Subtle Transparent Scrollbars for inner containers (exclude html, body) */
+*:not(html):not(body)::-webkit-scrollbar { width: 5px; height: 5px; }
+*:not(html):not(body)::-webkit-scrollbar-track { background: transparent !important; }
+*:not(html):not(body)::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 9999px;
+    transition: background-color 0.2s ease;
+}
+*:not(html):not(body)::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
 
 /* Typography */
 a { color: var(--text-main); text-decoration: none; transition: var(--transition-smooth); }

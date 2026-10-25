@@ -277,7 +277,7 @@
         height: 6px;
     }
     .custom-scrollbar::-webkit-scrollbar-track {
-        background: rgba(0, 0, 0, 0.05);
+        background: transparent !important;
         border-radius: 3px;
     }
     .custom-scrollbar::-webkit-scrollbar-thumb {
@@ -1528,6 +1528,7 @@
             } else {
                 $('html, body').removeClass('settings-active-view');
             }
+            window.dispatchEvent(new Event('updateFloatingScrollbar'));
         }
 
         setTimeout(() => {
@@ -1544,6 +1545,7 @@
             } else {
                 $('html, body').removeClass('settings-active-view');
             }
+            window.dispatchEvent(new Event('updateFloatingScrollbar'));
         });
 
         $('#mainTabs .nav-link').on('click', function(e) {

@@ -267,6 +267,125 @@
             opacity: 1;
             transform: scale(1.15);
         }
+    
+        /* ==================== FLOATING ANIMATED OVERLAY SCROLLBAR ==================== */
+        html {
+            scrollbar-width: none !important;
+            -ms-overflow-style: none !important;
+        }
+        html::-webkit-scrollbar {
+            display: none !important;
+            width: 0 !important;
+            height: 0 !important;
+        }
+        body {
+            scrollbar-width: none !important;
+            -ms-overflow-style: none !important;
+        }
+        body::-webkit-scrollbar {
+            display: none !important;
+            width: 0 !important;
+            height: 0 !important;
+        }
+
+        .sys-floating-scrollbar {
+            position: fixed !important;
+            right: 3px;
+            top: 64px;
+            bottom: 16px;
+            width: 14px;
+            z-index: 1040;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .sys-floating-scrollbar.has-overflow {
+            display: block;
+        }
+
+        .sys-floating-scrollbar.is-scrolling,
+        .sys-floating-scrollbar.is-hovered,
+        .sys-floating-scrollbar.is-dragging {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .sys-scrollbar-track {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            cursor: pointer;
+        }
+
+        .sys-floating-scrollbar.is-scrolling .sys-scrollbar-track,
+        .sys-floating-scrollbar.is-hovered .sys-scrollbar-track,
+        .sys-floating-scrollbar.is-dragging .sys-scrollbar-track {
+            pointer-events: auto;
+        }
+
+        .sys-scrollbar-thumb {
+            position: absolute;
+            top: 0;
+            right: 3px;
+            width: 5px;
+            min-height: 40px;
+            border-radius: 9999px;
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            pointer-events: none;
+            cursor: grab;
+            will-change: transform, height, width, background-color, box-shadow;
+            transform: translate3d(0, 0, 0);
+            transition: width 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+                        right 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+                        background-color 0.2s ease,
+                        box-shadow 0.25s ease;
+        }
+
+        .sys-floating-scrollbar.is-scrolling .sys-scrollbar-thumb,
+        .sys-floating-scrollbar.is-hovered .sys-scrollbar-thumb,
+        .sys-floating-scrollbar.is-dragging .sys-scrollbar-thumb {
+            pointer-events: auto;
+        }
+
+        [data-theme="dark"] .sys-scrollbar-thumb {
+            background-color: rgba(255, 255, 255, 0.22);
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+        }
+
+        [data-theme="light"] .sys-scrollbar-thumb {
+            background-color: rgba(0, 0, 0, 0.2);
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+        }
+
+        .sys-floating-scrollbar:hover .sys-scrollbar-thumb,
+        .sys-floating-scrollbar.is-hovered .sys-scrollbar-thumb,
+        .sys-floating-scrollbar.is-dragging .sys-scrollbar-thumb {
+            width: 8px;
+            right: 2px;
+        }
+
+        [data-theme="dark"] .sys-floating-scrollbar:hover .sys-scrollbar-thumb,
+        [data-theme="dark"] .sys-floating-scrollbar.is-hovered .sys-scrollbar-thumb,
+        [data-theme="dark"] .sys-floating-scrollbar.is-dragging .sys-scrollbar-thumb {
+            background-color: var(--color-primary-light, #60a5fa);
+            box-shadow: 0 0 14px rgba(96, 165, 250, 0.6), 0 0 2px rgba(255, 255, 255, 0.85);
+        }
+
+        [data-theme="light"] .sys-floating-scrollbar:hover .sys-scrollbar-thumb,
+        [data-theme="light"] .sys-floating-scrollbar.is-hovered .sys-scrollbar-thumb,
+        [data-theme="light"] .sys-floating-scrollbar.is-dragging .sys-scrollbar-thumb {
+            background-color: var(--color-primary, #2563eb);
+            box-shadow: 0 0 10px rgba(37, 99, 235, 0.45);
+        }
+
+        .sys-floating-scrollbar.is-dragging .sys-scrollbar-thumb {
+            cursor: grabbing !important;
+            filter: brightness(1.15);
+        }
+
     </style>
     {% block head %}{% endblock %}
 </head>
@@ -345,6 +464,13 @@
             <span>ZERO2YOLOYARD</span>
         </div>
     </div>
+    <!-- Floating Non-Intrusive Animated Scrollbar -->
+    <div id="sys-floating-scrollbar" class="sys-floating-scrollbar" aria-hidden="true" style="display: none;">
+        <div class="sys-scrollbar-track">
+            <div class="sys-scrollbar-thumb"></div>
+        </div>
+    </div>
+
 
     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
@@ -379,6 +505,160 @@
                 }, { passive: false });
             }
         });
+
+        // ==================== CUSTOM ANIMATED FLOATING SCROLLBAR ====================
+        (function() {
+            let scrollbarEl = null;
+            let trackEl = null;
+            let thumbEl = null;
+            let fadeTimer = null;
+            let isDragging = false;
+            let startY = 0;
+            let startScrollTop = 0;
+            let trackHeight = 0;
+            let thumbHeight = 0;
+
+            function updateMetrics() {
+                if (!scrollbarEl || !trackEl || !thumbEl) return;
+                const docHeight = Math.max(
+                    document.body.scrollHeight, document.documentElement.scrollHeight,
+                    document.body.offsetHeight, document.documentElement.offsetHeight
+                );
+                const winHeight = window.innerHeight;
+                const scrollTop = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+
+                // Hide completely if document does not exceed viewport or if on Config view
+                if (docHeight <= winHeight + 12 || document.body.classList.contains('settings-active-view')) {
+                    scrollbarEl.classList.remove('has-overflow', 'is-scrolling', 'is-hovered');
+                    scrollbarEl.style.display = 'none';
+                    return;
+                }
+
+                scrollbarEl.style.display = 'block';
+                scrollbarEl.classList.add('has-overflow');
+
+                trackHeight = trackEl.clientHeight;
+                if (trackHeight <= 0) return;
+
+                // Scale thumb proportionally to visible fraction of document
+                thumbHeight = Math.max(36, Math.min(trackHeight * 0.85, Math.round((winHeight / docHeight) * trackHeight)));
+                thumbEl.style.height = thumbHeight + 'px';
+
+                const maxScroll = docHeight - winHeight;
+                const scrollRatio = maxScroll > 0 ? Math.max(0, Math.min(1, scrollTop / maxScroll)) : 0;
+                const thumbTop = Math.round(scrollRatio * (trackHeight - thumbHeight));
+                thumbEl.style.transform = `translate3d(0, ${thumbTop}px, 0)`;
+            }
+
+            function onScroll() {
+                if (!scrollbarEl) return;
+                updateMetrics();
+                if (!scrollbarEl.classList.contains('has-overflow')) return;
+
+                scrollbarEl.classList.add('is-scrolling');
+                clearTimeout(fadeTimer);
+                fadeTimer = setTimeout(() => {
+                    if (!isDragging && !scrollbarEl.classList.contains('is-hovered')) {
+                        scrollbarEl.classList.remove('is-scrolling');
+                    }
+                }, 1200);
+            }
+
+            function initFloatingScrollbar() {
+                scrollbarEl = document.getElementById('sys-floating-scrollbar');
+                if (!scrollbarEl) return;
+                trackEl = scrollbarEl.querySelector('.sys-scrollbar-track');
+                thumbEl = scrollbarEl.querySelector('.sys-scrollbar-thumb');
+
+                window.addEventListener('scroll', onScroll, { passive: true });
+                window.addEventListener('resize', () => {
+                    updateMetrics();
+                }, { passive: true });
+
+                // Proximity hover detection (when cursor nears right edge)
+                window.addEventListener('mousemove', (e) => {
+                    if (!scrollbarEl || !scrollbarEl.classList.contains('has-overflow')) return;
+                    const isNearRight = e.clientX >= window.innerWidth - 22;
+                    if (isNearRight) {
+                        scrollbarEl.classList.add('is-hovered');
+                    } else if (!isDragging) {
+                        scrollbarEl.classList.remove('is-hovered');
+                    }
+                }, { passive: true });
+
+                // Dragging support
+                thumbEl.addEventListener('mousedown', (e) => {
+                    isDragging = true;
+                    startY = e.clientY;
+                    startScrollTop = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+                    scrollbarEl.classList.add('is-dragging');
+                    document.body.style.userSelect = 'none';
+                    e.preventDefault();
+                    e.stopPropagation();
+                });
+
+                document.addEventListener('mousemove', (e) => {
+                    if (!isDragging) return;
+                    const deltaY = e.clientY - startY;
+                    const docHeight = Math.max(
+                        document.body.scrollHeight, document.documentElement.scrollHeight
+                    );
+                    const winHeight = window.innerHeight;
+                    const maxScroll = docHeight - winHeight;
+                    const maxThumbMove = trackHeight - thumbHeight;
+                    if (maxThumbMove > 0 && maxScroll > 0) {
+                        const targetScroll = startScrollTop + (deltaY / maxThumbMove) * maxScroll;
+                        window.scrollTo({ top: targetScroll, behavior: 'instant' });
+                    }
+                });
+
+                document.addEventListener('mouseup', () => {
+                    if (isDragging) {
+                        isDragging = false;
+                        scrollbarEl.classList.remove('is-dragging');
+                        document.body.style.userSelect = '';
+                        onScroll();
+                    }
+                });
+
+                // Track click to jump
+                trackEl.addEventListener('click', (e) => {
+                    if (e.target === thumbEl) return;
+                    const rect = trackEl.getBoundingClientRect();
+                    const clickY = e.clientY - rect.top;
+                    const docHeight = Math.max(
+                        document.body.scrollHeight, document.documentElement.scrollHeight
+                    );
+                    const winHeight = window.innerHeight;
+                    const maxScroll = docHeight - winHeight;
+                    const maxThumbMove = trackHeight - thumbHeight;
+                    if (maxThumbMove > 0 && maxScroll > 0) {
+                        const targetScroll = ((clickY - thumbHeight / 2) / maxThumbMove) * maxScroll;
+                        window.scrollTo({ top: targetScroll, behavior: 'smooth' });
+                    }
+                });
+
+                // Dynamic updates via MutationObserver
+                const observer = new MutationObserver(() => {
+                    setTimeout(updateMetrics, 50);
+                });
+                observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style'] });
+
+                // Re-calculate on tab changes
+                if (window.$) {
+                    $(document).on('shown.bs.tab', () => setTimeout(updateMetrics, 60));
+                }
+                window.addEventListener('updateFloatingScrollbar', updateMetrics);
+
+                setTimeout(updateMetrics, 150);
+            }
+
+            if (document.readyState === 'loading') {
+                document.addEventListener("DOMContentLoaded", initFloatingScrollbar);
+            } else {
+                initFloatingScrollbar();
+            }
+        })();
 
         // ==================== BOOT SEQUENCE LOGIC ====================
         document.addEventListener("DOMContentLoaded", () => {
