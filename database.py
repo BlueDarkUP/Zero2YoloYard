@@ -894,10 +894,70 @@ def set_class_sam3_prompt(label_name, sam3_prompt):
         )
 
 
+def normalize_pose_schema(schema_input):
+    if not schema_input:
+        return schema_input
+    data = schema_input
+    if isinstance(schema_input, str):
+        try:
+            data = json.loads(schema_input)
+        except Exception:
+            return schema_input
+    if not isinstance(data, dict):
+        return data
+
+    points = data.get("points") or data.get("keypoints") or []
+    raw_edges = data.get("edges") or data.get("skeleton") or []
+
+    name_edges = []
+    idx_skeleton = []
+
+    # Detect 1-based indexing if any numeric index is >= len(points)
+    is_one_based = False
+    for p in raw_edges:
+        if isinstance(p, (list, tuple)) and len(p) == 2:
+            a, b = p[0], p[1]
+            if isinstance(a, int) and isinstance(b, int) and points:
+                if a >= len(points) or b >= len(points):
+                    is_one_based = True
+                    break
+
+    for p in raw_edges:
+        if isinstance(p, (list, tuple)) and len(p) == 2:
+            a, b = p[0], p[1]
+            if isinstance(a, int) and isinstance(b, int) and points:
+                idx_a = a - 1 if is_one_based else a
+                idx_b = b - 1 if is_one_based else b
+                if 0 <= idx_a < len(points) and 0 <= idx_b < len(points):
+                    name_edges.append([points[idx_a], points[idx_b]])
+                    idx_skeleton.append([idx_a, idx_b])
+                else:
+                    name_edges.append([str(a), str(b)])
+                    idx_skeleton.append([idx_a, idx_b])
+            elif isinstance(a, str) and isinstance(b, str):
+                name_edges.append([a, b])
+                ia = points.index(a) if a in points else -1
+                ib = points.index(b) if b in points else -1
+                if ia != -1 and ib != -1:
+                    idx_skeleton.append([ia, ib])
+                else:
+                    idx_skeleton.append([a, b])
+
+    data["points"] = points
+    data["keypoints"] = points
+    if name_edges:
+        data["edges"] = name_edges
+    if idx_skeleton:
+        data["skeleton"] = idx_skeleton
+    return data
+
 def set_class_keypoint_schema(label_name, schema_json):
-    if isinstance(schema_json, (dict, list)):
-        schema_json = json.dumps(schema_json)
-    cleaned = (schema_json or '').strip() or None
+    normalized = normalize_pose_schema(schema_json)
+    if isinstance(normalized, (dict, list)):
+        schema_str = json.dumps(normalized)
+    else:
+        schema_str = str(normalized) if normalized else None
+    cleaned = (schema_str or '').strip() or None
     now_ms = int(time.time() * 1000)
     with engine.begin() as conn:
         conn.execute(
@@ -923,7 +983,8 @@ def get_all_class_keypoint_schemas():
         for row in res:
             if row[1] and row[1].strip():
                 try:
-                    result_dict[row[0]] = json.loads(row[1])
+                    loaded = json.loads(row[1])
+                    result_dict[row[0]] = normalize_pose_schema(loaded)
                 except Exception:
                     result_dict[row[0]] = row[1]
         return result_dict

@@ -788,15 +788,16 @@ def handle_save_pose_schema(args: Dict[str, Any]) -> Dict[str, Any]:
     c_name = args.get("class_name")
     kpts = args.get("keypoints", [])
     skel = args.get("skeleton", [])
-    schema_dict = {
+    raw_dict = {
         "name": c_name,
         "keypoints": kpts,
         "points": kpts,
         "skeleton": skel,
         "edges": skel
     }
-    database.set_class_keypoint_schema(c_name, json.dumps(schema_dict))
-    return {"success": True, "class_name": c_name, "schema": schema_dict}
+    normalized = database.normalize_pose_schema(raw_dict)
+    database.set_class_keypoint_schema(c_name, normalized)
+    return {"success": True, "class_name": c_name, "schema": normalized}
 
 
 @register_tool(

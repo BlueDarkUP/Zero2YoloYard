@@ -54,8 +54,12 @@ class PoseAnnotator {
             const s = typeof window.classKeypointSchemas[label] === 'string'
                 ? JSON.parse(window.classKeypointSchemas[label])
                 : window.classKeypointSchemas[label];
-            if (s && Array.isArray(s.points) && s.points.length > 0) {
-                return { points: s.points, edges: Array.isArray(s.edges) ? s.edges : [] };
+            if (s) {
+                const pts = Array.isArray(s.points) && s.points.length > 0 ? s.points : (Array.isArray(s.keypoints) ? s.keypoints : []);
+                const edg = Array.isArray(s.edges) && s.edges.length > 0 ? s.edges : (Array.isArray(s.skeleton) ? s.skeleton : []);
+                if (pts && pts.length > 0) {
+                    return { points: pts, edges: edg };
+                }
             }
         }
 
@@ -64,8 +68,12 @@ class PoseAnnotator {
                         localStorage.getItem(`zyy_pose_schema::${this.core.videoUuid}::${label}`);
             if (raw) {
                 const parsed = JSON.parse(raw);
-                if (parsed && Array.isArray(parsed.points) && parsed.points.length > 0) {
-                    return { points: parsed.points, edges: Array.isArray(parsed.edges) ? parsed.edges : [] };
+                if (parsed) {
+                    const pts = Array.isArray(parsed.points) && parsed.points.length > 0 ? parsed.points : (Array.isArray(parsed.keypoints) ? parsed.keypoints : []);
+                    const edg = Array.isArray(parsed.edges) && parsed.edges.length > 0 ? parsed.edges : (Array.isArray(parsed.skeleton) ? parsed.skeleton : []);
+                    if (pts && pts.length > 0) {
+                        return { points: pts, edges: edg };
+                    }
                 }
             }
         } catch (e) { /* ignore */ }
@@ -858,13 +866,39 @@ class PoseAnnotator {
 
             const schema = this.getSchema(obj.label);
             let drewAnyEdge = false;
-            if (schema && schema.edges && schema.edges.length > 0) {
+
+            const edgesToDraw = (schema && Array.isArray(schema.edges) && schema.edges.length > 0)
+                ? schema.edges
+                : (schema && Array.isArray(schema.skeleton) && schema.skeleton.length > 0 ? schema.skeleton : []);
+
+            const isOneBased = edgesToDraw.some(([x, y]) => {
+                const nx = parseInt(x), ny = parseInt(y);
+                return (!isNaN(nx) && nx >= kps.length) || (!isNaN(ny) && ny >= kps.length);
+            });
+
+            const resolvePoint = (ref) => {
+                if (ref === undefined || ref === null) return null;
+                if (typeof ref === 'string' && byName[ref]) return byName[ref];
+                const num = parseInt(ref);
+                if (!isNaN(num)) {
+                    if (isOneBased) {
+                        if (num > 0 && num <= kps.length && kps[num - 1]) return kps[num - 1];
+                    } else {
+                        if (num >= 0 && num < kps.length && kps[num]) return kps[num];
+                        if (num > 0 && num <= kps.length && kps[num - 1]) return kps[num - 1];
+                    }
+                }
+                return null;
+            };
+
+            if (edgesToDraw.length > 0) {
                 ctx.save();
                 ctx.strokeStyle = classColor;
                 ctx.lineWidth = (isSelectedInstance ? 2.5 : 1.5) / zoom;
                 ctx.globalAlpha = isSelectedInstance ? 0.95 : 0.65;
-                schema.edges.forEach(([a, b]) => {
-                    const pa = byName[a], pb = byName[b];
+                edgesToDraw.forEach(([a, b]) => {
+                    const pa = resolvePoint(a);
+                    const pb = resolvePoint(b);
                     if (pa && pb && pa.v > 0 && pb.v > 0) {
                         ctx.beginPath();
                         ctx.moveTo(pa.x, pa.y);
@@ -876,18 +910,24 @@ class PoseAnnotator {
                 ctx.restore();
             }
 
-            if (!drewAnyEdge && kps.length > 1) {
+            // Safe fallback: ONLY if standard 17-point pose, draw standard COCO connections instead of zigzag
+            if (!drewAnyEdge && kps.length === 17) {
+                const defaultEdges = this.getDefaultCOCO17Schema().edges;
                 ctx.save();
                 ctx.strokeStyle = classColor;
-                ctx.lineWidth = (isSelectedInstance ? 2.0 : 1.2) / zoom;
-                ctx.globalAlpha = 0.65;
-                const visKps = kps.filter(k => k.v > 0);
-                for (let i = 0; i < visKps.length - 1; i++) {
-                    ctx.beginPath();
-                    ctx.moveTo(visKps[i].x, visKps[i].y);
-                    ctx.lineTo(visKps[i + 1].x, visKps[i + 1].y);
-                    ctx.stroke();
-                }
+                ctx.lineWidth = (isSelectedInstance ? 2.5 : 1.5) / zoom;
+                ctx.globalAlpha = isSelectedInstance ? 0.95 : 0.65;
+                defaultEdges.forEach(([a, b]) => {
+                    const pa = byName[a] || resolvePoint(a);
+                    const pb = byName[b] || resolvePoint(b);
+                    if (pa && pb && pa.v > 0 && pb.v > 0) {
+                        ctx.beginPath();
+                        ctx.moveTo(pa.x, pa.y);
+                        ctx.lineTo(pb.x, pb.y);
+                        ctx.stroke();
+                        drewAnyEdge = true;
+                    }
+                });
                 ctx.restore();
             }
 
@@ -1098,7 +1138,13 @@ class PoseAnnotator {
         `);
         $('body').append(modal);
 
-        let working = { points: [...schema.points], edges: schema.edges.map(e => [...e]) };
+        const workingEdges = (schema.edges || []).map(e => {
+            let a = e[0], b = e[1];
+            if (typeof a === 'number' && schema.points[a]) a = schema.points[a];
+            if (typeof b === 'number' && schema.points[b]) b = schema.points[b];
+            return [String(a), String(b)];
+        });
+        let working = { points: [...schema.points], edges: workingEdges };
 
         function renderPoints() {
             const list = $('#pose-schema-points-list');
