@@ -249,8 +249,18 @@ def load_settings():
         return dict(DEFAULT_SETTINGS)
 
 
-def save_settings(settings_data):
+def save_settings(settings_data, overwrite=False):
     try:
+        if not overwrite and os.path.exists(SETTINGS_FILE):
+            try:
+                with open(SETTINGS_FILE, 'r', encoding='utf-8') as f_in:
+                    current = json.load(f_in)
+                if isinstance(current, dict):
+                    merged = dict(current)
+                    merged.update(settings_data)
+                    settings_data = merged
+            except Exception:
+                pass
         sanitized = sanitize_settings(settings_data)
         tmp_file = SETTINGS_FILE + ".tmp"
         with open(tmp_file, 'w', encoding='utf-8') as f:
@@ -268,7 +278,7 @@ def reset_to_defaults():
     is_setup_done = current.get("initial_setup_done", False)
     new_settings = dict(DEFAULT_SETTINGS)
     new_settings["initial_setup_done"] = is_setup_done
-    if save_settings(new_settings):
+    if save_settings(new_settings, overwrite=True):
         update_device()
         return True, new_settings
     return False, current
