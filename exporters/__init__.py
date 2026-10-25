@@ -11,9 +11,29 @@ class ExporterRegistry:
 
     @classmethod
     def get(cls, format_key: str) -> BaseExporter:
-        if format_key not in cls._exporters:
+        alias_map = {
+            "yolo_v8_pose": "yolo_pose",
+            "yolo_v11_pose": "yolo_pose",
+            "yolo_pose": "yolo_pose",
+            "yolo_v8_seg": "yolo_segmentation",
+            "yolo_v11_seg": "yolo_segmentation",
+            "yolo_segmentation": "yolo_segmentation",
+            "yolo_v8_detect": "yolo_v8_detect",
+            "yolo_v11_detect": "yolo_v8_detect",
+            "yolo_detect": "yolo_v8_detect",
+            "yolo_v8_cls": "yolo_cls",
+            "yolo_v11_cls": "yolo_cls",
+            "yolo_cls": "yolo_cls",
+            "coco_pose": "coco_pose",
+            "coco_detect": "coco_detection",
+            "coco_detection": "coco_detection",
+            "voc_detect": "pascal_voc_detection",
+            "pascal_voc": "pascal_voc_detection",
+        }
+        resolved = alias_map.get(format_key.lower().strip() if format_key else "", format_key)
+        if resolved not in cls._exporters:
             raise ValueError(f"Unknown export format: {format_key}")
-        return cls._exporters[format_key]()
+        return cls._exporters[resolved]()
 
     @classmethod
     def list_for_type(cls, annotation_type: str) -> List[Dict[str, str]]:
