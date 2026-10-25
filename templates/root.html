@@ -153,6 +153,178 @@
     }
     .manual-text.highlight-tune { color: var(--color-info-text); }
     .manual-text.highlight-when { color: var(--color-warning-text); }
+
+    /* ==================== SETTINGS WORKSPACE SCROLL ISOLATION ==================== */
+    body.settings-active-view {
+        overflow-y: hidden;
+    }
+
+    #settings {
+        height: calc(100vh - 215px);
+        max-height: calc(100vh - 215px);
+        min-height: 520px;
+        box-sizing: border-box;
+        overflow: hidden;
+    }
+
+    .settings-workspace-form {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+    }
+
+    .settings-workspace-layout {
+        display: flex;
+        flex: 1 1 auto;
+        min-height: 0;
+        height: 100%;
+        gap: 1.5rem;
+    }
+
+    /* Left Sidebar: Fixed & Stationary */
+    .settings-sidebar-col {
+        width: 280px;
+        flex: 0 0 280px;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+    }
+
+    .settings-sidebar-inner {
+        flex: 1 1 auto;
+        overflow-y: auto;
+        overflow-x: hidden;
+        overscroll-behavior: contain;
+        -ms-scroll-chaining: none;
+        padding-right: 4px;
+    }
+
+    .settings-sidebar-pills .nav-link {
+        font-size: 0.85rem;
+        font-weight: 500;
+        padding: 9px 13px;
+        border-radius: var(--radius-sm);
+        color: var(--text-secondary);
+        border: 1px solid transparent;
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        margin-bottom: 4px;
+    }
+
+    .settings-sidebar-pills .nav-link:hover {
+        color: var(--text-main);
+        background: var(--bg-surface-secondary);
+        border-color: var(--border-color);
+        transform: translateX(2px);
+    }
+
+    .settings-sidebar-pills .nav-link.active {
+        color: #fff !important;
+        background: var(--color-primary) !important;
+        box-shadow: 0 4px 14px var(--color-primary-glow);
+        border-color: var(--color-primary-accent);
+        transform: translateX(4px);
+    }
+
+    /* Right Content Column: Independent Scroll Container */
+    .settings-content-col {
+        flex: 1 1 auto;
+        min-width: 0;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+    }
+
+    .settings-scroll-container {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        overflow-x: hidden;
+        overscroll-behavior: contain; /* 关键：阻断滚动向上链式冒泡，到底或到顶完全停止整页滚动 */
+        -ms-scroll-chaining: none;
+        padding-right: 12px;
+        padding-bottom: 0.5rem;
+        scroll-behavior: smooth;
+    }
+
+    /* Fixed Floating Commit Bar at Bottom of Right Panel */
+    .settings-footer-bar {
+        flex: 0 0 auto;
+        background: var(--bg-surface);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-sm);
+        padding: 12px 20px;
+        margin-top: 8px;
+        box-shadow: 0 -4px 18px rgba(0, 0, 0, 0.16);
+        z-index: 5;
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+    }
+
+    /* Custom Modern Scrollbars for Settings */
+    .custom-scrollbar::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+        background: rgba(0, 0, 0, 0.05);
+        border-radius: 3px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: var(--border-highlight);
+        border-radius: 3px;
+        transition: background 0.2s ease;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: var(--text-secondary);
+    }
+    .custom-scrollbar {
+        scrollbar-width: thin;
+        scrollbar-color: var(--border-highlight) transparent;
+    }
+
+    /* When on Settings tab, limit non-active tabs to prevent page stretch */
+    .tab-panes-track > .tab-pane:not(.active) {
+        max-height: calc(100vh - 215px);
+        overflow: hidden !important;
+    }
+
+    @media (max-width: 991.98px) {
+        .settings-sidebar-col {
+            width: 230px;
+            flex: 0 0 230px;
+        }
+    }
+
+    @media (max-width: 767.98px) {
+        #settings {
+            height: auto;
+            max-height: none;
+            overflow: visible;
+        }
+        .settings-workspace-layout {
+            flex-direction: column;
+            height: auto;
+        }
+        .settings-sidebar-col {
+            width: 100%;
+            flex: 0 0 auto;
+            height: auto;
+        }
+        .settings-content-col {
+            height: auto;
+        }
+        .settings-scroll-container {
+            overflow-y: visible;
+            padding-right: 0;
+        }
+        .settings-footer-bar {
+            position: sticky;
+            bottom: 30px;
+        }
+    }
 </style>
 {% endblock %}
 
@@ -321,11 +493,12 @@
             </div>
         </div>
         <div class="tab-pane" id="settings" role="tabpanel">
-            <form id="settings-form">
-                <div class="row">
-                    <!-- Left Sidebar Nav -->
-                    <div class="col-lg-3 col-md-4 mb-4">
-                        <div class="nav flex-column nav-pills settings-sidebar-pills shadow-sm" id="settings-v-tabs" role="tablist" aria-orientation="vertical">
+            <form id="settings-form" class="settings-workspace-form">
+                <div class="settings-workspace-layout">
+                    <!-- Left Sidebar Nav (Fixed & Stationary) -->
+                    <div class="settings-sidebar-col">
+                        <div class="settings-sidebar-inner custom-scrollbar">
+                            <div class="nav flex-column nav-pills settings-sidebar-pills shadow-sm" id="settings-v-tabs" role="tablist" aria-orientation="vertical">
                             <a class="nav-link active d-flex align-items-center" id="tab-v-hw" data-toggle="pill" href="#pane-v-hw" role="tab">
                                 <i class="bi bi-motherboard mr-2 text-primary"></i> Compute & Hardware
                             </a>
@@ -371,9 +544,10 @@
                         </div>
                     </div>
 
-                    <!-- Right Content Panels -->
-                    <div class="col-lg-9 col-md-8">
-                        <div class="tab-content" id="settings-v-tabContent">
+                    <!-- Right Content Panels (Only this container scrolls; stops at boundary) -->
+                    <div class="settings-content-col">
+                        <div class="settings-scroll-container custom-scrollbar" id="settings-scroll-pane">
+                            <div class="tab-content" id="settings-v-tabContent">
 
                             <!-- 1. COMPUTE & HARDWARE -->
                             <div class="tab-pane fade show active" id="pane-v-hw" role="tabpanel">
@@ -996,20 +1170,28 @@
                             </div>
 
                         </div>
+                    </div>
 
-                        <!-- Sticky Submit Footer -->
-                        <div class="d-flex justify-content-between align-items-center mt-3 pt-3 border-top border-theme">
-                            <span class="small text-muted font-monospace">
-                                <i class="bi bi-shield-lock-fill mr-1 text-success"></i> ATOMIC_CONFIG_SAVER_ENABLED
+                    <!-- Pinned Submit Footer (Always accessible at bottom of right side) -->
+                    <div class="settings-footer-bar">
+                        <div class="d-flex justify-content-between align-items-center w-100">
+                            <span class="small text-muted font-monospace d-flex align-items-center">
+                                <i class="bi bi-shield-lock-fill mr-2 text-success"></i> ATOMIC_CONFIG_SAVER_ENABLED
                             </span>
-                            <button type="submit" id="btn-save-settings" class="btn btn-primary px-5 font-weight-bold tracking-wider">
-                                <i class="bi bi-hdd-fill mr-2"></i>COMMIT_CHANGES
-                            </button>
+                            <div class="d-flex align-items-center" style="gap: 12px;">
+                                <span id="settings-save-hint" class="small text-muted font-monospace d-none d-md-inline" style="font-size: 0.72rem;">
+                                    All parameters verified before commit
+                                </span>
+                                <button type="submit" id="btn-save-settings" class="btn btn-primary px-5 font-weight-bold tracking-wider shadow-sm">
+                                    <i class="bi bi-hdd-fill mr-2"></i>COMMIT_CHANGES
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </form>
-        </div>
+            </div>
+        </form>
+    </div>
 
         </div>
     </div>
@@ -1327,6 +1509,16 @@
                 const isActive = idx === index;
                 $(this).toggleClass('active', isActive);
             });
+
+            // When switching to/from settings tab, adjust body overflow
+            if (index === 3) {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                if (window.innerWidth >= 768) {
+                    $('body').addClass('settings-active-view');
+                }
+            } else {
+                $('body').removeClass('settings-active-view');
+            }
         }
 
         setTimeout(() => {
@@ -1338,6 +1530,11 @@
 
         $(window).on('resize', function() {
             updateTabIndicator($('#mainTabs .nav-link.active'), false);
+            if (activeTabIndex === 3 && window.innerWidth >= 768) {
+                $('body').addClass('settings-active-view');
+            } else {
+                $('body').removeClass('settings-active-view');
+            }
         });
 
         $('#mainTabs .nav-link').on('click', function(e) {
@@ -1794,6 +1991,45 @@
                 }
             });
         });
+
+        // Reset scroll position to top when switching category tabs
+        $('#settings-v-tabs a[data-toggle="pill"]').on('shown.bs.tab', function() {
+            const scrollEl = document.getElementById('settings-scroll-pane');
+            if (scrollEl) {
+                scrollEl.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        });
+
+        // Boundary wheel lock: Stop propagation and default when hitting edges to prevent whole-page scrolling
+        const settingsScrollPane = document.getElementById('settings-scroll-pane');
+        if (settingsScrollPane) {
+            settingsScrollPane.addEventListener('wheel', function(e) {
+                const delta = e.deltaY;
+                const up = delta < 0;
+                const down = delta > 0;
+                const atTop = this.scrollTop <= 0;
+                const atBottom = Math.ceil(this.scrollTop + this.clientHeight) >= this.scrollHeight;
+
+                if ((up && atTop) || (down && atBottom)) {
+                    e.preventDefault();
+                }
+            }, { passive: false });
+        }
+
+        const settingsSidebarInner = document.querySelector('.settings-sidebar-inner');
+        if (settingsSidebarInner) {
+            settingsSidebarInner.addEventListener('wheel', function(e) {
+                const delta = e.deltaY;
+                const up = delta < 0;
+                const down = delta > 0;
+                const atTop = this.scrollTop <= 0;
+                const atBottom = Math.ceil(this.scrollTop + this.clientHeight) >= this.scrollHeight;
+
+                if ((up && atTop) || (down && atBottom)) {
+                    e.preventDefault();
+                }
+            }, { passive: false });
+        }
 
         // Export settings.json
         $('#btn-export-settings').on('click', function() {
