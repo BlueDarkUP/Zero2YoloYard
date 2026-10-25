@@ -1,1089 +1,1562 @@
-[
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_get_system_status",
-      "description": "[SYSTEM] Retrieve system health, hardware acceleration (CUDA/CPU device, VRAM, thread count), server boot status, and environment setup completion state.",
-      "parameters": {
-        "type": "object",
-        "properties": {},
-        "required": []
+{
+  "version": "1.1.0",
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_get_system_status",
+        "description": "[SYSTEM] Retrieve system health, hardware acceleration (CUDA/CPU device, VRAM, thread count), server boot status, and environment setup completion state.",
+        "parameters": {
+          "type": "object",
+          "properties": {},
+          "required": []
+        }
       }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_get_settings",
-      "description": "[SYSTEM] Retrieve the complete dictionary of all 102 system configuration parameters (model thresholds, paths, mirrors, canvas defaults).",
-      "parameters": {
-        "type": "object",
-        "properties": {},
-        "required": []
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_get_settings",
+        "description": "[SYSTEM] Retrieve the complete dictionary of all 102 system configuration parameters (model thresholds, paths, mirrors, canvas defaults).",
+        "parameters": {
+          "type": "object",
+          "properties": {},
+          "required": []
+        }
       }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_update_settings",
-      "description": "[SYSTEM] Update one or more system configuration settings (e.g. gpu_device, default_preannotation_conf, download mirrors, etc.).",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "settings": {
-            "type": "object",
-            "description": "Dictionary of configuration key-value pairs to update."
-          }
-        },
-        "required": [
-          "settings"
-        ]
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_update_settings",
+        "description": "[SYSTEM] Update one or more system configuration settings (e.g. gpu_device, default_preannotation_conf, download mirrors, etc.).",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "settings": {
+              "type": "object",
+              "description": "Dictionary of configuration key-value pairs to update."
+            }
+          },
+          "required": [
+            "settings"
+          ]
+        }
       }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_list_foundation_models",
-      "description": "[MODELS] List all built-in foundation models (SAM 2.1 checkpoints, SAM 3, CLIP, GKDT Pose, LocateAnything, GroundingDINO) and their local installation and weight status.",
-      "parameters": {
-        "type": "object",
-        "properties": {},
-        "required": []
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_reset_settings",
+        "description": "[SYSTEM] Reset all system and hardware configuration settings to factory default values.",
+        "parameters": {
+          "type": "object",
+          "properties": {}
+        }
       }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_download_foundation_model",
-      "description": "[MODELS] Trigger background download of a foundation model checkpoint by ID ('sam2.1_t', 'sam2.1_s', 'sam2.1_b', 'sam2.1_l', 'clip_vit_b32', etc.).",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "model_id": {
-            "type": "string",
-            "description": "Unique identifier of the foundation model to download."
-          }
-        },
-        "required": [
-          "model_id"
-        ]
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_export_settings",
+        "description": "[SYSTEM] Export current system settings as a portable JSON configuration dictionary.",
+        "parameters": {
+          "type": "object",
+          "properties": {}
+        }
       }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_get_model_download_status",
-      "description": "[MODELS] Check the download progress and status of a foundation model.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "model_id": {
-            "type": "string",
-            "description": "Model ID to inspect."
-          }
-        },
-        "required": [
-          "model_id"
-        ]
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_import_settings",
+        "description": "[SYSTEM] Import and overwrite system configuration from a provided settings dictionary.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "settings": {
+              "type": "object",
+              "description": "Configuration dictionary to apply."
+            }
+          },
+          "required": [
+            "settings"
+          ]
+        }
       }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_list_trained_models",
-      "description": "[MODELS] List all user-trained / custom models (YOLO detection, segmentation, pose) registered in the catalog.",
-      "parameters": {
-        "type": "object",
-        "properties": {}
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_clear_cache",
+        "description": "[SYSTEM] Clear cached frame features, SAM inference cache, and transient memory allocations.",
+        "parameters": {
+          "type": "object",
+          "properties": {}
+        }
       }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_import_trained_model",
-      "description": "[MODELS] Import and register a custom trained model weight file (.pt or .onnx) with description, model_type, and optional labels.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "description": {
-            "type": "string",
-            "description": "Display name of the model."
-          },
-          "model_path": {
-            "type": "string",
-            "description": "Absolute path to model weight file (.pt, .onnx)."
-          },
-          "model_type": {
-            "type": "string",
-            "enum": [
-              "yolo_detect",
-              "yolo_seg",
-              "yolo_pose"
-            ],
-            "default": "yolo_detect",
-            "description": "Model architecture type."
-          },
-          "label_filename": {
-            "type": "string",
-            "description": "Optional labels file path or comma-separated names."
-          }
-        },
-        "required": [
-          "description",
-          "model_path"
-        ]
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_detect_hardware",
+        "description": "[SYSTEM] Query detailed system hardware telemetry: CPU cores, RAM, CUDA availability, GPU names, VRAM, and recommended compute preset.",
+        "parameters": {
+          "type": "object",
+          "properties": {}
+        }
       }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_delete_trained_model",
-      "description": "[MODELS] Remove a custom trained model from catalog.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "model_uuid": {
-            "type": "string",
-            "description": "UUID of model to delete."
-          }
-        },
-        "required": [
-          "model_uuid"
-        ]
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_list_foundation_models",
+        "description": "[MODELS] List all built-in foundation models (SAM 2.1 checkpoints, SAM 3, CLIP, GKDT Pose, LocateAnything, GroundingDINO) and their local installation and weight status.",
+        "parameters": {
+          "type": "object",
+          "properties": {},
+          "required": []
+        }
       }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_upload_video",
-      "description": "[VIDEOS] Ingest a video file from local disk, register it in database, and queue asynchronous frame extraction at target FPS. Starting point for video annotation.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "file_path": {
-            "type": "string",
-            "description": "Absolute path to video file (.mp4, .avi, .mov, etc.) on local disk."
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_download_foundation_model",
+        "description": "[MODELS] Trigger background download of a foundation model checkpoint by ID ('sam2.1_t', 'sam2.1_s', 'sam2.1_b', 'sam2.1_l', 'clip_vit_b32', etc.).",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "model_id": {
+              "type": "string",
+              "description": "Unique identifier of the foundation model to download."
+            }
           },
-          "description": {
-            "type": "string",
-            "description": "Unique title / stream identifier for this video."
-          },
-          "target_fps": {
-            "type": "integer",
-            "default": 5,
-            "description": "Frame sampling rate (frames extracted per second). Default 5."
-          },
-          "annotation_type": {
-            "type": "string",
-            "enum": [
-              "detection",
-              "segmentation",
-              "pose",
-              "classification"
-            ],
-            "default": "detection",
-            "description": "Primary annotation modality for this video stream."
-          }
-        },
-        "required": [
-          "file_path",
-          "description"
-        ]
+          "required": [
+            "model_id"
+          ]
+        }
       }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_list_videos",
-      "description": "[VIDEOS] List all registered videos, their UUIDs, descriptions, total frame count, labeled frame count, status, and annotation type.",
-      "parameters": {
-        "type": "object",
-        "properties": {}
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_get_model_download_status",
+        "description": "[MODELS] Check the download progress and status of a foundation model.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "model_id": {
+              "type": "string",
+              "description": "Model ID to inspect."
+            }
+          },
+          "required": [
+            "model_id"
+          ]
+        }
       }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_get_video_info",
-      "description": "[VIDEOS] Get detailed metadata, total frame count, labeled frame count, resolution, and status for a specific video.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "video_uuid": {
-            "type": "string",
-            "description": "UUID of video to inspect."
-          }
-        },
-        "required": [
-          "video_uuid"
-        ]
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_list_trained_models",
+        "description": "[MODELS] List all user-trained / custom models (YOLO detection, segmentation, pose) registered in the catalog.",
+        "parameters": {
+          "type": "object",
+          "properties": {}
+        }
       }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_delete_video",
-      "description": "[VIDEOS] Delete a video, removing its extracted frame images, annotations, and database records.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "video_uuid": {
-            "type": "string",
-            "description": "UUID of video to delete."
-          }
-        },
-        "required": [
-          "video_uuid"
-        ]
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_import_trained_model",
+        "description": "[MODELS] Import and register a custom trained model weight file (.pt or .onnx) with description, model_type, and optional labels.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "description": {
+              "type": "string",
+              "description": "Display name of the model."
+            },
+            "model_path": {
+              "type": "string",
+              "description": "Absolute path to model weight file (.pt, .onnx)."
+            },
+            "model_type": {
+              "type": "string",
+              "enum": [
+                "yolo_detect",
+                "yolo_seg",
+                "yolo_pose"
+              ],
+              "default": "yolo_detect",
+              "description": "Model architecture type."
+            },
+            "label_filename": {
+              "type": "string",
+              "description": "Optional labels file path or comma-separated names."
+            }
+          },
+          "required": [
+            "description",
+            "model_path"
+          ]
+        }
       }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_import_frames",
-      "description": "[VIDEOS] Import a folder of pre-extracted frame images directly into a new video entry without requiring a source video file.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "folder_path": {
-            "type": "string",
-            "description": "Directory containing image files (.jpg, .png, etc.)."
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_delete_trained_model",
+        "description": "[MODELS] Remove a custom trained model from catalog.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "model_uuid": {
+              "type": "string",
+              "description": "UUID of model to delete."
+            }
           },
-          "description": {
-            "type": "string",
-            "description": "Stream title."
-          },
-          "annotation_type": {
-            "type": "string",
-            "default": "detection"
-          }
-        },
-        "required": [
-          "folder_path",
-          "description"
-        ]
+          "required": [
+            "model_uuid"
+          ]
+        }
       }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_list_classes",
-      "description": "[CLASSES] List all active annotation class labels in the workspace.",
-      "parameters": {
-        "type": "object",
-        "properties": {}
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_delete_foundation_model",
+        "description": "[MODELS] Delete downloaded weights of a foundation model to reclaim disk space.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "model_id": {
+              "type": "string",
+              "description": "Identifier of the model to purge."
+            }
+          },
+          "required": [
+            "model_id"
+          ]
+        }
       }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_add_class",
-      "description": "[CLASSES] Create a new annotation class label (e.g. 'car', 'person', 'defect').",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "class_name": {
-            "type": "string",
-            "description": "Name of label to add."
-          }
-        },
-        "required": [
-          "class_name"
-        ]
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_upload_video",
+        "description": "[VIDEOS] Ingest a video file from local disk, register it in database, and queue asynchronous frame extraction at target FPS. Starting point for video annotation.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "file_path": {
+              "type": "string",
+              "description": "Absolute path to video file (.mp4, .avi, .mov, etc.) on local disk."
+            },
+            "description": {
+              "type": "string",
+              "description": "Unique title / stream identifier for this video."
+            },
+            "target_fps": {
+              "type": "integer",
+              "default": 5,
+              "description": "Frame sampling rate (frames extracted per second). Default 5."
+            },
+            "annotation_type": {
+              "type": "string",
+              "enum": [
+                "detection",
+                "segmentation",
+                "pose",
+                "classification"
+              ],
+              "default": "detection",
+              "description": "Primary annotation modality for this video stream."
+            }
+          },
+          "required": [
+            "file_path",
+            "description"
+          ]
+        }
       }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_delete_class",
-      "description": "[CLASSES] Delete an existing class label from the registry.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "class_name": {
-            "type": "string",
-            "description": "Name of label to delete."
-          }
-        },
-        "required": [
-          "class_name"
-        ]
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_list_videos",
+        "description": "[VIDEOS] List all registered videos, their UUIDs, descriptions, total frame count, labeled frame count, status, and annotation type.",
+        "parameters": {
+          "type": "object",
+          "properties": {}
+        }
       }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_set_class_prompt",
-      "description": "[CLASSES] Configure the SAM 3 / open-vocabulary natural language prompt for a class (e.g. class_name: 'cone', sam3_prompt: 'traffic orange cone'). Essential for zero-shot text auto-labeling.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "class_name": {
-            "type": "string",
-            "description": "Target class name."
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_get_video_info",
+        "description": "[VIDEOS] Get detailed metadata, total frame count, labeled frame count, resolution, and status for a specific video.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "video_uuid": {
+              "type": "string",
+              "description": "UUID of video to inspect."
+            }
           },
-          "sam3_prompt": {
-            "type": "string",
-            "description": "Descriptive English phrase characterizing the object."
-          }
-        },
-        "required": [
-          "class_name",
-          "sam3_prompt"
-        ]
+          "required": [
+            "video_uuid"
+          ]
+        }
       }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_list_class_prompts",
-      "description": "[CLASSES] Retrieve all class labels along with their configured open-vocab text prompts.",
-      "parameters": {
-        "type": "object",
-        "properties": {}
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_delete_video",
+        "description": "[VIDEOS] Delete a video, removing its extracted frame images, annotations, and database records.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "video_uuid": {
+              "type": "string",
+              "description": "UUID of video to delete."
+            }
+          },
+          "required": [
+            "video_uuid"
+          ]
+        }
       }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_save_pose_schema",
-      "description": "[CLASSES] Define or update keypoint names and skeleton connections for a pose estimation class.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "class_name": {
-            "type": "string",
-            "description": "Target class name."
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_import_frames",
+        "description": "[VIDEOS] Import a folder of pre-extracted frame images directly into a new video entry without requiring a source video file.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "folder_path": {
+              "type": "string",
+              "description": "Directory containing image files (.jpg, .png, etc.)."
+            },
+            "description": {
+              "type": "string",
+              "description": "Stream title."
+            },
+            "annotation_type": {
+              "type": "string",
+              "default": "detection"
+            }
           },
-          "keypoints": {
-            "type": "array",
-            "description": "List of keypoint names in order."
-          },
-          "skeleton": {
-            "type": "array",
-            "description": "List of 2-element index pairs connecting keypoints."
-          }
-        },
-        "required": [
-          "class_name",
-          "keypoints"
-        ]
+          "required": [
+            "folder_path",
+            "description"
+          ]
+        }
       }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_get_pose_schemas",
-      "description": "[CLASSES] List all registered pose keypoint schemas across classes.",
-      "parameters": {
-        "type": "object",
-        "properties": {}
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_get_video_frames",
+        "description": "[VIDEOS] Retrieve the sequential frame index for a video, indicating for each frame whether it has annotations, ambiguous flag, and frame number.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "video_uuid": {
+              "type": "string",
+              "description": "UUID of the video."
+            }
+          },
+          "required": [
+            "video_uuid"
+          ]
+        }
       }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_sam3_text_predict",
-      "description": "[ANNOTATION] Perform zero-shot open-vocabulary detection & segmentation on a specific video frame using a text prompt. Returns bounding boxes, segmentation masks, and confidence scores.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "video_uuid": {
-            "type": "string",
-            "description": "UUID of the video stream."
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_clear_video_annotations",
+        "description": "[VIDEOS] Reset and purge all annotation data across all frames of a video.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "video_uuid": {
+              "type": "string",
+              "description": "UUID of video whose annotations should be wiped."
+            }
           },
-          "frame_number": {
-            "type": "integer",
-            "description": "0-based index of frame to query."
-          },
-          "text_prompt": {
-            "type": "string",
-            "description": "Description of object to detect (e.g. 'red soda can')."
-          },
-          "confidence": {
-            "type": "number",
-            "default": 0.25,
-            "description": "Detection confidence threshold."
-          }
-        },
-        "required": [
-          "video_uuid",
-          "frame_number",
-          "text_prompt"
-        ]
+          "required": [
+            "video_uuid"
+          ]
+        }
       }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_sam_prompt_predict",
-      "description": "[ANNOTATION] Interactive point-guided or box-guided SAM 2 segmentation on a specific video frame.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "video_uuid": {
-            "type": "string"
-          },
-          "frame_number": {
-            "type": "integer"
-          },
-          "points": {
-            "type": "array",
-            "description": "List of [x, y] coordinates."
-          },
-          "point_labels": {
-            "type": "array",
-            "description": "1 for positive, 0 for negative point."
-          },
-          "box": {
-            "type": "array",
-            "description": "[x1, y1, x2, y2] bounding box prompt."
-          }
-        },
-        "required": [
-          "video_uuid",
-          "frame_number"
-        ]
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_list_classes",
+        "description": "[CLASSES] List all active annotation class labels in the workspace.",
+        "parameters": {
+          "type": "object",
+          "properties": {}
+        }
       }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_lam_predict",
-      "description": "[ANNOTATION] Perform LocateAnything multi-modal open-vocabulary object detection on a specific video frame.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "video_uuid": {
-            "type": "string"
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_add_class",
+        "description": "[CLASSES] Create a new annotation class label (e.g. 'car', 'person', 'defect').",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "class_name": {
+              "type": "string",
+              "description": "Name of label to add."
+            }
           },
-          "frame_number": {
-            "type": "integer"
-          },
-          "text_prompt": {
-            "type": "string"
-          },
-          "confidence": {
-            "type": "number",
-            "default": 0.25
-          }
-        },
-        "required": [
-          "video_uuid",
-          "frame_number",
-          "text_prompt"
-        ]
+          "required": [
+            "class_name"
+          ]
+        }
       }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_pose_predict",
-      "description": "[ANNOTATION] Run GKDT pose estimation on a frame, guided by text description or bounding boxes.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "video_uuid": {
-            "type": "string"
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_delete_class",
+        "description": "[CLASSES] Delete an existing class label from the registry.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "class_name": {
+              "type": "string",
+              "description": "Name of label to delete."
+            }
           },
-          "frame_number": {
-            "type": "integer"
-          },
-          "text_prompt": {
-            "type": "string",
-            "description": "Text prompt to locate subject before pose extraction."
-          },
-          "bbox": {
-            "type": "array",
-            "description": "Optional [x1, y1, x2, y2] to bypass text detection."
-          }
-        },
-        "required": [
-          "video_uuid",
-          "frame_number"
-        ]
+          "required": [
+            "class_name"
+          ]
+        }
       }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_batch_apply_class_to_videos",
-      "description": "[ANNOTATION] AUTONOMOUS MACRO: Automatically runs SAM 3 open-vocabulary detection and segmentation for a given class across entire video(s) in background. Labels all frames matching the class prompt.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "class_name": {
-            "type": "string",
-            "description": "Class name whose prompt will be queried."
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_set_class_prompt",
+        "description": "[CLASSES] Configure the SAM 3 / open-vocabulary natural language prompt for a class (e.g. class_name: 'cone', sam3_prompt: 'traffic orange cone'). Essential for zero-shot text auto-labeling.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "class_name": {
+              "type": "string",
+              "description": "Target class name."
+            },
+            "sam3_prompt": {
+              "type": "string",
+              "description": "Descriptive English phrase characterizing the object."
+            }
           },
-          "video_uuids": {
-            "type": "array",
-            "description": "List of video UUIDs to auto-label."
-          },
-          "confidence_threshold": {
-            "type": "number",
-            "default": 0.5,
-            "description": "Detection confidence cutoff."
-          },
-          "process_all_frames": {
-            "type": "boolean",
-            "default": true,
-            "description": "True to process all frames, False for unannotated only."
-          }
-        },
-        "required": [
-          "class_name",
-          "video_uuids"
-        ]
+          "required": [
+            "class_name",
+            "sam3_prompt"
+          ]
+        }
       }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_batch_apply_pose_to_videos",
-      "description": "[ANNOTATION] AUTONOMOUS MACRO: Run automated pose keypoint extraction across video(s) in background.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "class_name": {
-            "type": "string"
-          },
-          "video_uuids": {
-            "type": "array"
-          },
-          "confidence_threshold": {
-            "type": "number",
-            "default": 0.5
-          }
-        },
-        "required": [
-          "class_name",
-          "video_uuids"
-        ]
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_list_class_prompts",
+        "description": "[CLASSES] Retrieve all class labels along with their configured open-vocab text prompts.",
+        "parameters": {
+          "type": "object",
+          "properties": {}
+        }
       }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_pre_annotate_with_model",
-      "description": "[ANNOTATION] AUTONOMOUS MACRO: Run background pre-annotation on a video using a custom trained model (YOLO).",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "video_uuid": {
-            "type": "string"
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_save_pose_schema",
+        "description": "[CLASSES] Define or update keypoint names and skeleton connections for a pose estimation class.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "class_name": {
+              "type": "string",
+              "description": "Target class name."
+            },
+            "keypoints": {
+              "type": "array",
+              "description": "List of keypoint names in order."
+            },
+            "skeleton": {
+              "type": "array",
+              "description": "List of 2-element index pairs connecting keypoints."
+            }
           },
-          "model_uuid": {
-            "type": "string"
-          },
-          "confidence": {
-            "type": "number",
-            "default": 0.5
-          }
-        },
-        "required": [
-          "video_uuid",
-          "model_uuid"
-        ]
+          "required": [
+            "class_name",
+            "keypoints"
+          ]
+        }
       }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_start_tracking",
-      "description": "[TRACKING] Initialize SAM 2 video tracking session from a keyframe bounding box prompt.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "video_uuid": {
-            "type": "string"
-          },
-          "start_frame": {
-            "type": "integer"
-          },
-          "bbox": {
-            "type": "array",
-            "description": "[x1, y1, x2, y2] bounding box to track."
-          },
-          "class_name": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "video_uuid",
-          "start_frame",
-          "bbox",
-          "class_name"
-        ]
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_get_pose_schemas",
+        "description": "[CLASSES] List all registered pose keypoint schemas across classes.",
+        "parameters": {
+          "type": "object",
+          "properties": {}
+        }
       }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_retrieve_tracked_bboxes",
-      "description": "[TRACKING] Retrieve tracked object bounding boxes across frame sequences during or after a tracking session.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "tracker_uuid": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "tracker_uuid"
-        ]
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_rename_class",
+        "description": "[CLASSES] Rename an existing annotation class label across the workspace, updating the class registry and all existing frame annotations.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "old_class_name": {
+              "type": "string",
+              "description": "Current name of class to rename."
+            },
+            "new_class_name": {
+              "type": "string",
+              "description": "New target class name."
+            }
+          },
+          "required": [
+            "old_class_name",
+            "new_class_name"
+          ]
+        }
       }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_stop_tracking",
-      "description": "[TRACKING] Finish and terminate a tracking session, committing tracked annotations to video frames.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "tracker_uuid": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "tracker_uuid"
-        ]
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_check_class_usage",
+        "description": "[CLASSES] Check how many video frames globally use a specific class label.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "class_name": {
+              "type": "string",
+              "description": "Target class name."
+            }
+          },
+          "required": [
+            "class_name"
+          ]
+        }
       }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_get_frame_annotations",
-      "description": "[ANNOTATIONS] Retrieve all annotations (bounding boxes, polygons, keypoints) on a specific video frame.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "video_uuid": {
-            "type": "string"
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_sam3_text_predict",
+        "description": "[ANNOTATION] Perform zero-shot open-vocabulary detection & segmentation on a specific video frame using a text prompt. Returns bounding boxes, segmentation masks, and confidence scores.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "video_uuid": {
+              "type": "string",
+              "description": "UUID of the video stream."
+            },
+            "frame_number": {
+              "type": "integer",
+              "description": "0-based index of frame to query."
+            },
+            "text_prompt": {
+              "type": "string",
+              "description": "Description of object to detect (e.g. 'red soda can')."
+            },
+            "confidence": {
+              "type": "number",
+              "default": 0.25,
+              "description": "Detection confidence threshold."
+            }
           },
-          "frame_number": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "video_uuid",
-          "frame_number"
-        ]
+          "required": [
+            "video_uuid",
+            "frame_number",
+            "text_prompt"
+          ]
+        }
       }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_save_frame_annotations",
-      "description": "[ANNOTATIONS] Save or overwrite annotations on a specific video frame with structured objects (bboxes, labels, polygons, keypoints).",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "video_uuid": {
-            "type": "string"
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_sam_prompt_predict",
+        "description": "[ANNOTATION] Interactive point-guided or box-guided SAM 2 segmentation on a specific video frame.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "video_uuid": {
+              "type": "string"
+            },
+            "frame_number": {
+              "type": "integer"
+            },
+            "points": {
+              "type": "array",
+              "description": "List of [x, y] coordinates."
+            },
+            "point_labels": {
+              "type": "array",
+              "description": "1 for positive, 0 for negative point."
+            },
+            "box": {
+              "type": "array",
+              "description": "[x1, y1, x2, y2] bounding box prompt."
+            }
           },
-          "frame_number": {
-            "type": "integer"
-          },
-          "annotations": {
-            "type": "object",
-            "description": "AnnotationData dictionary containing 'objects' list."
-          }
-        },
-        "required": [
-          "video_uuid",
-          "frame_number",
-          "annotations"
-        ]
+          "required": [
+            "video_uuid",
+            "frame_number"
+          ]
+        }
       }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_interpolate_bboxes",
-      "description": "[ANNOTATIONS] Linearly interpolate bounding box positions for an object between two keyframes across intermediate frames.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "video_uuid": {
-            "type": "string"
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_lam_predict",
+        "description": "[ANNOTATION] Perform LocateAnything multi-modal open-vocabulary object detection on a specific video frame.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "video_uuid": {
+              "type": "string"
+            },
+            "frame_number": {
+              "type": "integer"
+            },
+            "text_prompt": {
+              "type": "string"
+            },
+            "confidence": {
+              "type": "number",
+              "default": 0.25
+            }
           },
-          "start_frame": {
-            "type": "integer"
-          },
-          "end_frame": {
-            "type": "integer"
-          },
-          "start_bbox": {
-            "type": "array",
-            "description": "[x1, y1, x2, y2]"
-          },
-          "end_bbox": {
-            "type": "array",
-            "description": "[x1, y1, x2, y2]"
-          },
-          "class_name": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "video_uuid",
-          "start_frame",
-          "end_frame",
-          "start_bbox",
-          "end_bbox",
-          "class_name"
-        ]
+          "required": [
+            "video_uuid",
+            "frame_number",
+            "text_prompt"
+          ]
+        }
       }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_interpolate_pose_keypoints",
-      "description": "[ANNOTATIONS] Smoothly interpolate skeleton keypoint positions between two keyframes across intermediate frames.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "video_uuid": {
-            "type": "string"
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_pose_predict",
+        "description": "[ANNOTATION] Run GKDT pose estimation on a frame, guided by text description or bounding boxes.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "video_uuid": {
+              "type": "string"
+            },
+            "frame_number": {
+              "type": "integer"
+            },
+            "text_prompt": {
+              "type": "string",
+              "description": "Text prompt to locate subject before pose extraction."
+            },
+            "bbox": {
+              "type": "array",
+              "description": "Optional [x1, y1, x2, y2] to bypass text detection."
+            }
           },
-          "start_frame": {
-            "type": "integer"
-          },
-          "end_frame": {
-            "type": "integer"
-          },
-          "start_keypoints": {
-            "type": "array"
-          },
-          "end_keypoints": {
-            "type": "array"
-          },
-          "class_name": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "video_uuid",
-          "start_frame",
-          "end_frame",
-          "start_keypoints",
-          "end_keypoints",
-          "class_name"
-        ]
+          "required": [
+            "video_uuid",
+            "frame_number"
+          ]
+        }
       }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_clip_zero_shot",
-      "description": "[CLASSIFICATION] Classify cropped objects or frames against a list of candidate class text descriptions using CLIP zero-shot matching.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "video_uuid": {
-            "type": "string"
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_batch_apply_class_to_videos",
+        "description": "[ANNOTATION] AUTONOMOUS MACRO: Automatically runs SAM 3 open-vocabulary detection and segmentation for a given class across entire video(s) in background. Labels all frames matching the class prompt.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "class_name": {
+              "type": "string",
+              "description": "Class name whose prompt will be queried."
+            },
+            "video_uuids": {
+              "type": "array",
+              "description": "List of video UUIDs to auto-label."
+            },
+            "confidence_threshold": {
+              "type": "number",
+              "default": 0.5,
+              "description": "Detection confidence cutoff."
+            },
+            "process_all_frames": {
+              "type": "boolean",
+              "default": true,
+              "description": "True to process all frames, False for unannotated only."
+            }
           },
-          "frame_number": {
-            "type": "integer"
-          },
-          "candidate_classes": {
-            "type": "array",
-            "description": "Candidate text labels."
-          },
-          "bbox": {
-            "type": "array",
-            "description": "Optional [x1, y1, x2, y2] crop region."
-          }
-        },
-        "required": [
-          "video_uuid",
-          "frame_number",
-          "candidate_classes"
-        ]
+          "required": [
+            "class_name",
+            "video_uuids"
+          ]
+        }
       }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_cluster_images",
-      "description": "[CLASSIFICATION] Extract visual embeddings and run K-Means clustering across detected objects or frames in a video.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "video_uuid": {
-            "type": "string"
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_batch_apply_pose_to_videos",
+        "description": "[ANNOTATION] AUTONOMOUS MACRO: Run automated pose keypoint extraction across video(s) in background.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "class_name": {
+              "type": "string"
+            },
+            "video_uuids": {
+              "type": "array"
+            },
+            "confidence_threshold": {
+              "type": "number",
+              "default": 0.5
+            }
           },
-          "k_clusters": {
-            "type": "integer",
-            "default": 8
-          }
-        },
-        "required": [
-          "video_uuid"
-        ]
+          "required": [
+            "class_name",
+            "video_uuids"
+          ]
+        }
       }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_batch_tag_cluster",
-      "description": "[CLASSIFICATION] Assign an annotation class label to all frames/objects belonging to a specific visual cluster.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "video_uuid": {
-            "type": "string"
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_pre_annotate_with_model",
+        "description": "[ANNOTATION] AUTONOMOUS MACRO: Run background pre-annotation on a video using a custom trained model (YOLO).",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "video_uuid": {
+              "type": "string"
+            },
+            "model_uuid": {
+              "type": "string"
+            },
+            "confidence": {
+              "type": "number",
+              "default": 0.5
+            }
           },
-          "cluster_id": {
-            "type": "integer"
-          },
-          "class_name": {
-            "type": "string"
-          },
-          "frame_numbers": {
-            "type": "array",
-            "description": "List of frame numbers in cluster."
-          }
-        },
-        "required": [
-          "video_uuid",
-          "class_name",
-          "frame_numbers"
-        ]
+          "required": [
+            "video_uuid",
+            "model_uuid"
+          ]
+        }
       }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_list_tasks",
-      "description": "[TASKS] List active and pending background tasks across the system.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "video_uuid": {
-            "type": "string",
-            "description": "Optional filter by video UUID."
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_find_similar_objects",
+        "description": "[ANNOTATION] Perform visual one-shot similarity search using feature embeddings on the current frame or across the dataset.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "video_uuid": {
+              "type": "string"
+            },
+            "frame_number": {
+              "type": "integer"
+            },
+            "reference_bbox": {
+              "type": "array",
+              "description": "[x1, y1, x2, y2] positive sample bounding box."
+            },
+            "search_scope": {
+              "type": "string",
+              "enum": [
+                "frame",
+                "dataset"
+              ],
+              "default": "frame"
+            },
+            "use_color": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          "required": [
+            "video_uuid",
+            "frame_number",
+            "reference_bbox"
+          ]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_start_tracking",
+        "description": "[TRACKING] Initialize SAM 2 video tracking session from a keyframe bounding box prompt.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "video_uuid": {
+              "type": "string"
+            },
+            "start_frame": {
+              "type": "integer"
+            },
+            "bbox": {
+              "type": "array",
+              "description": "[x1, y1, x2, y2] bounding box to track."
+            },
+            "class_name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "video_uuid",
+            "start_frame",
+            "bbox",
+            "class_name"
+          ]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_retrieve_tracked_bboxes",
+        "description": "[TRACKING] Retrieve tracked object bounding boxes across frame sequences during or after a tracking session.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "tracker_uuid": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "tracker_uuid"
+          ]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_stop_tracking",
+        "description": "[TRACKING] Finish and terminate a tracking session, committing tracked annotations to video frames.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "tracker_uuid": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "tracker_uuid"
+          ]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_sam2_track_video",
+        "description": "[TRACKING] Launch SAM 2 video mask propagation tracking from start_frame to end_frame in background.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "video_uuid": {
+              "type": "string"
+            },
+            "start_frame": {
+              "type": "integer"
+            },
+            "end_frame": {
+              "type": "integer"
+            },
+            "init_bboxes_text": {
+              "type": "string",
+              "description": "Bounding box definitions on start_frame to initiate track."
+            }
+          },
+          "required": [
+            "video_uuid",
+            "start_frame",
+            "end_frame",
+            "init_bboxes_text"
+          ]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_get_frame_annotations",
+        "description": "[ANNOTATIONS] Retrieve all annotations (bounding boxes, polygons, keypoints) on a specific video frame.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "video_uuid": {
+              "type": "string"
+            },
+            "frame_number": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "video_uuid",
+            "frame_number"
+          ]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_save_frame_annotations",
+        "description": "[ANNOTATIONS] Save or overwrite annotations on a specific video frame with structured objects (bboxes, labels, polygons, keypoints).",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "video_uuid": {
+              "type": "string"
+            },
+            "frame_number": {
+              "type": "integer"
+            },
+            "annotations": {
+              "type": "object",
+              "description": "AnnotationData dictionary containing 'objects' list."
+            }
+          },
+          "required": [
+            "video_uuid",
+            "frame_number",
+            "annotations"
+          ]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_interpolate_bboxes",
+        "description": "[ANNOTATIONS] Linearly interpolate bounding box positions for an object between two keyframes across intermediate frames.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "video_uuid": {
+              "type": "string"
+            },
+            "start_frame": {
+              "type": "integer"
+            },
+            "end_frame": {
+              "type": "integer"
+            },
+            "start_bbox": {
+              "type": "array",
+              "description": "[x1, y1, x2, y2]"
+            },
+            "end_bbox": {
+              "type": "array",
+              "description": "[x1, y1, x2, y2]"
+            },
+            "class_name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "video_uuid",
+            "start_frame",
+            "end_frame",
+            "start_bbox",
+            "end_bbox",
+            "class_name"
+          ]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_interpolate_pose_keypoints",
+        "description": "[ANNOTATIONS] Smoothly interpolate skeleton keypoint positions between two keyframes across intermediate frames.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "video_uuid": {
+              "type": "string"
+            },
+            "start_frame": {
+              "type": "integer"
+            },
+            "end_frame": {
+              "type": "integer"
+            },
+            "start_keypoints": {
+              "type": "array"
+            },
+            "end_keypoints": {
+              "type": "array"
+            },
+            "class_name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "video_uuid",
+            "start_frame",
+            "end_frame",
+            "start_keypoints",
+            "end_keypoints",
+            "class_name"
+          ]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_add_annotation_object",
+        "description": "[ANNOTATIONS] Add or update a single annotation object (bounding box, segmentation polygon, or pose keypoint skeleton) on a specific video frame.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "video_uuid": {
+              "type": "string",
+              "description": "UUID of the video stream."
+            },
+            "frame_number": {
+              "type": "integer",
+              "description": "Target frame number."
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "bbox",
+                "polygon",
+                "keypoint"
+              ],
+              "default": "bbox"
+            },
+            "label": {
+              "type": "string",
+              "description": "Class name for this object."
+            },
+            "bbox": {
+              "type": "array",
+              "description": "[x1, y1, x2, y2] bounding box coordinates."
+            },
+            "points": {
+              "type": "array",
+              "description": "[[x, y], ...] polygon vertex coordinates for segmentation."
+            },
+            "keypoints": {
+              "type": "array",
+              "description": "[{'name': '...', 'x': x, 'y': y, 'v': v}, ...] keypoint list for pose estimation."
+            },
+            "object_id": {
+              "type": "string",
+              "description": "Optional custom unique identifier for this object."
+            }
+          },
+          "required": [
+            "video_uuid",
+            "frame_number",
+            "label"
+          ]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_delete_annotation_object",
+        "description": "[ANNOTATIONS] Remove a specific annotation object by its ID from a video frame.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "video_uuid": {
+              "type": "string"
+            },
+            "frame_number": {
+              "type": "integer"
+            },
+            "object_id": {
+              "type": "string",
+              "description": "ID of the object to delete."
+            }
+          },
+          "required": [
+            "video_uuid",
+            "frame_number",
+            "object_id"
+          ]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_clear_frame_annotations",
+        "description": "[ANNOTATIONS] Clear all annotation objects and classification tags on a specific video frame.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "video_uuid": {
+              "type": "string"
+            },
+            "frame_number": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "video_uuid",
+            "frame_number"
+          ]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_set_frame_ambiguous",
+        "description": "[ANNOTATIONS] Flag or unflag a video frame as ambiguous (requiring human review or disambiguation).",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "video_uuid": {
+              "type": "string"
+            },
+            "frame_number": {
+              "type": "integer"
+            },
+            "is_ambiguous": {
+              "type": "boolean",
+              "default": true
+            }
+          },
+          "required": [
+            "video_uuid",
+            "frame_number"
+          ]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_get_ambiguous_frames",
+        "description": "[ANNOTATIONS] List all frame numbers in a video currently flagged as ambiguous.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "video_uuid": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "video_uuid"
+          ]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_clip_zero_shot",
+        "description": "[CLASSIFICATION] Classify cropped objects or frames against a list of candidate class text descriptions using CLIP zero-shot matching.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "video_uuid": {
+              "type": "string"
+            },
+            "frame_number": {
+              "type": "integer"
+            },
+            "candidate_classes": {
+              "type": "array",
+              "description": "Candidate text labels."
+            },
+            "bbox": {
+              "type": "array",
+              "description": "Optional [x1, y1, x2, y2] crop region."
+            }
+          },
+          "required": [
+            "video_uuid",
+            "frame_number",
+            "candidate_classes"
+          ]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_cluster_images",
+        "description": "[CLASSIFICATION] Extract visual embeddings and run K-Means clustering across detected objects or frames in a video.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "video_uuid": {
+              "type": "string"
+            },
+            "k_clusters": {
+              "type": "integer",
+              "default": 8
+            }
+          },
+          "required": [
+            "video_uuid"
+          ]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_batch_tag_cluster",
+        "description": "[CLASSIFICATION] Assign an annotation class label to all frames/objects belonging to a specific visual cluster.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "video_uuid": {
+              "type": "string"
+            },
+            "cluster_id": {
+              "type": "integer"
+            },
+            "class_name": {
+              "type": "string"
+            },
+            "frame_numbers": {
+              "type": "array",
+              "description": "List of frame numbers in cluster."
+            }
+          },
+          "required": [
+            "video_uuid",
+            "class_name",
+            "frame_numbers"
+          ]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_set_frame_classifications",
+        "description": "[CLASSIFICATION] Set or replace the whole-image classification labels for a specific video frame.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "video_uuid": {
+              "type": "string"
+            },
+            "frame_number": {
+              "type": "integer"
+            },
+            "classifications": {
+              "type": "array",
+              "description": "List of class names assigned to this image."
+            }
+          },
+          "required": [
+            "video_uuid",
+            "frame_number",
+            "classifications"
+          ]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_clear_frame_classifications",
+        "description": "[CLASSIFICATION] Clear all whole-image classification labels for a specific video frame.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "video_uuid": {
+              "type": "string"
+            },
+            "frame_number": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "video_uuid",
+            "frame_number"
+          ]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_list_tasks",
+        "description": "[TASKS] List active and pending background tasks across the system.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "video_uuid": {
+              "type": "string",
+              "description": "Optional filter by video UUID."
+            }
           }
         }
       }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_get_task_status",
-      "description": "[TASKS] Poll progress, completion percentage, and result of an active background task (e.g. batch auto-labeling, tracking, frame extraction).",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "task_uuid": {
-            "type": "string",
-            "description": "Task UUID to query."
-          }
-        },
-        "required": [
-          "task_uuid"
-        ]
-      }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_cancel_task",
-      "description": "[TASKS] Cancel/abort an active background task safely.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "task_uuid": {
-            "type": "string"
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_get_task_status",
+        "description": "[TASKS] Poll progress, completion percentage, and result of an active background task (e.g. batch auto-labeling, tracking, frame extraction).",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "task_uuid": {
+              "type": "string",
+              "description": "Task UUID to query."
+            }
           },
-          "video_uuid": {
-            "type": "string"
+          "required": [
+            "task_uuid"
+          ]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_cancel_task",
+        "description": "[TASKS] Cancel/abort an active background task safely.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "task_uuid": {
+              "type": "string"
+            },
+            "video_uuid": {
+              "type": "string"
+            }
           }
         }
       }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_list_datasets",
-      "description": "[DATASETS] Enumerate all created datasets, their UUIDs, video sources, statuses (PROCESSING, READY, FAILED), and export formats.",
-      "parameters": {
-        "type": "object",
-        "properties": {}
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_list_datasets",
+        "description": "[DATASETS] Enumerate all created datasets, their UUIDs, video sources, statuses (PROCESSING, READY, FAILED), and export formats.",
+        "parameters": {
+          "type": "object",
+          "properties": {}
+        }
       }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_get_dataset_info",
-      "description": "[DATASETS] Retrieve full metadata of a dataset including train/eval/test splits, file counts, and absolute path of compiled ZIP.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "dataset_uuid": {
-            "type": "string",
-            "description": "UUID of dataset."
-          }
-        },
-        "required": [
-          "dataset_uuid"
-        ]
-      }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_create_dataset",
-      "description": "[DATASETS] Compile annotated video frames into a machine-learning training dataset (splits train/val/test, exports to formats like YOLOv8/v11, COCO, VOC).",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "description": {
-            "type": "string",
-            "description": "Title / name of the dataset."
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_get_dataset_info",
+        "description": "[DATASETS] Retrieve full metadata of a dataset including train/eval/test splits, file counts, and absolute path of compiled ZIP.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "dataset_uuid": {
+              "type": "string",
+              "description": "UUID of dataset."
+            }
           },
-          "video_uuids": {
-            "type": "array",
-            "description": "List of annotated video UUIDs to include."
+          "required": [
+            "dataset_uuid"
+          ]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_create_dataset",
+        "description": "[DATASETS] Compile annotated video frames into a machine-learning training dataset (splits train/val/test, exports to formats like YOLOv8/v11, COCO, VOC).",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "description": {
+              "type": "string",
+              "description": "Title / name of the dataset."
+            },
+            "video_uuids": {
+              "type": "array",
+              "description": "List of annotated video UUIDs to include."
+            },
+            "export_format": {
+              "type": "string",
+              "default": "yolo_v8_detect",
+              "description": "Export format: yolo_v8_detect, yolo_v8_seg, yolo_v8_pose, coco_detect, voc, yolo_v11_detect, etc."
+            },
+            "eval_percent": {
+              "type": "number",
+              "default": 20.0,
+              "description": "Validation set percentage."
+            },
+            "test_percent": {
+              "type": "number",
+              "default": 10.0,
+              "description": "Test set percentage."
+            },
+            "augmentation_options": {
+              "type": "object",
+              "description": "Optional Albumentations settings."
+            }
           },
-          "export_format": {
-            "type": "string",
-            "default": "yolo_v8_detect",
-            "description": "Export format: yolo_v8_detect, yolo_v8_seg, yolo_v8_pose, coco_detect, voc, yolo_v11_detect, etc."
+          "required": [
+            "description",
+            "video_uuids"
+          ]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_regenerate_dataset",
+        "description": "[DATASETS] Recompile an existing dataset with updated annotations or settings.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "dataset_uuid": {
+              "type": "string"
+            }
           },
-          "eval_percent": {
-            "type": "number",
-            "default": 20.0,
-            "description": "Validation set percentage."
+          "required": [
+            "dataset_uuid"
+          ]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_get_export_formats",
+        "description": "[DATASETS] Retrieve all supported dataset export formats with their descriptions and schema requirements.",
+        "parameters": {
+          "type": "object",
+          "properties": {}
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_set_dataset_augmentations",
+        "description": "[DATASETS] Configure data augmentation settings (rotation, crop, flip, HSV adjustments) for a dataset.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "dataset_uuid": {
+              "type": "string"
+            },
+            "augmentation_options": {
+              "type": "object"
+            }
           },
-          "test_percent": {
-            "type": "number",
-            "default": 10.0,
-            "description": "Test set percentage."
+          "required": [
+            "dataset_uuid",
+            "augmentation_options"
+          ]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_delete_dataset",
+        "description": "[DATASETS] Delete a dataset and its exported ZIP and folder files from disk.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "dataset_uuid": {
+              "type": "string"
+            }
           },
-          "augmentation_options": {
-            "type": "object",
-            "description": "Optional Albumentations settings."
-          }
-        },
-        "required": [
-          "description",
-          "video_uuids"
-        ]
+          "required": [
+            "dataset_uuid"
+          ]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_download_dataset",
+        "description": "[DATASETS] Download or locate the compiled dataset ZIP archive for a completed dataset.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "dataset_uuid": {
+              "type": "string",
+              "description": "UUID of compiled dataset."
+            },
+            "target_dir": {
+              "type": "string",
+              "description": "Optional destination folder to copy the ZIP to."
+            }
+          },
+          "required": [
+            "dataset_uuid"
+          ]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "z2yy_datasets_containing_video",
+        "description": "[DATASETS] Find all compiled or existing datasets that include a specific video.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "video_uuid": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "video_uuid"
+          ]
+        }
       }
     }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_regenerate_dataset",
-      "description": "[DATASETS] Recompile an existing dataset with updated annotations or settings.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "dataset_uuid": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "dataset_uuid"
-        ]
-      }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_get_export_formats",
-      "description": "[DATASETS] Retrieve all supported dataset export formats with their descriptions and schema requirements.",
-      "parameters": {
-        "type": "object",
-        "properties": {}
-      }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_set_dataset_augmentations",
-      "description": "[DATASETS] Configure data augmentation settings (rotation, crop, flip, HSV adjustments) for a dataset.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "dataset_uuid": {
-            "type": "string"
-          },
-          "augmentation_options": {
-            "type": "object"
-          }
-        },
-        "required": [
-          "dataset_uuid",
-          "augmentation_options"
-        ]
-      }
-    }
-  },
-  {
-    "type": "function",
-    "function": {
-      "name": "z2yy_delete_dataset",
-      "description": "[DATASETS] Delete a dataset and its exported ZIP and folder files from disk.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "dataset_uuid": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "dataset_uuid"
-        ]
-      }
-    }
-  }
-]
+  ]
+}

@@ -136,6 +136,118 @@ def handle_update_settings(args: Dict[str, Any]) -> Dict[str, Any]:
     settings_manager.save_settings(current)
     return {"success": True, "updated_keys": list(updates.keys())}
 
+@register_tool(
+    name="z2yy_reset_settings",
+    category="system",
+    description="Reset all system and hardware configuration settings to factory default values.",
+    parameters={"type": "object", "properties": {}},
+    returns={"type": "object", "properties": {"success": {"type": "boolean"}, "settings": {"type": "object"}}}
+)
+def handle_reset_settings(args: Dict[str, Any]) -> Dict[str, Any]:
+    success, current = settings_manager.reset_to_defaults()
+    return {"success": success, "settings": current}
+
+
+@register_tool(
+    name="z2yy_export_settings",
+    category="system",
+    description="Export current system settings as a portable JSON configuration dictionary.",
+    parameters={"type": "object", "properties": {}},
+    returns={"type": "object", "properties": {"settings": {"type": "object"}}}
+)
+def handle_export_settings(args: Dict[str, Any]) -> Dict[str, Any]:
+    return {"settings": settings_manager.load_settings()}
+
+
+@register_tool(
+    name="z2yy_import_settings",
+    category="system",
+    description="Import and overwrite system configuration from a provided settings dictionary.",
+    parameters={
+        "type": "object",
+        "properties": {
+            "settings": {"type": "object", "description": "Configuration dictionary to apply."}
+        },
+        "required": ["settings"]
+    },
+    returns={"type": "object", "properties": {"success": {"type": "boolean"}, "settings": {"type": "object"}}}
+)
+def handle_import_settings(args: Dict[str, Any]) -> Dict[str, Any]:
+    new_settings = args.get("settings", {})
+    success = settings_manager.save_settings(new_settings)
+    return {"success": success, "settings": settings_manager.load_settings()}
+
+
+@register_tool(
+    name="z2yy_clear_cache",
+    category="system",
+    description="Clear cached frame features, SAM inference cache, and transient memory allocations.",
+    parameters={"type": "object", "properties": {}},
+    returns={"type": "object", "properties": {"success": {"type": "boolean"}, "cleared_items": {"type": "integer"}}}
+)
+def handle_clear_cache(args: Dict[str, Any]) -> Dict[str, Any]:
+    count = 0
+    try:
+        import ai_models
+        count = ai_models.sam_tasks.frame_cache_size() if (hasattr(ai_models, "sam_tasks") and ai_models.sam_tasks) else 0
+        ai_models.clear_retrieval_engine_cache()
+    except Exception:
+        pass
+    return {"success": True, "cleared_items": count}
+
+
+@register_tool(
+    name="z2yy_detect_hardware",
+    category="system",
+    description="Query detailed system hardware telemetry: CPU cores, RAM, CUDA availability, GPU names, VRAM, and recommended compute preset.",
+    parameters={"type": "object", "properties": {}},
+    returns={"type": "object"}
+)
+def handle_detect_hardware(args: Dict[str, Any]) -> Dict[str, Any]:
+    import torch
+    cpu_cores = os.cpu_count() or 4
+    ram_gb = 0
+    try:
+        import psutil
+        ram_gb = round(psutil.virtual_memory().total / (1024 ** 3), 1)
+    except ImportError:
+        pass
+
+    has_cuda = torch.cuda.is_available()
+    gpu_devices = []
+    if has_cuda:
+        try:
+            device_count = torch.cuda.device_count()
+            for i in range(device_count):
+                dev_name = torch.cuda.get_device_name(i)
+                dev_vram = round(torch.cuda.get_device_properties(i).total_memory / (1024 ** 3), 1)
+                gpu_devices.append({
+                    "id": i,
+                    "name": dev_name,
+                    "vram_gb": dev_vram
+                })
+        except Exception:
+            pass
+
+    max_vram = max([d["vram_gb"] for d in gpu_devices], default=0)
+    if has_cuda and max_vram >= 12:
+        recommended_preset = "desktop"
+    elif has_cuda and max_vram >= 6:
+        recommended_preset = "laptop"
+    elif has_cuda and max_vram >= 3.5:
+        recommended_preset = "portable"
+    else:
+        recommended_preset = "cpu"
+
+    return {
+        "cpu_cores": cpu_cores,
+        "ram_gb": ram_gb,
+        "has_cuda": has_cuda,
+        "gpu_devices": gpu_devices,
+        "recommended_preset": recommended_preset
+    }
+
+
 
 # ==============================================================================
 # CATEGORY 2: FOUNDATION & CUSTOM AI MODELS
@@ -288,6 +400,40 @@ def handle_delete_trained_model(args: Dict[str, Any]) -> Dict[str, Any]:
     database.delete_model(uuid_val)
     file_storage.delete_model_files(uuid_val)
     return {"success": True, "model_uuid": uuid_val}
+
+@register_tool(
+    name="z2yy_delete_foundation_model",
+    category="models",
+    description="Delete downloaded weights of a foundation model to reclaim disk space.",
+    parameters={
+        "type": "object",
+        "properties": {
+            "model_id": {"type": "string", "description": "Identifier of the model to purge."}
+        },
+        "required": ["model_id"]
+    },
+    returns={"type": "object", "properties": {"success": {"type": "boolean"}, "model_id": {"type": "string"}}}
+)
+def handle_delete_foundation_model(args: Dict[str, Any]) -> Dict[str, Any]:
+    m_id = args.get("model_id")
+    registry = local_model_manager.get_model_registry()
+    model_def = next((m for m in registry if m["id"] == m_id), None)
+    if not model_def:
+        raise ValueError(f"Foundation model not found: {m_id}")
+    
+    base_dir = config.BASE_DIR
+    target = os.path.join(base_dir, model_def.get("dest", ""))
+    deleted = False
+    if os.path.isfile(target):
+        os.remove(target)
+        deleted = True
+    elif os.path.isdir(target):
+        shutil.rmtree(target)
+        deleted = True
+    
+    local_model_manager.DOWNLOAD_TASKS.pop(m_id, None)
+    return {"success": True, "model_id": m_id, "deleted": deleted}
+
 
 
 # ==============================================================================
@@ -457,6 +603,76 @@ def handle_import_frames(args: Dict[str, Any]) -> Dict[str, Any]:
 
     return {"success": True, "video_uuid": v_uuid, "imported_count": len(img_files)}
 
+@register_tool(
+    name="z2yy_get_video_frames",
+    category="videos",
+    description="Retrieve the sequential frame index for a video, indicating for each frame whether it has annotations, ambiguous flag, and frame number.",
+    parameters={
+        "type": "object",
+        "properties": {
+            "video_uuid": {"type": "string", "description": "UUID of the video."}
+        },
+        "required": ["video_uuid"]
+    },
+    returns={"type": "object", "properties": {"frames": {"type": "array"}, "total_frames": {"type": "integer"}}}
+)
+def handle_get_video_frames(args: Dict[str, Any]) -> Dict[str, Any]:
+    v_uuid = args.get("video_uuid")
+    raw_frames = database.get_video_frames(v_uuid)
+    frames_meta = []
+    for f in raw_frames:
+        ann_json = (f.get("annotations_json") or "").strip()
+        has_ann = False
+        is_ambiguous = bool(f.get("is_ambiguous", False))
+        if ann_json:
+            try:
+                ad = json.loads(ann_json)
+                has_ann = bool(ad.get("objects") or ad.get("classifications"))
+                is_ambiguous = bool(ad.get("is_ambiguous", is_ambiguous))
+            except Exception:
+                pass
+        if not has_ann and (f.get("bboxes_text") or "").strip():
+            has_ann = True
+        frames_meta.append({
+            "frame_number": f.get("frame_number"),
+            "has_annotations": has_ann,
+            "is_ambiguous": is_ambiguous,
+            "image_url": f"/media/frames/{v_uuid}/frame_{f.get('frame_number', 0):05d}.jpg"
+        })
+    return {"video_uuid": v_uuid, "total_frames": len(frames_meta), "frames": frames_meta}
+
+
+@register_tool(
+    name="z2yy_clear_video_annotations",
+    category="videos",
+    description="Reset and purge all annotation data across all frames of a video.",
+    parameters={
+        "type": "object",
+        "properties": {
+            "video_uuid": {"type": "string", "description": "UUID of video whose annotations should be wiped."}
+        },
+        "required": ["video_uuid"]
+    },
+    returns={"type": "object", "properties": {"success": {"type": "boolean"}, "video_uuid": {"type": "string"}}}
+)
+def handle_clear_video_annotations(args: Dict[str, Any]) -> Dict[str, Any]:
+    v_uuid = args.get("video_uuid")
+    with database.engine.begin() as conn:
+        conn.execute(
+            database.text("UPDATE video_frames SET bboxes_text = NULL, annotations_json = NULL WHERE video_uuid = :u"),
+            {"u": v_uuid}
+        )
+        conn.execute(
+            database.text("DELETE FROM frame_labels WHERE frame_id IN (SELECT frame_id FROM video_frames WHERE video_uuid = :u)"),
+            {"u": v_uuid}
+        )
+        conn.execute(
+            database.text("UPDATE videos SET labeled_frame_count = 0 WHERE video_uuid = :u"),
+            {"u": v_uuid}
+        )
+    return {"success": True, "video_uuid": v_uuid, "message": "All annotations for video cleared."}
+
+
 
 # ==============================================================================
 # CATEGORY 4: CLASSES & PROMPTS
@@ -572,7 +788,13 @@ def handle_save_pose_schema(args: Dict[str, Any]) -> Dict[str, Any]:
     c_name = args.get("class_name")
     kpts = args.get("keypoints", [])
     skel = args.get("skeleton", [])
-    schema_dict = {"name": c_name, "keypoints": kpts, "skeleton": skel}
+    schema_dict = {
+        "name": c_name,
+        "keypoints": kpts,
+        "points": kpts,
+        "skeleton": skel,
+        "edges": skel
+    }
     database.set_class_keypoint_schema(c_name, json.dumps(schema_dict))
     return {"success": True, "class_name": c_name, "schema": schema_dict}
 
@@ -587,6 +809,93 @@ def handle_save_pose_schema(args: Dict[str, Any]) -> Dict[str, Any]:
 def handle_get_pose_schemas(args: Dict[str, Any]) -> Dict[str, Any]:
     schemas = database.get_all_class_keypoint_schemas()
     return {"schemas": schemas}
+
+@register_tool(
+    name="z2yy_rename_class",
+    category="classes",
+    description="Rename an existing annotation class label across the workspace, updating the class registry and all existing frame annotations.",
+    parameters={
+        "type": "object",
+        "properties": {
+            "old_class_name": {"type": "string", "description": "Current name of class to rename."},
+            "new_class_name": {"type": "string", "description": "New target class name."}
+        },
+        "required": ["old_class_name", "new_class_name"]
+    },
+    returns={"type": "object", "properties": {"success": {"type": "boolean"}, "updated_frames_count": {"type": "integer"}}}
+)
+def handle_rename_class(args: Dict[str, Any]) -> Dict[str, Any]:
+    old_name = args.get("old_class_name", "").strip()
+    new_name = args.get("new_class_name", "").strip()
+    if not old_name or not new_name:
+        raise ValueError("Both old_class_name and new_class_name are required.")
+    if old_name == new_name:
+        return {"success": True, "old_class_name": old_name, "new_class_name": new_name, "updated_frames_count": 0}
+
+    updated_count = 0
+    with database.engine.begin() as conn:
+        conn.execute(
+            database.text("UPDATE class_labels SET label_name = :new WHERE label_name = :old"),
+            {"old": old_name, "new": new_name}
+        )
+        conn.execute(
+            database.text("UPDATE frame_labels SET label_name = :new WHERE label_name = :old"),
+            {"old": old_name, "new": new_name}
+        )
+        frames = conn.execute(
+            database.text("SELECT frame_id, annotations_json FROM video_frames WHERE annotations_json LIKE :pattern"),
+            {"pattern": f"%{old_name}%"}
+        ).fetchall()
+        for row in frames:
+            fid, ann_raw = row
+            if not ann_raw:
+                continue
+            try:
+                ann_data = json.loads(ann_raw)
+                changed = False
+                for obj in ann_data.get("objects", []):
+                    if obj.get("label") == old_name:
+                        obj["label"] = new_name
+                        changed = True
+                cls_list = ann_data.get("classifications", [])
+                if old_name in cls_list:
+                    ann_data["classifications"] = [new_name if c == old_name else c for c in cls_list]
+                    changed = True
+                if changed:
+                    conn.execute(
+                        database.text("UPDATE video_frames SET annotations_json = :ann WHERE frame_id = :fid"),
+                        {"ann": json.dumps(ann_data), "fid": fid}
+                    )
+                    updated_count += 1
+            except Exception:
+                pass
+    return {"success": True, "old_class_name": old_name, "new_class_name": new_name, "updated_frames_count": updated_count}
+
+
+@register_tool(
+    name="z2yy_check_class_usage",
+    category="classes",
+    description="Check how many video frames globally use a specific class label.",
+    parameters={
+        "type": "object",
+        "properties": {
+            "class_name": {"type": "string", "description": "Target class name."}
+        },
+        "required": ["class_name"]
+    },
+    returns={"type": "object", "properties": {"success": {"type": "boolean"}, "usage_count": {"type": "integer"}}}
+)
+def handle_check_class_usage(args: Dict[str, Any]) -> Dict[str, Any]:
+    c_name = args.get("class_name", "").strip()
+    if not c_name:
+        raise ValueError("class_name is required.")
+    with database.engine.connect() as conn:
+        count = conn.execute(
+            database.text("SELECT COUNT(DISTINCT frame_id) FROM frame_labels WHERE label_name = :ln"),
+            {"ln": c_name}
+        ).scalar()
+    return {"success": True, "class_name": c_name, "usage_count": count or 0}
+
 
 
 # ==============================================================================
@@ -837,6 +1146,38 @@ def handle_pre_annotate_with_model(args: Dict[str, Any]) -> Dict[str, Any]:
 
     return {"success": True, "video_uuid": v_uuid, "model_uuid": m_uuid, "status": "PRE_ANNOTATING"}
 
+@register_tool(
+    name="z2yy_find_similar_objects",
+    category="annotation",
+    description="Perform visual one-shot similarity search using feature embeddings on the current frame or across the dataset.",
+    parameters={
+        "type": "object",
+        "properties": {
+            "video_uuid": {"type": "string"},
+            "frame_number": {"type": "integer"},
+            "reference_bbox": {"type": "array", "description": "[x1, y1, x2, y2] positive sample bounding box."},
+            "search_scope": {"type": "string", "enum": ["frame", "dataset"], "default": "frame"},
+            "use_color": {"type": "boolean", "default": False}
+        },
+        "required": ["video_uuid", "frame_number", "reference_bbox"]
+    },
+    returns={"type": "object", "properties": {"success": {"type": "boolean"}, "results": {"type": "array"}}}
+)
+def handle_find_similar_objects(args: Dict[str, Any]) -> Dict[str, Any]:
+    import ai_models
+    v_uuid = args.get("video_uuid")
+    f_num = int(args.get("frame_number"))
+    bbox = args.get("reference_bbox")
+    scope = args.get("search_scope", "frame")
+    use_col = bool(args.get("use_color", False))
+
+    if scope == "dataset":
+        res = ai_models.predict_from_dataset(v_uuid, f_num, bbox, use_color=use_col)
+    else:
+        res = ai_models.predict_from_one_shot(v_uuid, f_num, bbox, use_color=use_col)
+    return {"success": True, "video_uuid": v_uuid, "scope": scope, "results": res}
+
+
 
 # ==============================================================================
 # CATEGORY 6: OBJECT TRACKING & TEMPORAL PROPAGATION (SAM 2)
@@ -911,6 +1252,38 @@ def handle_stop_tracking(args: Dict[str, Any]) -> Dict[str, Any]:
     t_uuid = args.get("tracker_uuid")
     background_tasks.stop_tracking(t_uuid)
     return {"success": True, "tracker_uuid": t_uuid}
+
+@register_tool(
+    name="z2yy_sam2_track_video",
+    category="tracking",
+    description="Launch SAM 2 video mask propagation tracking from start_frame to end_frame in background.",
+    parameters={
+        "type": "object",
+        "properties": {
+            "video_uuid": {"type": "string"},
+            "start_frame": {"type": "integer"},
+            "end_frame": {"type": "integer"},
+            "init_bboxes_text": {"type": "string", "description": "Bounding box definitions on start_frame to initiate track."}
+        },
+        "required": ["video_uuid", "start_frame", "end_frame", "init_bboxes_text"]
+    },
+    returns={"type": "object", "properties": {"success": {"type": "boolean"}, "tracker_uuid": {"type": "string"}}}
+)
+def handle_sam2_track_video(args: Dict[str, Any]) -> Dict[str, Any]:
+    import threading
+    v_uuid = args.get("video_uuid")
+    start_f = int(args.get("start_frame"))
+    end_f = int(args.get("end_frame"))
+    bboxes_text = args.get("init_bboxes_text")
+
+    tracker_uuid = str(uuid.uuid4())
+    threading.Thread(
+        target=background_tasks.start_sam2_batch_tracking_task,
+        args=(v_uuid, tracker_uuid, start_f, end_f, bboxes_text),
+        name=f"AgentSAM2Tracker-{tracker_uuid[:6]}"
+    ).start()
+    return {"success": True, "tracker_uuid": tracker_uuid, "video_uuid": v_uuid}
+
 
 
 # ==============================================================================
@@ -1068,6 +1441,166 @@ def handle_interpolate_pose_keypoints(args: Dict[str, Any]) -> Dict[str, Any]:
 
     return {"success": True, "interpolated_frames": total - 1}
 
+@register_tool(
+    name="z2yy_add_annotation_object",
+    category="annotations",
+    description="Add or update a single annotation object (bounding box, segmentation polygon, or pose keypoint skeleton) on a specific video frame.",
+    parameters={
+        "type": "object",
+        "properties": {
+            "video_uuid": {"type": "string", "description": "UUID of the video stream."},
+            "frame_number": {"type": "integer", "description": "Target frame number."},
+            "type": {"type": "string", "enum": ["bbox", "polygon", "keypoint"], "default": "bbox"},
+            "label": {"type": "string", "description": "Class name for this object."},
+            "bbox": {"type": "array", "description": "[x1, y1, x2, y2] bounding box coordinates."},
+            "points": {"type": "array", "description": "[[x, y], ...] polygon vertex coordinates for segmentation."},
+            "keypoints": {"type": "array", "description": "[{'name': '...', 'x': x, 'y': y, 'v': v}, ...] keypoint list for pose estimation."},
+            "object_id": {"type": "string", "description": "Optional custom unique identifier for this object."}
+        },
+        "required": ["video_uuid", "frame_number", "label"]
+    },
+    returns={"type": "object", "properties": {"success": {"type": "boolean"}, "object_id": {"type": "string"}}}
+)
+def handle_add_annotation_object(args: Dict[str, Any]) -> Dict[str, Any]:
+    v_uuid = args.get("video_uuid")
+    f_num = int(args.get("frame_number"))
+    obj_type = args.get("type", "bbox")
+    label = args.get("label")
+    bbox = args.get("bbox")
+    points = args.get("points")
+    keypoints = args.get("keypoints")
+    obj_id = args.get("object_id") or f"{obj_type}_{int(time.time()*1000)}_{uuid.uuid4().hex[:4]}"
+
+    ann_dict = database.get_frame_annotations(v_uuid, f_num) or {"version": 1, "objects": [], "classifications": [], "is_ambiguous": False}
+    objs = ann_dict.setdefault("objects", [])
+    
+    existing_idx = next((i for i, o in enumerate(objs) if o.get("id") == obj_id), None)
+    new_obj = {
+        "id": obj_id,
+        "type": obj_type,
+        "label": label,
+        "bbox": bbox,
+        "points": points,
+        "keypoints": keypoints
+    }
+    if existing_idx is not None:
+        objs[existing_idx] = new_obj
+    else:
+        objs.append(new_obj)
+
+    database.save_frame_annotations(v_uuid, f_num, json.dumps(ann_dict))
+    return {"success": True, "object_id": obj_id, "video_uuid": v_uuid, "frame_number": f_num}
+
+
+@register_tool(
+    name="z2yy_delete_annotation_object",
+    category="annotations",
+    description="Remove a specific annotation object by its ID from a video frame.",
+    parameters={
+        "type": "object",
+        "properties": {
+            "video_uuid": {"type": "string"},
+            "frame_number": {"type": "integer"},
+            "object_id": {"type": "string", "description": "ID of the object to delete."}
+        },
+        "required": ["video_uuid", "frame_number", "object_id"]
+    },
+    returns={"type": "object", "properties": {"success": {"type": "boolean"}}}
+)
+def handle_delete_annotation_object(args: Dict[str, Any]) -> Dict[str, Any]:
+    v_uuid = args.get("video_uuid")
+    f_num = int(args.get("frame_number"))
+    obj_id = args.get("object_id")
+
+    ann_dict = database.get_frame_annotations(v_uuid, f_num)
+    if not ann_dict or "objects" not in ann_dict:
+        return {"success": True, "deleted": False, "message": "No annotations found on frame."}
+    
+    initial_len = len(ann_dict["objects"])
+    ann_dict["objects"] = [o for o in ann_dict["objects"] if o.get("id") != obj_id]
+    deleted = len(ann_dict["objects"]) < initial_len
+    if deleted:
+        database.save_frame_annotations(v_uuid, f_num, json.dumps(ann_dict))
+    return {"success": True, "deleted": deleted, "object_id": obj_id}
+
+
+@register_tool(
+    name="z2yy_clear_frame_annotations",
+    category="annotations",
+    description="Clear all annotation objects and classification tags on a specific video frame.",
+    parameters={
+        "type": "object",
+        "properties": {
+            "video_uuid": {"type": "string"},
+            "frame_number": {"type": "integer"}
+        },
+        "required": ["video_uuid", "frame_number"]
+    },
+    returns={"type": "object", "properties": {"success": {"type": "boolean"}}}
+)
+def handle_clear_frame_annotations(args: Dict[str, Any]) -> Dict[str, Any]:
+    v_uuid = args.get("video_uuid")
+    f_num = int(args.get("frame_number"))
+    empty_ann = {"version": 1, "objects": [], "classifications": [], "is_ambiguous": False}
+    database.save_frame_annotations(v_uuid, f_num, json.dumps(empty_ann))
+    return {"success": True, "video_uuid": v_uuid, "frame_number": f_num}
+
+
+@register_tool(
+    name="z2yy_set_frame_ambiguous",
+    category="annotations",
+    description="Flag or unflag a video frame as ambiguous (requiring human review or disambiguation).",
+    parameters={
+        "type": "object",
+        "properties": {
+            "video_uuid": {"type": "string"},
+            "frame_number": {"type": "integer"},
+            "is_ambiguous": {"type": "boolean", "default": True}
+        },
+        "required": ["video_uuid", "frame_number"]
+    },
+    returns={"type": "object", "properties": {"success": {"type": "boolean"}, "is_ambiguous": {"type": "boolean"}}}
+)
+def handle_set_frame_ambiguous(args: Dict[str, Any]) -> Dict[str, Any]:
+    v_uuid = args.get("video_uuid")
+    f_num = int(args.get("frame_number"))
+    is_amb = bool(args.get("is_ambiguous", True))
+
+    ann_dict = database.get_frame_annotations(v_uuid, f_num) or {"version": 1, "objects": [], "classifications": [], "is_ambiguous": False}
+    ann_dict["is_ambiguous"] = is_amb
+    database.save_frame_annotations(v_uuid, f_num, json.dumps(ann_dict))
+    return {"success": True, "video_uuid": v_uuid, "frame_number": f_num, "is_ambiguous": is_amb}
+
+
+@register_tool(
+    name="z2yy_get_ambiguous_frames",
+    category="annotations",
+    description="List all frame numbers in a video currently flagged as ambiguous.",
+    parameters={
+        "type": "object",
+        "properties": {
+            "video_uuid": {"type": "string"}
+        },
+        "required": ["video_uuid"]
+    },
+    returns={"type": "object", "properties": {"ambiguous_frames": {"type": "array"}, "count": {"type": "integer"}}}
+)
+def handle_get_ambiguous_frames(args: Dict[str, Any]) -> Dict[str, Any]:
+    v_uuid = args.get("video_uuid")
+    frames = database.get_video_frames(v_uuid)
+    ambiguous = []
+    for f in frames:
+        ann_json = (f.get("annotations_json") or "").strip()
+        if ann_json:
+            try:
+                ad = json.loads(ann_json)
+                if ad.get("is_ambiguous"):
+                    ambiguous.append(f.get("frame_number"))
+            except Exception:
+                pass
+    return {"video_uuid": v_uuid, "count": len(ambiguous), "ambiguous_frames": ambiguous}
+
+
 
 # ==============================================================================
 # CATEGORY 8: ZERO-SHOT CLASSIFICATION & FEATURE CLUSTERING (CLIP)
@@ -1160,6 +1693,55 @@ def handle_batch_tag_cluster(args: Dict[str, Any]) -> Dict[str, Any]:
         database.save_frame_annotations(v_uuid, int(fn), json.dumps(curr))
 
     return {"success": True, "tagged_count": len(frames), "class_name": cls}
+
+@register_tool(
+    name="z2yy_set_frame_classifications",
+    category="classification",
+    description="Set or replace the whole-image classification labels for a specific video frame.",
+    parameters={
+        "type": "object",
+        "properties": {
+            "video_uuid": {"type": "string"},
+            "frame_number": {"type": "integer"},
+            "classifications": {"type": "array", "description": "List of class names assigned to this image."}
+        },
+        "required": ["video_uuid", "frame_number", "classifications"]
+    },
+    returns={"type": "object", "properties": {"success": {"type": "boolean"}}}
+)
+def handle_set_frame_classifications(args: Dict[str, Any]) -> Dict[str, Any]:
+    v_uuid = args.get("video_uuid")
+    f_num = int(args.get("frame_number"))
+    classes = args.get("classifications", [])
+
+    ann_dict = database.get_frame_annotations(v_uuid, f_num) or {"version": 1, "objects": [], "classifications": [], "is_ambiguous": False}
+    ann_dict["classifications"] = list(dict.fromkeys(classes))
+    database.save_frame_annotations(v_uuid, f_num, json.dumps(ann_dict))
+    return {"success": True, "video_uuid": v_uuid, "frame_number": f_num, "classifications": ann_dict["classifications"]}
+
+
+@register_tool(
+    name="z2yy_clear_frame_classifications",
+    category="classification",
+    description="Clear all whole-image classification labels for a specific video frame.",
+    parameters={
+        "type": "object",
+        "properties": {
+            "video_uuid": {"type": "string"},
+            "frame_number": {"type": "integer"}
+        },
+        "required": ["video_uuid", "frame_number"]
+    },
+    returns={"type": "object", "properties": {"success": {"type": "boolean"}}}
+)
+def handle_clear_frame_classifications(args: Dict[str, Any]) -> Dict[str, Any]:
+    v_uuid = args.get("video_uuid")
+    f_num = int(args.get("frame_number"))
+    ann_dict = database.get_frame_annotations(v_uuid, f_num) or {"version": 1, "objects": [], "classifications": [], "is_ambiguous": False}
+    ann_dict["classifications"] = []
+    database.save_frame_annotations(v_uuid, f_num, json.dumps(ann_dict))
+    return {"success": True, "video_uuid": v_uuid, "frame_number": f_num}
+
 
 
 # ==============================================================================
@@ -1424,6 +2006,61 @@ def handle_delete_dataset(args: Dict[str, Any]) -> Dict[str, Any]:
     database.delete_dataset(d_uuid)
     file_storage.delete_dataset_files(d_uuid)
     return {"success": True, "dataset_uuid": d_uuid}
+
+@register_tool(
+    name="z2yy_download_dataset",
+    category="datasets",
+    description="Download or locate the compiled dataset ZIP archive for a completed dataset.",
+    parameters={
+        "type": "object",
+        "properties": {
+            "dataset_uuid": {"type": "string", "description": "UUID of compiled dataset."},
+            "target_dir": {"type": "string", "description": "Optional destination folder to copy the ZIP to."}
+        },
+        "required": ["dataset_uuid"]
+    },
+    returns={"type": "object", "properties": {"success": {"type": "boolean"}, "zip_path": {"type": "string"}}}
+)
+def handle_download_dataset(args: Dict[str, Any]) -> Dict[str, Any]:
+    d_uuid = args.get("dataset_uuid")
+    target_dir = args.get("target_dir")
+    zip_path = file_storage.get_dataset_zip_path(d_uuid)
+    if not os.path.exists(zip_path):
+        raise FileNotFoundError(f"Dataset zip archive not found for {d_uuid}")
+    
+    final_path = zip_path
+    if target_dir:
+        os.makedirs(target_dir, exist_ok=True)
+        final_path = os.path.join(target_dir, os.path.basename(zip_path))
+        shutil.copy2(zip_path, final_path)
+    return {"success": True, "dataset_uuid": d_uuid, "zip_path": final_path, "size_bytes": os.path.getsize(final_path)}
+
+
+@register_tool(
+    name="z2yy_datasets_containing_video",
+    category="datasets",
+    description="Find all compiled or existing datasets that include a specific video.",
+    parameters={
+        "type": "object",
+        "properties": {
+            "video_uuid": {"type": "string"}
+        },
+        "required": ["video_uuid"]
+    },
+    returns={"type": "object", "properties": {"matching_datasets": {"type": "array"}}}
+)
+def handle_datasets_containing_video(args: Dict[str, Any]) -> Dict[str, Any]:
+    v_uuid = args.get("video_uuid")
+    matching = []
+    for ds in database.get_dataset_list():
+        try:
+            ds_video_uuids = json.loads(ds.get("video_uuids") or "[]")
+            if v_uuid in ds_video_uuids:
+                matching.append(ds)
+        except Exception:
+            pass
+    return {"video_uuid": v_uuid, "matching_datasets": matching}
+
 
 
 # ==============================================================================

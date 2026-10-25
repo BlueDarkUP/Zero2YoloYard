@@ -112,6 +112,16 @@ You can communicate with Z2YY through two primary channels:
   - Parameters: `none` (Required: `none`)
 - **`z2yy_update_settings`**: Update one or more system configuration settings (e.g. gpu_device, default_preannotation_conf, download mirrors, etc.).
   - Parameters: `settings` (Required: `settings`)
+- **`z2yy_reset_settings`**: Reset all system and hardware configuration settings to factory default values.
+  - Parameters: `none` (Required: `none`)
+- **`z2yy_export_settings`**: Export current system settings as a portable JSON configuration dictionary.
+  - Parameters: `none` (Required: `none`)
+- **`z2yy_import_settings`**: Import and overwrite system configuration from a provided settings dictionary.
+  - Parameters: `settings` (Required: `settings`)
+- **`z2yy_clear_cache`**: Clear cached frame features, SAM inference cache, and transient memory allocations.
+  - Parameters: `none` (Required: `none`)
+- **`z2yy_detect_hardware`**: Query detailed system hardware telemetry: CPU cores, RAM, CUDA availability, GPU names, VRAM, and recommended compute preset.
+  - Parameters: `none` (Required: `none`)
 ### MODELS TOOLS
 - **`z2yy_list_foundation_models`**: List all built-in foundation models (SAM 2.1 checkpoints, SAM 3, CLIP, GKDT Pose, LocateAnything, GroundingDINO) and their local installation and weight status.
   - Parameters: `none` (Required: `none`)
@@ -125,6 +135,8 @@ You can communicate with Z2YY through two primary channels:
   - Parameters: `description, model_path, model_type, label_filename` (Required: `description, model_path`)
 - **`z2yy_delete_trained_model`**: Remove a custom trained model from catalog.
   - Parameters: `model_uuid` (Required: `model_uuid`)
+- **`z2yy_delete_foundation_model`**: Delete downloaded weights of a foundation model to reclaim disk space.
+  - Parameters: `model_id` (Required: `model_id`)
 ### VIDEOS TOOLS
 - **`z2yy_upload_video`**: Ingest a video file from local disk, register it in database, and queue asynchronous frame extraction at target FPS. Starting point for video annotation.
   - Parameters: `file_path, description, target_fps, annotation_type` (Required: `file_path, description`)
@@ -136,6 +148,10 @@ You can communicate with Z2YY through two primary channels:
   - Parameters: `video_uuid` (Required: `video_uuid`)
 - **`z2yy_import_frames`**: Import a folder of pre-extracted frame images directly into a new video entry without requiring a source video file.
   - Parameters: `folder_path, description, annotation_type` (Required: `folder_path, description`)
+- **`z2yy_get_video_frames`**: Retrieve the sequential frame index for a video, indicating for each frame whether it has annotations, ambiguous flag, and frame number.
+  - Parameters: `video_uuid` (Required: `video_uuid`)
+- **`z2yy_clear_video_annotations`**: Reset and purge all annotation data across all frames of a video.
+  - Parameters: `video_uuid` (Required: `video_uuid`)
 ### CLASSES TOOLS
 - **`z2yy_list_classes`**: List all active annotation class labels in the workspace.
   - Parameters: `none` (Required: `none`)
@@ -151,6 +167,10 @@ You can communicate with Z2YY through two primary channels:
   - Parameters: `class_name, keypoints, skeleton` (Required: `class_name, keypoints`)
 - **`z2yy_get_pose_schemas`**: List all registered pose keypoint schemas across classes.
   - Parameters: `none` (Required: `none`)
+- **`z2yy_rename_class`**: Rename an existing annotation class label across the workspace, updating the class registry and all existing frame annotations.
+  - Parameters: `old_class_name, new_class_name` (Required: `old_class_name, new_class_name`)
+- **`z2yy_check_class_usage`**: Check how many video frames globally use a specific class label.
+  - Parameters: `class_name` (Required: `class_name`)
 ### ANNOTATION TOOLS
 - **`z2yy_sam3_text_predict`**: Perform zero-shot open-vocabulary detection & segmentation on a specific video frame using a text prompt. Returns bounding boxes, segmentation masks, and confidence scores.
   - Parameters: `video_uuid, frame_number, text_prompt, confidence` (Required: `video_uuid, frame_number, text_prompt`)
@@ -166,6 +186,8 @@ You can communicate with Z2YY through two primary channels:
   - Parameters: `class_name, video_uuids, confidence_threshold` (Required: `class_name, video_uuids`)
 - **`z2yy_pre_annotate_with_model`**: AUTONOMOUS MACRO: Run background pre-annotation on a video using a custom trained model (YOLO).
   - Parameters: `video_uuid, model_uuid, confidence` (Required: `video_uuid, model_uuid`)
+- **`z2yy_find_similar_objects`**: Perform visual one-shot similarity search using feature embeddings on the current frame or across the dataset.
+  - Parameters: `video_uuid, frame_number, reference_bbox, search_scope, use_color` (Required: `video_uuid, frame_number, reference_bbox`)
 ### TRACKING TOOLS
 - **`z2yy_start_tracking`**: Initialize SAM 2 video tracking session from a keyframe bounding box prompt.
   - Parameters: `video_uuid, start_frame, bbox, class_name` (Required: `video_uuid, start_frame, bbox, class_name`)
@@ -173,6 +195,8 @@ You can communicate with Z2YY through two primary channels:
   - Parameters: `tracker_uuid` (Required: `tracker_uuid`)
 - **`z2yy_stop_tracking`**: Finish and terminate a tracking session, committing tracked annotations to video frames.
   - Parameters: `tracker_uuid` (Required: `tracker_uuid`)
+- **`z2yy_sam2_track_video`**: Launch SAM 2 video mask propagation tracking from start_frame to end_frame in background.
+  - Parameters: `video_uuid, start_frame, end_frame, init_bboxes_text` (Required: `video_uuid, start_frame, end_frame, init_bboxes_text`)
 ### ANNOTATIONS TOOLS
 - **`z2yy_get_frame_annotations`**: Retrieve all annotations (bounding boxes, polygons, keypoints) on a specific video frame.
   - Parameters: `video_uuid, frame_number` (Required: `video_uuid, frame_number`)
@@ -182,6 +206,16 @@ You can communicate with Z2YY through two primary channels:
   - Parameters: `video_uuid, start_frame, end_frame, start_bbox, end_bbox, class_name` (Required: `video_uuid, start_frame, end_frame, start_bbox, end_bbox, class_name`)
 - **`z2yy_interpolate_pose_keypoints`**: Smoothly interpolate skeleton keypoint positions between two keyframes across intermediate frames.
   - Parameters: `video_uuid, start_frame, end_frame, start_keypoints, end_keypoints, class_name` (Required: `video_uuid, start_frame, end_frame, start_keypoints, end_keypoints, class_name`)
+- **`z2yy_add_annotation_object`**: Add or update a single annotation object (bounding box, segmentation polygon, or pose keypoint skeleton) on a specific video frame.
+  - Parameters: `video_uuid, frame_number, type, label, bbox, points, keypoints, object_id` (Required: `video_uuid, frame_number, label`)
+- **`z2yy_delete_annotation_object`**: Remove a specific annotation object by its ID from a video frame.
+  - Parameters: `video_uuid, frame_number, object_id` (Required: `video_uuid, frame_number, object_id`)
+- **`z2yy_clear_frame_annotations`**: Clear all annotation objects and classification tags on a specific video frame.
+  - Parameters: `video_uuid, frame_number` (Required: `video_uuid, frame_number`)
+- **`z2yy_set_frame_ambiguous`**: Flag or unflag a video frame as ambiguous (requiring human review or disambiguation).
+  - Parameters: `video_uuid, frame_number, is_ambiguous` (Required: `video_uuid, frame_number`)
+- **`z2yy_get_ambiguous_frames`**: List all frame numbers in a video currently flagged as ambiguous.
+  - Parameters: `video_uuid` (Required: `video_uuid`)
 ### CLASSIFICATION TOOLS
 - **`z2yy_clip_zero_shot`**: Classify cropped objects or frames against a list of candidate class text descriptions using CLIP zero-shot matching.
   - Parameters: `video_uuid, frame_number, candidate_classes, bbox` (Required: `video_uuid, frame_number, candidate_classes`)
@@ -189,6 +223,10 @@ You can communicate with Z2YY through two primary channels:
   - Parameters: `video_uuid, k_clusters` (Required: `video_uuid`)
 - **`z2yy_batch_tag_cluster`**: Assign an annotation class label to all frames/objects belonging to a specific visual cluster.
   - Parameters: `video_uuid, cluster_id, class_name, frame_numbers` (Required: `video_uuid, class_name, frame_numbers`)
+- **`z2yy_set_frame_classifications`**: Set or replace the whole-image classification labels for a specific video frame.
+  - Parameters: `video_uuid, frame_number, classifications` (Required: `video_uuid, frame_number, classifications`)
+- **`z2yy_clear_frame_classifications`**: Clear all whole-image classification labels for a specific video frame.
+  - Parameters: `video_uuid, frame_number` (Required: `video_uuid, frame_number`)
 ### TASKS TOOLS
 - **`z2yy_list_tasks`**: List active and pending background tasks across the system.
   - Parameters: `video_uuid` (Required: `none`)
@@ -211,3 +249,7 @@ You can communicate with Z2YY through two primary channels:
   - Parameters: `dataset_uuid, augmentation_options` (Required: `dataset_uuid, augmentation_options`)
 - **`z2yy_delete_dataset`**: Delete a dataset and its exported ZIP and folder files from disk.
   - Parameters: `dataset_uuid` (Required: `dataset_uuid`)
+- **`z2yy_download_dataset`**: Download or locate the compiled dataset ZIP archive for a completed dataset.
+  - Parameters: `dataset_uuid, target_dir` (Required: `dataset_uuid`)
+- **`z2yy_datasets_containing_video`**: Find all compiled or existing datasets that include a specific video.
+  - Parameters: `video_uuid` (Required: `video_uuid`)

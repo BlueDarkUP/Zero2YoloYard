@@ -225,7 +225,12 @@ def predict_pose_from_text(video_uuid, frame_number, class_label, custom_kps_tex
         schema_raw = database.get_class_keypoint_schema(class_label)
         if schema_raw:
             schema_data = json.loads(schema_raw) if isinstance(schema_raw, str) else schema_raw
-            kps_texts = schema_data.get('points', [])
+            kps_texts = schema_data.get('points') or schema_data.get('keypoints') or schema_data.get('kps') or []
+
+    # Universal human pose fallback: if no custom schema configured, fallback to standard COCO-17
+    if not kps_texts and str(class_label).strip().lower() in ('person', 'people', 'human', 'pedestrian'):
+        from annotation_model import COCO_POSE_17_SCHEMA
+        kps_texts = COCO_POSE_17_SCHEMA.get('keypoints', [])
 
     if not kps_texts:
         raise ValueError(f"Class [{class_label}] has no keypoint schema configured. Please configure a keypoint template or enter keypoint names on the right panel!")
