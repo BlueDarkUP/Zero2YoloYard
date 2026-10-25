@@ -31,15 +31,25 @@
 
     <style>
         .navbar {
-            position: -webkit-sticky !important;
-            position: sticky !important;
+            position: fixed !important;
             top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            width: 100% !important;
+            height: 58px !important;
+            min-height: 58px !important;
+            max-height: 58px !important;
             z-index: 1030 !important;
             background-color: var(--bg-glass) !important;
             backdrop-filter: blur(16px) saturate(180%) !important;
             -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
             border-bottom: 1px solid var(--border-color) !important;
             box-shadow: none !important;
+            transform: none !important;
+        }
+
+        body {
+            padding-top: 58px !important;
         }
 
         .system-status-bar {
@@ -277,7 +287,7 @@
         </div>
     </div>
 
-    <nav class="navbar navbar-expand-lg py-2 px-4 border-bottom sticky-top">
+    <nav class="navbar navbar-expand-lg py-2 px-4 border-bottom fixed-top">
         <a class="navbar-brand d-flex align-items-center" href="/">
             <i class="bi bi-bounding-box mr-3 navbar-brand-icon"></i>
             <div class="d-flex flex-column justify-content-center">

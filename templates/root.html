@@ -2189,6 +2189,16 @@
             }, { passive: false });
         }
 
+        // Global wheel lock in settings view: prevent window/navbar from moving when scrolling over non-scrollable areas
+        window.addEventListener('wheel', function(e) {
+            if ($('body').hasClass('settings-active-view')) {
+                const insideScrollable = e.target.closest && (e.target.closest('#settings-scroll-pane') || e.target.closest('.settings-sidebar-inner'));
+                if (!insideScrollable) {
+                    e.preventDefault();
+                }
+            }
+        }, { passive: false });
+
         const settingsSidebarInner = document.querySelector('.settings-sidebar-inner');
         if (settingsSidebarInner) {
             settingsSidebarInner.addEventListener('wheel', function(e) {
