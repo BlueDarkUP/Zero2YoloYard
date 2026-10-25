@@ -39,7 +39,7 @@
             backdrop-filter: blur(16px) saturate(180%) !important;
             -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
             border-bottom: 1px solid var(--border-color) !important;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.22) !important;
+            box-shadow: none !important;
         }
 
         .system-status-bar {
@@ -357,6 +357,16 @@
             const themeBtn = document.getElementById('theme-toggle-btn');
             if (themeBtn) {
                 themeBtn.addEventListener('click', window.toggleTheme);
+            }
+        });
+
+        // Prevent wheel on navbar from causing page scroll/jitter
+        document.addEventListener("DOMContentLoaded", () => {
+            const navbarEl = document.querySelector('.navbar');
+            if (navbarEl) {
+                navbarEl.addEventListener('wheel', (e) => {
+                    e.preventDefault();
+                }, { passive: false });
             }
         });
 

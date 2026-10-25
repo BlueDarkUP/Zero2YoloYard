@@ -155,14 +155,29 @@
     .manual-text.highlight-when { color: var(--color-warning-text); }
 
     /* ==================== SETTINGS WORKSPACE SCROLL ISOLATION ==================== */
+    html.settings-active-view,
     body.settings-active-view {
-        overflow-y: hidden;
+        overflow: hidden !important;
+        height: 100vh !important;
+        max-height: 100vh !important;
     }
 
-    #settings {
-        height: calc(100vh - 215px);
-        max-height: calc(100vh - 215px);
-        min-height: 520px;
+    body.settings-active-view main {
+        padding-bottom: 26px !important;
+        overflow: hidden !important;
+    }
+
+    body.settings-active-view .page-header {
+        margin-top: 0.75rem !important;
+        margin-bottom: 0.75rem !important;
+        padding-top: 0.25rem !important;
+        padding-bottom: 0.5rem !important;
+    }
+
+    body.settings-active-view #settings {
+        height: calc(100vh - 170px);
+        max-height: calc(100vh - 170px);
+        min-height: 480px;
         box-sizing: border-box;
         overflow: hidden;
     }
@@ -1511,14 +1526,14 @@
                 $(this).toggleClass('active', isActive);
             });
 
-            // When switching to/from settings tab, adjust body overflow
+            // When switching to/from settings tab, adjust html & body overflow
             if (index === 3) {
-                window.scrollTo({ top: 0, behavior: 'smooth' });
+                window.scrollTo({ top: 0, behavior: 'instant' });
                 if (window.innerWidth >= 768) {
-                    $('body').addClass('settings-active-view');
+                    $('html, body').addClass('settings-active-view');
                 }
             } else {
-                $('body').removeClass('settings-active-view');
+                $('html, body').removeClass('settings-active-view');
             }
         }
 
@@ -1532,9 +1547,9 @@
         $(window).on('resize', function() {
             updateTabIndicator($('#mainTabs .nav-link.active'), false);
             if (activeTabIndex === 3 && window.innerWidth >= 768) {
-                $('body').addClass('settings-active-view');
+                $('html, body').addClass('settings-active-view');
             } else {
-                $('body').removeClass('settings-active-view');
+                $('html, body').removeClass('settings-active-view');
             }
         });
 
@@ -2012,6 +2027,15 @@
                 const atBottom = Math.ceil(this.scrollTop + this.clientHeight) >= this.scrollHeight;
 
                 if ((up && atTop) || (down && atBottom)) {
+                    e.preventDefault();
+                }
+            }, { passive: false });
+        }
+
+        const pageHeader = document.querySelector('.page-header');
+        if (pageHeader) {
+            pageHeader.addEventListener('wheel', function(e) {
+                if ($('body').hasClass('settings-active-view')) {
                     e.preventDefault();
                 }
             }, { passive: false });
