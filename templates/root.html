@@ -320,334 +320,689 @@
                 </div>
             </div>
         </div>
-
         <div class="tab-pane" id="settings" role="tabpanel">
             <form id="settings-form">
-                <div class="row justify-content-center">
-                    <div class="col-lg-10 col-xl-9">
-
-                        <div class="card settings-section mb-4">
-                            <div class="card-header text-primary">
-                                <i class="bi bi-motherboard mr-2"></i> SYSTEM_HARDWARE_CONFIG
-                            </div>
-                            <div class="card-body">
-                                <div class="form-row">
-                                    <div class="form-group col-md-6">
-                                        <label class="small text-muted font-weight-bold">COMPUTATION_NODE <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="gpu_device"></i></label>
-                                        <select id="setting-gpu-device" class="form-control custom-select">
-                                            <option value="auto">AUTO_DETECT</option>
-                                            <option value="cpu">CPU_ONLY</option>
-                                            <option value="cuda:0">NVIDIA_CUDA_0</option>
-                                            <option value="cuda:1">NVIDIA_CUDA_1</option>
-                                        </select>
-                                    </div>
-                                    <div class="form-group col-md-6">
-                                        <label class="small text-muted font-weight-bold">SEGMENTATION_CORE (SAM) <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="sam_model"></i></label>
-                                        <select id="setting-sam-model" class="form-control custom-select">
-                                            <option value="sam2.1_t.pt" data-name="SAM 2.1 Tiny">SAM 2.1 TINY (LOW_LATENCY)</option>
-                                            <option value="sam2.1_s.pt" data-name="SAM 2.1 Small">SAM 2.1 SMALL (BALANCED)</option>
-                                            <option value="sam2.1_b.pt" data-name="SAM 2.1 Base">SAM 2.1 BASE (STANDARD)</option>
-                                            <option value="sam2.1_l.pt" data-name="SAM 2.1 Large">SAM 2.1 LARGE (HIGH_PRECISION)</option>
-                                        </select>
-                                        <small class="text-muted font-monospace">Controls SAM2 (point-click / tracking). SAM 3.1 (retrieval features below) uses a fixed checkpoint.</small>
-                                    </div>
-                                </div>
-                            </div>
+                <div class="row">
+                    <!-- Left Sidebar Nav -->
+                    <div class="col-lg-3 col-md-4 mb-4">
+                        <div class="nav flex-column nav-pills settings-sidebar-pills shadow-sm" id="settings-v-tabs" role="tablist" aria-orientation="vertical">
+                            <a class="nav-link active d-flex align-items-center" id="tab-v-hw" data-toggle="pill" href="#pane-v-hw" role="tab">
+                                <i class="bi bi-motherboard mr-2 text-primary"></i> Compute & Hardware
+                            </a>
+                            <a class="nav-link d-flex align-items-center" id="tab-v-models" data-toggle="pill" href="#pane-v-models" role="tab">
+                                <i class="bi bi-cpu mr-2 text-info"></i> AI Foundation Models
+                            </a>
+                            <a class="nav-link d-flex align-items-center" id="tab-v-canvas" data-toggle="pill" href="#pane-v-canvas" role="tab">
+                                <i class="bi bi-palette mr-2 text-warning"></i> Canvas & Ergonomics
+                            </a>
+                            <a class="nav-link d-flex align-items-center" id="tab-v-video" data-toggle="pill" href="#pane-v-video" role="tab">
+                                <i class="bi bi-camera-reels mr-2 text-success"></i> Video & Extraction
+                            </a>
+                            <a class="nav-link d-flex align-items-center" id="tab-v-qc" data-toggle="pill" href="#pane-v-qc" role="tab">
+                                <i class="bi bi-shield-check mr-2 text-danger"></i> Quality Control & QC
+                            </a>
+                            <a class="nav-link d-flex align-items-center" id="tab-v-export" data-toggle="pill" href="#pane-v-export" role="tab">
+                                <i class="bi bi-box-seam mr-2 text-info"></i> Dataset & Exporters
+                            </a>
+                            <a class="nav-link d-flex align-items-center" id="tab-v-storage" data-toggle="pill" href="#pane-v-storage" role="tab">
+                                <i class="bi bi-hdd mr-2 text-secondary"></i> Storage & Housekeeping
+                            </a>
+                            <a class="nav-link d-flex align-items-center" id="tab-v-network" data-toggle="pill" href="#pane-v-network" role="tab">
+                                <i class="bi bi-globe2 mr-2" style="color: #a78bfa;"></i> Network & Model Hub
+                            </a>
+                            <a class="nav-link d-flex align-items-center" id="tab-v-classes" data-toggle="pill" href="#pane-v-classes" role="tab">
+                                <i class="bi bi-tags mr-2 text-warning"></i> Class Colors & Schema
+                            </a>
                         </div>
 
-                        <div class="card settings-section mb-4" style="border-color: var(--color-info);">
-                            <div class="card-header text-info">
-                                <i class="bi bi-toggles2 mr-2"></i> MODEL & FEATURE TOGGLES
-                            </div>
-                            <div class="card-body">
-                                <div class="alert alert-info rounded-0 small font-monospace">
-                                    <i class="bi bi-info-circle mr-1"></i> DISABLING MODELS ON LOW-VRAM DEVICES SIGNIFICANTLY REDUCES RESOURCE USAGE, BUT RELATED FEATURES WILL BE UNAVAILABLE.
-                                </div>
-                                <div class="form-row">
-                                    <div class="form-group col-md-6">
-                                        <label class="small text-muted font-weight-bold">SEGMENT ANYTHING MODEL (SAM2) <i class="bi bi-info-square-fill ml-1 text-info info-trigger" data-key="enable_sam"></i></label>
-                                        <div class="custom-control custom-switch mt-2">
-                                            <input type="checkbox" class="custom-control-input" id="setting-enable-sam">
-                                            <label class="custom-control-label font-monospace" for="setting-enable-sam">ENABLE SAM FEATURES</label>
-                                        </div>
-                                    </div>
-                                    <div class="form-group col-md-6">
-                                        <label class="small text-muted font-weight-bold">SAM 3.1 RETRIEVAL FEATURES <i class="bi bi-info-square-fill ml-1 text-info info-trigger" data-key="enable_feature"></i></label>
-                                        <div class="custom-control custom-switch mt-2">
-                                            <input type="checkbox" class="custom-control-input" id="setting-enable-feature-extractor">
-                                            <label class="custom-control-label font-monospace" for="setting-enable-feature-extractor">ENABLE SMART SELECT / LAM / BULK APPLY / QC</label>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="form-row mt-2">
-                                    <div class="form-group col-md-6">
-                                        <label class="small text-muted font-weight-bold">CLASSIFICATION MODEL (CLIP) <i class="bi bi-info-square-fill ml-1 text-info info-trigger" data-key="enable_cls"></i></label>
-                                        <div class="custom-control custom-switch mt-2">
-                                            <input type="checkbox" class="custom-control-input" id="setting-enable-cls">
-                                            <label class="custom-control-label font-monospace" for="setting-enable-cls">ENABLE CLIP ZERO-SHOT & CLUSTERING</label>
-                                        </div>
-                                    </div>
-                                    <div class="form-group col-md-6">
-                                        <label class="small text-muted font-weight-bold">POSE ESTIMATION MODEL (KEYPOINTS) <i class="bi bi-info-square-fill ml-1 text-info info-trigger" data-key="enable_pose"></i></label>
-                                        <div class="custom-control custom-switch mt-2 mb-2">
-                                            <input type="checkbox" class="custom-control-input" id="setting-enable-pose">
-                                            <label class="custom-control-label font-monospace" for="setting-enable-pose">ENABLE GROUNDED POSE / KEYPOINTS</label>
-                                        </div>
-                                        <select id="setting-gkdt-model-type" class="form-control custom-select custom-select-sm mt-1 font-monospace">
-                                            <option value="GKDT-L">GKDT-L (Lightweight / DINOv3-L, ~6GB)</option>
-                                            <option value="GKDT-H">GKDT-H (High Precision / DINOv3-H, ~12GB)</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
+                        <!-- System Reset / Backup Quick Actions in Sidebar -->
+                        <div class="card settings-section mt-3 p-3">
+                            <div class="small font-weight-bold text-muted mb-2 text-uppercase font-monospace">Configuration Ops</div>
+                            <button type="button" class="btn btn-sm btn-outline-secondary btn-block text-left mb-2" id="btn-export-settings">
+                                <i class="bi bi-download mr-1"></i> Export settings.json
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary btn-block text-left mb-2" id="btn-import-settings-trigger">
+                                <i class="bi bi-upload mr-1"></i> Import settings.json
+                            </button>
+                            <input type="file" id="file-import-settings" accept=".json" style="display:none;">
+                            <button type="button" class="btn btn-sm btn-outline-danger btn-block text-left" id="btn-reset-settings">
+                                <i class="bi bi-arrow-counterclockwise mr-1"></i> Factory Reset
+                            </button>
                         </div>
+                    </div>
 
-                        <div class="card settings-section mb-4" style="border-color: var(--color-warning);">
-                            <div class="card-header text-warning">
-                                <i class="bi bi-cpu mr-2"></i> SYSTEM_RESOURCES
-                            </div>
-                            <div class="card-body">
-                                <div class="form-row">
-                                    <div class="form-group col-md-4">
-                                        <label class="small text-muted font-weight-bold">MAX_WORKERS <i class="bi bi-info-square-fill ml-1 text-warning info-trigger" data-key="max_workers"></i></label>
-                                        <select id="setting-max-workers" class="form-control custom-select">
-                                            <option value="auto">AUTO_DETECT</option>
-                                            <option value="4">4 THREADS (LOW_POWER)</option>
-                                            <option value="8">8 THREADS (STANDARD)</option>
-                                            <option value="16">16 THREADS (HIGH_PERFORMANCE)</option>
-                                        </select>
+                    <!-- Right Content Panels -->
+                    <div class="col-lg-9 col-md-8">
+                        <div class="tab-content" id="settings-v-tabContent">
+
+                            <!-- 1. COMPUTE & HARDWARE -->
+                            <div class="tab-pane fade show active" id="pane-v-hw" role="tabpanel">
+                                <div class="card settings-section mb-4">
+                                    <div class="card-header text-primary">
+                                        <i class="bi bi-motherboard mr-2"></i> SYSTEM_COMPUTE_&_ACCELERATION
                                     </div>
-                                    <div class="form-group col-md-4">
-                                        <label class="d-flex justify-content-between small text-muted font-weight-bold">
-                                            <span>MAX_CACHE_SIZE <i class="bi bi-info-square-fill ml-1 text-warning info-trigger" data-key="max_cache_size"></i></span> <span id="max-cache-size-val" class="text-warning font-monospace">30</span>
-                                        </label>
-                                        <input type="range" class="custom-range" id="setting-max-cache-size" min="10" max="100" step="10">
-                                    </div>
-                                    <div class="form-group col-md-4">
-                                        <label class="small text-muted font-weight-bold">MIXED_PRECISION <i class="bi bi-info-square-fill ml-1 text-warning info-trigger" data-key="use_autocast"></i></label>
-                                        <div class="custom-control custom-switch mt-2">
-                                            <input type="checkbox" class="custom-control-input" id="setting-use-autocast">
-                                            <label class="custom-control-label font-monospace" for="setting-use-autocast">ENABLE_FP16/BF16</label>
+                                    <div class="card-body">
+                                        <div class="form-row">
+                                            <div class="form-group col-md-6">
+                                                <label class="small text-muted font-weight-bold">COMPUTATION_NODE <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="gpu_device"></i></label>
+                                                <select id="setting-gpu-device" class="form-control custom-select">
+                                                    <option value="auto">AUTO_DETECT (CUDA / CPU)</option>
+                                                    <option value="cpu">CPU_ONLY</option>
+                                                    <option value="cuda:0">NVIDIA_CUDA_0</option>
+                                                </select>
+                                                <small class="text-muted font-monospace">Active device for tensor operations.</small>
+                                            </div>
+                                            <div class="form-group col-md-6">
+                                                <label class="small text-muted font-weight-bold">SYSTEM_PRESET</label>
+                                                <select id="setting-system-preset" class="form-control custom-select">
+                                                    <option value="eco">Eco Lightweight (CPU / Low VRAM)</option>
+                                                    <option value="balanced" selected>Balanced Production (4G-6G VRAM)</option>
+                                                    <option value="pro">Pro High-Performance (8G-11G VRAM)</option>
+                                                    <option value="research">Extreme Research (12G+ VRAM)</option>
+                                                </select>
+                                                <small class="text-muted font-monospace">Quickly align settings with compute tier.</small>
+                                            </div>
                                         </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="card settings-section mb-4">
-                            <div class="card-header text-primary">
-                                <i class="bi bi-magic mr-2"></i> AI_INFERENCE_TUNING
-                            </div>
-                            <div class="card-body">
-                                <div class="form-row">
-                                    <div class="form-group col-md-4">
-                                        <label class="small text-muted font-weight-bold">INFERENCE_RESOLUTION <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="inference_size"></i></label>
-                                        <select id="setting-inference-size" class="form-control custom-select">
-                                            <option value="512">512x512 (FAST/LOW_VRAM)</option>
-                                            <option value="640">640x640 (STANDARD)</option>
-                                            <option value="1024">1024x1024 (HIGH_RES/HIGH_VRAM)</option>
-                                        </select>
-                                    </div>
-                                    <div class="form-group col-md-4">
-                                        <label class="d-flex justify-content-between small text-muted font-weight-bold">
-                                            <span>DEFAULT_CONFIDENCE <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="default_confidence"></i></span> <span id="default-confidence-val" class="text-primary font-monospace">0.50</span>
-                                        </label>
-                                        <input type="range" class="custom-range" id="setting-default-confidence" min="0.1" max="0.95" step="0.05">
-                                    </div>
-                                    <div class="form-group col-md-4">
-                                        <label class="d-flex justify-content-between small text-muted font-weight-bold">
-                                            <span>BBOX_PADDING <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="sam_box_padding"></i></span> <span id="sam-box-padding-val" class="text-primary font-monospace">0%</span>
-                                        </label>
-                                        <input type="range" class="custom-range" id="setting-sam-box-padding" min="0.0" max="0.2" step="0.02">
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="card settings-section mb-4">
-                            <div class="card-header text-success">
-                                <i class="bi bi-device-hdd mr-2"></i> STORAGE_&_CLEANUP
-                            </div>
-                            <div class="card-body">
-                                <div class="form-row">
-                                    <div class="form-group col-md-4">
-                                        <label class="small text-muted font-weight-bold">DATASET_COMPRESSION <i class="bi bi-info-square-fill ml-1 text-success info-trigger" data-key="zip_compression"></i></label>
-                                        <select id="setting-zip-compression" class="form-control custom-select">
-                                            <option value="fast">FAST (STORE_ONLY)</option>
-                                            <option value="standard">STANDARD</option>
-                                            <option value="max">MAXIMUM (HIGH_CPU)</option>
-                                        </select>
-                                    </div>
-                                    <div class="form-group col-md-4">
-                                        <label class="small text-muted font-weight-bold">AUTO_PREPROCESS <i class="bi bi-info-square-fill ml-1 text-success info-trigger" data-key="auto_preprocess"></i></label>
-                                        <div class="custom-control custom-switch mt-2">
-                                            <input type="checkbox" class="custom-control-input" id="setting-auto-preprocess">
-                                            <label class="custom-control-label font-monospace" for="setting-auto-preprocess">BACKGROUND_SCAN</label>
-                                        </div>
-                                    </div>
-                                    <div class="form-group col-md-4">
-                                        <label class="small text-muted font-weight-bold text-danger">ORPHAN_FRAME_CLEANUP <i class="bi bi-info-square-fill ml-1 text-danger info-trigger" data-key="auto_cleanup"></i></label>
-                                        <div class="custom-control custom-switch mt-2">
-                                            <input type="checkbox" class="custom-control-input" id="setting-auto-cleanup">
-                                            <label class="custom-control-label font-monospace text-danger" for="setting-auto-cleanup">DELETE_ON_EXPORT</label>
+                                        <div class="form-row mt-2">
+                                            <div class="form-group col-md-4">
+                                                <label class="small text-muted font-weight-bold">MAX_THREAD_WORKERS</label>
+                                                <select id="setting-max-workers" class="form-control custom-select">
+                                                    <option value="auto">AUTO_DETECT</option>
+                                                    <option value="2">2 THREADS (SAFE)</option>
+                                                    <option value="4">4 THREADS (LOW_POWER)</option>
+                                                    <option value="8">8 THREADS (STANDARD)</option>
+                                                    <option value="16">16 THREADS (HIGH_PERFORMANCE)</option>
+                                                </select>
+                                            </div>
+                                            <div class="form-group col-md-4">
+                                                <label class="small text-muted font-weight-bold">MIXED_PRECISION</label>
+                                                <div class="custom-control custom-switch mt-2">
+                                                    <input type="checkbox" class="custom-control-input" id="setting-use-autocast">
+                                                    <label class="custom-control-label font-monospace" for="setting-use-autocast">ENABLE FP16 / BF16</label>
+                                                </div>
+                                            </div>
+                                            <div class="form-group col-md-4">
+                                                <label class="small text-muted font-weight-bold">CUDA MEMORY PURGE</label>
+                                                <div class="custom-control custom-switch mt-2">
+                                                    <input type="checkbox" class="custom-control-input" id="setting-cuda-empty-cache">
+                                                    <label class="custom-control-label font-monospace" for="setting-cuda-empty-cache">EMPTY CACHE ON BATCH</label>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
 
-                        <div class="card settings-section mb-4">
-                            <div class="card-header text-primary">
-                                <i class="bi bi-sliders mr-2"></i> ALGORITHM_PARAMETERS
-                            </div>
-                            <div class="card-body">
-                                <div class="form-row">
-                                    <div class="form-group col-md-4">
-                                        <label class="d-flex justify-content-between small text-muted font-weight-bold">
-                                            <span>MASK_CONFIDENCE <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="sam_mask_confidence"></i></span> <span id="sam-mask-confidence-val" class="text-primary font-monospace">0.35</span>
-                                        </label>
-                                        <input type="range" class="custom-range" id="setting-sam-mask-confidence" min="0.1" max="0.9" step="0.05">
+                            <!-- 2. AI FOUNDATION MODELS -->
+                            <div class="tab-pane fade" id="pane-v-models" role="tabpanel">
+                                <!-- Global Toggles -->
+                                <div class="card settings-section mb-4" style="border-color: var(--color-info);">
+                                    <div class="card-header text-info">
+                                        <i class="bi bi-toggles2 mr-2"></i> MODEL_MATRIX_MASTER_SWITCHES
                                     </div>
-                                    <div class="form-group col-md-4">
-                                        <label class="d-flex justify-content-between small text-muted font-weight-bold">
-                                            <span>NMS_IOU_THRESH <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="nms_iou_threshold"></i></span> <span id="nms-iou-threshold-val" class="text-primary font-monospace">0.70</span>
-                                        </label>
-                                        <input type="range" class="custom-range" id="setting-nms-iou-threshold" min="0.1" max="1.0" step="0.05">
-                                    </div>
-                                    <div class="form-group col-md-4">
-                                        <label class="d-flex justify-content-between small text-muted font-weight-bold">
-                                            <span>QC_SEMANTIC_THRESHOLD <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="consistency_semantic_threshold"></i></span> <span id="consistency-semantic-threshold-val" class="text-primary font-monospace">0.30</span>
-                                        </label>
-                                        <input type="range" class="custom-range" id="setting-consistency-semantic-threshold" min="0.05" max="0.9" step="0.05">
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="card settings-section mb-4">
-                            <div class="card-header text-primary">
-                                <i class="bi bi-stack mr-2"></i> BATCH_PROCESSING_&_TRACKING
-                            </div>
-                            <div class="card-body">
-                                <div class="form-row">
-                                    <div class="form-group col-md-6">
-                                        <label class="d-flex justify-content-between small text-muted font-weight-bold">
-                                            <span>TRACKING_CONFIDENCE <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="batch_tracking_conf"></i></span> <span id="batch-tracking-conf-val" class="text-primary font-monospace">0.30</span>
-                                        </label>
-                                        <input type="range" class="custom-range" id="setting-batch-tracking-conf" min="0.1" max="0.95" step="0.05">
-                                    </div>
-                                    <div class="form-group col-md-6">
-                                        <label class="d-flex justify-content-between small text-muted font-weight-bold">
-                                            <span>PRE_ANNOTATION_CONF <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="preannotation_conf"></i></span> <span id="preannotation-conf-val" class="text-primary font-monospace">0.50</span>
-                                        </label>
-                                        <input type="range" class="custom-range" id="setting-preannotation-conf" min="0.1" max="0.95" step="0.05">
-                                    </div>
-                                </div>
-                                <div class="form-row mt-2">
-                                    <div class="form-group col-md-4">
-                                        <label class="small text-muted font-weight-bold">TRACK_IMG_SIZE <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="batch_tracking_imgsz"></i></label>
-                                        <input type="number" id="setting-batch-tracking-imgsz" class="form-control" step="32" min="256" max="2048">
-                                    </div>
-                                    <div class="form-group col-md-4">
-                                        <label class="small text-muted font-weight-bold">CHUNK_SIZE <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="batch_tracking_chunk"></i></label>
-                                        <input type="number" id="setting-batch-tracking-chunk-size" class="form-control" min="1" max="100">
-                                    </div>
-                                    <div class="form-group col-md-4">
-                                        <label class="small text-muted font-weight-bold">QC_CONFUSION_MARGIN <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="consistency_confusion_margin"></i></label>
-                                        <input type="number" id="setting-consistency-confusion-margin" class="form-control" min="0" max="0.9" step="0.05">
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="card settings-section mb-4">
-                            <div class="card-header text-primary">
-                                <i class="bi bi-ui-checks mr-2"></i> WORKFLOW_PROTOCOLS
-                            </div>
-                            <div class="card-body">
-                                <div class="form-row">
-                                    <div class="form-group col-md-6">
-                                        <label class="small text-muted font-weight-bold">DEFAULT_TOOL <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="default_annotation_mode"></i></label>
-                                        <select id="setting-default-annotation-mode" class="form-control custom-select">
-                                            <option value="manual">MANUAL_DRAW</option>
-                                            <option value="sam">SAM (POINT_CLICK)</option>
-                                            <option value="lam">LAM (TEXT_PROMPT)</option>
-                                            <option value="smart_select">SMART_SELECT</option>
-                                        </select>
-                                    </div>
-                                    <div class="form-group col-md-6">
-                                        <label class="small text-muted font-weight-bold">AUTO_SAVE <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="autosave_enabled"></i></label>
-                                        <div class="custom-control custom-switch mt-2">
-                                            <input type="checkbox" class="custom-control-input" id="setting-autosave-enabled">
-                                            <label class="custom-control-label font-monospace" for="setting-autosave-enabled">SAVE_ON_NAV</label>
+                                    <div class="card-body">
+                                        <div class="form-row">
+                                            <div class="form-group col-md-3">
+                                                <label class="small text-muted font-weight-bold">SAM 2.1 (SEGMENT)</label>
+                                                <div class="custom-control custom-switch mt-1">
+                                                    <input type="checkbox" class="custom-control-input" id="setting-enable-sam">
+                                                    <label class="custom-control-label font-monospace" for="setting-enable-sam">ENABLE SAM</label>
+                                                </div>
+                                            </div>
+                                            <div class="form-group col-md-3">
+                                                <label class="small text-muted font-weight-bold">SAM 3.1 (RETRIEVAL)</label>
+                                                <div class="custom-control custom-switch mt-1">
+                                                    <input type="checkbox" class="custom-control-input" id="setting-enable-feature-extractor">
+                                                    <label class="custom-control-label font-monospace" for="setting-enable-feature-extractor">ENABLE SAM 3</label>
+                                                </div>
+                                            </div>
+                                            <div class="form-group col-md-3">
+                                                <label class="small text-muted font-weight-bold">CLIP (CLASSIFY)</label>
+                                                <div class="custom-control custom-switch mt-1">
+                                                    <input type="checkbox" class="custom-control-input" id="setting-enable-cls">
+                                                    <label class="custom-control-label font-monospace" for="setting-enable-cls">ENABLE CLIP</label>
+                                                </div>
+                                            </div>
+                                            <div class="form-group col-md-3">
+                                                <label class="small text-muted font-weight-bold">GKDT (POSE)</label>
+                                                <div class="custom-control custom-switch mt-1">
+                                                    <input type="checkbox" class="custom-control-input" id="setting-enable-pose">
+                                                    <label class="custom-control-label font-monospace" for="setting-enable-pose">ENABLE GKDT</label>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
-                                    <div class="form-group col-md-6">
-                                        <label class="small text-muted font-weight-bold">SPEEDRUN_MODE <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="speedrun_auto_next"></i></label>
-                                        <div class="custom-control custom-switch mt-2">
-                                            <input type="checkbox" class="custom-control-input" id="setting-speedrun-auto-next">
-                                            <label class="custom-control-label font-monospace text-warning" for="setting-speedrun-auto-next">⚡ AUTO_NEXT_ON_TAG</label>
+                                </div>
+
+                                <!-- SAM 2.1 & SAM 3 Tuning -->
+                                <div class="card settings-section mb-4">
+                                    <div class="card-header text-primary">
+                                        <i class="bi bi-bounding-box-circles mr-2"></i> SAM 2.1 / SAM 3.1 SEGMENTATION & TRACKING
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="form-row">
+                                            <div class="form-group col-md-6">
+                                                <label class="small text-muted font-weight-bold">SAM 2.1 MODEL WEIGHT</label>
+                                                <select id="setting-sam-model" class="form-control custom-select">
+                                                    <option value="sam2.1_t.pt" data-name="SAM 2.1 Tiny">SAM 2.1 TINY (LOW_LATENCY, ~75MB)</option>
+                                                    <option value="sam2.1_s.pt" data-name="SAM 2.1 Small">SAM 2.1 SMALL (BALANCED, ~88MB)</option>
+                                                    <option value="sam2.1_b.pt" data-name="SAM 2.1 Base">SAM 2.1 BASE+ (STANDARD, ~154MB)</option>
+                                                    <option value="sam2.1_l.pt" data-name="SAM 2.1 Large">SAM 2.1 LARGE (HIGH_PRECISION, ~428MB)</option>
+                                                </select>
+                                            </div>
+                                            <div class="form-group col-md-6">
+                                                <label class="d-flex justify-content-between small text-muted font-weight-bold">
+                                                    <span>MASK_CONFIDENCE</span> <span id="sam-mask-confidence-val" class="text-primary font-monospace">0.70</span>
+                                                </label>
+                                                <input type="range" class="custom-range" id="setting-sam-mask-confidence" min="0.1" max="0.95" step="0.05">
+                                            </div>
+                                        </div>
+                                        <div class="form-row mt-2">
+                                            <div class="form-group col-md-4">
+                                                <label class="d-flex justify-content-between small text-muted font-weight-bold">
+                                                    <span>LRU_CACHE_SIZE (FRAMES)</span> <span id="max-cache-size-val" class="text-warning font-monospace">30</span>
+                                                </label>
+                                                <input type="range" class="custom-range" id="setting-max-cache-size" min="10" max="100" step="10">
+                                            </div>
+                                            <div class="form-group col-md-4">
+                                                <label class="d-flex justify-content-between small text-muted font-weight-bold">
+                                                    <span>TRACKING_CONFIDENCE</span> <span id="batch-tracking-conf-val" class="text-primary font-monospace">0.30</span>
+                                                </label>
+                                                <input type="range" class="custom-range" id="setting-batch-tracking-conf" min="0.1" max="0.95" step="0.05">
+                                            </div>
+                                            <div class="form-group col-md-4">
+                                                <label class="d-flex justify-content-between small text-muted font-weight-bold">
+                                                    <span>NMS_IOU_THRESHOLD</span> <span id="nms-iou-threshold-val" class="text-primary font-monospace">0.70</span>
+                                                </label>
+                                                <input type="range" class="custom-range" id="setting-nms-iou-threshold" min="0.1" max="1.0" step="0.05">
+                                            </div>
+                                        </div>
+                                        <div class="form-row mt-2">
+                                            <div class="form-group col-md-4">
+                                                <label class="small text-muted font-weight-bold">TRACKING_IMG_SIZE</label>
+                                                <input type="number" id="setting-batch-tracking-imgsz" class="form-control font-monospace" step="32" min="256" max="2048">
+                                            </div>
+                                            <div class="form-group col-md-4">
+                                                <label class="small text-muted font-weight-bold">TRACKING_CHUNK_SIZE</label>
+                                                <input type="number" id="setting-batch-tracking-chunk-size" class="form-control font-monospace" min="1" max="100">
+                                            </div>
+                                            <div class="form-group col-md-4">
+                                                <label class="d-flex justify-content-between small text-muted font-weight-bold">
+                                                    <span>BBOX_PADDING</span> <span id="sam-box-padding-val" class="text-primary font-monospace">0%</span>
+                                                </label>
+                                                <input type="range" class="custom-range" id="setting-sam-box-padding" min="0.0" max="0.2" step="0.02">
+                                            </div>
                                         </div>
                                     </div>
-                                    <div class="form-group col-md-6">
-                                        <label class="small text-muted font-weight-bold">COMPRESSION_QUALITY <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="jpeg_quality"></i></label>
-                                        <input type="number" id="setting-jpeg-quality" class="form-control" min="10" max="100" step="5">
+                                </div>
+
+                                <!-- GKDT Pose Estimation Model Matrix (CRITICAL) -->
+                                <div class="card settings-section mb-4" style="border-color: var(--color-warning);">
+                                    <div class="card-header text-warning">
+                                        <i class="bi bi-person-lines-fill mr-2"></i> GKDT GROUNDED KEYPOINT POSE ESTIMATION
                                     </div>
-                                    <div class="form-group col-md-6">
-                                        <label class="small text-muted font-weight-bold">LEGACY_TRACKER <i class="bi bi-info-square-fill ml-1 text-primary info-trigger" data-key="opencv_tracker"></i></label>
-                                        <select id="setting-opencv-tracker" class="form-control custom-select">
-                                            {% for tracker in tracker_fns %}<option value="{{ tracker }}">{{ tracker }}</option>{% endfor %}
-                                        </select>
+                                    <div class="card-body">
+                                        <div class="form-row">
+                                            <div class="form-group col-md-4">
+                                                <label class="small text-muted font-weight-bold">GKDT MODEL ARCHITECTURE</label>
+                                                <select id="setting-gkdt-model-type" class="form-control custom-select font-monospace">
+                                                    <option value="GKDT-L">GKDT-L (App / DINOv3-L, ~6.3 GB)</option>
+                                                    <option value="GKDT-H">GKDT-H (App High Precision / DINOv3-H, ~12.9 GB)</option>
+                                                    <option value="GKDT-L-Research">GKDT-L (Research Benchmark)</option>
+                                                    <option value="GKDT-H-Research">GKDT-H (Research Benchmark)</option>
+                                                </select>
+                                            </div>
+                                            <div class="form-group col-md-4">
+                                                <label class="small text-muted font-weight-bold">DETECTOR BACKEND (BOUNDING BOX)</label>
+                                                <select id="setting-gkdt-detector" class="form-control custom-select font-monospace">
+                                                    <option value="LocateAnything-3B">LocateAnything-3B (NVIDIA 3B, Highest Acc)</option>
+                                                    <option value="GroundingDINO">GroundingDINO Swin-T</option>
+                                                    <option value="SAM3-Text-Head">SAM3 Text Head (Reuse VRAM)</option>
+                                                </select>
+                                            </div>
+                                            <div class="form-group col-md-4">
+                                                <label class="d-flex justify-content-between small text-muted font-weight-bold">
+                                                    <span>KEYPOINT_CONF_THRESHOLD</span> <span id="gkdt-kpt-conf-val" class="text-warning font-monospace">0.25</span>
+                                                </label>
+                                                <input type="range" class="custom-range" id="setting-gkdt-kpt-conf" min="0.05" max="0.80" step="0.05">
+                                            </div>
+                                        </div>
+                                        <div class="form-row mt-2">
+                                            <div class="form-group col-md-4">
+                                                <label class="d-flex justify-content-between small text-muted font-weight-bold">
+                                                    <span>POSE_BBOX_PADDING</span> <span id="gkdt-padding-val" class="text-warning font-monospace">20%</span>
+                                                </label>
+                                                <input type="range" class="custom-range" id="setting-gkdt-bbox-padding" min="0.0" max="0.35" step="0.05">
+                                            </div>
+                                            <div class="form-group col-md-4">
+                                                <label class="small text-muted font-weight-bold">DEFAULT_KEYPOINT_SCHEMA</label>
+                                                <select id="setting-gkdt-default-schema" class="form-control custom-select font-monospace">
+                                                    <option value="COCO_17" selected>COCO-17 Human Body Skeleton</option>
+                                                    <option value="custom">Custom Defined Schema</option>
+                                                </select>
+                                            </div>
+                                            <div class="form-group col-md-4">
+                                                <label class="small text-muted font-weight-bold">LEGACY_OPENCV_TRACKER</label>
+                                                <select id="setting-opencv-tracker" class="form-control custom-select">
+                                                    {% for tracker in tracker_fns %}<option value="{{ tracker }}">{{ tracker }}</option>{% endfor %}
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- CLIP Classification & Clustering -->
+                                <div class="card settings-section mb-4" style="border-color: var(--color-success);">
+                                    <div class="card-header text-success">
+                                        <i class="bi bi-tags-fill mr-2"></i> CLIP ZERO-SHOT CLASSIFICATION & FEATURE RETRIEVAL
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="form-row">
+                                            <div class="form-group col-md-6">
+                                                <label class="small text-muted font-weight-bold">CLIP MODEL CHECKPOINT</label>
+                                                <select id="setting-clip-model" class="form-control custom-select font-monospace">
+                                                    <option value="clip-vit-base-patch32">clip-vit-base-patch32 (Fast, Recommended, ~605MB)</option>
+                                                    <option value="clip-vit-base-patch16">clip-vit-base-patch16 (Fine-grained, ~599MB)</option>
+                                                    <option value="clip-vit-large-patch14">clip-vit-large-patch14 (Highest Precision, ~1.7GB)</option>
+                                                </select>
+                                            </div>
+                                            <div class="form-group col-md-3">
+                                                <label class="small text-muted font-weight-bold">PROMPT ENSEMBLING</label>
+                                                <div class="custom-control custom-switch mt-2">
+                                                    <input type="checkbox" class="custom-control-input" id="setting-clip-ensemble" checked>
+                                                    <label class="custom-control-label font-monospace" for="setting-clip-ensemble">8-TEMPLATE BLEND</label>
+                                                </div>
+                                            </div>
+                                            <div class="form-group col-md-3">
+                                                <label class="small text-muted font-weight-bold">NEGATIVE FILTER</label>
+                                                <div class="custom-control custom-switch mt-2">
+                                                    <input type="checkbox" class="custom-control-input" id="setting-clip-negative" checked>
+                                                    <label class="custom-control-label font-monospace" for="setting-clip-negative">BACKGROUND REJECT</label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="form-row mt-2">
+                                            <div class="form-group col-md-6">
+                                                <label class="small text-muted font-weight-bold">K-MEANS CLUSTERING FEATURE SOURCE</label>
+                                                <select id="setting-clip-kmeans-source" class="form-control custom-select">
+                                                    <option value="semantic" selected>Deep Semantic Vector Only (CLIP)</option>
+                                                    <option value="color">3D Color Histogram Only (HSV)</option>
+                                                    <option value="hybrid">Dual-Stream Hybrid Weighted</option>
+                                                </select>
+                                            </div>
+                                            <div class="form-group col-md-6">
+                                                <label class="small text-muted font-weight-bold">DEFAULT K-MEANS CLUSTERS</label>
+                                                <input type="number" id="setting-clip-kmeans-k" class="form-control font-monospace" min="2" max="30" value="5">
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
+
+                            <!-- 3. CANVAS & ERGONOMICS -->
+                            <div class="tab-pane fade" id="pane-v-canvas" role="tabpanel">
+                                <div class="card settings-section mb-4">
+                                    <div class="card-header text-warning">
+                                        <i class="bi bi-palette mr-2"></i> CANVAS_VISUAL_RENDERING_&_ACCENTS
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="form-row">
+                                            <div class="form-group col-md-4">
+                                                <label class="d-flex justify-content-between small text-muted font-weight-bold">
+                                                    <span>BBOX_LINE_WIDTH</span> <span id="canvas-line-width-val" class="text-warning font-monospace">2 px</span>
+                                                </label>
+                                                <input type="range" class="custom-range" id="setting-canvas-line-width" min="1" max="8" step="1" value="2">
+                                            </div>
+                                            <div class="form-group col-md-4">
+                                                <label class="d-flex justify-content-between small text-muted font-weight-bold">
+                                                    <span>HANDLE_POINT_RADIUS</span> <span id="canvas-point-radius-val" class="text-warning font-monospace">4 px</span>
+                                                </label>
+                                                <input type="range" class="custom-range" id="setting-canvas-point-radius" min="2" max="12" step="1" value="4">
+                                            </div>
+                                            <div class="form-group col-md-4">
+                                                <label class="d-flex justify-content-between small text-muted font-weight-bold">
+                                                    <span>MASK_FILL_OPACITY</span> <span id="canvas-mask-opacity-val" class="text-warning font-monospace">35%</span>
+                                                </label>
+                                                <input type="range" class="custom-range" id="setting-canvas-mask-opacity" min="0.10" max="0.90" step="0.05" value="0.35">
+                                            </div>
+                                        </div>
+                                        <div class="form-row mt-2">
+                                            <div class="form-group col-md-4">
+                                                <label class="small text-muted font-weight-bold">FULLSCREEN_CROSSHAIR</label>
+                                                <div class="custom-control custom-switch mt-2">
+                                                    <input type="checkbox" class="custom-control-input" id="setting-canvas-crosshair">
+                                                    <label class="custom-control-label font-monospace" for="setting-canvas-crosshair">ENABLE CROSSHAIR</label>
+                                                </div>
+                                            </div>
+                                            <div class="form-group col-md-4">
+                                                <label class="small text-muted font-weight-bold">LABEL_DISPLAY_MODE</label>
+                                                <select id="setting-canvas-label-mode" class="form-control custom-select">
+                                                    <option value="hover" selected>HOVER_ONLY (CLEANEST)</option>
+                                                    <option value="always">ALWAYS_VISIBLE</option>
+                                                    <option value="never">NEVER_SHOW</option>
+                                                </select>
+                                            </div>
+                                            <div class="form-group col-md-4">
+                                                <label class="small text-muted font-weight-bold">ZOOM_STEP_SENSITIVITY</label>
+                                                <select id="setting-canvas-zoom-step" class="form-control custom-select font-monospace">
+                                                    <option value="1.10">1.10 (FINE / SMOOTH)</option>
+                                                    <option value="1.15" selected>1.15 (BALANCED / DEFAULT)</option>
+                                                    <option value="1.25">1.25 (FAST ZOOM)</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="card settings-section mb-4">
+                                    <div class="card-header text-primary">
+                                        <i class="bi bi-ui-checks mr-2"></i> WORKFLOW_AUTOMATION_&_SPEEDRUN
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="form-row">
+                                            <div class="form-group col-md-4">
+                                                <label class="small text-muted font-weight-bold">DEFAULT_ANNOTATION_TOOL</label>
+                                                <select id="setting-default-annotation-mode" class="form-control custom-select">
+                                                    <option value="manual">MANUAL_DRAW</option>
+                                                    <option value="sam">SAM (POINT_CLICK)</option>
+                                                    <option value="lam">LAM (TEXT_PROMPT)</option>
+                                                    <option value="smart_select">SMART_SELECT</option>
+                                                </select>
+                                            </div>
+                                            <div class="form-group col-md-4">
+                                                <label class="small text-muted font-weight-bold">SPEEDRUN_MODE</label>
+                                                <div class="custom-control custom-switch mt-2">
+                                                    <input type="checkbox" class="custom-control-input" id="setting-speedrun-auto-next">
+                                                    <label class="custom-control-label font-monospace text-warning" for="setting-speedrun-auto-next">⚡ AUTO_NEXT_ON_TAG</label>
+                                                </div>
+                                            </div>
+                                            <div class="form-group col-md-4">
+                                                <label class="small text-muted font-weight-bold">NAV_AUTOSAVE</label>
+                                                <div class="custom-control custom-switch mt-2">
+                                                    <input type="checkbox" class="custom-control-input" id="setting-autosave-enabled">
+                                                    <label class="custom-control-label font-monospace" for="setting-autosave-enabled">SAVE_ON_NAV</label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="form-row mt-2">
+                                            <div class="form-group col-md-6">
+                                                <label class="small text-muted font-weight-bold">IN-MEMORY_CACHE_SAVE_INTERVAL (SECONDS)</label>
+                                                <input type="number" id="setting-cache-save-interval" class="form-control font-monospace" min="5" max="300" step="5" value="30">
+                                            </div>
+                                            <div class="form-group col-md-6">
+                                                <label class="small text-muted font-weight-bold">UNDO_HISTORY_STACK_LIMIT</label>
+                                                <input type="number" id="setting-canvas-history-limit" class="form-control font-monospace" min="10" max="150" step="10" value="50">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 4. VIDEO & EXTRACTION -->
+                            <div class="tab-pane fade" id="pane-v-video" role="tabpanel">
+                                <div class="card settings-section mb-4">
+                                    <div class="card-header text-success">
+                                        <i class="bi bi-camera-reels mr-2"></i> VIDEO_INGESTION_&_FRAME_EXTRACTION
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="form-row">
+                                            <div class="form-group col-md-4">
+                                                <label class="small text-muted font-weight-bold">FRAME_EXTRACTION_STRATEGY</label>
+                                                <select id="setting-video-extraction-mode" class="form-control custom-select">
+                                                    <option value="all" selected>EXTRACT ALL FRAMES (1:1 NATIVE)</option>
+                                                    <option value="fps_1">1 FRAME PER SECOND (1 FPS)</option>
+                                                    <option value="fps_2">2 FRAMES PER SECOND (2 FPS)</option>
+                                                    <option value="fps_5">5 FRAMES PER SECOND (5 FPS)</option>
+                                                    <option value="fps_10">10 FRAMES PER SECOND (10 FPS)</option>
+                                                    <option value="step_2">STEP (EVERY 2ND FRAME)</option>
+                                                    <option value="step_5">STEP (EVERY 5TH FRAME)</option>
+                                                </select>
+                                            </div>
+                                            <div class="form-group col-md-4">
+                                                <label class="small text-muted font-weight-bold">MAX_FRAME_RESOLUTION_LIMIT</label>
+                                                <select id="setting-video-max-resolution" class="form-control custom-select font-monospace">
+                                                    <option value="1080" selected>DOWNSAMPLE TO 1080P (SAFE)</option>
+                                                    <option value="720">DOWNSAMPLE TO 720P (FAST)</option>
+                                                    <option value="1440">DOWNSAMPLE TO 1440P (2K)</option>
+                                                    <option value="0">KEEP ORIGINAL RESOLUTION</option>
+                                                </select>
+                                            </div>
+                                            <div class="form-group col-md-4">
+                                                <label class="small text-muted font-weight-bold">JPEG_COMPRESSION_QUALITY</label>
+                                                <input type="number" id="setting-jpeg-quality" class="form-control font-monospace" min="10" max="100" step="5" value="85">
+                                            </div>
+                                        </div>
+                                        <div class="form-row mt-2">
+                                            <div class="form-group col-md-6">
+                                                <label class="small text-muted font-weight-bold">BACKGROUND_SCAN_PREPROCESS</label>
+                                                <div class="custom-control custom-switch mt-2">
+                                                    <input type="checkbox" class="custom-control-input" id="setting-auto-preprocess">
+                                                    <label class="custom-control-label font-monospace" for="setting-auto-preprocess">BACKGROUND PREPROCESS FRAMES</label>
+                                                </div>
+                                            </div>
+                                            <div class="form-group col-md-6">
+                                                <label class="small text-muted font-weight-bold text-danger">ORPHAN_FRAME_CLEANUP</label>
+                                                <div class="custom-control custom-switch mt-2">
+                                                    <input type="checkbox" class="custom-control-input" id="setting-auto-cleanup">
+                                                    <label class="custom-control-label font-monospace text-danger" for="setting-auto-cleanup">DELETE ON DATASET EXPORT</label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 5. QUALITY CONTROL & QC -->
+                            <div class="tab-pane fade" id="pane-v-qc" role="tabpanel">
+                                <div class="card settings-section mb-4" style="border-color: var(--color-danger);">
+                                    <div class="card-header text-danger">
+                                        <i class="bi bi-shield-check mr-2"></i> DUAL-STREAM_DATA_AUDIT_&_OUTLIER_DETECTION
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="form-row">
+                                            <div class="form-group col-md-6">
+                                                <label class="d-flex justify-content-between small text-muted font-weight-bold">
+                                                    <span>SEMANTIC_WEIGHT (CLIP)</span> <span id="qc-semantic-weight-val" class="text-danger font-monospace">70%</span>
+                                                </label>
+                                                <input type="range" class="custom-range" id="setting-qc-semantic-weight" min="0.10" max="0.90" step="0.05" value="0.70">
+                                            </div>
+                                            <div class="form-group col-md-6">
+                                                <label class="d-flex justify-content-between small text-muted font-weight-bold">
+                                                    <span>COLOR_WEIGHT (HSV)</span> <span id="qc-color-weight-val" class="text-danger font-monospace">30%</span>
+                                                </label>
+                                                <input type="range" class="custom-range" id="setting-qc-color-weight" min="0.10" max="0.90" step="0.05" value="0.30">
+                                            </div>
+                                        </div>
+                                        <div class="form-row mt-2">
+                                            <div class="form-group col-md-4">
+                                                <label class="d-flex justify-content-between small text-muted font-weight-bold">
+                                                    <span>SIGMA_ANOMALY_FACTOR</span> <span id="color-confusion-factor-val" class="text-danger font-monospace">2.0 σ</span>
+                                                </label>
+                                                <input type="range" class="custom-range" id="setting-color-confusion-factor" min="1.0" max="3.5" step="0.2" value="2.0">
+                                            </div>
+                                            <div class="form-group col-md-4">
+                                                <label class="d-flex justify-content-between small text-muted font-weight-bold">
+                                                    <span>SEMANTIC_FLOOR_THRESH</span> <span id="consistency-semantic-threshold-val" class="text-danger font-monospace">0.30</span>
+                                                </label>
+                                                <input type="range" class="custom-range" id="setting-consistency-semantic-threshold" min="0.05" max="0.80" step="0.05" value="0.30">
+                                            </div>
+                                            <div class="form-group col-md-4">
+                                                <label class="small text-muted font-weight-bold">CONFUSION_MARGIN</label>
+                                                <input type="number" id="setting-consistency-confusion-margin" class="form-control font-monospace" min="0.01" max="0.50" step="0.02" value="0.15">
+                                            </div>
+                                        </div>
+                                        <div class="form-row mt-2">
+                                            <div class="form-group col-md-6">
+                                                <label class="small text-muted font-weight-bold">CROSS-CLASS CONFUSION MIN CONFIDENCE</label>
+                                                <input type="number" id="setting-qc-cross-class-conf-min" class="form-control font-monospace" min="0.30" max="0.90" step="0.05" value="0.65">
+                                            </div>
+                                            <div class="form-group col-md-6">
+                                                <label class="small text-muted font-weight-bold">KEYPOINT OUT-OF-BOUNDS TOLERANCE (PX)</label>
+                                                <input type="number" id="setting-qc-kpt-out-of-bounds" class="form-control font-monospace" min="0" max="300" step="10" value="50">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 6. DATASET & EXPORTERS -->
+                            <div class="tab-pane fade" id="pane-v-export" role="tabpanel">
+                                <div class="card settings-section mb-4">
+                                    <div class="card-header text-info">
+                                        <i class="bi bi-box-seam mr-2"></i> DATASET_SPLIT_&_COMPILATION_PIPELINE
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="form-row">
+                                            <div class="form-group col-md-4">
+                                                <label class="small text-muted font-weight-bold">DEFAULT_TRAIN_RATIO (%)</label>
+                                                <input type="number" id="setting-train-percent" class="form-control font-monospace" min="10" max="90" step="5" value="70">
+                                            </div>
+                                            <div class="form-group col-md-4">
+                                                <label class="small text-muted font-weight-bold">DEFAULT_VAL_RATIO (%)</label>
+                                                <input type="number" id="setting-eval-percent" class="form-control font-monospace" min="5" max="50" step="5" value="20">
+                                            </div>
+                                            <div class="form-group col-md-4">
+                                                <label class="small text-muted font-weight-bold">DEFAULT_TEST_RATIO (%)</label>
+                                                <input type="number" id="setting-test-percent" class="form-control font-monospace" min="0" max="40" step="5" value="10">
+                                            </div>
+                                        </div>
+                                        <div class="form-row mt-2">
+                                            <div class="form-group col-md-6">
+                                                <label class="small text-muted font-weight-bold">SPLIT_ISOLATION_STRATEGY</label>
+                                                <select id="setting-dataset-split-strategy" class="form-control custom-select">
+                                                    <option value="group_by_video" selected>GROUP_BY_VIDEO_UUID (PREVENTS ADJACENT FRAME LEAKAGE)</option>
+                                                    <option value="random">RANDOM_UNIFORM_SHUFFLE</option>
+                                                </select>
+                                                <small class="text-muted font-monospace">Prevents temporal data contamination.</small>
+                                            </div>
+                                            <div class="form-group col-md-6">
+                                                <label class="small text-muted font-weight-bold">ZIP_COMPRESSION_ENGINE</label>
+                                                <select id="setting-zip-compression" class="form-control custom-select">
+                                                    <option value="fast">FAST (STORE ONLY, ZERO CPU)</option>
+                                                    <option value="standard" selected>STANDARD (DEFLATED)</option>
+                                                    <option value="max">MAXIMUM (HIGHEST COMPRESSION)</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="form-row mt-2">
+                                            <div class="form-group col-md-4">
+                                                <label class="small text-muted font-weight-bold">TIGHT_FIT_BOUNDING_BOXES</label>
+                                                <div class="custom-control custom-switch mt-2">
+                                                    <input type="checkbox" class="custom-control-input" id="setting-export-tight-fit" checked>
+                                                    <label class="custom-control-label font-monospace" for="setting-export-tight-fit">FIT TO MASK EDGES</label>
+                                                </div>
+                                            </div>
+                                            <div class="form-group col-md-4">
+                                                <label class="small text-muted font-weight-bold">INCLUDE_BACKGROUND_FRAMES</label>
+                                                <div class="custom-control custom-switch mt-2">
+                                                    <input type="checkbox" class="custom-control-input" id="setting-export-include-bg" checked>
+                                                    <label class="custom-control-label font-monospace" for="setting-export-include-bg">INCLUDE NEGATIVES</label>
+                                                </div>
+                                            </div>
+                                            <div class="form-group col-md-4">
+                                                <label class="small text-muted font-weight-bold">YOLO_FLOAT_PRECISION</label>
+                                                <select id="setting-export-precision" class="form-control custom-select font-monospace">
+                                                    <option value="4">4 Decimals (0.XXXX)</option>
+                                                    <option value="6" selected>6 Decimals (0.XXXXXX)</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 7. STORAGE & HOUSEKEEPING -->
+                            <div class="tab-pane fade" id="pane-v-storage" role="tabpanel">
+                                <div class="card settings-section mb-4">
+                                    <div class="card-header text-secondary">
+                                        <i class="bi bi-hdd mr-2"></i> STORAGE_HEALTH_&_HOUSEKEEPING
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="mb-3">
+                                            <div class="d-flex justify-content-between small text-muted font-monospace mb-1">
+                                                <span>VOLUME DISK FREE SPACE</span>
+                                                <span id="storage-disk-val">Checking...</span>
+                                            </div>
+                                            <div class="progress" style="height: 8px;">
+                                                <div id="storage-disk-progress" class="progress-bar bg-info" role="progressbar" style="width: 0%"></div>
+                                            </div>
+                                        </div>
+                                        <div class="alert alert-secondary rounded-0 small font-monospace">
+                                            <i class="bi bi-folder-fill mr-1 text-primary"></i> STORAGE_PATH: <code>local_storage/</code> &nbsp;|&nbsp; 
+                                            <i class="bi bi-database-fill mr-1 text-warning"></i> DATABASE: <code>ftc_ml.db</code> (SQLite WAL Mode)
+                                        </div>
+                                        <div class="d-flex flex-wrap mt-3">
+                                            <button type="button" class="btn btn-sm btn-outline-warning mr-3 mb-2" id="clear-cache-btn">
+                                                <i class="bi bi-eraser-fill mr-1"></i> PURGE SAM3 FRAME CACHE
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 8. NETWORK & MODEL HUB -->
+                            <div class="tab-pane fade" id="pane-v-network" role="tabpanel">
+                                <div class="card settings-section mb-4" id="local-model-mgmt-card" style="border-color: #7c3aed; border-width: 2px;">
+                                    <div class="card-header d-flex align-items-center justify-content-between" style="background: linear-gradient(90deg, rgba(124,58,237,0.18) 0%, rgba(124,58,237,0.06) 100%); border-bottom: 1px solid rgba(124,58,237,0.35);">
+                                        <span style="color: #a78bfa; font-weight: 700; letter-spacing: 0.08em;">
+                                            <i class="bi bi-hdd-stack mr-2"></i>LOCAL MODEL REPOSITORY & ACCELERATION
+                                        </span>
+                                        <button type="button" id="btn-refresh-models" class="btn btn-sm font-monospace" style="background: rgba(124,58,237,0.18); color: #a78bfa; border: 1px solid rgba(124,58,237,0.5); font-size: 0.75rem;" title="Rescan local weights">
+                                            <i class="bi bi-arrow-clockwise mr-1"></i>REFRESH
+                                        </button>
+                                    </div>
+                                    <div class="card-body p-0">
+                                        <div class="px-3 pt-3 pb-2">
+                                            <div class="custom-control custom-switch mb-2">
+                                                <input type="checkbox" class="custom-control-input" id="use-mirror-switch" checked>
+                                                <label class="custom-control-label text-main small font-monospace" for="use-mirror-switch">Enable domestic mirror acceleration (hf-mirror.com / ghfast.top, with auto-fallback)</label>
+                                            </div>
+                                        </div>
+                                        <div id="local-model-table-wrap" class="px-3 pb-3">
+                                            <div id="local-model-loading" class="text-center py-4" style="color: #6b7280;">
+                                                <i class="bi bi-hourglass-split mr-1"></i><span class="font-monospace small">SCANNING LOCAL WEIGHTS...</span>
+                                            </div>
+                                            <table class="table table-sm mb-0" id="local-model-table" style="display:none; font-size: 0.8rem;">
+                                                <thead>
+                                                    <tr style="color: #9ca3af; border-bottom: 1px solid rgba(124,58,237,0.2);">
+                                                        <th class="font-monospace border-0 pl-0">ENGINE</th>
+                                                        <th class="font-monospace border-0">MODEL</th>
+                                                        <th class="font-monospace border-0">FORMAT</th>
+                                                        <th class="font-monospace border-0">SIZE</th>
+                                                        <th class="font-monospace border-0">PURPOSE</th>
+                                                        <th class="font-monospace border-0 pr-0 text-right">STATUS</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="local-model-tbody"></tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 9. CLASS COLORS & SCHEMAS (FORMERLY MISSING) -->
+                            <div class="tab-pane fade" id="pane-v-classes" role="tabpanel">
+                                <div class="card settings-section mb-4" style="border-color: var(--color-warning);">
+                                    <div class="card-header text-warning">
+                                        <i class="bi bi-palette-fill mr-2"></i> CLASS_PALETTE_&_COLOR_REGISTRATION
+                                    </div>
+                                    <div class="card-body">
+                                        <p class="text-muted small font-monospace">Assign individual accent colors to each annotated class label. Colors are preserved across sessions.</p>
+                                        <div id="class-color-manager" class="d-flex flex-wrap p-2 border border-theme" style="background: var(--bg-surface-secondary); min-height: 80px; border-radius: var(--radius-sm);">
+                                            <p class="text-muted small pl-2 font-monospace">> SCANNING_CLASS_REGISTRY...</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                         </div>
 
-                        <!-- Local Model Management -->
-                        <div class="card settings-section mb-4" id="local-model-mgmt-card" style="border-color: #7c3aed; border-width: 2px;">
-                            <div class="card-header d-flex align-items-center justify-content-between" style="background: linear-gradient(90deg, rgba(124,58,237,0.18) 0%, rgba(124,58,237,0.06) 100%); border-bottom: 1px solid rgba(124,58,237,0.35);">
-                                <span style="color: #a78bfa; font-weight: 700; letter-spacing: 0.08em;">
-                                    <i class="bi bi-hdd-stack mr-2"></i>LOCAL MODEL MANAGEMENT
-                                </span>
-                                <button type="button" id="btn-refresh-models" class="btn btn-sm font-monospace" style="background: rgba(124,58,237,0.18); color: #a78bfa; border: 1px solid rgba(124,58,237,0.5); font-size: 0.75rem; letter-spacing: 0.06em;" title="Rescan local model files">
-                                    <i class="bi bi-arrow-clockwise mr-1"></i>REFRESH
-                                </button>
-                            </div>
-                            <div class="card-body p-0">
-                                <div class="px-3 pt-2 pb-1">
-                                    <div class="alert mb-2 py-2 small font-monospace" style="background: rgba(124,58,237,0.08); border: 1px solid rgba(124,58,237,0.25); color: #c4b5fd; border-radius: 4px;">
-                                        <i class="bi bi-shield-lock-fill mr-1" style="color: #7c3aed;"></i>
-                                        All model weights have been excluded from version control via <code class="text-warning">.gitignore</code> rules (including niche formats like <code class="text-warning">.best</code> ).
-                                        <span class="badge ml-2" style="background: rgba(124,58,237,0.25); color: #a78bfa; font-size: 0.7rem;">GIT_SAFE</span>
-                                    </div>
-                                    <div class="custom-control custom-switch mb-2">
-                                        <input type="checkbox" class="custom-control-input" id="use-mirror-switch" checked>
-                                        <label class="custom-control-label text-main small font-monospace" for="use-mirror-switch">Enable domestic mirror acceleration (hf-mirror / ghfast / ghproxy, with auto-fallback)</label>
-                                    </div>
-                                </div>
-                                <div id="local-model-table-wrap" class="px-3 pb-3">
-                                    <div id="local-model-loading" class="text-center py-4" style="color: #6b7280;">
-                                        <i class="bi bi-hourglass-split mr-1"></i><span class="font-monospace small">SCANNING LOCAL WEIGHTS...</span>
-                                    </div>
-                                    <table class="table table-sm mb-0" id="local-model-table" style="display:none; font-size: 0.8rem;">
-                                        <thead>
-                                            <tr style="color: #9ca3af; border-bottom: 1px solid rgba(124,58,237,0.2);">
-                                                <th class="font-monospace border-0 pl-0" style="font-size:0.72rem; letter-spacing:0.06em;">ENGINE</th>
-                                                <th class="font-monospace border-0" style="font-size:0.72rem; letter-spacing:0.06em;">MODEL</th>
-                                                <th class="font-monospace border-0" style="font-size:0.72rem; letter-spacing:0.06em;">FORMAT</th>
-                                                <th class="font-monospace border-0" style="font-size:0.72rem; letter-spacing:0.06em;">SIZE</th>
-                                                <th class="font-monospace border-0" style="font-size:0.72rem; letter-spacing:0.06em;">PURPOSE</th>
-                                                <th class="font-monospace border-0 pr-0 text-right" style="font-size:0.72rem; letter-spacing:0.06em;">STATUS</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="local-model-tbody"></tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="text-right pb-5">
-                            <button type="submit" class="btn btn-primary px-5 font-weight-bold tracking-wider">
+                        <!-- Sticky Submit Footer -->
+                        <div class="d-flex justify-content-between align-items-center mt-3 pt-3 border-top border-theme">
+                            <span class="small text-muted font-monospace">
+                                <i class="bi bi-shield-lock-fill mr-1 text-success"></i> ATOMIC_CONFIG_SAVER_ENABLED
+                            </span>
+                            <button type="submit" id="btn-save-settings" class="btn btn-primary px-5 font-weight-bold tracking-wider">
                                 <i class="bi bi-hdd-fill mr-2"></i>COMMIT_CHANGES
                             </button>
                         </div>
@@ -655,6 +1010,7 @@
                 </div>
             </form>
         </div>
+
         </div>
     </div>
 </div>
@@ -1193,49 +1549,96 @@
                     currentSettings = data.settings;
                     const s = data.settings;
 
-                    $('#setting-gpu-device').val(s.gpu_device);
-                    $('#setting-sam-model').val(s.sam_model_checkpoint);
-
+                    // 1. Hardware & System
+                    $('#setting-gpu-device').val(s.gpu_device || 'auto');
+                    $('#setting-system-preset').val(s.system_preset || 'balanced');
                     $('#setting-max-workers').val(s.max_workers || '8');
-                    $('#setting-max-cache-size').val(s.max_cache_size || 30).trigger('input');
                     $('#setting-use-autocast').prop('checked', s.use_autocast !== false);
+                    $('#setting-cuda-empty-cache').prop('checked', s.cuda_empty_cache_on_batch !== false);
 
-                    $('#setting-inference-size').val(s.inference_size || 512);
-                    $('#setting-default-confidence').val(s.default_confidence || 0.5).trigger('input');
-                    $('#setting-sam-box-padding').val(s.sam_box_padding || 0.0).trigger('input');
-
-                    $('#setting-zip-compression').val(s.zip_compression || 'standard');
-                    $('#setting-auto-preprocess').prop('checked', s.auto_preprocess !== false);
-                    $('#setting-auto-cleanup').prop('checked', s.auto_cleanup_frames === true);
-
+                    // 2. Model Switches
                     $('#setting-enable-sam').prop('checked', s.enable_sam_model !== false);
                     $('#setting-enable-feature-extractor').prop('checked', s.enable_feature_extractor !== false);
                     $('#setting-enable-cls').prop('checked', s.enable_cls_model !== false);
                     $('#setting-enable-pose').prop('checked', s.enable_pose_model !== false);
+
+                    // 3. SAM Tuning
+                    $('#setting-sam-model').val(s.sam_model_checkpoint || 'sam2.1_s.pt');
+                    $('#setting-sam-mask-confidence').val(s.sam_mask_confidence ?? 0.70).trigger('input');
+                    $('#setting-max-cache-size').val(s.max_cache_size || 30).trigger('input');
+                    $('#setting-batch-tracking-conf').val(s.batch_tracking_conf ?? 0.30).trigger('input');
+                    $('#setting-nms-iou-threshold').val(s.nms_iou_threshold ?? 0.70).trigger('input');
+                    $('#setting-batch-tracking-imgsz').val(s.batch_tracking_imgsz || 1024);
+                    $('#setting-batch-tracking-chunk-size').val(s.batch_tracking_chunk_size || 10);
+                    $('#setting-sam-box-padding').val(s.sam_box_padding ?? 0.0).trigger('input');
+
+                    // 4. GKDT Model & Pose Parameters
                     $('#setting-gkdt-model-type').val(s.gkdt_model_type || 'GKDT-L');
+                    $('#setting-gkdt-detector').val(s.gkdt_detector_backend || 'LocateAnything-3B');
+                    $('#setting-gkdt-kpt-conf').val(s.gkdt_kpt_conf_threshold ?? 0.25).trigger('input');
+                    $('#setting-gkdt-bbox-padding').val(s.gkdt_bbox_padding ?? 0.20).trigger('input');
+                    $('#setting-gkdt-default-schema').val(s.gkdt_default_schema || 'COCO_17');
+                    $('#setting-opencv-tracker').val(s.default_opencv_tracker || 'CSRT');
 
-                    $('#eval-percent').val(s.default_eval_percent || 20.0);
-                    $('#test-percent').val(s.default_test_percent || 10.0);
+                    // 5. CLIP Model & Parameters
+                    $('#setting-clip-model').val(s.clip_model_checkpoint || 'clip-vit-base-patch32');
+                    $('#setting-clip-ensemble').prop('checked', s.clip_use_prompt_ensemble !== false);
+                    $('#setting-clip-negative').prop('checked', s.clip_negative_filter !== false);
+                    $('#setting-clip-kmeans-source').val(s.clip_kmeans_feature_source || 'semantic');
+                    $('#setting-clip-kmeans-k').val(s.clip_kmeans_default_k || 5);
 
-                    $('#setting-sam-mask-confidence').val(s.sam_mask_confidence).trigger('input');
-                    $('#setting-nms-iou-threshold').val(s.nms_iou_threshold).trigger('input');
-                    $('#setting-consistency-semantic-threshold').val(s.consistency_semantic_threshold ?? 0.3).trigger('input');
-
-                    $('#setting-batch-tracking-conf').val(s.batch_tracking_conf).trigger('input');
-                    $('#setting-preannotation-conf').val(s.default_preannotation_conf).trigger('input');
-                    $('#setting-batch-tracking-imgsz').val(s.batch_tracking_imgsz);
-                    $('#setting-batch-tracking-chunk-size').val(s.batch_tracking_chunk_size);
-                    $('#setting-consistency-confusion-margin').val(s.consistency_confusion_margin ?? 0.15);
-
-                    $('#setting-default-annotation-mode').val(s.default_annotation_mode);
-                    $('#setting-autosave-enabled').prop('checked', s.autosave_enabled);
+                    // 6. Canvas & Ergonomics
+                    $('#setting-canvas-line-width').val(s.canvas_line_width || 2).trigger('input');
+                    $('#setting-canvas-point-radius').val(s.canvas_point_radius || 4).trigger('input');
+                    $('#setting-canvas-mask-opacity').val(s.canvas_mask_opacity ?? 0.35).trigger('input');
+                    $('#setting-canvas-crosshair').prop('checked', s.canvas_show_crosshair === true);
+                    $('#setting-canvas-label-mode').val(s.canvas_label_display_mode || 'hover');
+                    $('#setting-canvas-zoom-step').val(s.canvas_zoom_step || '1.15');
+                    $('#setting-default-annotation-mode').val(s.default_annotation_mode || 'manual');
                     $('#setting-speedrun-auto-next').prop('checked', s.speedrun_auto_next !== false);
-                    $('#setting-jpeg-quality').val(s.frame_extraction_jpeg_quality);
-                    $('#setting-opencv-tracker').val(s.default_opencv_tracker);
+                    $('#setting-autosave-enabled').prop('checked', s.autosave_enabled === true);
+                    $('#setting-cache-save-interval').val(s.cache_save_interval_seconds || 30);
+                    $('#setting-canvas-history-limit').val(s.canvas_history_limit || 50);
 
-                    $('#setting-cache-save-interval').val(s.cache_save_interval_seconds);
+                    // 7. Video & Extraction
+                    $('#setting-video-extraction-mode').val(s.video_extraction_mode || 'all');
+                    $('#setting-video-max-resolution').val(s.video_max_resolution || 1080);
+                    $('#setting-jpeg-quality').val(s.frame_extraction_jpeg_quality || 85);
+                    $('#setting-auto-preprocess').prop('checked', s.auto_preprocess !== false);
+                    $('#setting-auto-cleanup').prop('checked', s.auto_cleanup_frames === true);
+
+                    // 8. Quality Control
+                    $('#setting-qc-semantic-weight').val(s.qc_semantic_weight ?? 0.70).trigger('input');
+                    $('#setting-qc-color-weight').val(s.qc_color_weight ?? 0.30).trigger('input');
+                    $('#setting-color-confusion-factor').val(s.color_confusion_factor ?? 2.0).trigger('input');
+                    $('#setting-consistency-semantic-threshold').val(s.consistency_semantic_threshold ?? 0.30).trigger('input');
+                    $('#setting-consistency-confusion-margin').val(s.consistency_confusion_margin ?? 0.15);
+                    $('#setting-qc-cross-class-conf-min').val(s.qc_cross_class_conf_min ?? 0.65);
+                    $('#setting-qc-kpt-out-of-bounds').val(s.qc_kpt_out_of_bounds_px || 50);
+
+                    // 9. Dataset Split & Export
+                    $('#setting-train-percent').val(s.default_train_percent || 70.0);
+                    $('#setting-eval-percent').val(s.default_eval_percent || 20.0);
+                    $('#setting-test-percent').val(s.default_test_percent || 10.0);
+                    $('#setting-dataset-split-strategy').val(s.dataset_split_strategy || 'group_by_video');
+                    $('#setting-zip-compression').val(s.zip_compression || 'standard');
+                    $('#setting-export-tight-fit').prop('checked', s.export_tight_fit_bbox !== false);
+                    $('#setting-export-include-bg').prop('checked', s.export_include_background !== false);
+                    $('#setting-export-precision').val(s.export_coord_precision || 6);
+
+                    // 10. Network Mirrors
+                    $('#use-mirror-switch').prop('checked', s.use_mirror_acceleration !== false);
 
                     loadClassColorManager();
+                }
+            });
+
+            // Update disk space in storage panel
+            $.get('/api/detect_hardware', function(hw) {
+                if (hw.disk_total_gb > 0) {
+                    $('#storage-disk-val').text(hw.disk_free_gb + ' GB FREE / ' + hw.disk_total_gb + ' GB TOTAL');
+                    const used = Math.round(((hw.disk_total_gb - hw.disk_free_gb) / hw.disk_total_gb) * 100);
+                    $('#storage-disk-progress').css('width', used + '%');
                 }
             });
         }
@@ -1245,18 +1648,18 @@
                 if (data.success) {
                     const container = $('#class-color-manager');
                     container.empty();
-                    if (data.labels.length === 0) {
-                        container.html('<p class="text-muted small pl-2 font-monospace">> NO_CLASSES_DETECTED. INITIATE_ANNOTATION_FIRST.</p>');
+                    if (!data.labels || data.labels.length === 0) {
+                        container.html('<p class="text-muted small pl-2 font-monospace">> NO_CLASSES_DETECTED_IN_DATABASE.</p>');
                         return;
                     }
-                    const classColors = currentSettings.class_colors || {};
+                    const classColors = (currentSettings && currentSettings.class_colors) ? currentSettings.class_colors : {};
                     data.labels.forEach(label => {
-                        const color = classColors[label] || '#000000';
+                        const color = classColors[label] || '#3b82f6';
                         const item = `
-                        <div class="d-flex align-items-center bg-surface-secondary border px-2 py-1 mr-2 mb-2" style="min-width: 120px; border-color: var(--border-color) !important; border-radius: var(--radius-sm);">
+                        <div class="d-flex align-items-center bg-surface border px-2 py-1 mr-2 mb-2" style="border-color: var(--border-color) !important; border-radius: var(--radius-sm);">
                             <input type="color" class="border-0 p-0 mr-2" value="${color}" data-class-name="${label}"
-                                   style="width: 24px; height: 24px; cursor: pointer; background: none;" title="COLOR_CODE: ${label}">
-                            <span class="small font-weight-bold text-truncate text-main font-monospace" style="max-width: 100px;">${label}</span>
+                                   style="width: 26px; height: 26px; cursor: pointer; background: none;" title="COLOR: ${label}">
+                            <span class="small font-weight-bold text-truncate text-main font-monospace" style="max-width: 140px;">${label}</span>
                         </div>`;
                         container.append(item);
                     });
@@ -1264,159 +1667,28 @@
             });
         }
 
-        // Augmentation setup logic
-        function setupAugmentationListeners(contextSelector) {
-            const context = $(contextSelector);
-            context.on('input', 'input[type="range"]', function() {
-                $(this).closest('div').find('.val-display').text($(this).val());
-            });
-            context.on('change', '.aug-option input[type="checkbox"]', function() {
-                const controlsId = $(this).closest('.aug-option').data('controls');
-                context.find('#' + controlsId).toggle($(this).is(':checked'));
-            });
-            context.find('.aug-option input[type="checkbox"]').each(function() {
-                const controlsId = $(this).closest('.aug-option').data('controls');
-                context.find('#' + controlsId).toggle($(this).is(':checked'));
-            });
-        }
-        function updateMultilabelVisibility() {
-            const selectedOpt = $('#dataset-export-format option:selected');
-            const fmtKey = $('#dataset-export-format').val() || '';
-            const typesStr = selectedOpt.attr('data-types') || '';
-            const isClassification = typesStr.includes('classification') || fmtKey.includes('cls') || fmtKey.includes('class');
-            $('#multilabel-strategy-group').slideToggle(isClassification);
-        }
+        // Live badge value bindings
+        $('#setting-sam-mask-confidence').on('input', function() { $('#sam-mask-confidence-val').text(parseFloat($(this).val()).toFixed(2)); });
+        $('#setting-max-cache-size').on('input', function() { $('#max-cache-size-val').text(parseInt($(this).val())); });
+        $('#setting-batch-tracking-conf').on('input', function() { $('#batch-tracking-conf-val').text(parseFloat($(this).val()).toFixed(2)); });
+        $('#setting-nms-iou-threshold').on('input', function() { $('#nms-iou-threshold-val').text(parseFloat($(this).val()).toFixed(2)); });
+        $('#setting-sam-box-padding').on('input', function() { $('#sam-box-padding-val').text(Math.round(parseFloat($(this).val()) * 100) + '%'); });
+        $('#setting-gkdt-kpt-conf').on('input', function() { $('#gkdt-kpt-conf-val').text(parseFloat($(this).val()).toFixed(2)); });
+        $('#setting-gkdt-bbox-padding').on('input', function() { $('#gkdt-padding-val').text(Math.round(parseFloat($(this).val()) * 100) + '%'); });
+        $('#setting-canvas-line-width').on('input', function() { $('#canvas-line-width-val').text($(this).val() + ' px'); });
+        $('#setting-canvas-point-radius').on('input', function() { $('#canvas-point-radius-val').text($(this).val() + ' px'); });
+        $('#setting-canvas-mask-opacity').on('input', function() { $('#canvas-mask-opacity-val').text(Math.round(parseFloat($(this).val()) * 100) + '%'); });
+        $('#setting-qc-semantic-weight').on('input', function() { $('#qc-semantic-weight-val').text(Math.round(parseFloat($(this).val()) * 100) + '%'); });
+        $('#setting-qc-color-weight').on('input', function() { $('#qc-color-weight-val').text(Math.round(parseFloat($(this).val()) * 100) + '%'); });
+        $('#setting-color-confusion-factor').on('input', function() { $('#color-confusion-factor-val').text(parseFloat($(this).val()).toFixed(1) + ' σ'); });
+        $('#setting-consistency-semantic-threshold').on('input', function() { $('#consistency-semantic-threshold-val').text(parseFloat($(this).val()).toFixed(2)); });
 
-        $('#dataset-export-format').on('change', updateMultilabelVisibility);
-
-        const multilabelDescriptions = {
-            'first': 'For images with multiple labels, only the first label is put into the corresponding folder, ensuring strict Softmax single-label classification paradigm.',
-            'composite': 'Combine multiple labels alphabetically into a new independent composite class (e.g. cat+dog), suitable for multi-target coexistence training.',
-            'skip': 'Skip images with multiple labels directly without exporting, ensuring the purity of the exported dataset.',
-            'duplicate': 'Copy the same image into every hit category folder (old logic), only for special multiple sample expansion needs.'
-        };
-
-        $('#dataset-multilabel-strategy').on('change', function() {
-            const val = $(this).val();
-            $('#multilabel-strategy-desc').text(multilabelDescriptions[val] || multilabelDescriptions['first']);
-        });
-
-        $('#createDatasetModal').on('show.bs.modal', function() {
-            $.get('/api/export_formats', function(res) {
-                if (res.success && res.formats) {
-                    const formatSelect = $('#dataset-export-format');
-                    formatSelect.empty();
-                    res.formats.forEach(function(fmt) {
-                        const opt = $('<option>', {
-                            value: fmt.key,
-                            text: fmt.name
-                        });
-                        if (fmt.types && Array.isArray(fmt.types)) {
-                            opt.attr('data-types', fmt.types.join(','));
-                        }
-                        formatSelect.append(opt);
-                    });
-                    updateMultilabelVisibility();
-                }
-            });
-        });
-
-        $('#aug-enabled').on('change', function() {
-            $('#augmentation-options-panel').slideToggle($(this).is(':checked'));
-        });
-        setupAugmentationListeners('#createDatasetModal');
-
-        function getAugmentationOptions(contextSelector) {
-            const context = $(contextSelector);
-            const getVal = (selector, type = 'float') => type === 'int' ? parseInt(context.find(selector).val()) : parseFloat(context.find(selector).val());
-            const isEnabled = (selector) => context.find(selector).is(':checked');
-             return {
-                enabled: isEnabled('#aug-enabled'),
-                multiply_factor: getVal('#aug-multiply-factor', 'int'),
-                hflip: { enabled: isEnabled('#aug-hflip-enabled'), p: getVal('#aug-hflip-p') },
-                vflip: { enabled: isEnabled('#aug-vflip-enabled'), p: getVal('#aug-vflip-p') },
-                rotate90: { enabled: isEnabled('#aug-rotate90-enabled'), p: getVal('#aug-rotate90-p') },
-                rotate: { enabled: isEnabled('#aug-rotate-enabled'), p: getVal('#aug-rotate-p'), limit: getVal('#aug-rotate-limit', 'int') },
-                ssr: { enabled: isEnabled('#aug-ssr-enabled'), p: getVal('#aug-ssr-p'), rotate: getVal('#aug-ssr-rotate', 'int'), shift: getVal('#aug-ssr-shift'), scale: getVal('#aug-ssr-scale') },
-                affine: { enabled: isEnabled('#aug-affine-enabled'), p: getVal('#aug-affine-p'), shear: getVal('#aug-affine-shear', 'int') },
-                crop: { enabled: isEnabled('#aug-crop-enabled'), p: getVal('#aug-crop-p') },
-                grayscale: { enabled: isEnabled('#aug-grayscale-enabled'), p: getVal('#aug-grayscale-p') },
-                hsv: { enabled: isEnabled('#aug-hsv-enabled'), p: getVal('#aug-hsv-p'), h: getVal('#aug-hsv-h', 'int'), s: getVal('#aug-hsv-s', 'int'), v: getVal('#aug-hsv-v', 'int') },
-                bc: { enabled: isEnabled('#aug-bc-enabled'), p: getVal('#aug-bc-p'), b: getVal('#aug-bc-b'), c: getVal('#aug-bc-c') },
-                blur: { enabled: isEnabled('#aug-blur-enabled'), p: getVal('#aug-blur-p'), limit: getVal('#aug-blur-limit', 'int') },
-                noise: { enabled: isEnabled('#aug-noise-enabled'), p: getVal('#aug-noise-p'), limit: getVal('#aug-noise-limit') },
-                cutout: { enabled: isEnabled('#aug-cutout-enabled'), p: getVal('#aug-cutout-p'), holes: getVal('#aug-cutout-holes', 'int'), size: getVal('#aug-cutout-size', 'int') },
-                mosaic: { enabled: isEnabled('#aug-mosaic-enabled'), p: getVal('#aug-mosaic-p') }
-            };
-        }
-
-        // Form Submissions
-        $('#create-dataset-form').on('submit', function(e) {
-            e.preventDefault();
-            const augmentation_options = getAugmentationOptions('#createDatasetModal');
-            const datasetData = {
-                description: $('#dataset-description').val(),
-                video_uuids: $('#dataset-videos').val(),
-                eval_percent: $('#eval-percent').val(),
-                test_percent: $('#test-percent').val(),
-                export_format: $('#dataset-export-format').val(),
-                export_options: {
-                    multilabel_strategy: $('#dataset-multilabel-strategy').val() || 'first'
-                },
-                augmentation_options: augmentation_options
-            };
-            $.ajax({
-                url: '/createDataset', type: 'POST', contentType: 'application/json',
-                data: JSON.stringify(datasetData),
-                success: function(response) {
-                    if (response.success) {
-                        showSuccess('COMPILATION_STARTED');
-                        $('#createDatasetModal').modal('hide');
-                        refreshDatasets(true);
-                    } else { showError(response.message); }
-                },
-                error: function(xhr) { showError(xhr.responseJSON ? xhr.responseJSON.message : 'UNKNOWN_ERROR'); }
-            });
-        });
-
-        $('#upload-video-form').on('submit', function(e) {
-            e.preventDefault();
-            const formData = new FormData(this);
-            $.ajax({
-                url: '/uploadVideo', type: 'POST', data: formData, processData: false, contentType: false,
-                success: function(response) {
-                    if (response.success) {
-                        showSuccess('UPLOAD_ACKNOWLEDGED. PROCESSING_STREAM...');
-                        $('#uploadVideoModal').modal('hide');
-                        $(this).trigger('reset');
-                        $('.custom-file-label').html('SELECT_DATA_STREAM...');
-                        refreshVideos(true);
-                    } else { showError(response.message); }
-                }.bind(this),
-                error: function(xhr) { showError(xhr.responseJSON ? xhr.responseJSON.message : 'UNKNOWN_ERROR'); }
-            });
-        });
-
-        $('#import-model-form').on('submit', function(e) {
-            e.preventDefault();
-            const formData = new FormData(this);
-            $.ajax({
-                url: '/importModel', type: 'POST', data: formData, processData: false, contentType: false,
-                success: function(response) {
-                    if (response.success) {
-                        showSuccess('ENGINE_IMPORTED_SUCCESSFULLY');
-                        $('#importModelModal').modal('hide');
-                        $(this).trigger('reset');
-                        $('.custom-file-label').html('SELECT_FILE...');
-                        refreshModels(true);
-                    } else { showError(response.message); }
-                }.bind(this),
-                error: function(xhr) { showError(xhr.responseJSON ? xhr.responseJSON.message : 'UNKNOWN_ERROR'); }
-            });
-        });
-
+        // Submit Settings Form
         $('#settings-form').on('submit', function(e) {
             e.preventDefault();
+            const $btn = $('#btn-save-settings');
+            $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm mr-1"></span> SAVING...');
+
             const selectedSamOption = $('#setting-sam-model').find('option:selected');
             const classColors = {};
             $('#class-color-manager input[type="color"]').each(function() {
@@ -1424,43 +1696,86 @@
             });
 
             const settingsData = {
+                // Compute & System
                 gpu_device: $('#setting-gpu-device').val(),
-                sam_model_checkpoint: selectedSamOption.val(),
-                sam_model_name: selectedSamOption.data('name'),
-                sam_mask_confidence: parseFloat($('#setting-sam-mask-confidence').val()),
-                nms_iou_threshold: parseFloat($('#setting-nms-iou-threshold').val()),
-                consistency_semantic_threshold: parseFloat($('#setting-consistency-semantic-threshold').val()),
-
+                system_preset: $('#setting-system-preset').val(),
                 max_workers: $('#setting-max-workers').val(),
-                max_cache_size: parseInt($('#setting-max-cache-size').val()),
                 use_autocast: $('#setting-use-autocast').is(':checked'),
+                cuda_empty_cache_on_batch: $('#setting-cuda-empty-cache').is(':checked'),
 
-                inference_size: parseInt($('#setting-inference-size').val()),
-                default_confidence: parseFloat($('#setting-default-confidence').val()),
-                sam_box_padding: parseFloat($('#setting-sam-box-padding').val()),
-
-                zip_compression: $('#setting-zip-compression').val(),
-                auto_preprocess: $('#setting-auto-preprocess').is(':checked'),
-                auto_cleanup_frames: $('#setting-auto-cleanup').is(':checked'),
-
+                // Model Toggles
                 enable_sam_model: $('#setting-enable-sam').is(':checked'),
                 enable_feature_extractor: $('#setting-enable-feature-extractor').is(':checked'),
                 enable_cls_model: $('#setting-enable-cls').is(':checked'),
                 enable_pose_model: $('#setting-enable-pose').is(':checked'),
-                gkdt_model_type: $('#setting-gkdt-model-type').val() || 'GKDT-L',
 
+                // SAM
+                sam_model_checkpoint: selectedSamOption.val(),
+                sam_model_name: selectedSamOption.data('name'),
+                sam_mask_confidence: parseFloat($('#setting-sam-mask-confidence').val()),
+                max_cache_size: parseInt($('#setting-max-cache-size').val()),
                 batch_tracking_conf: parseFloat($('#setting-batch-tracking-conf').val()),
-                default_preannotation_conf: parseFloat($('#setting-preannotation-conf').val()),
+                nms_iou_threshold: parseFloat($('#setting-nms-iou-threshold').val()),
                 batch_tracking_imgsz: parseInt($('#setting-batch-tracking-imgsz').val()),
                 batch_tracking_chunk_size: parseInt($('#setting-batch-tracking-chunk-size').val()),
-                consistency_confusion_margin: parseFloat($('#setting-consistency-confusion-margin').val()),
+                sam_box_padding: parseFloat($('#setting-sam-box-padding').val()),
 
-                default_annotation_mode: $('#setting-default-annotation-mode').val(),
-                autosave_enabled: $('#setting-autosave-enabled').is(':checked'),
-                speedrun_auto_next: $('#setting-speedrun-auto-next').is(':checked'),
-                frame_extraction_jpeg_quality: parseInt($('#setting-jpeg-quality').val()),
+                // GKDT & Pose
+                gkdt_model_type: $('#setting-gkdt-model-type').val(),
+                gkdt_detector_backend: $('#setting-gkdt-detector').val(),
+                gkdt_kpt_conf_threshold: parseFloat($('#setting-gkdt-kpt-conf').val()),
+                gkdt_bbox_padding: parseFloat($('#setting-gkdt-bbox-padding').val()),
+                gkdt_default_schema: $('#setting-gkdt-default-schema').val(),
                 default_opencv_tracker: $('#setting-opencv-tracker').val(),
+
+                // CLIP
+                clip_model_checkpoint: $('#setting-clip-model').val(),
+                clip_use_prompt_ensemble: $('#setting-clip-ensemble').is(':checked'),
+                clip_negative_filter: $('#setting-clip-negative').is(':checked'),
+                clip_kmeans_feature_source: $('#setting-clip-kmeans-source').val(),
+                clip_kmeans_default_k: parseInt($('#setting-clip-kmeans-k').val()),
+
+                // Canvas & Ergonomics
+                canvas_line_width: parseInt($('#setting-canvas-line-width').val()),
+                canvas_point_radius: parseInt($('#setting-canvas-point-radius').val()),
+                canvas_mask_opacity: parseFloat($('#setting-canvas-mask-opacity').val()),
+                canvas_show_crosshair: $('#setting-canvas-crosshair').is(':checked'),
+                canvas_label_display_mode: $('#setting-canvas-label-mode').val(),
+                canvas_zoom_step: parseFloat($('#setting-canvas-zoom-step').val()),
+                default_annotation_mode: $('#setting-default-annotation-mode').val(),
+                speedrun_auto_next: $('#setting-speedrun-auto-next').is(':checked'),
+                autosave_enabled: $('#setting-autosave-enabled').is(':checked'),
                 cache_save_interval_seconds: parseInt($('#setting-cache-save-interval').val()) || 30,
+                canvas_history_limit: parseInt($('#setting-canvas-history-limit').val()) || 50,
+
+                // Video & Extraction
+                video_extraction_mode: $('#setting-video-extraction-mode').val(),
+                video_max_resolution: parseInt($('#setting-video-max-resolution').val()),
+                frame_extraction_jpeg_quality: parseInt($('#setting-jpeg-quality').val()),
+                auto_preprocess: $('#setting-auto-preprocess').is(':checked'),
+                auto_cleanup_frames: $('#setting-auto-cleanup').is(':checked'),
+
+                // QC
+                qc_semantic_weight: parseFloat($('#setting-qc-semantic-weight').val()),
+                qc_color_weight: parseFloat($('#setting-qc-color-weight').val()),
+                color_confusion_factor: parseFloat($('#setting-color-confusion-factor').val()),
+                consistency_semantic_threshold: parseFloat($('#setting-consistency-semantic-threshold').val()),
+                consistency_confusion_margin: parseFloat($('#setting-consistency-confusion-margin').val()),
+                qc_cross_class_conf_min: parseFloat($('#setting-qc-cross-class-conf-min').val()),
+                qc_kpt_out_of_bounds_px: parseInt($('#setting-qc-kpt-out-of-bounds').val()),
+
+                // Dataset & Export
+                default_train_percent: parseFloat($('#setting-train-percent').val()),
+                default_eval_percent: parseFloat($('#setting-eval-percent').val()),
+                default_test_percent: parseFloat($('#setting-test-percent').val()),
+                dataset_split_strategy: $('#setting-dataset-split-strategy').val(),
+                zip_compression: $('#setting-zip-compression').val(),
+                export_tight_fit_bbox: $('#setting-export-tight-fit').is(':checked'),
+                export_include_background: $('#setting-export-include-bg').is(':checked'),
+                export_coord_precision: parseInt($('#setting-export-precision').val()),
+
+                // Mirrors & Classes
+                use_mirror_acceleration: $('#use-mirror-switch').is(':checked'),
                 class_colors: classColors
             };
 
@@ -1468,28 +1783,58 @@
                 url: '/api/settings', type: 'POST', contentType: 'application/json',
                 data: JSON.stringify(settingsData),
                 success: function(response) {
+                    $btn.prop('disabled', false).html('<i class="bi bi-hdd-fill mr-2"></i>COMMIT_CHANGES');
                     if (response.success) {
-                         window.sysAlert(response.restart_required ? "CONFIG_SAVED. RESTART_REQUIRED_FOR_HARDWARE_CHANGES." : "CONFIG_SAVED.", 'success');
+                        window.sysAlert(response.restart_required ? "CONFIGURATION_SAVED. RESTART REQUIRED FOR DEVICE/SAM CHANGES." : "CONFIGURATION_SAVED_SUCCESSFULLY.", 'success');
                     } else { showError(response.message); }
                 },
-                error: function(xhr) { showError(xhr.responseJSON ? xhr.responseJSON.message : 'UNKNOWN_ERROR'); }
+                error: function(xhr) {
+                    $btn.prop('disabled', false).html('<i class="bi bi-hdd-fill mr-2"></i>COMMIT_CHANGES');
+                    showError(xhr.responseJSON ? xhr.responseJSON.message : 'UNKNOWN_ERROR');
+                }
             });
         });
 
-        ['sam-mask-confidence', 'nms-iou-threshold', 'consistency-semantic-threshold', 'batch-tracking-conf', 'preannotation-conf', 'default-confidence'].forEach(id => {
-            $(`#setting-${id}`).on('input', function() {
-                $(`#${id}-val`).text(parseFloat($(this).val()).toFixed(2));
+        // Export settings.json
+        $('#btn-export-settings').on('click', function() {
+            window.location.href = '/api/settings/export';
+        });
+
+        // Import settings.json
+        $('#btn-import-settings-trigger').on('click', function() {
+            $('#file-import-settings').trigger('click');
+        });
+        $('#file-import-settings').on('change', function() {
+            const file = this.files[0];
+            if (!file) return;
+            const formData = new FormData();
+            formData.append('file', file);
+            $.ajax({
+                url: '/api/settings/import', type: 'POST', data: formData,
+                processData: false, contentType: false,
+                success: function(res) {
+                    if (res.success) {
+                        window.sysAlert('Settings imported successfully! Reloading values...', 'success');
+                        loadSettings();
+                    } else { showError(res.message); }
+                },
+                error: function(xhr) { showError(xhr.responseJSON ? xhr.responseJSON.message : 'IMPORT_FAILED'); }
             });
         });
 
-        ['max-cache-size'].forEach(id => {
-            $(`#setting-${id}`).on('input', function() {
-                $(`#${id}-val`).text(parseInt($(this).val()));
+        // Factory Reset Settings
+        $('#btn-reset-settings').on('click', function() {
+            window.sysConfirm("WARNING: RESET ALL SYSTEM CONFIGURATIONS TO FACTORY DEFAULTS?", function() {
+                $.ajax({
+                    url: '/api/settings/reset', type: 'POST',
+                    success: function(res) {
+                        if (res.success) {
+                            window.sysAlert('Settings restored to factory defaults.', 'success');
+                            loadSettings();
+                        } else { showError(res.message); }
+                    }
+                });
             });
-        });
-
-        $('#setting-sam-box-padding').on('input', function() {
-            $('#sam-box-padding-val').text(Math.round(parseFloat($(this).val()) * 100) + '%');
         });
 
         $('#clear-cache-btn').on('click', function() {
