@@ -81,6 +81,12 @@ def get_project_datas():
                 dst = os.path.dirname(rel)
                 datas.append((src, dst))
 
+    # 1.5 AI Agent 规范文档与工具元数据
+    for doc in ['AGENT_INSTRUCTIONS.md', 'AGENT_TOOLS.json', 'agent_hub.py']:
+        doc_path = os.path.join(PROJECT_DIR, doc)
+        if os.path.exists(doc_path):
+            datas.append((doc_path, '.'))
+
     return datas
 
 project_datas = get_project_datas()

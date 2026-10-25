@@ -3056,6 +3056,38 @@ def preview_augmentations():
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
+# ==============================================================================
+# AI AGENT HUB REST & TOOL INTERFACES
+# ==============================================================================
+import agent_hub
+
+@app.route('/api/agent/tools', methods=['GET'])
+def api_agent_tools():
+    """Returns complete machine-readable JSON Schema for all registered AI tools."""
+    return jsonify({
+        'success': True,
+        'tools': agent_hub.get_all_tools_schema(),
+        'count': len(agent_hub.TOOL_REGISTRY)
+    })
+
+@app.route('/api/agent/prompt', methods=['GET'])
+def api_agent_prompt():
+    """Returns complete Markdown System Prompt designed specifically for LLM Agents."""
+    return Response(agent_hub.generate_agent_prompt_markdown(), mimetype='text/markdown')
+
+@app.route('/api/agent/execute', methods=['POST'])
+def api_agent_execute():
+    """Universal execution dispatcher for any registered agent tool."""
+    data = request.get_json(force=True, silent=True) or {}
+    tool_name = data.get('tool')
+    arguments = data.get('arguments', {})
+    if not tool_name:
+        return jsonify({'success': False, 'message': 'Missing "tool" field in payload.'}), 400
+    res = agent_hub.execute_tool(tool_name, arguments)
+    status_code = 200 if res.get('success') else 400
+    return jsonify(res), status_code
+
+
 def start_server():
     init(autoreset=True)
     root_logger = logging.getLogger()
@@ -3113,6 +3145,11 @@ class WebviewAPI:
 
 if __name__ == '__main__':
     multiprocessing.freeze_support()
+
+    if len(sys.argv) > 1 and sys.argv[1] == 'agent':
+        import agent_hub
+        agent_hub.run_cli(sys.argv[2:])
+        sys.exit(0)
 
     if '--no-gui' in sys.argv or os.environ.get('Z2Y_NO_GUI') == '1':
         start_server()
