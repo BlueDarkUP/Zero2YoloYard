@@ -59,6 +59,14 @@ class CLIPModelManager:
         if not available:
             raise FileNotFoundError(f"No valid CLIP models found in {self.base_checkpoints_dir}")
 
+        if not model_name:
+            try:
+                import settings_manager
+                configured_model = settings_manager.load_settings().get("clip_model_checkpoint")
+                if configured_model and configured_model in available:
+                    model_name = configured_model
+            except Exception:
+                pass
         if not model_name or model_name not in available:
             model_name = available[0]
 
@@ -112,7 +120,13 @@ class CLIPModelManager:
         vec = image_features.squeeze(0).cpu().numpy()
         return vec
 
-    def predict_zero_shot(self, image, candidate_classes, prompt_template="a photo of a {}", use_ensemble=True, model_name=None):
+    def predict_zero_shot(self, image, candidate_classes, prompt_template="a photo of a {}", use_ensemble=None, model_name=None):
+        if use_ensemble is None:
+            try:
+                import settings_manager
+                use_ensemble = bool(settings_manager.load_settings().get("clip_use_prompt_ensemble", True))
+            except Exception:
+                use_ensemble = True
         """
         Industry-standard Zero-Shot Classification using Prompt Ensembling (FiftyOne / OpenAI best practices).
         Supports multi-template prompt averaging & negative background class filtering.

@@ -120,27 +120,39 @@ def load_gkdt_model(model_type=None):
         cfg_candidates.insert(0, os.path.join(meipass, "gkdt_engine", "test_real_world", "configs", "gkd.yaml"))
     cfg_file = next((p for p in cfg_candidates if os.path.isfile(p)), cfg_candidates[0])
 
-    if "H" in model_type:
-        candidate_paths = [
-            os.path.join(config.BASE_DIR, "gkdt_engine", "output", "GKDT-H_for_app", "model", "gkd_fullset.best"),
-            os.path.join(config.BASE_DIR, "gkdt_engine", "output", "GKDT-H_for_research", "model", "gkd.best"),
-            os.path.join(config.BASE_DIR, "checkpoints", "gkdt_h.best"),
-            os.path.join(GKDT_ENGINE_DIR, "output", "GKDT-H_for_app", "model", "gkd_fullset.best"),
-            os.path.join(GKDT_ENGINE_DIR, "output", "GKDT-H_for_research", "model", "gkd.best"),
-            os.path.join(GKDT_ENGINE_DIR, "output", "GKDT-H_for_research", "model", "gkd_fullset.best"),
-            os.path.join(GKDT_ENGINE_DIR, "output", "GKDT-H_for_app", "model", "gkd.best"),
-        ]
+    is_research = "research" in str(model_type).lower()
+
+    if "H" in str(model_type).upper():
+        if is_research:
+            candidate_paths = [
+                os.path.join(config.BASE_DIR, "gkdt_engine", "output", "GKDT-H_for_research", "model", "gkd.best"),
+                os.path.join(GKDT_ENGINE_DIR, "output", "GKDT-H_for_research", "model", "gkd.best"),
+                os.path.join(config.BASE_DIR, "gkdt_engine", "output", "GKDT-H_for_app", "model", "gkd_fullset.best"),
+                os.path.join(config.BASE_DIR, "checkpoints", "gkdt_h.best"),
+            ]
+        else:
+            candidate_paths = [
+                os.path.join(config.BASE_DIR, "gkdt_engine", "output", "GKDT-H_for_app", "model", "gkd_fullset.best"),
+                os.path.join(GKDT_ENGINE_DIR, "output", "GKDT-H_for_app", "model", "gkd_fullset.best"),
+                os.path.join(config.BASE_DIR, "gkdt_engine", "output", "GKDT-H_for_research", "model", "gkd.best"),
+                os.path.join(config.BASE_DIR, "checkpoints", "gkdt_h.best"),
+            ]
         opts = ["MODEL.ENCODER.DINOv3.VISUAL_ENCODER", "dinov3_vith16plus"]
     else:
-        candidate_paths = [
-            os.path.join(config.BASE_DIR, "gkdt_engine", "output", "GKDT-L_for_app", "model", "gkd_fullset.best"),
-            os.path.join(config.BASE_DIR, "gkdt_engine", "output", "GKDT-L_for_research", "model", "gkd.best"),
-            os.path.join(config.BASE_DIR, "checkpoints", "gkdt_l.best"),
-            os.path.join(GKDT_ENGINE_DIR, "output", "GKDT-L_for_app", "model", "gkd_fullset.best"),
-            os.path.join(GKDT_ENGINE_DIR, "output", "GKDT-L_for_research", "model", "gkd.best"),
-            os.path.join(GKDT_ENGINE_DIR, "output", "GKDT-L_for_research", "model", "gkd_fullset.best"),
-            os.path.join(GKDT_ENGINE_DIR, "output", "GKDT-L_for_app", "model", "gkd.best"),
-        ]
+        if is_research:
+            candidate_paths = [
+                os.path.join(config.BASE_DIR, "gkdt_engine", "output", "GKDT-L_for_research", "model", "gkd.best"),
+                os.path.join(GKDT_ENGINE_DIR, "output", "GKDT-L_for_research", "model", "gkd.best"),
+                os.path.join(config.BASE_DIR, "gkdt_engine", "output", "GKDT-L_for_app", "model", "gkd_fullset.best"),
+                os.path.join(config.BASE_DIR, "checkpoints", "gkdt_l.best"),
+            ]
+        else:
+            candidate_paths = [
+                os.path.join(config.BASE_DIR, "gkdt_engine", "output", "GKDT-L_for_app", "model", "gkd_fullset.best"),
+                os.path.join(GKDT_ENGINE_DIR, "output", "GKDT-L_for_app", "model", "gkd_fullset.best"),
+                os.path.join(config.BASE_DIR, "gkdt_engine", "output", "GKDT-L_for_research", "model", "gkd.best"),
+                os.path.join(config.BASE_DIR, "checkpoints", "gkdt_l.best"),
+            ]
         opts = ["MODEL.ENCODER.DINOv3.VISUAL_ENCODER", "dinov3_vitl16"]
 
     # 动态将 DINOv3 仓库路径重写为绝对路径，彻底避免相对路径导致的 FileNotFoundError
@@ -233,8 +245,10 @@ def predict_pose_from_text(video_uuid, frame_number, class_label, custom_kps_tex
     if bbox is not None and len(bbox) == 4:
         bw = bbox[2] - bbox[0]
         bh = bbox[3] - bbox[1]
-        pad_x = bw * 0.20
-        pad_y = bh * 0.20
+        settings = settings_manager.load_settings()
+        pad_ratio = float(settings.get("gkdt_bbox_padding", 0.20))
+        pad_x = bw * pad_ratio
+        pad_y = bh * pad_ratio
         min_x_allowed = max(0, bbox[0] - pad_x)
         min_y_allowed = max(0, bbox[1] - pad_y)
         max_x_allowed = min(img_w, bbox[2] + pad_x)
@@ -291,10 +305,13 @@ def predict_pose_from_text(video_uuid, frame_number, class_label, custom_kps_tex
         # A. 坐标越界检测（超出图像边界，或超出了 SAM 2.1 目标的动作安全区）
         is_out_of_bounds = (x < min_x_allowed or x > max_x_allowed or y < min_y_allowed or y > max_y_allowed)
 
-        # B. 三阶概率与空间双重熔断机制
-        if is_out_of_bounds or score < 0.12:
+        # B. 三阶概率与空间双重熔断机制 (根据系统 gkdt_kpt_conf_threshold 动态调整)
+        kpt_conf_base = float(settings_manager.load_settings().get("gkdt_kpt_conf_threshold", 0.25))
+        absent_thresh = max(0.05, kpt_conf_base * 0.48)
+        visible_thresh = min(0.95, kpt_conf_base * 1.52)
+        if is_out_of_bounds or score < absent_thresh:
             v = 0  # ⚪ 不存在 / 画面外 (Absent)
-        elif score >= 0.38:
+        elif score >= visible_thresh:
             v = 2  # 🟢 清晰可见 (Visible)
         else:
             v = 1  # 🟠 躯体遮挡 (Occluded)
